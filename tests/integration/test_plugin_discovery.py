@@ -18,6 +18,7 @@ def test_all_plugins_discovered():
         "connections",
         "storage",
         "projects",
+        "training",
     }
 
     discovered = set(plugins.keys())

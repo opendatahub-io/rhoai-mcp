@@ -27,6 +27,7 @@ rhoai-mcp-pipelines = { workspace = true }
 rhoai-mcp-connections = { workspace = true }
 rhoai-mcp-storage = { workspace = true }
 rhoai-mcp-projects = { workspace = true }
+rhoai-mcp-training = { workspace = true }
 
 # =============================================================================
 # Shared Tool Configuration
@@ -64,6 +65,7 @@ known-first-party = [
     "rhoai_mcp_connections",
     "rhoai_mcp_storage",
     "rhoai_mcp_projects",
+    "rhoai_mcp_training",
 ]
 
 [tool.mypy]

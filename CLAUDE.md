@@ -108,6 +108,42 @@ Environment variables use `RHOAI_MCP_` prefix. Key settings:
 - `kubernetes>=28.1.0`: K8s Python client
 - `pydantic>=2.0.0`: Data validation and settings
 
+## Development Principles
+
+### Test-Driven Development
+
+Follow TDD for all code changes:
+
+1. **Write tests first**: Before implementing any feature or fix, write failing tests that define the expected behavior
+2. **Red-Green-Refactor**: Run tests to see them fail (red), write minimal code to pass (green), then refactor while keeping tests green
+3. **Test coverage**: All new code must have corresponding tests; run `make test` before committing
+4. **Test types**: Unit tests go in `packages/*/tests/`, integration tests in `tests/integration/`
+
+### Simplicity and Maintainability
+
+Favor simple, maintainable solutions at all times:
+
+- **KISS**: Choose the simplest solution that works; avoid premature optimization or over-abstraction
+- **Single responsibility**: Each function, class, and module should do one thing well
+- **Explicit over implicit**: Code should be self-documenting; avoid magic or clever tricks
+- **Minimal dependencies**: Only add dependencies when truly necessary
+- **Delete dead code**: Remove unused code rather than commenting it out
+- **Small functions**: Keep functions short and focused; if a function needs extensive comments, it should be split
+
+### Idiomatic Python
+
+Write Pythonic code that follows community conventions:
+
+- Use list/dict/set comprehensions where they improve readability
+- Prefer `pathlib.Path` over `os.path` for file operations
+- Use context managers (`with` statements) for resource management
+- Leverage dataclasses and Pydantic models for structured data
+- Use type hints consistently (required by mypy)
+- Follow PEP 8 naming: `snake_case` for functions/variables, `PascalCase` for classes
+- Use `typing` module for complex types; prefer `|` union syntax (Python 3.10+)
+- Prefer raising specific exceptions over generic ones
+- Use f-strings for string formatting
+
 ## Code Style
 
 - Python 3.10+, line length 100

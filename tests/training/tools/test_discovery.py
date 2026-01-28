@@ -39,7 +39,7 @@ class TestDiscoveryTools:
     def test_list_training_jobs_empty(self, mock_mcp: MagicMock, mock_server: MagicMock) -> None:
         """Test listing training jobs when none exist."""
         # Setup mock to return empty list
-        mock_server.k8s.list.return_value = []
+        mock_server.k8s.list_resources.return_value = []
 
         # Get the registered tool
         tools = {}
@@ -63,7 +63,7 @@ class TestDiscoveryTools:
         self, mock_mcp: MagicMock, mock_server: MagicMock
     ) -> None:
         """Test listing training jobs returns job info."""
-        mock_server.k8s.list.return_value = [
+        mock_server.k8s.list_resources.return_value = [
             _make_mock_resource("job-1", "default"),
             _make_mock_resource("job-2", "default"),
         ]
@@ -148,7 +148,7 @@ class TestDiscoveryTools:
 
     def test_list_training_runtimes(self, mock_mcp: MagicMock, mock_server: MagicMock) -> None:
         """Test listing training runtimes."""
-        mock_server.k8s.list.return_value = [
+        mock_server.k8s.list_resources.return_value = [
             _make_mock_resource("transformers-runtime", None),
             _make_mock_resource("pytorch-runtime", None),
         ]

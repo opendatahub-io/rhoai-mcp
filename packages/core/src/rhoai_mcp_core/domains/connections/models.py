@@ -48,7 +48,7 @@ class DataConnection(BaseModel):
                 try:
                     return base64.b64decode(data[field_name]).decode("utf-8")
                 except Exception:
-                    return data[field_name]
+                    return str(data[field_name])
             return None
 
         # Get and optionally mask sensitive values

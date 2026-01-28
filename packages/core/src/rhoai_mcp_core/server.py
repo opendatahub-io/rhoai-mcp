@@ -298,7 +298,7 @@ class RHOAIServer:
 
             # Check for DataScienceCluster
             try:
-                dsc_list = k8s.list(CRDs.DATA_SCIENCE_CLUSTER)
+                dsc_list = k8s.list_resources(CRDs.DATA_SCIENCE_CLUSTER)
                 if dsc_list:
                     result["rhoai_available"] = True
                     dsc = dsc_list[0]
@@ -313,7 +313,7 @@ class RHOAIServer:
 
             # Check for accelerator profiles
             try:
-                accelerators = k8s.list(CRDs.ACCELERATOR_PROFILE)
+                accelerators = k8s.list_resources(CRDs.ACCELERATOR_PROFILE)
                 result["accelerators"] = [
                     {
                         "name": acc.metadata.name,
@@ -379,7 +379,7 @@ class RHOAIServer:
             k8s = self.k8s
 
             try:
-                accelerators = k8s.list(CRDs.ACCELERATOR_PROFILE)
+                accelerators = k8s.list_resources(CRDs.ACCELERATOR_PROFILE)
                 return [
                     {
                         "name": acc.metadata.name,

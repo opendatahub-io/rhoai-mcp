@@ -141,7 +141,7 @@ class ProjectClient:
         try:
             from rhoai_mcp_core.domains.notebooks.crds import NotebookCRDs
 
-            notebooks = self._k8s.list(NotebookCRDs.NOTEBOOK, namespace=namespace)
+            notebooks = self._k8s.list_resources(NotebookCRDs.NOTEBOOK, namespace=namespace)
             workbenches = len(notebooks)
             workbenches_running = sum(
                 1
@@ -155,7 +155,7 @@ class ProjectClient:
         try:
             from rhoai_mcp_core.domains.inference.crds import InferenceCRDs
 
-            isvc = self._k8s.list(InferenceCRDs.INFERENCE_SERVICE, namespace=namespace)
+            isvc = self._k8s.list_resources(InferenceCRDs.INFERENCE_SERVICE, namespace=namespace)
             models = len(isvc)
             models_ready = sum(1 for svc in isvc if self._is_inference_service_ready(svc))
         except Exception:
@@ -184,7 +184,7 @@ class ProjectClient:
         try:
             from rhoai_mcp_core.domains.pipelines.crds import PipelinesCRDs
 
-            dspas = self._k8s.list(PipelinesCRDs.DSPA, namespace=namespace)
+            dspas = self._k8s.list_resources(PipelinesCRDs.DSPA, namespace=namespace)
             pipelines = 1 if dspas else 0
         except Exception:
             pass

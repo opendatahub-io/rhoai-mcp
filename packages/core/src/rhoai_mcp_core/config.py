@@ -3,6 +3,7 @@
 import os
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -180,7 +181,7 @@ def get_config() -> RHOAIConfig:
     return _config
 
 
-def configure(**kwargs: str) -> RHOAIConfig:
+def configure(**kwargs: Any) -> RHOAIConfig:
     """Configure the global settings.
 
     This should be called before get_config() if you want to override defaults.

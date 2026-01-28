@@ -28,18 +28,18 @@ class TestTrainingClient:
 
     def test_list_training_jobs_empty(self, client: TrainingClient, mock_k8s: MagicMock) -> None:
         """Test listing jobs when none exist."""
-        mock_k8s.list.return_value = []
+        mock_k8s.list_resources.return_value = []
 
         jobs = client.list_training_jobs("default")
 
         assert jobs == []
-        mock_k8s.list.assert_called_once_with(TrainingCRDs.TRAIN_JOB, namespace="default")
+        mock_k8s.list_resources.assert_called_once_with(TrainingCRDs.TRAIN_JOB, namespace="default")
 
     def test_list_training_jobs_with_results(
         self, client: TrainingClient, mock_k8s: MagicMock
     ) -> None:
         """Test listing jobs returns parsed TrainJob models."""
-        mock_k8s.list.return_value = [
+        mock_k8s.list_resources.return_value = [
             _make_mock_resource("job-1", "default"),
             _make_mock_resource("job-2", "default"),
         ]
@@ -151,7 +151,7 @@ class TestTrainingClient:
         self, client: TrainingClient, mock_k8s: MagicMock
     ) -> None:
         """Test listing cluster training runtimes."""
-        mock_k8s.list.return_value = [
+        mock_k8s.list_resources.return_value = [
             _make_mock_resource("transformers-runtime", None),
             _make_mock_resource("pytorch-runtime", None),
         ]
@@ -159,7 +159,7 @@ class TestTrainingClient:
         runtimes = client.list_cluster_training_runtimes()
 
         assert len(runtimes) == 2
-        mock_k8s.list.assert_called_once_with(TrainingCRDs.CLUSTER_TRAINING_RUNTIME)
+        mock_k8s.list_resources.assert_called_once_with(TrainingCRDs.CLUSTER_TRAINING_RUNTIME)
 
     def test_get_cluster_training_runtime(
         self, client: TrainingClient, mock_k8s: MagicMock

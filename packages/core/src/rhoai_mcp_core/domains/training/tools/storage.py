@@ -288,18 +288,20 @@ def _find_rwx_storage_class(k8s: Any) -> str | None:
 
     try:
         # Try to list storage classes
-        from kubernetes import client
+        from kubernetes import client  # type: ignore[import-untyped]
 
         storage_api = client.StorageV1Api(k8s._api_client)
         storage_classes = storage_api.list_storage_class()
 
         for sc in storage_classes.items:
-            if sc.metadata.name.lower() in [n.lower() for n in common_names]:
-                return sc.metadata.name
+            name: str = sc.metadata.name
+            if name.lower() in [n.lower() for n in common_names]:
+                return name
 
         # Return first storage class as fallback
         if storage_classes.items:
-            return storage_classes.items[0].metadata.name
+            first_name: str = storage_classes.items[0].metadata.name
+            return first_name
     except Exception:
         pass
 

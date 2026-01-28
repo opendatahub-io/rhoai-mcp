@@ -20,7 +20,7 @@ class NotebookClient:
 
     def list_workbenches(self, namespace: str) -> list[Workbench]:
         """List all workbenches in a namespace."""
-        notebooks = self._k8s.list(NotebookCRDs.NOTEBOOK, namespace=namespace)
+        notebooks = self._k8s.list_resources(NotebookCRDs.NOTEBOOK, namespace=namespace)
         return [
             Workbench.from_notebook_cr(nb, url=self._get_workbench_url(nb.metadata.name, namespace))
             for nb in notebooks

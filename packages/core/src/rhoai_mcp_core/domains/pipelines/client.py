@@ -21,7 +21,7 @@ class PipelineClient:
         Returns None if no DSPA exists in the namespace.
         """
         try:
-            dspas = self._k8s.list(PipelinesCRDs.DSPA, namespace=namespace)
+            dspas = self._k8s.list_resources(PipelinesCRDs.DSPA, namespace=namespace)
             if not dspas:
                 return None
 

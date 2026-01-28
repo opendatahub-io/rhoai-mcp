@@ -38,7 +38,7 @@ class TrainingClient:
         Returns:
             List of TrainJob models.
         """
-        resources = self._k8s.list(TrainingCRDs.TRAIN_JOB, namespace=namespace)
+        resources = self._k8s.list_resources(TrainingCRDs.TRAIN_JOB, namespace=namespace)
         return [TrainJob.from_resource(r) for r in resources]
 
     def get_training_job(self, namespace: str, name: str) -> TrainJob:
@@ -152,7 +152,7 @@ class TrainingClient:
         Returns:
             List of TrainingRuntime models.
         """
-        resources = self._k8s.list(TrainingCRDs.CLUSTER_TRAINING_RUNTIME)
+        resources = self._k8s.list_resources(TrainingCRDs.CLUSTER_TRAINING_RUNTIME)
         return [TrainingRuntime.from_resource(r, is_cluster_scoped=True) for r in resources]
 
     def list_training_runtimes(self, namespace: str) -> list[TrainingRuntime]:
@@ -164,7 +164,7 @@ class TrainingClient:
         Returns:
             List of TrainingRuntime models.
         """
-        resources = self._k8s.list(TrainingCRDs.TRAINING_RUNTIME, namespace=namespace)
+        resources = self._k8s.list_resources(TrainingCRDs.TRAINING_RUNTIME, namespace=namespace)
         return [TrainingRuntime.from_resource(r, is_cluster_scoped=False) for r in resources]
 
     def get_cluster_training_runtime(self, name: str) -> TrainingRuntime:
@@ -238,13 +238,14 @@ class TrainingClient:
         # Get logs from the first running or completed pod
         pod = pods.items[0]
         try:
-            return self._k8s.core_v1.read_namespaced_pod_log(
+            logs: str = self._k8s.core_v1.read_namespaced_pod_log(
                 name=pod.metadata.name,
                 namespace=namespace,
                 container=container,
                 tail_lines=tail_lines,
                 previous=previous,
             )
+            return logs
         except Exception as e:
             return f"Error getting logs: {e}"
 

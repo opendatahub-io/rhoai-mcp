@@ -8,10 +8,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from kubernetes import client, config
-from kubernetes.client import ApiException
-from kubernetes.dynamic import DynamicClient
-from kubernetes.dynamic.resource import Resource, ResourceInstance
+from kubernetes import client, config  # type: ignore[import-untyped]
+from kubernetes.client import ApiException  # type: ignore[import-untyped]
+from kubernetes.dynamic import DynamicClient  # type: ignore[import-untyped]
+from kubernetes.dynamic.resource import Resource, ResourceInstance  # type: ignore[import-untyped]
 
 from rhoai_mcp_core.config import AuthMode, RHOAIConfig, get_config
 from rhoai_mcp_core.utils.errors import AuthenticationError, NotFoundError, RHOAIError
@@ -231,13 +231,13 @@ class K8sClient:
                 raise NotFoundError(crd.kind, name, namespace)
             raise RHOAIError(f"Failed to get {crd.kind} '{name}': {e.reason}")
 
-    def list(
+    def list_resources(
         self,
         crd: CRDDefinition,
         namespace: str | None = None,
         label_selector: str | None = None,
         field_selector: str | None = None,
-    ) -> list[ResourceInstance]:
+    ) -> list[Any]:
         """List resources."""
         resource = self.get_resource(crd)
         try:
@@ -314,14 +314,14 @@ class K8sClient:
     def list_projects(
         self,
         label_selector: str | None = None,
-    ) -> list[ResourceInstance]:
+    ) -> list[Any]:
         """List OpenShift projects the user has access to.
 
         This uses the OpenShift Projects API which only returns projects
         the authenticated user has permission to access, unlike listing
         all namespaces which requires cluster-wide permissions.
         """
-        return self.list(CRDs.PROJECT, label_selector=label_selector)
+        return self.list_resources(CRDs.PROJECT, label_selector=label_selector)
 
     def patch_project(
         self,
@@ -360,7 +360,7 @@ class K8sClient:
         """List namespaces."""
         try:
             result = self.core_v1.list_namespace(label_selector=label_selector)
-            return result.items
+            return list(result.items)
         except ApiException as e:
             raise RHOAIError(f"Failed to list namespaces: {e.reason}")
 
@@ -440,7 +440,7 @@ class K8sClient:
                 namespace=namespace,
                 label_selector=label_selector,
             )
-            return result.items
+            return list(result.items)
         except ApiException as e:
             raise RHOAIError(f"Failed to list secrets: {e.reason}")
 
@@ -505,7 +505,7 @@ class K8sClient:
                 namespace=namespace,
                 label_selector=label_selector,
             )
-            return result.items
+            return list(result.items)
         except ApiException as e:
             raise RHOAIError(f"Failed to list PVCs: {e.reason}")
 

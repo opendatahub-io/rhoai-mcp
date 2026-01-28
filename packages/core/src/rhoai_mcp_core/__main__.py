@@ -3,6 +3,7 @@
 import argparse
 import logging
 import sys
+from typing import Any
 
 from rhoai_mcp_core import __version__
 from rhoai_mcp_core.config import (
@@ -100,7 +101,7 @@ def main() -> int:
     args = parse_args()
 
     # Build config from args, falling back to environment/defaults
-    config_kwargs = {}
+    config_kwargs: dict[str, Any] = {}
 
     if args.transport:
         transport_map = {

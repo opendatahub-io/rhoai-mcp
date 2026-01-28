@@ -21,7 +21,7 @@ class InferenceClient:
     def list_inference_services(self, namespace: str) -> list[dict[str, Any]]:
         """List all InferenceServices in a namespace."""
         try:
-            isvc_list = self._k8s.list(InferenceCRDs.INFERENCE_SERVICE, namespace=namespace)
+            isvc_list = self._k8s.list_resources(InferenceCRDs.INFERENCE_SERVICE, namespace=namespace)
         except Exception:
             return []
 
@@ -60,7 +60,7 @@ class InferenceClient:
     def list_serving_runtimes(self, namespace: str) -> list[dict[str, Any]]:
         """List available ServingRuntimes in a namespace."""
         try:
-            runtimes = self._k8s.list(InferenceCRDs.SERVING_RUNTIME, namespace=namespace)
+            runtimes = self._k8s.list_resources(InferenceCRDs.SERVING_RUNTIME, namespace=namespace)
         except Exception:
             return []
 

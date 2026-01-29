@@ -1,9 +1,9 @@
 # RHOAI MCP Server
 
-[![CI](https://github.com/admiller/rhoai-mcp-prototype/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/admiller/rhoai-mcp-prototype/actions/workflows/ci.yml)
-[![Container Build](https://github.com/admiller/rhoai-mcp-prototype/actions/workflows/container-build.yml/badge.svg)](https://github.com/admiller/rhoai-mcp-prototype/actions/workflows/container-build.yml)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/admiller/rhoai-mcp-prototype)
-[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/admiller/rhoai-mcp-prototype)
+[![CI](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/ci.yml)
+[![Container Build](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/container-build.yml/badge.svg)](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/container-build.yml)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/opendatahub-io/rhoai-mcp)
+[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/opendatahub-io/rhoai-mcp)
 [![Python](https://img.shields.io/badge/python-3.10%2B-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 

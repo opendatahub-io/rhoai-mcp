@@ -141,8 +141,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         # Route to appropriate handler
         # At this point, namespace is validated for actions that require it
         if action_lower == "list":
-            assert namespace is not None  # Validated above
-            return _action_list(server, namespace)
+            return _action_list(server, namespace)  # type: ignore[arg-type]
         elif action_lower == "get":
             return _action_get(server, namespace, name)
         elif action_lower == "status":

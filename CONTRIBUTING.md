@@ -139,7 +139,7 @@ domains/prompts/
 ### Adding a New Domain
 
 1. Create a new directory under `src/rhoai_mcp/domains/`:
-   ```
+   ```text
    domains/my_domain/
    ├── __init__.py
    ├── client.py

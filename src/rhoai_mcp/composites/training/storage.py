@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 
-from rhoai_mcp.utils.errors import NotFoundError
+from rhoai_mcp.utils.errors import NotFoundError, RHOAIError
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
@@ -85,7 +85,7 @@ def create_training_pvc(
             "storage_class": storage_class,
             "message": f"PVC '{pvc_name}' created. It may take a moment to bind.",
         }
-    except Exception as e:
+    except RHOAIError as e:
         return {
             "error": f"Failed to create PVC: {e}",
             "created": False,
@@ -202,7 +202,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                     "error": f"PVC '{pvc_name}' is not bound (current: {pvc.status.phase})",
                     "message": "Wait for PVC to be bound before fixing permissions.",
                 }
-        except Exception as e:
+        except NotFoundError as e:
             return {"error": f"PVC not found: {e}"}
 
         # Create a job to fix permissions

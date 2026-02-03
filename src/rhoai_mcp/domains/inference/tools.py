@@ -466,10 +466,13 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
         # Check 3: Storage accessibility
         if storage_uri.startswith("pvc://"):
+            from rhoai_mcp.utils.errors import NotFoundError
+
             pvc_name = storage_uri.replace("pvc://", "").split("/")[0]
             try:
                 pvc = server.k8s.get_pvc(pvc_name, namespace)
-                if pvc.status.phase == "Bound":
+                pvc_phase = pvc.status.phase if pvc.status else "Unknown"
+                if pvc_phase == "Bound":
                     checks.append(
                         {
                             "name": "Storage",
@@ -482,11 +485,11 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                         {
                             "name": "Storage",
                             "passed": False,
-                            "message": f"PVC '{pvc_name}' is {pvc.status.phase}",
+                            "message": f"PVC '{pvc_name}' is {pvc_phase}",
                         }
                     )
                     all_passed = False
-            except Exception:
+            except NotFoundError:
                 checks.append(
                     {
                         "name": "Storage",
@@ -819,8 +822,11 @@ def _generate_deployment_name(model_id: str) -> str:
     """Generate a deployment name from model ID."""
     # Extract model name from org/model format
     name = model_id.split("/")[-1] if "/" in model_id else model_id
-    # Sanitize for Kubernetes
+    # Sanitize for Kubernetes DNS-1123 subdomain
     name = re.sub(r"[^a-z0-9-]", "-", name.lower())
     name = re.sub(r"-+", "-", name).strip("-")
+    # Handle edge case: empty or invalid result after sanitization
+    if not name:
+        name = "model"
     # Limit length
-    return name[:50] if len(name) > 50 else name
+    return name[:50]

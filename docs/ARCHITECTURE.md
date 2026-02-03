@@ -274,7 +274,7 @@ MCP Prompts provide workflow guidance templates that help AI agents through mult
 
 ### Structure
 
-```
+```text
 domains/prompts/
 ├── __init__.py
 ├── prompts.py                  # Main registration coordinator

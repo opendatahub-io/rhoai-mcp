@@ -470,7 +470,6 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         resource_type: str,
         namespace: str | None = None,
         limit: int | None = None,
-        verbosity: str = "minimal",  # noqa: ARG001
     ) -> dict:
         """List any RHOAI resource type.
 
@@ -482,7 +481,6 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 "training_jobs", "connections", "storage", or "pipelines".
             namespace: The project (namespace) name. Required except for "projects".
             limit: Maximum number of items to return.
-            verbosity: Response detail level - "minimal", "standard", or "full".
 
         Returns:
             Paginated list of resources.

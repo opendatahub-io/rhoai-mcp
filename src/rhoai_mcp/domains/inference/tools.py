@@ -337,8 +337,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                     )
             elif resource_requirements.get("gpu", 0) > 0:
                 issues.append("Model requires GPU but no GPUs available in cluster")
-        except Exception:
-            warnings.append("Could not check GPU availability")
+        except Exception as e:
+            warnings.append(f"Could not check GPU availability: {type(e).__name__}")
 
         # Step 6: Validate storage if provided
         storage_valid = True
@@ -424,16 +424,30 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                     "message": f"Namespace '{namespace}' exists",
                 }
             )
-        except Exception:
-            checks.append(
-                {
-                    "name": "Namespace",
-                    "passed": False,
-                    "message": f"Namespace '{namespace}' not found",
-                }
-            )
+        except Exception as e:
+            # Import here to avoid circular imports
+            from kubernetes.client import ApiException  # type: ignore[import-untyped]
+
+            if isinstance(e, ApiException) and e.status == 404:
+                checks.append(
+                    {
+                        "name": "Namespace",
+                        "passed": False,
+                        "message": f"Namespace '{namespace}' not found",
+                    }
+                )
+                actions_needed.append(f"Create namespace '{namespace}'")
+            else:
+                # Auth/network errors should be reported differently
+                error_msg = e.reason if isinstance(e, ApiException) else str(e)
+                checks.append(
+                    {
+                        "name": "Namespace",
+                        "passed": False,
+                        "message": f"Failed to check namespace: {error_msg}",
+                    }
+                )
             all_passed = False
-            actions_needed.append(f"Create namespace '{namespace}'")
 
         # Check 2: Serving runtime availability
         client = InferenceClient(server.k8s)
@@ -828,5 +842,8 @@ def _generate_deployment_name(model_id: str) -> str:
     # Handle edge case: empty or invalid result after sanitization
     if not name:
         name = "model"
-    # Limit length
+    # K8s DNS-1123 names must start with a letter
+    elif not name[0].isalpha():
+        name = f"model-{name}"
+    # Limit length (max 63 for K8s labels, use 50 for safety margin)
     return name[:50]

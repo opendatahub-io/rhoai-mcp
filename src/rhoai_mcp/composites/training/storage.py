@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 
-from rhoai_mcp.utils.errors import NotFoundError, RHOAIError
+from rhoai_mcp.utils.errors import NotFoundError, ResourceExistsError, RHOAIError
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
@@ -84,6 +84,15 @@ def create_training_pvc(
             "access_mode": access_mode,
             "storage_class": storage_class,
             "message": f"PVC '{pvc_name}' created. It may take a moment to bind.",
+        }
+    except ResourceExistsError:
+        # Race condition: PVC was created between check and create
+        return {
+            "exists": True,
+            "created": False,
+            "pvc_name": pvc_name,
+            "namespace": namespace,
+            "message": f"PVC '{pvc_name}' already exists.",
         }
     except RHOAIError as e:
         return {

@@ -64,11 +64,46 @@ class ModelRegistryClient:
         """List all registered models.
 
         Args:
-            page_size: Maximum number of models to return.
+            page_size: Maximum number of models per page.
             order_by: Field to order by (UPDATE_TIME, CREATE_TIME, NAME).
 
         Returns:
-            List of registered models.
+            List of all registered models (iterates through all pages).
+
+        Raises:
+            ModelRegistryError: If the API request fails.
+            ModelRegistryConnectionError: If connection fails.
+        """
+        all_models: list[RegisteredModel] = []
+        next_page_token: str | None = None
+
+        while True:
+            models, next_page_token = await self._list_registered_models_page(
+                page_size=page_size,
+                order_by=order_by,
+                page_token=next_page_token,
+            )
+            all_models.extend(models)
+            if not next_page_token:
+                break
+
+        return all_models
+
+    async def _list_registered_models_page(
+        self,
+        page_size: int = 100,
+        order_by: str = "UPDATE_TIME",
+        page_token: str | None = None,
+    ) -> tuple[list[RegisteredModel], str | None]:
+        """List a single page of registered models.
+
+        Args:
+            page_size: Maximum number of models to return.
+            order_by: Field to order by (UPDATE_TIME, CREATE_TIME, NAME).
+            page_token: Token for the next page (None for first page).
+
+        Returns:
+            Tuple of (models, next_page_token). next_page_token is None if no more pages.
 
         Raises:
             ModelRegistryError: If the API request fails.
@@ -79,6 +114,8 @@ class ModelRegistryClient:
             "pageSize": page_size,
             "orderBy": order_by,
         }
+        if page_token:
+            params["nextPageToken"] = page_token
 
         try:
             response = await client.get(
@@ -91,7 +128,9 @@ class ModelRegistryClient:
             models = []
             for item in data.get("items", []):
                 models.append(self._parse_registered_model(item))
-            return models
+
+            next_token = data.get("nextPageToken")
+            return models, next_token
 
         except httpx.ConnectError as e:
             raise ModelRegistryConnectionError(
@@ -130,7 +169,7 @@ class ModelRegistryClient:
             raise ModelRegistryError(f"Failed to get model: {e}") from e
 
     async def get_registered_model_by_name(self, name: str) -> RegisteredModel | None:
-        """Get a registered model by name.
+        """Get a registered model by name, searching all pages.
 
         Args:
             name: The model name.
@@ -138,10 +177,19 @@ class ModelRegistryClient:
         Returns:
             The registered model, or None if not found.
         """
-        models = await self.list_registered_models()
-        for model in models:
-            if model.name == name:
-                return model
+        next_page_token: str | None = None
+
+        while True:
+            models, next_page_token = await self._list_registered_models_page(
+                page_size=100,
+                page_token=next_page_token,
+            )
+            for model in models:
+                if model.name == name:
+                    return model
+            if not next_page_token:
+                break
+
         return None
 
     async def get_model_versions(self, model_id: str) -> list[ModelVersion]:

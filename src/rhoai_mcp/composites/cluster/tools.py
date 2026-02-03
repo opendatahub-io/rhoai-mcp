@@ -915,6 +915,20 @@ def _list_resource_names(
             names=[p.metadata.name for p in projects],
         )
 
+    # Handle runtimes (cluster-scoped, don't require namespace)
+    if resource_type in ("runtime", "runtimes", "training_runtime", "training_runtimes"):
+        from rhoai_mcp.domains.training.client import TrainingClient
+
+        training_client = TrainingClient(server.k8s)
+        runtimes = training_client.list_cluster_training_runtimes()
+        if namespace:
+            runtimes.extend(training_client.list_training_runtimes(namespace))
+        return ResourceNameList(
+            type="training_runtimes",
+            count=len(runtimes),
+            names=[r.name for r in runtimes],
+        )
+
     if namespace is None:
         return ResourceNameList(
             type=resource_type,
@@ -987,19 +1001,6 @@ def _list_resource_names(
             namespace=namespace,
             count=len(jobs),
             names=[j.name for j in jobs],
-        )
-
-    if resource_type in ("runtime", "runtimes", "training_runtime", "training_runtimes"):
-        from rhoai_mcp.domains.training.client import TrainingClient
-
-        training_client = TrainingClient(server.k8s)
-        runtimes = training_client.list_cluster_training_runtimes()
-        if namespace:
-            runtimes.extend(training_client.list_training_runtimes(namespace))
-        return ResourceNameList(
-            type="training_runtimes",
-            count=len(runtimes),
-            names=[r.name for r in runtimes],
         )
 
     return ResourceNameList(

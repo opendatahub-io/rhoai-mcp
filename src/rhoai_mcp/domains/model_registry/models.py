@@ -103,3 +103,113 @@ class RegisteredModel(BaseModel):
         if not self.versions:
             return None
         return max(self.versions, key=lambda v: v.create_time or datetime.min)
+
+
+class ValidationMetrics(BaseModel):
+    """Validation/benchmark metrics from experiment runs.
+
+    Stores performance and quality metrics captured during model
+    evaluation or benchmark runs.
+    """
+
+    model_name: str = Field(..., description="Name of the model")
+    model_version: str = Field(..., description="Version of the model")
+    run_id: str | None = Field(None, description="Experiment run ID")
+
+    # Latency metrics (milliseconds)
+    p50_latency_ms: float | None = Field(None, description="50th percentile latency in ms")
+    p95_latency_ms: float | None = Field(None, description="95th percentile latency in ms")
+    p99_latency_ms: float | None = Field(None, description="99th percentile latency in ms")
+    mean_latency_ms: float | None = Field(None, description="Mean latency in ms")
+
+    # Throughput metrics
+    tokens_per_second: float | None = Field(None, description="Token throughput")
+    requests_per_second: float | None = Field(None, description="Request throughput")
+
+    # Resource metrics
+    gpu_memory_gb: float | None = Field(None, description="GPU memory usage in GB")
+    gpu_utilization_percent: float | None = Field(None, description="GPU utilization percentage")
+    peak_memory_gb: float | None = Field(None, description="Peak memory usage in GB")
+
+    # Test conditions
+    gpu_type: str | None = Field(None, description="GPU type (e.g., A100, H100)")
+    gpu_count: int = Field(1, description="Number of GPUs used")
+    input_tokens: int = Field(512, description="Input token count for benchmark")
+    output_tokens: int = Field(256, description="Output token count for benchmark")
+    batch_size: int = Field(1, description="Batch size used")
+    concurrency: int = Field(1, description="Number of concurrent requests")
+    tensor_parallel_size: int = Field(1, description="Tensor parallelism degree")
+
+    # Quality metrics
+    accuracy: float | None = Field(None, description="Model accuracy")
+    perplexity: float | None = Field(None, description="Model perplexity")
+
+    # Metadata
+    benchmark_date: datetime | None = Field(None, description="When benchmark was run")
+    notes: str | None = Field(None, description="Additional notes")
+
+
+class MetricHistoryPoint(BaseModel):
+    """Single point in metric history."""
+
+    step: int = Field(..., description="Training step or epoch")
+    timestamp: datetime | None = Field(None, description="When this point was recorded")
+    value: float = Field(..., description="Metric value")
+
+
+class MetricHistory(BaseModel):
+    """Metric history from an experiment run.
+
+    Tracks the evolution of a metric over training steps or time.
+    """
+
+    metric_name: str = Field(..., description="Name of the metric")
+    run_id: str = Field(..., description="Experiment run ID")
+    history: list[MetricHistoryPoint] = Field(default_factory=list, description="History points")
+
+    def get_last_value(self) -> float | None:
+        """Get the most recent metric value."""
+        if not self.history:
+            return None
+        return max(self.history, key=lambda p: p.step).value
+
+    def get_average(self) -> float | None:
+        """Get the average metric value across all points."""
+        if not self.history:
+            return None
+        return sum(p.value for p in self.history) / len(self.history)
+
+
+class BenchmarkData(BaseModel):
+    """Model benchmark data for capacity planning.
+
+    Provides performance metrics useful for sizing and deployment decisions.
+    """
+
+    model_name: str = Field(..., description="Name of the model")
+    model_version: str = Field(..., description="Version of the model")
+    gpu_type: str = Field(..., description="GPU type (e.g., A100, H100)")
+    gpu_count: int = Field(1, description="Number of GPUs used")
+
+    # Latency (ms)
+    p50_latency_ms: float = Field(0.0, description="50th percentile latency in ms")
+    p95_latency_ms: float = Field(0.0, description="95th percentile latency in ms")
+    p99_latency_ms: float = Field(0.0, description="99th percentile latency in ms")
+
+    # Throughput
+    tokens_per_second: float = Field(0.0, description="Token throughput")
+    requests_per_second: float = Field(0.0, description="Request throughput")
+
+    # Resources
+    gpu_memory_gb: float = Field(0.0, description="GPU memory usage in GB")
+    gpu_utilization_percent: float = Field(0.0, description="GPU utilization percentage")
+
+    # Test conditions
+    input_tokens: int = Field(512, description="Input token count for benchmark")
+    output_tokens: int = Field(256, description="Output token count for benchmark")
+    batch_size: int = Field(1, description="Batch size used")
+    concurrency: int = Field(1, description="Number of concurrent requests")
+
+    # Metadata
+    benchmark_date: datetime | None = Field(None, description="When benchmark was run")
+    source: str = Field("model_registry", description="Source of benchmark data")

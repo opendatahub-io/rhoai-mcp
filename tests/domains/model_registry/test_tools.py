@@ -305,3 +305,407 @@ class TestGetModelArtifacts:
         assert result["count"] == 1
         assert len(result["artifacts"]) == 1
         assert result["artifacts"][0]["uri"] == "s3://bucket/model/weights.bin"
+
+
+class TestGetModelBenchmarks:
+    """Test get_model_benchmarks tool."""
+
+    @pytest.fixture
+    def mock_server(self) -> MagicMock:
+        """Create a mock server."""
+        server = MagicMock()
+        server.config.model_registry_enabled = True
+        server.config.model_registry_url = "http://registry:8080"
+        server.config.model_registry_timeout = 30
+        return server
+
+    def test_get_benchmarks_disabled(self, mock_server: MagicMock) -> None:
+        """Test getting benchmarks when registry is disabled."""
+        mock_server.config.model_registry_enabled = False
+
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        result = registered_tools["get_model_benchmarks"]("llama-2-7b")
+        assert "error" in result
+        assert "disabled" in result["error"]
+
+    def test_get_benchmarks_success(self, mock_server: MagicMock) -> None:
+        """Test getting benchmarks successfully."""
+        from rhoai_mcp.domains.model_registry.models import BenchmarkData
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        benchmark = BenchmarkData(
+            model_name="llama-2-7b",
+            model_version="v1.0",
+            gpu_type="A100",
+            p50_latency_ms=45.0,
+            tokens_per_second=1500.0,
+        )
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+        ) as mock_client_class, patch(
+            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+        ) as mock_extractor_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            mock_extractor = AsyncMock()
+            mock_extractor.get_benchmark_for_model = AsyncMock(return_value=benchmark)
+            mock_extractor_class.return_value = mock_extractor
+
+            result = registered_tools["get_model_benchmarks"]("llama-2-7b")
+
+        assert result["model_name"] == "llama-2-7b"
+        assert result["gpu_type"] == "A100"
+        assert result["p50_latency_ms"] == 45.0
+
+    def test_get_benchmarks_not_found(self, mock_server: MagicMock) -> None:
+        """Test getting benchmarks when no data found."""
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+        ) as mock_client_class, patch(
+            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+        ) as mock_extractor_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            mock_extractor = AsyncMock()
+            mock_extractor.get_benchmark_for_model = AsyncMock(return_value=None)
+            mock_extractor_class.return_value = mock_extractor
+
+            result = registered_tools["get_model_benchmarks"]("nonexistent")
+
+        assert "error" in result
+        assert "No benchmark data found" in result["error"]
+
+
+class TestGetValidationMetrics:
+    """Test get_validation_metrics tool."""
+
+    @pytest.fixture
+    def mock_server(self) -> MagicMock:
+        """Create a mock server."""
+        server = MagicMock()
+        server.config.model_registry_enabled = True
+        server.config.model_registry_url = "http://registry:8080"
+        server.config.model_registry_timeout = 30
+        return server
+
+    def test_get_validation_metrics_disabled(self, mock_server: MagicMock) -> None:
+        """Test getting validation metrics when registry is disabled."""
+        mock_server.config.model_registry_enabled = False
+
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        result = registered_tools["get_validation_metrics"]("llama-2-7b", "v1.0")
+        assert "error" in result
+        assert "disabled" in result["error"]
+
+    def test_get_validation_metrics_model_not_found(self, mock_server: MagicMock) -> None:
+        """Test getting validation metrics when model not found."""
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get_registered_model_by_name = AsyncMock(return_value=None)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = registered_tools["get_validation_metrics"]("nonexistent", "v1.0")
+
+        assert "error" in result
+        assert "Model not found" in result["error"]
+
+    def test_get_validation_metrics_version_not_found(self, mock_server: MagicMock) -> None:
+        """Test getting validation metrics when version not found."""
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        model = RegisteredModel(id="model-1", name="llama-2-7b", state="LIVE")
+        version = ModelVersion(id="v1", name="v1.0", registered_model_id="model-1")
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get_registered_model_by_name = AsyncMock(return_value=model)
+            mock_client.get_model_versions = AsyncMock(return_value=[version])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = registered_tools["get_validation_metrics"]("llama-2-7b", "v2.0")
+
+        assert "error" in result
+        assert "Version not found" in result["error"]
+
+    def test_get_validation_metrics_success(self, mock_server: MagicMock) -> None:
+        """Test getting validation metrics successfully."""
+        from rhoai_mcp.domains.model_registry.models import ValidationMetrics
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        model = RegisteredModel(id="model-1", name="llama-2-7b", state="LIVE")
+        version = ModelVersion(
+            id="v1",
+            name="v1.0",
+            registered_model_id="model-1",
+            custom_properties=CustomProperties(
+                properties={"p50_latency_ms": "45.0", "gpu_type": "A100"}
+            ),
+        )
+
+        metrics = ValidationMetrics(
+            model_name="llama-2-7b",
+            model_version="v1.0",
+            p50_latency_ms=45.0,
+            gpu_type="A100",
+        )
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+        ) as mock_client_class, patch(
+            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+        ) as mock_extractor_class:
+            mock_client = AsyncMock()
+            mock_client.get_registered_model_by_name = AsyncMock(return_value=model)
+            mock_client.get_model_versions = AsyncMock(return_value=[version])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            mock_extractor = MagicMock()
+            mock_extractor.extract_validation_metrics.return_value = metrics
+            mock_extractor_class.return_value = mock_extractor
+
+            result = registered_tools["get_validation_metrics"]("llama-2-7b", "v1.0")
+
+        assert result["model_name"] == "llama-2-7b"
+        assert result["model_version"] == "v1.0"
+
+
+class TestFindBenchmarksByGpu:
+    """Test find_benchmarks_by_gpu tool."""
+
+    @pytest.fixture
+    def mock_server(self) -> MagicMock:
+        """Create a mock server."""
+        server = MagicMock()
+        server.config.model_registry_enabled = True
+        server.config.model_registry_url = "http://registry:8080"
+        server.config.model_registry_timeout = 30
+        return server
+
+    def test_find_benchmarks_disabled(self, mock_server: MagicMock) -> None:
+        """Test finding benchmarks when registry is disabled."""
+        mock_server.config.model_registry_enabled = False
+
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        result = registered_tools["find_benchmarks_by_gpu"]("A100")
+        assert "error" in result
+        assert "disabled" in result["error"]
+
+    def test_find_benchmarks_success(self, mock_server: MagicMock) -> None:
+        """Test finding benchmarks successfully."""
+        from rhoai_mcp.domains.model_registry.models import BenchmarkData
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        benchmarks = [
+            BenchmarkData(
+                model_name="llama-2-7b",
+                model_version="v1.0",
+                gpu_type="A100",
+                p50_latency_ms=45.0,
+            ),
+            BenchmarkData(
+                model_name="mistral-7b",
+                model_version="v2.0",
+                gpu_type="A100",
+                p50_latency_ms=40.0,
+            ),
+        ]
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+        ) as mock_client_class, patch(
+            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+        ) as mock_extractor_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            mock_extractor = AsyncMock()
+            mock_extractor.find_benchmarks_by_gpu = AsyncMock(return_value=benchmarks)
+            mock_extractor_class.return_value = mock_extractor
+
+            result = registered_tools["find_benchmarks_by_gpu"]("A100")
+
+        assert result["gpu_type"] == "A100"
+        assert result["count"] == 2
+        assert len(result["benchmarks"]) == 2
+        assert result["benchmarks"][0]["model_name"] == "llama-2-7b"
+        assert result["benchmarks"][1]["model_name"] == "mistral-7b"
+
+    def test_find_benchmarks_empty(self, mock_server: MagicMock) -> None:
+        """Test finding benchmarks with no results."""
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        mcp = MagicMock()
+        registered_tools: dict[str, Any] = {}
+
+        def capture_tool() -> Any:
+            def decorator(func: Any) -> Any:
+                registered_tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        mcp.tool = capture_tool
+        register_tools(mcp, mock_server)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+        ) as mock_client_class, patch(
+            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+        ) as mock_extractor_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            mock_extractor = AsyncMock()
+            mock_extractor.find_benchmarks_by_gpu = AsyncMock(return_value=[])
+            mock_extractor_class.return_value = mock_extractor
+
+            result = registered_tools["find_benchmarks_by_gpu"]("TPU")
+
+        assert result["gpu_type"] == "TPU"
+        assert result["count"] == 0
+        assert result["benchmarks"] == []

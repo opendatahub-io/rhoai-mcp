@@ -76,7 +76,7 @@ Composite plugins follow the same pattern and are registered in `composites/regi
 ### Available Hooks
 
 | Hook | Purpose |
-|------|---------|
+| ---- | ------- |
 | `rhoai_get_plugin_metadata` | Return plugin metadata |
 | `rhoai_register_tools` | Register MCP tools |
 | `rhoai_register_resources` | Register MCP resources |
@@ -255,7 +255,7 @@ Single `training()` tool with `action` parameter that consolidates all training 
 Mirror the training domain's planning tools pattern.
 
 | Tool | Purpose |
-|------|---------|
+| ---- | ------- |
 | `check_deployment_prerequisites()` | Pre-flight checks |
 | `estimate_serving_resources()` | GPU/memory estimation |
 | `recommend_serving_runtime()` | Runtime selection |

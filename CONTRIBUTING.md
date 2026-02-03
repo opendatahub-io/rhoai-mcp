@@ -140,12 +140,13 @@ domains/prompts/
 
 1. Create a new directory under `src/rhoai_mcp/domains/`:
    ```
-   domains/my-domain/
+   domains/my_domain/
    ├── __init__.py
    ├── client.py
    ├── models.py
    ├── tools.py
-   └── prompts.py  # Optional: if domain has workflow prompts
+   ├── resources.py  # Optional: MCP resources
+   └── prompts.py    # Optional: if domain has workflow prompts
    ```
 
 2. Implement the domain client:
@@ -167,7 +168,7 @@ domains/prompts/
        def __init__(self) -> None:
            super().__init__(
                PluginMetadata(
-                   name="my-domain",
+                   name="my_domain",
                    version="1.0.0",
                    description="My domain description",
                    maintainer="team@example.com",

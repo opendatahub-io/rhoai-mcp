@@ -494,7 +494,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
         # Apply limit if specified
         names = names_result.names
-        if limit and limit < len(names):
+        if limit is not None:
+            if limit < 0:
+                return {"error": "limit must be >= 0"}
             names = names[:limit]
 
         return {
@@ -865,7 +867,7 @@ def _get_resource_status(
             bucket=conn.aws_s3_bucket,
         )
 
-    if resource_type in ("training", "trainjob", "train_job"):
+    if resource_type in ("training", "training_job", "trainjob", "train_job"):
         from rhoai_mcp.domains.training.client import TrainingClient
 
         training_client = TrainingClient(server.k8s)

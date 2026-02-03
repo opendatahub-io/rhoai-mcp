@@ -344,13 +344,16 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         storage_valid = True
         if storage_uri:
             if storage_uri.startswith("pvc://"):
+                from rhoai_mcp.utils.errors import NotFoundError
+
                 pvc_name = storage_uri.replace("pvc://", "").split("/")[0]
                 try:
                     pvc = server.k8s.get_pvc(pvc_name, namespace)
-                    if pvc.status.phase != "Bound":
-                        issues.append(f"PVC '{pvc_name}' is not bound")
+                    pvc_phase = pvc.status.phase if pvc.status else "Unknown"
+                    if pvc_phase != "Bound":
+                        issues.append(f"PVC '{pvc_name}' is not bound (status: {pvc_phase})")
                         storage_valid = False
-                except Exception:
+                except NotFoundError:
                     issues.append(f"PVC '{pvc_name}' not found")
                     storage_valid = False
             elif storage_uri.startswith("s3://"):

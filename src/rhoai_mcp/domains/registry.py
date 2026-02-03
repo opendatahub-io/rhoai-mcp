@@ -237,6 +237,38 @@ class PromptsPlugin(BasePlugin):
         return True, "Prompts require no external dependencies"
 
 
+class ModelRegistryPlugin(BasePlugin):
+    """Plugin for Model Registry integration.
+
+    Provides tools to interact with the OpenShift AI Model Registry service
+    via its REST API. Unlike other domains that use Kubernetes CRDs, the
+    Model Registry has its own HTTP-based API.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="model_registry",
+                version="0.1.0",
+                description="Model Registry integration",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],  # Uses REST API, not CRDs
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.model_registry.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        if not server.config.model_registry_enabled:
+            return False, "Model Registry is disabled"
+        return True, "Model Registry integration enabled"
+
+
 def get_core_plugins() -> list[BasePlugin]:
     """Return all core domain plugin instances.
 
@@ -255,4 +287,5 @@ def get_core_plugins() -> list[BasePlugin]:
         StoragePlugin(),
         TrainingPlugin(),
         PromptsPlugin(),
+        ModelRegistryPlugin(),
     ]

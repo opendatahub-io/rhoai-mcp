@@ -142,6 +142,22 @@ class RHOAIConfig(BaseSettings):
         description="Enable evaluation harness for tracking agent performance",
     )
 
+    # Model Registry settings
+    model_registry_url: str = Field(
+        default="http://model-registry.odh-model-registries.svc:8080",
+        description="Model Registry service URL",
+    )
+    model_registry_timeout: int = Field(
+        default=30,
+        ge=1,
+        le=120,
+        description="Model Registry request timeout in seconds",
+    )
+    model_registry_enabled: bool = Field(
+        default=True,
+        description="Enable Model Registry integration",
+    )
+
     @field_validator("kubeconfig_path", mode="before")
     @classmethod
     def resolve_kubeconfig_path(cls, v: str | Path | None) -> Path | None:

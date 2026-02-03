@@ -1,0 +1,280 @@
+"""Model Registry REST API client."""
+
+from typing import TYPE_CHECKING, Any
+
+import httpx
+
+from rhoai_mcp.domains.model_registry.errors import (
+    ModelNotFoundError,
+    ModelRegistryConnectionError,
+    ModelRegistryError,
+)
+from rhoai_mcp.domains.model_registry.models import (
+    CustomProperties,
+    ModelArtifact,
+    ModelVersion,
+    RegisteredModel,
+)
+
+if TYPE_CHECKING:
+    from rhoai_mcp.config import RHOAIConfig
+
+
+class ModelRegistryClient:
+    """Client for OpenShift AI Model Registry REST API.
+
+    This client communicates with the Model Registry service using HTTP REST
+    calls. Unlike other domain clients that use Kubernetes CRDs, the Model
+    Registry has its own REST API.
+
+    Usage:
+        async with ModelRegistryClient(config) as client:
+            models = await client.list_registered_models()
+    """
+
+    def __init__(self, config: "RHOAIConfig") -> None:
+        """Initialize client.
+
+        Args:
+            config: RHOAI configuration with Model Registry settings.
+        """
+        self._config = config
+        self._http_client: httpx.AsyncClient | None = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create HTTP client."""
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(
+                base_url=self._config.model_registry_url,
+                timeout=self._config.model_registry_timeout,
+            )
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close HTTP client."""
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
+
+    async def list_registered_models(
+        self,
+        page_size: int = 100,
+        order_by: str = "UPDATE_TIME",
+    ) -> list[RegisteredModel]:
+        """List all registered models.
+
+        Args:
+            page_size: Maximum number of models to return.
+            order_by: Field to order by (UPDATE_TIME, CREATE_TIME, NAME).
+
+        Returns:
+            List of registered models.
+
+        Raises:
+            ModelRegistryError: If the API request fails.
+            ModelRegistryConnectionError: If connection fails.
+        """
+        client = await self._get_client()
+        params: dict[str, str | int] = {
+            "pageSize": page_size,
+            "orderBy": order_by,
+        }
+
+        try:
+            response = await client.get(
+                "/api/model_registry/v1alpha3/registered_models",
+                params=params,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            models = []
+            for item in data.get("items", []):
+                models.append(self._parse_registered_model(item))
+            return models
+
+        except httpx.ConnectError as e:
+            raise ModelRegistryConnectionError(
+                f"Failed to connect to Model Registry at {self._config.model_registry_url}: {e}"
+            ) from e
+        except httpx.HTTPStatusError as e:
+            raise ModelRegistryError(f"Failed to list models: {e}") from e
+
+    async def get_registered_model(self, model_id: str) -> RegisteredModel:
+        """Get a registered model by ID.
+
+        Args:
+            model_id: The model ID.
+
+        Returns:
+            The registered model.
+
+        Raises:
+            ModelNotFoundError: If the model doesn't exist.
+            ModelRegistryError: If the API request fails.
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.get(
+                f"/api/model_registry/v1alpha3/registered_models/{model_id}"
+            )
+            if response.status_code == 404:
+                raise ModelNotFoundError(f"Model not found: {model_id}")
+            response.raise_for_status()
+            return self._parse_registered_model(response.json())
+
+        except httpx.ConnectError as e:
+            raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise ModelRegistryError(f"Failed to get model: {e}") from e
+
+    async def get_registered_model_by_name(self, name: str) -> RegisteredModel | None:
+        """Get a registered model by name.
+
+        Args:
+            name: The model name.
+
+        Returns:
+            The registered model, or None if not found.
+        """
+        models = await self.list_registered_models()
+        for model in models:
+            if model.name == name:
+                return model
+        return None
+
+    async def get_model_versions(self, model_id: str) -> list[ModelVersion]:
+        """Get all versions of a registered model.
+
+        Args:
+            model_id: The parent model ID.
+
+        Returns:
+            List of model versions.
+
+        Raises:
+            ModelRegistryError: If the API request fails.
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.get(
+                f"/api/model_registry/v1alpha3/registered_models/{model_id}/versions"
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            versions = []
+            for item in data.get("items", []):
+                versions.append(self._parse_model_version(item))
+            return versions
+
+        except httpx.ConnectError as e:
+            raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise ModelRegistryError(f"Failed to get model versions: {e}") from e
+
+    async def get_model_version(self, version_id: str) -> ModelVersion:
+        """Get a specific model version.
+
+        Args:
+            version_id: The version ID.
+
+        Returns:
+            The model version.
+
+        Raises:
+            ModelNotFoundError: If the version doesn't exist.
+            ModelRegistryError: If the API request fails.
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.get(f"/api/model_registry/v1alpha3/model_versions/{version_id}")
+            if response.status_code == 404:
+                raise ModelNotFoundError(f"Version not found: {version_id}")
+            response.raise_for_status()
+            return self._parse_model_version(response.json())
+
+        except httpx.ConnectError as e:
+            raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise ModelRegistryError(f"Failed to get model version: {e}") from e
+
+    async def get_model_artifacts(self, version_id: str) -> list[ModelArtifact]:
+        """Get artifacts for a model version.
+
+        Args:
+            version_id: The model version ID.
+
+        Returns:
+            List of model artifacts.
+
+        Raises:
+            ModelRegistryError: If the API request fails.
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.get(
+                f"/api/model_registry/v1alpha3/model_versions/{version_id}/artifacts"
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            artifacts = []
+            for item in data.get("items", []):
+                artifacts.append(self._parse_model_artifact(item))
+            return artifacts
+
+        except httpx.ConnectError as e:
+            raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise ModelRegistryError(f"Failed to get artifacts: {e}") from e
+
+    def _parse_registered_model(self, data: dict[str, Any]) -> RegisteredModel:
+        """Parse registered model from API response."""
+        return RegisteredModel(
+            id=data.get("id", ""),
+            name=data.get("name", ""),
+            description=data.get("description"),
+            owner=data.get("owner"),
+            state=data.get("state", "LIVE"),
+            custom_properties=CustomProperties(properties=data.get("customProperties", {})),
+        )
+
+    def _parse_model_version(self, data: dict[str, Any]) -> ModelVersion:
+        """Parse model version from API response."""
+        return ModelVersion(
+            id=data.get("id", ""),
+            name=data.get("name", ""),
+            registered_model_id=data.get("registeredModelId", ""),
+            state=data.get("state", "LIVE"),
+            description=data.get("description"),
+            author=data.get("author"),
+            custom_properties=CustomProperties(properties=data.get("customProperties", {})),
+        )
+
+    def _parse_model_artifact(self, data: dict[str, Any]) -> ModelArtifact:
+        """Parse model artifact from API response."""
+        return ModelArtifact(
+            id=data.get("id", ""),
+            name=data.get("name", ""),
+            uri=data.get("uri", ""),
+            description=data.get("description"),
+            model_format_name=data.get("modelFormatName"),
+            model_format_version=data.get("modelFormatVersion"),
+            storage_key=data.get("storageKey"),
+            storage_path=data.get("storagePath"),
+            service_account_name=data.get("serviceAccountName"),
+            custom_properties=CustomProperties(properties=data.get("customProperties", {})),
+        )
+
+    async def __aenter__(self) -> "ModelRegistryClient":
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit."""
+        await self.close()

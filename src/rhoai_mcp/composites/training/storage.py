@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -11,6 +12,8 @@ from rhoai_mcp.utils.errors import NotFoundError, ResourceExistsError, RHOAIErro
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
     from rhoai_mcp.server import RHOAIServer
+
+logger = logging.getLogger(__name__)
 
 
 def create_training_pvc(
@@ -210,9 +213,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         # Verify PVC exists
         try:
             pvc = server.k8s.get_pvc(pvc_name, namespace)
-            if pvc.status.phase != "Bound":
+            status_phase = pvc.status.phase if pvc.status else "Unknown"
+            if status_phase != "Bound":
                 return {
-                    "error": f"PVC '{pvc_name}' is not bound (current: {pvc.status.phase})",
+                    "error": f"PVC '{pvc_name}' is not bound (current: {status_phase})",
                     "message": "Wait for PVC to be bound before fixing permissions.",
                 }
         except NotFoundError as e:
@@ -274,7 +278,7 @@ def _find_rwx_storage_class(k8s: Any) -> str | None:
         if storage_classes.items:
             first_name: str = storage_classes.items[0].metadata.name
             return first_name
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to auto-detect RWX storage class: %s", e)
 
     return None

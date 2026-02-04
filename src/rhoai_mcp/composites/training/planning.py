@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -600,7 +601,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
 
 def _estimate_resources_internal(model_id: str, method: str) -> dict[str, Any]:
-    """Internal helper for resource estimation used by prepare_training."""
+    """Internal helper for resource estimation used by prepare_training.
+
+    Note: Uses a simplified formula without optimizer/activation overhead.
+    For detailed estimates, use the estimate_resources() tool.
+    """
     param_count = _extract_param_count(model_id)
 
     # Get base memory estimate
@@ -647,8 +652,6 @@ def _sanitize_pvc_name(base_name: str, suffix: str = "") -> str:
     Returns:
         A DNS-1123 compliant name, truncated with hash suffix if needed.
     """
-    import hashlib
-
     # Build the full name
     full_name = f"{base_name}-{suffix}" if suffix else base_name
 

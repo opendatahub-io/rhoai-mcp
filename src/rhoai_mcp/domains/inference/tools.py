@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 # Model size estimates by parameter count (in billions)
-MODEL_SIZE_ESTIMATES = {
+MODEL_SIZE_ESTIMATES: dict[tuple[int, int], int] = {
     (0, 1): 2,  # < 1B params -> ~2GB
     (1, 3): 6,  # 1-3B params -> ~6GB
     (3, 7): 14,  # 3-7B params -> ~14GB
@@ -266,7 +266,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         Args:
             namespace: The project (namespace) name.
             model_id: Model identifier (e.g., "meta-llama/Llama-2-7b-hf").
-            storage_uri: Model location (s3:// or pvc://). Auto-detected if None.
+            storage_uri: Model location (s3:// or pvc://). Required for deployment.
             model_format: Model format. Auto-detected from model_id if None.
 
         Returns:

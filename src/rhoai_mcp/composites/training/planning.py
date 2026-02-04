@@ -527,7 +527,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             prereq_passed = False
 
         # Step 3: Handle storage
-        pvc_name = f"training-checkpoints-{namespace}"
+        pvc_name = _sanitize_pvc_name("training-checkpoints", namespace)
         storage_exists = False
 
         try:
@@ -618,6 +618,52 @@ def _estimate_resources_internal(model_id: str, method: str) -> dict[str, Any]:
         "recommended_gpus": recommended_gpus,
         "storage_gb": int(param_count * 4) + 50,
     }
+
+
+def _sanitize_pvc_name(base_name: str, suffix: str = "") -> str:
+    """Sanitize a PVC name for DNS-1123 compliance.
+
+    Kubernetes PVC names must:
+    - Be at most 63 characters
+    - Start and end with alphanumeric characters
+    - Contain only lowercase alphanumeric characters or '-'
+
+    Args:
+        base_name: The base name to sanitize.
+        suffix: Optional suffix to append (e.g., namespace).
+
+    Returns:
+        A DNS-1123 compliant name, truncated with hash suffix if needed.
+    """
+    import hashlib
+
+    # Build the full name
+    full_name = f"{base_name}-{suffix}" if suffix else base_name
+
+    # Lowercase and replace invalid characters with hyphens
+    sanitized = re.sub(r"[^a-z0-9-]", "-", full_name.lower())
+    # Collapse multiple hyphens
+    sanitized = re.sub(r"-+", "-", sanitized)
+    # Strip leading/trailing hyphens
+    sanitized = sanitized.strip("-")
+
+    # Ensure it starts with alphanumeric
+    if sanitized and not sanitized[0].isalnum():
+        sanitized = f"pvc-{sanitized}"
+
+    # Handle empty result
+    if not sanitized:
+        sanitized = "pvc"
+
+    # Truncate if needed, preserving uniqueness with hash suffix
+    max_length = 63
+    if len(sanitized) > max_length:
+        # Use first 54 chars + "-" + 8-char hash suffix
+        hash_suffix = hashlib.sha256(full_name.encode()).hexdigest()[:8]
+        truncated = sanitized[: max_length - 9].rstrip("-")
+        sanitized = f"{truncated}-{hash_suffix}"
+
+    return sanitized
 
 
 def _extract_param_count(model_id: str) -> float:

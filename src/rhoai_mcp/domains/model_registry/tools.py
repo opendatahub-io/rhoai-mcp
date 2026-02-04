@@ -1,6 +1,5 @@
 """MCP Tools for Model Registry operations."""
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -12,7 +11,6 @@ from rhoai_mcp.domains.model_registry.errors import (
     ModelRegistryConnectionError,
     ModelRegistryError,
 )
-from rhoai_mcp.domains.model_registry.models import BenchmarkData
 from rhoai_mcp.utils.response import (
     PaginatedResponse,
     Verbosity,
@@ -27,7 +25,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     """Register Model Registry tools with the MCP server."""
 
     @mcp.tool()
-    def list_registered_models(
+    async def list_registered_models(
         limit: int | None = None,
         offset: int = 0,
         verbosity: str = "standard",
@@ -50,13 +48,10 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
-        async def _list() -> list[dict[str, Any]]:
+        try:
             async with ModelRegistryClient(server.config) as client:
                 models = await client.list_registered_models()
-                return [_format_model(m, Verbosity.from_str(verbosity)) for m in models]
-
-        try:
-            all_items = asyncio.run(_list())
+                all_items = [_format_model(m, Verbosity.from_str(verbosity)) for m in models]
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -75,7 +70,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         return PaginatedResponse.build(paginated, total, offset, effective_limit)
 
     @mcp.tool()
-    def get_registered_model(
+    async def get_registered_model(
         model_id: str,
         include_versions: bool = False,
     ) -> dict[str, Any]:
@@ -91,7 +86,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
-        async def _get() -> dict[str, Any]:
+        try:
             async with ModelRegistryClient(server.config) as client:
                 model = await client.get_registered_model(model_id)
                 result = _format_model(model, Verbosity.FULL)
@@ -101,9 +96,6 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                     result["versions"] = [_format_version(v, Verbosity.STANDARD) for v in versions]
 
                 return result
-
-        try:
-            return asyncio.run(_get())
         except ModelNotFoundError:
             return {"error": f"Model not found: {model_id}"}
         except ModelRegistryConnectionError as e:
@@ -112,7 +104,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             return {"error": str(e)}
 
     @mcp.tool()
-    def list_model_versions(
+    async def list_model_versions(
         model_id: str,
         limit: int | None = None,
         offset: int = 0,
@@ -135,13 +127,10 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
-        async def _list() -> list[dict[str, Any]]:
+        try:
             async with ModelRegistryClient(server.config) as client:
                 versions = await client.get_model_versions(model_id)
-                return [_format_version(v, Verbosity.from_str(verbosity)) for v in versions]
-
-        try:
-            all_items = asyncio.run(_list())
+                all_items = [_format_version(v, Verbosity.from_str(verbosity)) for v in versions]
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -160,7 +149,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         return PaginatedResponse.build(paginated, total, offset, effective_limit)
 
     @mcp.tool()
-    def get_model_version(version_id: str) -> dict[str, Any]:
+    async def get_model_version(version_id: str) -> dict[str, Any]:
         """Get detailed information about a specific model version.
 
         Args:
@@ -172,13 +161,10 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
-        async def _get() -> dict[str, Any]:
+        try:
             async with ModelRegistryClient(server.config) as client:
                 version = await client.get_model_version(version_id)
                 return _format_version(version, Verbosity.FULL)
-
-        try:
-            return asyncio.run(_get())
         except ModelNotFoundError:
             return {"error": f"Version not found: {version_id}"}
         except ModelRegistryConnectionError as e:
@@ -187,7 +173,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             return {"error": str(e)}
 
     @mcp.tool()
-    def get_model_artifacts(
+    async def get_model_artifacts(
         version_id: str,
         verbosity: str = "standard",
     ) -> dict[str, Any]:
@@ -206,13 +192,12 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
-        async def _get() -> list[dict[str, Any]]:
+        try:
             async with ModelRegistryClient(server.config) as client:
                 artifacts = await client.get_model_artifacts(version_id)
-                return [_format_artifact(a, Verbosity.from_str(verbosity)) for a in artifacts]
-
-        try:
-            artifacts = asyncio.run(_get())
+                formatted_artifacts = [
+                    _format_artifact(a, Verbosity.from_str(verbosity)) for a in artifacts
+                ]
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -220,12 +205,12 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
         return {
             "version_id": version_id,
-            "artifacts": artifacts,
-            "count": len(artifacts),
+            "artifacts": formatted_artifacts,
+            "count": len(formatted_artifacts),
         }
 
     @mcp.tool()
-    def get_model_benchmarks(
+    async def get_model_benchmarks(
         model_name: str,
         version_name: str | None = None,
         gpu_type: str | None = None,
@@ -247,17 +232,14 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
-        async def _get() -> BenchmarkData | None:
+        try:
             async with ModelRegistryClient(server.config) as client:
                 extractor = BenchmarkExtractor(client)
-                return await extractor.get_benchmark_for_model(
+                benchmark = await extractor.get_benchmark_for_model(
                     model_name=model_name,
                     version_name=version_name,
                     gpu_type=gpu_type,
                 )
-
-        try:
-            benchmark = asyncio.run(_get())
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -269,7 +251,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         return _format_benchmark(benchmark)
 
     @mcp.tool()
-    def get_validation_metrics(
+    async def get_validation_metrics(
         model_name: str,
         version_name: str,
     ) -> dict[str, Any]:
@@ -290,7 +272,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
-        async def _get() -> dict[str, Any]:
+        try:
             async with ModelRegistryClient(server.config) as client:
                 # Find the model
                 model = await client.get_registered_model_by_name(model_name)
@@ -311,16 +293,13 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 extractor = BenchmarkExtractor(client)
                 metrics = extractor.extract_validation_metrics(target_version, model_name)
                 return _format_validation_metrics(metrics)
-
-        try:
-            return asyncio.run(_get())
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
             return {"error": str(e)}
 
     @mcp.tool()
-    def find_benchmarks_by_gpu(
+    async def find_benchmarks_by_gpu(
         gpu_type: str,
     ) -> dict[str, Any]:
         """Find all benchmarks for a specific GPU type.
@@ -338,14 +317,11 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
-        async def _find() -> list[dict[str, Any]]:
+        try:
             async with ModelRegistryClient(server.config) as client:
                 extractor = BenchmarkExtractor(client)
                 benchmarks = await extractor.find_benchmarks_by_gpu(gpu_type)
-                return [_format_benchmark(b) for b in benchmarks]
-
-        try:
-            benchmarks = asyncio.run(_find())
+                formatted_benchmarks = [_format_benchmark(b) for b in benchmarks]
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -353,8 +329,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
         return {
             "gpu_type": gpu_type,
-            "benchmarks": benchmarks,
-            "count": len(benchmarks),
+            "benchmarks": formatted_benchmarks,
+            "count": len(formatted_benchmarks),
         }
 
 

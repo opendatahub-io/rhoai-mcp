@@ -30,13 +30,17 @@ def create_training_pvc(
         k8s: Kubernetes client instance.
         namespace: The namespace to create the PVC in.
         pvc_name: Name for the PVC.
-        size_gb: Size in GB.
+        size_gb: Size in GB (must be >= 1).
         access_mode: Access mode (default: "ReadWriteMany" for distributed training).
         storage_class: Storage class to use (auto-detected if not specified).
 
     Returns:
         PVC creation result with success/error status.
     """
+    # Validate size_gb
+    if size_gb < 1:
+        return {"error": "size_gb must be >= 1", "created": False}
+
     # Check if PVC already exists
     try:
         existing = k8s.get_pvc(pvc_name, namespace)

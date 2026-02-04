@@ -137,6 +137,10 @@ class ModelRegistryClient:
             raise ModelRegistryConnectionError(
                 f"Failed to connect to Model Registry at {self._config.model_registry_url}: {e}"
             ) from e
+        except httpx.TimeoutException as e:
+            raise ModelRegistryConnectionError(
+                f"Timeout connecting to Model Registry at {self._config.model_registry_url}: {e}"
+            ) from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to list models: {e}") from e
 
@@ -166,6 +170,8 @@ class ModelRegistryClient:
 
         except httpx.ConnectError as e:
             raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+        except httpx.TimeoutException as e:
+            raise ModelRegistryConnectionError(f"Timeout connecting to Model Registry: {e}") from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model: {e}") from e
 
@@ -267,6 +273,8 @@ class ModelRegistryClient:
 
         except httpx.ConnectError as e:
             raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+        except httpx.TimeoutException as e:
+            raise ModelRegistryConnectionError(f"Timeout connecting to Model Registry: {e}") from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model versions: {e}") from e
 
@@ -294,6 +302,8 @@ class ModelRegistryClient:
 
         except httpx.ConnectError as e:
             raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+        except httpx.TimeoutException as e:
+            raise ModelRegistryConnectionError(f"Timeout connecting to Model Registry: {e}") from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model version: {e}") from e
 
@@ -325,6 +335,8 @@ class ModelRegistryClient:
 
         except httpx.ConnectError as e:
             raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+        except httpx.TimeoutException as e:
+            raise ModelRegistryConnectionError(f"Timeout connecting to Model Registry: {e}") from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get artifacts: {e}") from e
 

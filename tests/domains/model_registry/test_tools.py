@@ -27,7 +27,7 @@ class TestListRegisteredModels:
         server.config.max_list_limit = 100
         return server
 
-    def test_list_models_disabled(self, mock_server: MagicMock) -> None:
+    async def test_list_models_disabled(self, mock_server: MagicMock) -> None:
         """Test listing when registry is disabled."""
         mock_server.config.model_registry_enabled = False
 
@@ -46,11 +46,11 @@ class TestListRegisteredModels:
         mcp.tool = capture_tool
         register_tools(mcp, mock_server)
 
-        result = registered_tools["list_registered_models"]()
+        result = await registered_tools["list_registered_models"]()
         assert "error" in result
         assert "disabled" in result["error"]
 
-    def test_list_models_success(self, mock_server: MagicMock) -> None:
+    async def test_list_models_success(self, mock_server: MagicMock) -> None:
         """Test successful model listing."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -81,13 +81,13 @@ class TestListRegisteredModels:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = registered_tools["list_registered_models"]()
+            result = await registered_tools["list_registered_models"]()
 
         assert "items" in result
         assert result["total"] == 2
         assert len(result["items"]) == 2
 
-    def test_list_models_with_pagination(self, mock_server: MagicMock) -> None:
+    async def test_list_models_with_pagination(self, mock_server: MagicMock) -> None:
         """Test model listing with pagination."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -118,7 +118,7 @@ class TestListRegisteredModels:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = registered_tools["list_registered_models"](limit=5, offset=2)
+            result = await registered_tools["list_registered_models"](limit=5, offset=2)
 
         assert result["total"] == 10
         assert len(result["items"]) == 5
@@ -137,7 +137,7 @@ class TestGetRegisteredModel:
         server.config.model_registry_timeout = 30
         return server
 
-    def test_get_model_success(self, mock_server: MagicMock) -> None:
+    async def test_get_model_success(self, mock_server: MagicMock) -> None:
         """Test getting a model successfully."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -171,13 +171,13 @@ class TestGetRegisteredModel:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = registered_tools["get_registered_model"]("model-123")
+            result = await registered_tools["get_registered_model"]("model-123")
 
         assert result["id"] == "model-123"
         assert result["name"] == "llama-2-7b"
         assert result["owner"] == "data-team"
 
-    def test_get_model_with_versions(self, mock_server: MagicMock) -> None:
+    async def test_get_model_with_versions(self, mock_server: MagicMock) -> None:
         """Test getting a model with versions."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -210,14 +210,14 @@ class TestGetRegisteredModel:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = registered_tools["get_registered_model"](
+            result = await registered_tools["get_registered_model"](
                 "model-123", include_versions=True
             )
 
         assert "versions" in result
         assert len(result["versions"]) == 2
 
-    def test_get_model_not_found(self, mock_server: MagicMock) -> None:
+    async def test_get_model_not_found(self, mock_server: MagicMock) -> None:
         """Test getting a model that doesn't exist."""
         from rhoai_mcp.domains.model_registry.errors import ModelNotFoundError
         from rhoai_mcp.domains.model_registry.tools import register_tools
@@ -246,7 +246,7 @@ class TestGetRegisteredModel:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = registered_tools["get_registered_model"]("nonexistent")
+            result = await registered_tools["get_registered_model"]("nonexistent")
 
         assert "error" in result
         assert "not found" in result["error"].lower()
@@ -264,7 +264,7 @@ class TestGetModelArtifacts:
         server.config.model_registry_timeout = 30
         return server
 
-    def test_get_artifacts_success(self, mock_server: MagicMock) -> None:
+    async def test_get_artifacts_success(self, mock_server: MagicMock) -> None:
         """Test getting artifacts successfully."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -299,7 +299,7 @@ class TestGetModelArtifacts:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = registered_tools["get_model_artifacts"]("version-123")
+            result = await registered_tools["get_model_artifacts"]("version-123")
 
         assert result["version_id"] == "version-123"
         assert result["count"] == 1
@@ -319,7 +319,7 @@ class TestGetModelBenchmarks:
         server.config.model_registry_timeout = 30
         return server
 
-    def test_get_benchmarks_disabled(self, mock_server: MagicMock) -> None:
+    async def test_get_benchmarks_disabled(self, mock_server: MagicMock) -> None:
         """Test getting benchmarks when registry is disabled."""
         mock_server.config.model_registry_enabled = False
 
@@ -338,11 +338,11 @@ class TestGetModelBenchmarks:
         mcp.tool = capture_tool
         register_tools(mcp, mock_server)
 
-        result = registered_tools["get_model_benchmarks"]("llama-2-7b")
+        result = await registered_tools["get_model_benchmarks"]("llama-2-7b")
         assert "error" in result
         assert "disabled" in result["error"]
 
-    def test_get_benchmarks_success(self, mock_server: MagicMock) -> None:
+    async def test_get_benchmarks_success(self, mock_server: MagicMock) -> None:
         """Test getting benchmarks successfully."""
         from rhoai_mcp.domains.model_registry.models import BenchmarkData
         from rhoai_mcp.domains.model_registry.tools import register_tools
@@ -382,13 +382,13 @@ class TestGetModelBenchmarks:
             mock_extractor.get_benchmark_for_model = AsyncMock(return_value=benchmark)
             mock_extractor_class.return_value = mock_extractor
 
-            result = registered_tools["get_model_benchmarks"]("llama-2-7b")
+            result = await registered_tools["get_model_benchmarks"]("llama-2-7b")
 
         assert result["model_name"] == "llama-2-7b"
         assert result["gpu_type"] == "A100"
         assert result["p50_latency_ms"] == 45.0
 
-    def test_get_benchmarks_not_found(self, mock_server: MagicMock) -> None:
+    async def test_get_benchmarks_not_found(self, mock_server: MagicMock) -> None:
         """Test getting benchmarks when no data found."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -419,7 +419,7 @@ class TestGetModelBenchmarks:
             mock_extractor.get_benchmark_for_model = AsyncMock(return_value=None)
             mock_extractor_class.return_value = mock_extractor
 
-            result = registered_tools["get_model_benchmarks"]("nonexistent")
+            result = await registered_tools["get_model_benchmarks"]("nonexistent")
 
         assert "error" in result
         assert "No benchmark data found" in result["error"]
@@ -437,7 +437,7 @@ class TestGetValidationMetrics:
         server.config.model_registry_timeout = 30
         return server
 
-    def test_get_validation_metrics_disabled(self, mock_server: MagicMock) -> None:
+    async def test_get_validation_metrics_disabled(self, mock_server: MagicMock) -> None:
         """Test getting validation metrics when registry is disabled."""
         mock_server.config.model_registry_enabled = False
 
@@ -456,11 +456,11 @@ class TestGetValidationMetrics:
         mcp.tool = capture_tool
         register_tools(mcp, mock_server)
 
-        result = registered_tools["get_validation_metrics"]("llama-2-7b", "v1.0")
+        result = await registered_tools["get_validation_metrics"]("llama-2-7b", "v1.0")
         assert "error" in result
         assert "disabled" in result["error"]
 
-    def test_get_validation_metrics_model_not_found(self, mock_server: MagicMock) -> None:
+    async def test_get_validation_metrics_model_not_found(self, mock_server: MagicMock) -> None:
         """Test getting validation metrics when model not found."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -486,12 +486,12 @@ class TestGetValidationMetrics:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = registered_tools["get_validation_metrics"]("nonexistent", "v1.0")
+            result = await registered_tools["get_validation_metrics"]("nonexistent", "v1.0")
 
         assert "error" in result
         assert "Model not found" in result["error"]
 
-    def test_get_validation_metrics_version_not_found(self, mock_server: MagicMock) -> None:
+    async def test_get_validation_metrics_version_not_found(self, mock_server: MagicMock) -> None:
         """Test getting validation metrics when version not found."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -521,12 +521,12 @@ class TestGetValidationMetrics:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = registered_tools["get_validation_metrics"]("llama-2-7b", "v2.0")
+            result = await registered_tools["get_validation_metrics"]("llama-2-7b", "v2.0")
 
         assert "error" in result
         assert "Version not found" in result["error"]
 
-    def test_get_validation_metrics_success(self, mock_server: MagicMock) -> None:
+    async def test_get_validation_metrics_success(self, mock_server: MagicMock) -> None:
         """Test getting validation metrics successfully."""
         from rhoai_mcp.domains.model_registry.models import ValidationMetrics
         from rhoai_mcp.domains.model_registry.tools import register_tools
@@ -577,7 +577,7 @@ class TestGetValidationMetrics:
             mock_extractor.extract_validation_metrics.return_value = metrics
             mock_extractor_class.return_value = mock_extractor
 
-            result = registered_tools["get_validation_metrics"]("llama-2-7b", "v1.0")
+            result = await registered_tools["get_validation_metrics"]("llama-2-7b", "v1.0")
 
         assert result["model_name"] == "llama-2-7b"
         assert result["model_version"] == "v1.0"
@@ -595,7 +595,7 @@ class TestFindBenchmarksByGpu:
         server.config.model_registry_timeout = 30
         return server
 
-    def test_find_benchmarks_disabled(self, mock_server: MagicMock) -> None:
+    async def test_find_benchmarks_disabled(self, mock_server: MagicMock) -> None:
         """Test finding benchmarks when registry is disabled."""
         mock_server.config.model_registry_enabled = False
 
@@ -614,11 +614,11 @@ class TestFindBenchmarksByGpu:
         mcp.tool = capture_tool
         register_tools(mcp, mock_server)
 
-        result = registered_tools["find_benchmarks_by_gpu"]("A100")
+        result = await registered_tools["find_benchmarks_by_gpu"]("A100")
         assert "error" in result
         assert "disabled" in result["error"]
 
-    def test_find_benchmarks_success(self, mock_server: MagicMock) -> None:
+    async def test_find_benchmarks_success(self, mock_server: MagicMock) -> None:
         """Test finding benchmarks successfully."""
         from rhoai_mcp.domains.model_registry.models import BenchmarkData
         from rhoai_mcp.domains.model_registry.tools import register_tools
@@ -665,7 +665,7 @@ class TestFindBenchmarksByGpu:
             mock_extractor.find_benchmarks_by_gpu = AsyncMock(return_value=benchmarks)
             mock_extractor_class.return_value = mock_extractor
 
-            result = registered_tools["find_benchmarks_by_gpu"]("A100")
+            result = await registered_tools["find_benchmarks_by_gpu"]("A100")
 
         assert result["gpu_type"] == "A100"
         assert result["count"] == 2
@@ -673,7 +673,7 @@ class TestFindBenchmarksByGpu:
         assert result["benchmarks"][0]["model_name"] == "llama-2-7b"
         assert result["benchmarks"][1]["model_name"] == "mistral-7b"
 
-    def test_find_benchmarks_empty(self, mock_server: MagicMock) -> None:
+    async def test_find_benchmarks_empty(self, mock_server: MagicMock) -> None:
         """Test finding benchmarks with no results."""
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
@@ -704,7 +704,7 @@ class TestFindBenchmarksByGpu:
             mock_extractor.find_benchmarks_by_gpu = AsyncMock(return_value=[])
             mock_extractor_class.return_value = mock_extractor
 
-            result = registered_tools["find_benchmarks_by_gpu"]("TPU")
+            result = await registered_tools["find_benchmarks_by_gpu"]("TPU")
 
         assert result["gpu_type"] == "TPU"
         assert result["count"] == 0

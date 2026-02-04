@@ -307,9 +307,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 compatible_runtimes.append(runtime["name"])
                 if recommended_runtime is None:
                     recommended_runtime = runtime["name"]
-            # Check for LLM-specific runtimes
+            # Check for LLM-specific runtimes (only if they also support the format)
             is_llm_runtime = "vllm" in runtime["name"].lower() or "tgis" in runtime["name"].lower()
-            if is_llm_runtime and model_info.get("is_llm"):
+            if is_llm_runtime and model_info.get("is_llm") and runtime["name"] in compatible_runtimes:
                 recommended_runtime = runtime["name"]
 
         if not compatible_runtimes:

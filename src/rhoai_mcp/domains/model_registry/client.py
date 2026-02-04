@@ -1,5 +1,6 @@
 """Model Registry REST API client."""
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -115,7 +116,7 @@ class ModelRegistryClient:
             "orderBy": order_by,
         }
         if page_token:
-            params["nextPageToken"] = page_token
+            params["pageToken"] = page_token
 
         try:
             response = await client.get(
@@ -192,23 +193,67 @@ class ModelRegistryClient:
 
         return None
 
-    async def get_model_versions(self, model_id: str) -> list[ModelVersion]:
+    async def get_model_versions(
+        self,
+        model_id: str,
+        page_size: int = 100,
+    ) -> list[ModelVersion]:
         """Get all versions of a registered model.
 
         Args:
             model_id: The parent model ID.
+            page_size: Maximum number of versions per page.
 
         Returns:
-            List of model versions.
+            List of all model versions (iterates through all pages).
 
         Raises:
             ModelRegistryError: If the API request fails.
         """
+        all_versions: list[ModelVersion] = []
+        next_page_token: str | None = None
+
+        while True:
+            versions, next_page_token = await self._get_model_versions_page(
+                model_id=model_id,
+                page_size=page_size,
+                page_token=next_page_token,
+            )
+            all_versions.extend(versions)
+            if not next_page_token:
+                break
+
+        return all_versions
+
+    async def _get_model_versions_page(
+        self,
+        model_id: str,
+        page_size: int = 100,
+        page_token: str | None = None,
+    ) -> tuple[list[ModelVersion], str | None]:
+        """Get a single page of model versions.
+
+        Args:
+            model_id: The parent model ID.
+            page_size: Maximum number of versions to return.
+            page_token: Token for the next page (None for first page).
+
+        Returns:
+            Tuple of (versions, next_page_token). next_page_token is None if no more pages.
+
+        Raises:
+            ModelRegistryError: If the API request fails.
+            ModelRegistryConnectionError: If connection fails.
+        """
         client = await self._get_client()
+        params: dict[str, str | int] = {"pageSize": page_size}
+        if page_token:
+            params["pageToken"] = page_token
 
         try:
             response = await client.get(
-                f"/api/model_registry/v1alpha3/registered_models/{model_id}/versions"
+                f"/api/model_registry/v1alpha3/registered_models/{model_id}/versions",
+                params=params,
             )
             response.raise_for_status()
             data = response.json()
@@ -216,7 +261,9 @@ class ModelRegistryClient:
             versions = []
             for item in data.get("items", []):
                 versions.append(self._parse_model_version(item))
-            return versions
+
+            next_token = data.get("nextPageToken")
+            return versions, next_token
 
         except httpx.ConnectError as e:
             raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
@@ -281,6 +328,22 @@ class ModelRegistryClient:
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get artifacts: {e}") from e
 
+    def _parse_timestamp(self, timestamp_str: str | None) -> datetime | None:
+        """Parse ISO 8601 timestamp from API response.
+
+        Args:
+            timestamp_str: ISO 8601 timestamp string (e.g., "2024-01-15T10:30:00Z").
+
+        Returns:
+            Parsed datetime object, or None if parsing fails.
+        """
+        if not timestamp_str:
+            return None
+        try:
+            return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+
     def _parse_registered_model(self, data: dict[str, Any]) -> RegisteredModel:
         """Parse registered model from API response."""
         return RegisteredModel(
@@ -290,6 +353,8 @@ class ModelRegistryClient:
             owner=data.get("owner"),
             state=data.get("state", "LIVE"),
             custom_properties=CustomProperties(properties=data.get("customProperties", {})),
+            create_time=self._parse_timestamp(data.get("createTime")),
+            update_time=self._parse_timestamp(data.get("updateTime")),
         )
 
     def _parse_model_version(self, data: dict[str, Any]) -> ModelVersion:
@@ -302,6 +367,8 @@ class ModelRegistryClient:
             description=data.get("description"),
             author=data.get("author"),
             custom_properties=CustomProperties(properties=data.get("customProperties", {})),
+            create_time=self._parse_timestamp(data.get("createTime")),
+            update_time=self._parse_timestamp(data.get("updateTime")),
         )
 
     def _parse_model_artifact(self, data: dict[str, Any]) -> ModelArtifact:
@@ -317,6 +384,8 @@ class ModelRegistryClient:
             storage_path=data.get("storagePath"),
             service_account_name=data.get("serviceAccountName"),
             custom_properties=CustomProperties(properties=data.get("customProperties", {})),
+            create_time=self._parse_timestamp(data.get("createTime")),
+            update_time=self._parse_timestamp(data.get("updateTime")),
         )
 
     async def __aenter__(self) -> "ModelRegistryClient":

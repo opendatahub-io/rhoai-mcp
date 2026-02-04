@@ -473,13 +473,22 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         warnings: list[str] = []
         storage_created = False
         recommended_runtime = runtime_name
+        prereq_passed = True
+
+        # Validate and normalize method parameter
+        valid_methods = {"lora", "qlora", "dora", "full"}
+        method = method.lower()
+        if method not in valid_methods:
+            issues.append(
+                f"Invalid fine-tuning method: {method}. Must be one of: {', '.join(valid_methods)}"
+            )
+            prereq_passed = False
 
         # Step 1: Estimate resources
         resource_estimate = _estimate_resources_internal(model_id, method)
 
         # Step 2: Check prerequisites
         client = TrainingClient(server.k8s)
-        prereq_passed = True
 
         # Check cluster connectivity and GPUs
         try:

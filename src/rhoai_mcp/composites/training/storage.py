@@ -265,7 +265,12 @@ def _find_rwx_storage_class(k8s: Any) -> str | None:
     try:
         # Try to list storage classes
         from kubernetes import client  # type: ignore[import-untyped]
+        from kubernetes.client import ApiException  # type: ignore[import-untyped]
+    except ImportError:
+        logger.debug("kubernetes client not available for storage class detection")
+        return None
 
+    try:
         storage_api = client.StorageV1Api(k8s._api_client)
         storage_classes = storage_api.list_storage_class()
 
@@ -278,7 +283,7 @@ def _find_rwx_storage_class(k8s: Any) -> str | None:
         if storage_classes.items:
             first_name: str = storage_classes.items[0].metadata.name
             return first_name
-    except Exception as e:
+    except ApiException as e:
         logger.debug("Failed to auto-detect RWX storage class: %s", e)
 
     return None

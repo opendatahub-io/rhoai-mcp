@@ -146,7 +146,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         )
 
         # Add success field for backward compatibility
-        if result.get("created"):
+        if result.get("created") or result.get("exists"):
             result["success"] = True
 
         return result

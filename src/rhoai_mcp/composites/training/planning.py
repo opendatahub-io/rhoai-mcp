@@ -549,7 +549,19 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 )
                 if result.get("created") or result.get("exists"):
                     storage_created = result.get("created", False)
-                    storage_exists = True
+                    # Verify PVC is actually Bound before considering it ready
+                    try:
+                        pvc = server.k8s.get_pvc(pvc_name, namespace)
+                        if pvc.status and pvc.status.phase == "Bound":
+                            storage_exists = True
+                        else:
+                            phase = pvc.status.phase if pvc.status else "Unknown"
+                            warnings.append(
+                                f"PVC '{pvc_name}' exists but is not bound (phase: {phase}). "
+                                "Training may need to wait for PVC to be ready."
+                            )
+                    except NotFoundError:
+                        warnings.append(f"PVC '{pvc_name}' creation reported but not found")
                 elif result.get("error"):
                     warnings.append(result["error"])
             else:

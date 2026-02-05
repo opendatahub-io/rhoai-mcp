@@ -497,15 +497,30 @@ class TestModelRegistryClientAuth:
         assert headers["Authorization"] == "Bearer my-explicit-token"
 
     def test_oauth_auth_outside_cluster(self, mock_config_oauth: MagicMock) -> None:
-        """When auth mode is OAUTH outside cluster, no auth headers returned.
-
-        Port-forwarding is used for external access, bypassing auth.
-        """
+        """When auth mode is OAUTH outside cluster, gets token from CLI."""
         client = ModelRegistryClient(mock_config_oauth)
 
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
             return_value=False,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth._get_cli_token",
+            return_value="cli-token-123",
+        ):
+            headers = client._get_auth_headers()
+
+        assert headers["Authorization"] == "Bearer cli-token-123"
+
+    def test_oauth_auth_outside_cluster_no_token(self, mock_config_oauth: MagicMock) -> None:
+        """When auth mode is OAUTH outside cluster but no CLI token, no headers."""
+        client = ModelRegistryClient(mock_config_oauth)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=False,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth._get_cli_token",
+            return_value=None,
         ):
             headers = client._get_auth_headers()
 

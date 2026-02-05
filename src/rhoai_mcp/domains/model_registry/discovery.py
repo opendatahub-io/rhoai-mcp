@@ -272,20 +272,24 @@ class ModelRegistryDiscovery:
         # Running outside cluster - set up port-forward
         try:
             manager = PortForwardManager.get_instance()
+            # Use HTTPS for ports other than 8080 (8443 uses kube-rbac-proxy, 443 is HTTPS)
+            use_https = result.port != 8080
             conn = await manager.forward(
                 namespace=result.namespace,
                 service_name=result.service_name,
                 remote_port=result.port,
+                use_https=use_https,
             )
 
             # Return discovery result with port-forwarded URL
+            # Port 8080 is direct REST API (no auth), port 8443 uses kube-rbac-proxy (auth required)
             return DiscoveredModelRegistry(
                 url=conn.local_url,
                 namespace=result.namespace,
                 service_name=result.service_name,
                 port=result.port,
                 source=f"{result.source}_port_forward",
-                requires_auth=False,  # Port-forward bypasses auth
+                requires_auth=result.requires_auth,  # Preserve auth requirement from discovery
                 is_external=True,
                 port_forward_connection=conn,
             )
@@ -333,7 +337,7 @@ async def probe_api_type(
         headers=headers,
         verify=verify,
     ) as client:
-        # Try Model Catalog API first
+        # Try Model Catalog API first (supports pageSize parameter)
         try:
             response = await client.get(
                 "/api/model_catalog/v1alpha1/models",
@@ -345,11 +349,10 @@ async def probe_api_type(
         except Exception as e:
             logger.debug(f"Model Catalog probe failed: {e}")
 
-        # Try standard Model Registry API
+        # Try standard Model Registry API (RHOAI doesn't support pagination params)
         try:
             response = await client.get(
                 "/api/model_registry/v1alpha3/registered_models",
-                params={"pageSize": 1},
             )
             if response.status_code == 200:
                 logger.info(f"Detected Model Registry API at {url}")

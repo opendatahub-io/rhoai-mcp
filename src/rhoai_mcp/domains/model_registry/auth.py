@@ -3,13 +3,16 @@
 This module provides shared authentication functions used by both the
 ModelRegistryClient and ModelCatalogClient to avoid code duplication.
 
-When running outside the cluster, port-forwarding is used to access the
-Model Registry service directly on port 8080, bypassing OAuth authentication.
+When running outside the cluster with port 8080, port-forwarding bypasses
+OAuth authentication. When using port 8443 (kube-rbac-proxy), authentication
+is still required and is obtained from the oc/kubectl CLI.
 """
 
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -40,6 +43,45 @@ def _get_in_cluster_token() -> str | None:
             return token_path.read_text().strip()
         except Exception as e:
             logger.debug(f"Error reading in-cluster token: {e}")
+    return None
+
+
+def _get_cli_token() -> str | None:
+    """Get authentication token from oc or kubectl CLI.
+
+    This is used when running outside the cluster and needing to
+    authenticate to services that require it (e.g., kube-rbac-proxy on 8443).
+
+    Returns:
+        The authentication token, or None if not available.
+    """
+    # Try oc first (OpenShift), then kubectl
+    for cli in ("oc", "kubectl"):
+        cli_path = shutil.which(cli)
+        if not cli_path:
+            continue
+
+        try:
+            if cli == "oc":
+                # oc whoami -t returns the token directly
+                result = subprocess.run(
+                    [cli_path, "whoami", "-t"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    logger.debug(f"Got auth token from {cli}")
+                    return result.stdout.strip()
+            else:
+                # kubectl config view to get token from kubeconfig
+                # This is more complex; for now, we rely on oc
+                pass
+        except subprocess.TimeoutExpired:
+            logger.debug(f"Timeout getting token from {cli}")
+        except Exception as e:
+            logger.debug(f"Error getting token from {cli}: {e}")
+
     return None
 
 
@@ -94,12 +136,13 @@ def build_auth_headers(
                     "Model Registry auth_mode is 'oauth' but no in-cluster token found."
                 )
         else:
-            # Outside cluster: port-forwarding should handle access without auth
-            # Only warn if auth is explicitly required
-            if requires_auth_override:
-                logger.debug(
-                    "Running outside cluster with requires_auth=True. "
-                    "Port-forwarding to internal service should bypass auth."
+            # Outside cluster: get token from oc/kubectl CLI
+            # This is needed for port 8443 (kube-rbac-proxy) which requires auth
+            token = _get_cli_token()
+            if not token and requires_auth_override:
+                logger.warning(
+                    "Running outside cluster with requires_auth=True but no CLI token found. "
+                    "Ensure you are logged in with 'oc login' or have valid kubeconfig."
                 )
 
     if token:

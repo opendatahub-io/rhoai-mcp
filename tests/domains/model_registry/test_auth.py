@@ -7,6 +7,7 @@ import pytest
 
 from rhoai_mcp.config import ModelRegistryAuthMode
 from rhoai_mcp.domains.model_registry.auth import (
+    _get_cli_token,
     _get_in_cluster_token,
     _is_running_in_cluster,
     build_auth_headers,
@@ -47,6 +48,54 @@ class TestGetInClusterToken:
         with patch("rhoai_mcp.domains.model_registry.auth.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
             token = _get_in_cluster_token()
+
+        assert token is None
+
+
+class TestGetCliToken:
+    """Test _get_cli_token helper function."""
+
+    def test_oc_token_available(self) -> None:
+        """When oc whoami -t returns a token, use it."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "my-oc-token\n"
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth.shutil.which",
+            return_value="/usr/bin/oc",
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth.subprocess.run",
+            return_value=mock_result,
+        ):
+            token = _get_cli_token()
+
+        assert token == "my-oc-token"
+
+    def test_oc_not_available(self) -> None:
+        """When oc is not available, return None."""
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth.shutil.which",
+            return_value=None,
+        ):
+            token = _get_cli_token()
+
+        assert token is None
+
+    def test_oc_returns_error(self) -> None:
+        """When oc whoami -t returns error, return None."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth.shutil.which",
+            return_value="/usr/bin/oc",
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth.subprocess.run",
+            return_value=mock_result,
+        ):
+            token = _get_cli_token()
 
         assert token is None
 
@@ -100,17 +149,29 @@ class TestBuildAuthHeaders:
         assert headers == {}
 
     def test_oauth_auth_outside_cluster(self, mock_config_oauth: MagicMock) -> None:
-        """When auth mode is OAUTH outside cluster, no token is returned.
-
-        Port-forwarding is used instead, which bypasses auth.
-        """
+        """When auth mode is OAUTH outside cluster, gets token from CLI."""
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
             return_value=False,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth._get_cli_token",
+            return_value="cli-token-123",
         ):
             headers = build_auth_headers(mock_config_oauth)
 
-        # Outside cluster, no auth headers are added (port-forwarding bypasses auth)
+        assert headers["Authorization"] == "Bearer cli-token-123"
+
+    def test_oauth_auth_outside_cluster_no_token(self, mock_config_oauth: MagicMock) -> None:
+        """When auth mode is OAUTH outside cluster but no CLI token, no headers."""
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=False,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth._get_cli_token",
+            return_value=None,
+        ):
+            headers = build_auth_headers(mock_config_oauth)
+
         assert headers == {}
 
     def test_oauth_auth_inside_cluster(self, mock_config_oauth: MagicMock) -> None:
@@ -157,13 +218,28 @@ class TestBuildAuthHeaders:
     def test_requires_auth_override_outside_cluster(
         self, mock_config_none: MagicMock
     ) -> None:
-        """When requires_auth_override is True outside cluster, no headers returned.
-
-        Port-forwarding is used for external access, bypassing auth.
-        """
+        """When requires_auth_override is True outside cluster, gets token from CLI."""
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
             return_value=False,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth._get_cli_token",
+            return_value="cli-override-token",
+        ):
+            headers = build_auth_headers(mock_config_none, requires_auth_override=True)
+
+        assert headers["Authorization"] == "Bearer cli-override-token"
+
+    def test_requires_auth_override_outside_cluster_no_token(
+        self, mock_config_none: MagicMock
+    ) -> None:
+        """When requires_auth_override is True outside cluster but no CLI token, no headers."""
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=False,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth._get_cli_token",
+            return_value=None,
         ):
             headers = build_auth_headers(mock_config_none, requires_auth_override=True)
 

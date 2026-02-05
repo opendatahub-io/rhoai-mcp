@@ -34,11 +34,13 @@ class PortForwardConnection:
     local_port: int
     process: asyncio.subprocess.Process
     ref_count: int = field(default=1)
+    use_https: bool = field(default=False)
 
     @property
     def local_url(self) -> str:
         """Get the local URL for this port-forward."""
-        return f"http://localhost:{self.local_port}"
+        protocol = "https" if self.use_https else "http"
+        return f"{protocol}://localhost:{self.local_port}"
 
     def __hash__(self) -> int:
         return hash((self.namespace, self.service_name, self.remote_port))
@@ -154,6 +156,7 @@ class PortForwardManager:
         service_name: str,
         remote_port: int,
         timeout: float = 10.0,
+        use_https: bool = False,
     ) -> PortForwardConnection:
         """Start or reuse a port-forward connection.
 
@@ -162,6 +165,7 @@ class PortForwardManager:
             service_name: Name of the service to forward to.
             remote_port: Port on the service to forward.
             timeout: Timeout in seconds waiting for connection.
+            use_https: Whether the remote service uses HTTPS.
 
         Returns:
             PortForwardConnection with local URL information.
@@ -243,6 +247,7 @@ class PortForwardManager:
                     remote_port=remote_port,
                     local_port=local_port,
                     process=process,
+                    use_https=use_https,
                 )
 
                 self._connections[key] = conn

@@ -1,11 +1,18 @@
 """MCP Tools for Model Registry operations."""
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 
 from rhoai_mcp.domains.model_registry.benchmarks import BenchmarkExtractor
+from rhoai_mcp.domains.model_registry.catalog_client import ModelCatalogClient
+from rhoai_mcp.domains.model_registry.catalog_models import CatalogModel, CatalogSource
 from rhoai_mcp.domains.model_registry.client import ModelRegistryClient
+from rhoai_mcp.domains.model_registry.discovery import (
+    ModelRegistryDiscovery,
+    probe_api_type,
+)
 from rhoai_mcp.domains.model_registry.errors import (
     ModelNotFoundError,
     ModelRegistryConnectionError,
@@ -20,15 +27,59 @@ from rhoai_mcp.utils.response import (
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
+logger = logging.getLogger(__name__)
+
+# Cache for discovered API type to avoid probing on every call
+_cached_api_type: str | None = None
+_cached_discovery_url: str | None = None
+
 
 def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     """Register Model Registry tools with the MCP server."""
+
+    async def _get_api_type() -> tuple[str, str]:
+        """Get the detected API type and URL, with caching.
+
+        Returns:
+            Tuple of (api_type, url) where api_type is one of:
+            "model_catalog", "model_registry", or "unknown".
+        """
+        global _cached_api_type, _cached_discovery_url
+
+        # Use cached value if available
+        if _cached_api_type is not None and _cached_discovery_url is not None:
+            return _cached_api_type, _cached_discovery_url
+
+        # Try discovery first
+        from rhoai_mcp.config import ModelRegistryDiscoveryMode
+
+        url = server.config.model_registry_url
+        requires_auth = False
+
+        if server.config.model_registry_discovery_mode == ModelRegistryDiscoveryMode.AUTO:
+            discovery = ModelRegistryDiscovery(server.k8s)
+            result = discovery.discover(fallback_url=url)
+            if result:
+                url = result.url
+                requires_auth = result.requires_auth
+                # If discovery already detected the API type, use it
+                if result.api_type != "unknown":
+                    _cached_api_type = result.api_type
+                    _cached_discovery_url = url
+                    return result.api_type, url
+
+        # Probe the API type
+        api_type = await probe_api_type(url, server.config, requires_auth)
+        _cached_api_type = api_type
+        _cached_discovery_url = url
+        return api_type, url
 
     @mcp.tool()
     async def list_registered_models(
         limit: int | None = None,
         offset: int = 0,
         verbosity: str = "standard",
+        source_label: str | None = None,
     ) -> dict[str, Any]:
         """List registered models in the Model Registry with pagination.
 
@@ -36,11 +87,17 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         artifacts, and custom properties. Use this to discover available models
         before deployment.
 
+        This tool automatically detects whether the cluster has a standard
+        Kubeflow Model Registry or Red Hat AI Model Catalog and uses the
+        appropriate API.
+
         Args:
             limit: Maximum number of items to return (None for all).
             offset: Starting offset for pagination (default: 0).
             verbosity: Response detail level - "minimal", "standard", or "full".
                 Use "minimal" for quick status checks.
+            source_label: (Model Catalog only) Filter by source label,
+                e.g., "Red Hat AI validated".
 
         Returns:
             Paginated list of registered models with metadata.
@@ -49,9 +106,39 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             return {"error": "Model Registry is disabled"}
 
         try:
-            async with ModelRegistryClient(server.config) as client:
-                models = await client.list_registered_models()
-                all_items = [_format_model(m, Verbosity.from_str(verbosity)) for m in models]
+            # Detect which API is available
+            api_type, url = await _get_api_type()
+
+            all_items: list[dict[str, Any]] = []
+
+            if api_type == "model_catalog":
+                # Use Model Catalog client
+                from rhoai_mcp.domains.model_registry.discovery import DiscoveredModelRegistry
+
+                # Create a minimal discovery result for the catalog client
+                discovery_result = DiscoveredModelRegistry(
+                    url=url,
+                    namespace="unknown",
+                    service_name="model-catalog",
+                    port=443,
+                    source="cached",
+                    requires_auth=True,
+                    api_type="model_catalog",
+                )
+                async with ModelCatalogClient(server.config, discovery_result) as catalog_client:
+                    catalog_models = await catalog_client.list_models(source_label=source_label)
+                    all_items = [
+                        _format_catalog_model(m, Verbosity.from_str(verbosity))
+                        for m in catalog_models
+                    ]
+            else:
+                # Use standard Model Registry client
+                async with ModelRegistryClient(server.config) as registry_client:
+                    registry_models = await registry_client.list_registered_models()
+                    all_items = [
+                        _format_model(m, Verbosity.from_str(verbosity)) for m in registry_models
+                    ]
+
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -67,7 +154,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         # Paginate
         paginated, total = paginate(all_items, offset, effective_limit)
 
-        return PaginatedResponse.build(paginated, total, offset, effective_limit)
+        result = PaginatedResponse.build(paginated, total, offset, effective_limit)
+        result["api_type"] = api_type
+        return result
 
     @mcp.tool()
     async def get_registered_model(
@@ -332,6 +421,166 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             "benchmarks": formatted_benchmarks,
             "count": len(formatted_benchmarks),
         }
+
+    @mcp.tool()
+    async def list_catalog_sources() -> dict[str, Any]:
+        """List available sources in the Model Catalog.
+
+        Sources are categories or providers of models in the Red Hat AI
+        Model Catalog, such as 'Red Hat AI validated' or 'Community'.
+
+        This tool only works when the cluster has a Model Catalog
+        (not a standard Kubeflow Model Registry).
+
+        Returns:
+            List of sources with names, labels, and model counts.
+        """
+        if not server.config.model_registry_enabled:
+            return {"error": "Model Registry is disabled"}
+
+        try:
+            api_type, url = await _get_api_type()
+
+            if api_type != "model_catalog":
+                return {
+                    "error": "This tool requires the Red Hat AI Model Catalog. "
+                    f"The cluster appears to have a standard Model Registry (api_type={api_type})."
+                }
+
+            from rhoai_mcp.domains.model_registry.discovery import DiscoveredModelRegistry
+
+            discovery_result = DiscoveredModelRegistry(
+                url=url,
+                namespace="unknown",
+                service_name="model-catalog",
+                port=443,
+                source="cached",
+                requires_auth=True,
+                api_type="model_catalog",
+            )
+            async with ModelCatalogClient(server.config, discovery_result) as client:
+                sources = await client.get_sources()
+                formatted_sources = [_format_catalog_source(s) for s in sources]
+
+        except ModelRegistryConnectionError as e:
+            return {"error": f"Connection failed: {e}"}
+        except ModelRegistryError as e:
+            return {"error": str(e)}
+
+        return {
+            "sources": formatted_sources,
+            "count": len(formatted_sources),
+        }
+
+    @mcp.tool()
+    async def get_catalog_model_artifacts(
+        source: str,
+        model_name: str,
+    ) -> dict[str, Any]:
+        """Get artifacts (storage URIs) for a model in the Model Catalog.
+
+        Artifacts contain the storage locations and format details for
+        downloading or deploying a model from the catalog.
+
+        This tool only works when the cluster has a Model Catalog
+        (not a standard Kubeflow Model Registry).
+
+        Args:
+            source: Source label (e.g., 'rhoai' or the source name).
+            model_name: Name of the model.
+
+        Returns:
+            List of artifacts with storage URIs and format information.
+        """
+        if not server.config.model_registry_enabled:
+            return {"error": "Model Registry is disabled"}
+
+        try:
+            api_type, url = await _get_api_type()
+
+            if api_type != "model_catalog":
+                return {
+                    "error": "This tool requires the Red Hat AI Model Catalog. "
+                    f"The cluster appears to have a standard Model Registry (api_type={api_type})."
+                }
+
+            from rhoai_mcp.domains.model_registry.discovery import DiscoveredModelRegistry
+
+            discovery_result = DiscoveredModelRegistry(
+                url=url,
+                namespace="unknown",
+                service_name="model-catalog",
+                port=443,
+                source="cached",
+                requires_auth=True,
+                api_type="model_catalog",
+            )
+            async with ModelCatalogClient(server.config, discovery_result) as client:
+                artifacts = await client.get_model_artifacts(source, model_name)
+                formatted_artifacts = [_format_catalog_artifact(a) for a in artifacts]
+
+        except ModelNotFoundError:
+            return {"error": f"Model not found: {source}/{model_name}"}
+        except ModelRegistryConnectionError as e:
+            return {"error": f"Connection failed: {e}"}
+        except ModelRegistryError as e:
+            return {"error": str(e)}
+
+        return {
+            "source": source,
+            "model_name": model_name,
+            "artifacts": formatted_artifacts,
+            "count": len(formatted_artifacts),
+        }
+
+
+def _format_catalog_model(model: CatalogModel, verbosity: Verbosity) -> dict[str, Any]:
+    """Format a catalog model for response."""
+    if verbosity == Verbosity.MINIMAL:
+        return {
+            "name": model.name,
+            "provider": model.provider,
+            "source_label": model.source_label,
+        }
+
+    result: dict[str, Any] = {
+        "name": model.name,
+        "description": model.description,
+        "provider": model.provider,
+        "source_label": model.source_label,
+        "task_type": model.task_type,
+        "size": model.size,
+        "license": model.license,
+    }
+
+    if verbosity == Verbosity.FULL:
+        result["tags"] = model.tags
+        result["long_description"] = model.long_description
+        result["readme"] = model.readme
+        if model.artifacts:
+            result["artifacts"] = [_format_catalog_artifact(a) for a in model.artifacts]
+
+    return result
+
+
+def _format_catalog_source(source: CatalogSource) -> dict[str, Any]:
+    """Format a catalog source for response."""
+    return {
+        "name": source.name,
+        "label": source.label,
+        "model_count": source.model_count,
+        "description": source.description,
+    }
+
+
+def _format_catalog_artifact(artifact: Any) -> dict[str, Any]:
+    """Format a catalog artifact for response."""
+    return {
+        "uri": artifact.uri,
+        "format": artifact.format,
+        "size": artifact.size,
+        "quantization": artifact.quantization,
+    }
 
 
 def _format_model(model: Any, verbosity: Verbosity) -> dict[str, Any]:

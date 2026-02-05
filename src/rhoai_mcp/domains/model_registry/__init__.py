@@ -1,11 +1,14 @@
 """Model Registry domain module.
 
 This domain provides MCP tools for interacting with the OpenShift AI
-Model Registry service. Unlike other domains that use Kubernetes CRDs,
-the Model Registry uses a REST API.
+Model Registry service or Red Hat AI Model Catalog. Unlike other domains
+that use Kubernetes CRDs, these services use REST APIs.
+
+The module auto-detects whether the cluster has a standard Kubeflow
+Model Registry or a Red Hat AI Model Catalog and uses the appropriate client.
 
 Exports:
-    Models:
+    Models (Model Registry):
         - RegisteredModel: Top-level model entity
         - ModelVersion: Version of a registered model
         - ModelArtifact: Storage artifact for a version
@@ -15,8 +18,14 @@ Exports:
         - MetricHistory: Metric history from experiment run
         - BenchmarkData: Model benchmark data for capacity planning
 
-    Client:
-        - ModelRegistryClient: Async HTTP client for the registry API
+    Models (Model Catalog):
+        - CatalogModel: Model entry in the catalog
+        - CatalogModelArtifact: Artifact information for catalog models
+        - CatalogSource: Source/category in the catalog
+
+    Clients:
+        - ModelRegistryClient: Async HTTP client for Model Registry API
+        - ModelCatalogClient: Async HTTP client for Model Catalog API
 
     Benchmarks:
         - BenchmarkExtractor: Extracts benchmark data from model versions
@@ -24,6 +33,7 @@ Exports:
     Discovery:
         - ModelRegistryDiscovery: Auto-discovers registry from cluster
         - DiscoveredModelRegistry: Discovery result dataclass
+        - probe_api_type: Async function to detect API type
 
     Errors:
         - ModelRegistryError: Base exception
@@ -35,10 +45,17 @@ Exports:
 """
 
 from rhoai_mcp.domains.model_registry.benchmarks import BenchmarkExtractor
+from rhoai_mcp.domains.model_registry.catalog_client import ModelCatalogClient
+from rhoai_mcp.domains.model_registry.catalog_models import (
+    CatalogModel,
+    CatalogModelArtifact,
+    CatalogSource,
+)
 from rhoai_mcp.domains.model_registry.client import ModelRegistryClient
 from rhoai_mcp.domains.model_registry.discovery import (
     DiscoveredModelRegistry,
     ModelRegistryDiscovery,
+    probe_api_type,
 )
 from rhoai_mcp.domains.model_registry.errors import (
     ModelNotFoundError,
@@ -58,7 +75,7 @@ from rhoai_mcp.domains.model_registry.models import (
 from rhoai_mcp.domains.model_registry.tools import register_tools
 
 __all__ = [
-    # Models
+    # Models (Model Registry)
     "RegisteredModel",
     "ModelVersion",
     "ModelArtifact",
@@ -67,13 +84,19 @@ __all__ = [
     "MetricHistoryPoint",
     "MetricHistory",
     "BenchmarkData",
-    # Client
+    # Models (Model Catalog)
+    "CatalogModel",
+    "CatalogModelArtifact",
+    "CatalogSource",
+    # Clients
     "ModelRegistryClient",
+    "ModelCatalogClient",
     # Benchmarks
     "BenchmarkExtractor",
     # Discovery
     "ModelRegistryDiscovery",
     "DiscoveredModelRegistry",
+    "probe_api_type",
     # Errors
     "ModelRegistryError",
     "ModelNotFoundError",

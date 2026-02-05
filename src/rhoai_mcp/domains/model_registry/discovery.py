@@ -3,21 +3,31 @@
 This module provides functionality to discover the Model Registry service
 in an OpenShift AI cluster by querying the ModelRegistry component CRD
 and falling back to common namespace/service patterns.
+
+It also supports detecting whether the discovered service is a standard
+Kubeflow Model Registry or a Red Hat AI Model Catalog.
 """
 
 from __future__ import annotations
 
 import logging
+import ssl
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from kubernetes.client import ApiException  # type: ignore[import-untyped]
 
-from rhoai_mcp.domains.model_registry.client import _is_running_in_cluster
+from rhoai_mcp.domains.model_registry.client import (
+    _get_in_cluster_token,
+    _get_oauth_token_from_kubeconfig,
+    _is_running_in_cluster,
+)
 from rhoai_mcp.domains.model_registry.crds import ModelRegistryCRDs
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
+    from rhoai_mcp.config import RHOAIConfig
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +64,10 @@ class DiscoveredModelRegistry:
     requires_auth: bool = False
     is_external: bool = field(default=False)  # True when using external Route
     route_name: str | None = field(default=None)  # Name of the Route if discovered
+    api_type: str = field(default="unknown")  # "model_catalog", "model_registry", or "unknown"
 
     def __str__(self) -> str:
-        return f"{self.url} (discovered via {self.source})"
+        return f"{self.url} (discovered via {self.source}, api_type={self.api_type})"
 
 
 class ModelRegistryDiscovery:
@@ -327,3 +338,79 @@ class ModelRegistryDiscovery:
             )
 
         return None
+
+
+async def probe_api_type(
+    url: str,
+    config: RHOAIConfig,
+    requires_auth: bool = False,
+) -> str:
+    """Probe which API type is available at the given URL.
+
+    Tries Model Catalog API first, then falls back to Model Registry API.
+    This detection allows seamless use of either API type.
+
+    Args:
+        url: Base URL of the service.
+        config: RHOAI configuration for auth and TLS settings.
+        requires_auth: Whether the endpoint requires authentication.
+
+    Returns:
+        "model_catalog" if Model Catalog API is available,
+        "model_registry" if standard Model Registry API is available,
+        "unknown" if neither responds successfully.
+    """
+    from rhoai_mcp.config import ModelRegistryAuthMode
+
+    # Build auth headers
+    headers: dict[str, str] = {}
+    if requires_auth or config.model_registry_auth_mode != ModelRegistryAuthMode.NONE:
+        token: str | None = None
+        if config.model_registry_auth_mode == ModelRegistryAuthMode.TOKEN:
+            token = config.model_registry_token
+        else:
+            # OAuth mode
+            if _is_running_in_cluster():
+                token = _get_in_cluster_token()
+            else:
+                token = _get_oauth_token_from_kubeconfig(config)
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+    # Configure SSL
+    verify: bool | ssl.SSLContext = True
+    if config.model_registry_skip_tls_verify:
+        verify = False
+
+    async with httpx.AsyncClient(
+        base_url=url,
+        timeout=10,  # Short timeout for probing
+        headers=headers,
+        verify=verify,
+    ) as client:
+        # Try Model Catalog API first
+        try:
+            response = await client.get(
+                "/api/model_catalog/v1alpha1/models",
+                params={"pageSize": 1},
+            )
+            if response.status_code == 200:
+                logger.info(f"Detected Model Catalog API at {url}")
+                return "model_catalog"
+        except Exception as e:
+            logger.debug(f"Model Catalog probe failed: {e}")
+
+        # Try standard Model Registry API
+        try:
+            response = await client.get(
+                "/api/model_registry/v1alpha3/registered_models",
+                params={"pageSize": 1},
+            )
+            if response.status_code == 200:
+                logger.info(f"Detected Model Registry API at {url}")
+                return "model_registry"
+        except Exception as e:
+            logger.debug(f"Model Registry probe failed: {e}")
+
+    logger.warning(f"Could not detect API type at {url}")
+    return "unknown"

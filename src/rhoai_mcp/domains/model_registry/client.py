@@ -169,13 +169,11 @@ class ModelRegistryClient:
     async def list_registered_models(
         self,
         page_size: int = 100,
-        order_by: str = "UPDATE_TIME",
     ) -> list[RegisteredModel]:
         """List all registered models.
 
         Args:
             page_size: Maximum number of models per page.
-            order_by: Field to order by (UPDATE_TIME, CREATE_TIME, NAME).
 
         Returns:
             List of all registered models (iterates through all pages).
@@ -190,7 +188,6 @@ class ModelRegistryClient:
         while True:
             models, next_page_token = await self._list_registered_models_page(
                 page_size=page_size,
-                order_by=order_by,
                 page_token=next_page_token,
             )
             all_models.extend(models)
@@ -202,35 +199,30 @@ class ModelRegistryClient:
     async def _list_registered_models_page(
         self,
         page_size: int = 100,
-        order_by: str = "UPDATE_TIME",
         page_token: str | None = None,
     ) -> tuple[list[RegisteredModel], str | None]:
         """List a single page of registered models.
 
         Args:
-            page_size: Maximum number of models to return.
-            order_by: Field to order by (UPDATE_TIME, CREATE_TIME, NAME).
-            page_token: Token for the next page (None for first page).
+            page_size: Maximum number of models to return (not used - RHOAI doesn't support pagination).
+            page_token: Token for the next page (not used - RHOAI doesn't support pagination).
 
         Returns:
-            Tuple of (models, next_page_token). next_page_token is None if no more pages.
+            Tuple of (models, next_page_token). next_page_token is always None for RHOAI.
 
         Raises:
             ModelRegistryError: If the API request fails.
             ModelRegistryConnectionError: If connection fails.
         """
+        # Note: OpenShift AI Model Registry doesn't support pageSize/pageToken parameters
+        # on the v1alpha3 API. We fetch all models in a single request.
+        _ = page_size  # unused - RHOAI returns all models
+        _ = page_token  # unused - RHOAI doesn't support pagination
         client = await self._get_client()
-        params: dict[str, str | int] = {
-            "pageSize": page_size,
-            "orderBy": order_by,
-        }
-        if page_token:
-            params["pageToken"] = page_token
 
         try:
             response = await client.get(
                 "/api/model_registry/v1alpha3/registered_models",
-                params=params,
             )
             response.raise_for_status()
             data = response.json()
@@ -354,25 +346,25 @@ class ModelRegistryClient:
 
         Args:
             model_id: The parent model ID.
-            page_size: Maximum number of versions to return.
-            page_token: Token for the next page (None for first page).
+            page_size: Maximum number of versions to return (not used - RHOAI doesn't support pagination).
+            page_token: Token for the next page (not used - RHOAI doesn't support pagination).
 
         Returns:
-            Tuple of (versions, next_page_token). next_page_token is None if no more pages.
+            Tuple of (versions, next_page_token). next_page_token is always None for RHOAI.
 
         Raises:
             ModelRegistryError: If the API request fails.
             ModelRegistryConnectionError: If connection fails.
         """
+        # Note: OpenShift AI Model Registry doesn't support pageSize/pageToken parameters
+        # on the v1alpha3 API. We fetch all versions in a single request.
+        _ = page_size  # unused - RHOAI returns all versions
+        _ = page_token  # unused - RHOAI doesn't support pagination
         client = await self._get_client()
-        params: dict[str, str | int] = {"pageSize": page_size}
-        if page_token:
-            params["pageToken"] = page_token
 
         try:
             response = await client.get(
                 f"/api/model_registry/v1alpha3/registered_models/{model_id}/versions",
-                params=params,
             )
             response.raise_for_status()
             data = response.json()

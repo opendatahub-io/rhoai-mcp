@@ -414,24 +414,44 @@ class TestModelCatalogClientAuth:
 
         assert headers == {}
 
-    def test_discovery_requires_auth(
+    def test_discovery_requires_auth_inside_cluster(
         self,
         mock_config_no_auth: MagicMock,
         mock_discovery_with_auth: DiscoveredModelRegistry,
     ) -> None:
-        """When discovery indicates auth required, auth is attempted."""
+        """When discovery indicates auth required and in-cluster, SA token is used."""
+        client = ModelCatalogClient(mock_config_no_auth, mock_discovery_with_auth)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=True,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.auth._get_in_cluster_token",
+            return_value="sa-token-123",
+        ):
+            headers = client._get_auth_headers()
+
+        assert headers["Authorization"] == "Bearer sa-token-123"
+
+    def test_discovery_requires_auth_outside_cluster(
+        self,
+        mock_config_no_auth: MagicMock,
+        mock_discovery_with_auth: DiscoveredModelRegistry,
+    ) -> None:
+        """When discovery indicates auth required but outside cluster, no auth is added.
+
+        Port-forwarding is used for external access, bypassing auth.
+        """
         client = ModelCatalogClient(mock_config_no_auth, mock_discovery_with_auth)
 
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
             return_value=False,
-        ), patch(
-            "rhoai_mcp.domains.model_registry.auth._get_oauth_token_from_kubeconfig",
-            return_value="sha256~oauth-token",
         ):
             headers = client._get_auth_headers()
 
-        assert headers["Authorization"] == "Bearer sha256~oauth-token"
+        # Outside cluster, no auth headers (port-forward bypasses auth)
+        assert headers == {}
 
     def test_get_base_url_from_discovery(
         self,

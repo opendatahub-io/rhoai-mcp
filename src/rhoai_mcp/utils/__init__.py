@@ -18,6 +18,11 @@ from rhoai_mcp.utils.errors import (
     ValidationError,
 )
 from rhoai_mcp.utils.labels import RHOAILabels
+from rhoai_mcp.utils.port_forward import (
+    PortForwardConnection,
+    PortForwardError,
+    PortForwardManager,
+)
 from rhoai_mcp.utils.response import (
     PaginatedResponse,
     ResponseBuilder,
@@ -48,4 +53,8 @@ __all__ = [
     "clear_expired",
     "cache_stats",
     "invalidate",
+    # Port forwarding
+    "PortForwardConnection",
+    "PortForwardError",
+    "PortForwardManager",
 ]

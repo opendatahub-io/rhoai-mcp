@@ -4,6 +4,10 @@ This module provides functionality to discover the Model Registry service
 in an OpenShift AI cluster by querying the ModelRegistry component CRD
 and falling back to common namespace/service patterns.
 
+When running outside the cluster, it uses `oc port-forward` to tunnel
+directly to the Model Registry service, bypassing the need for external
+Routes and OAuth authentication.
+
 It also supports detecting whether the discovered service is a standard
 Kubeflow Model Registry or a Red Hat AI Model Catalog.
 """
@@ -13,7 +17,7 @@ from __future__ import annotations
 import logging
 import ssl
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import httpx
 from kubernetes.client import ApiException  # type: ignore[import-untyped]
@@ -23,6 +27,7 @@ from rhoai_mcp.domains.model_registry.auth import (
     build_auth_headers,
 )
 from rhoai_mcp.domains.model_registry.crds import ModelRegistryCRDs
+from rhoai_mcp.utils.port_forward import PortForwardConnection, PortForwardError, PortForwardManager
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
@@ -59,11 +64,11 @@ class DiscoveredModelRegistry:
     namespace: str
     service_name: str
     port: int
-    source: str  # "crd", "namespace_scan", "fallback", or "*_route" variants
+    source: str  # "crd", "namespace_scan", "fallback", or "*_port_forward" variants
     requires_auth: bool = False
-    is_external: bool = field(default=False)  # True when using external Route
-    route_name: str | None = field(default=None)  # Name of the Route if discovered
+    is_external: bool = field(default=False)  # True when using port-forward
     api_type: str = field(default="unknown")  # "model_catalog", "model_registry", or "unknown"
+    port_forward_connection: PortForwardConnection | None = field(default=None)
 
     def __str__(self) -> str:
         return f"{self.url} (discovered via {self.source}, api_type={self.api_type})"
@@ -167,88 +172,6 @@ class ModelRegistryDiscovery:
 
         return None
 
-    def _find_route_for_service(self, service_name: str, namespace: str) -> tuple[str, str] | None:
-        """Find an OpenShift Route that exposes the given service.
-
-        Args:
-            service_name: Name of the Kubernetes service to find a Route for.
-            namespace: Namespace where the service and Route are located.
-
-        Returns:
-            Tuple of (route_name, external_url) if found, None otherwise.
-        """
-        try:
-            routes = self._k8s.list_resources(ModelRegistryCRDs.ROUTE, namespace)
-        except ApiException as e:
-            logger.debug(f"Error listing Routes in {namespace}: {e}")
-            return None
-        except Exception as e:
-            logger.debug(f"Error during Route discovery: {e}")
-            return None
-
-        if not routes:
-            logger.debug(f"No Routes found in {namespace}")
-            return None
-
-        for route in routes:
-            route_obj: Any = route
-            spec = getattr(route_obj, "spec", None)
-            if not spec:
-                continue
-
-            # Check if this Route targets our service
-            to_ref = getattr(spec, "to", None)
-            if not to_ref:
-                continue
-
-            to_kind = getattr(to_ref, "kind", None)
-            to_name = getattr(to_ref, "name", None)
-
-            if to_kind != "Service" or to_name != service_name:
-                continue
-
-            # Check if Route is admitted (ready to serve traffic)
-            status = getattr(route_obj, "status", None)
-            if not status:
-                logger.debug(
-                    f"Route {getattr(route_obj.metadata, 'name', 'unknown')} has no status"
-                )
-                continue
-
-            ingress_list = getattr(status, "ingress", None) or []
-            is_admitted = False
-            host: str | None = None
-
-            for ingress in ingress_list:
-                conditions = getattr(ingress, "conditions", None) or []
-                for condition in conditions:
-                    cond_type = getattr(condition, "type", None)
-                    cond_status = getattr(condition, "status", None)
-                    if cond_type == "Admitted" and cond_status == "True":
-                        is_admitted = True
-                        host = getattr(ingress, "host", None)
-                        break
-                if is_admitted:
-                    break
-
-            if not is_admitted or not host:
-                route_name = getattr(route_obj.metadata, "name", "unknown")
-                logger.debug(f"Route {route_name} is not admitted or has no host")
-                continue
-
-            # Determine protocol based on TLS configuration
-            tls = getattr(spec, "tls", None)
-            protocol = "https" if tls else "http"
-
-            route_name = getattr(route_obj.metadata, "name", service_name)
-            external_url = f"{protocol}://{host}"
-
-            logger.debug(f"Found Route {route_name} exposing {service_name} at {external_url}")
-            return (route_name, external_url)
-
-        logger.debug(f"No Route found exposing service {service_name} in {namespace}")
-        return None
-
     def _find_service_in_namespace(
         self, namespace: str, source: str
     ) -> DiscoveredModelRegistry | None:
@@ -298,27 +221,6 @@ class ModelRegistryDiscovery:
         if best_service and best_port:
             service_name = best_service.metadata.name
 
-            # If running outside cluster, try to find an external Route
-            if not _is_running_in_cluster():
-                route_result = self._find_route_for_service(service_name, namespace)
-                if route_result:
-                    route_name, external_url = route_result
-                    return DiscoveredModelRegistry(
-                        url=external_url,
-                        namespace=namespace,
-                        service_name=service_name,
-                        port=443,  # Routes typically use standard HTTPS port
-                        source=f"{source}_route",
-                        requires_auth=True,  # Routes typically use OAuth proxy
-                        is_external=True,
-                        route_name=route_name,
-                    )
-                else:
-                    logger.warning(
-                        f"Running outside cluster but no Route found for {service_name}. "
-                        f"Internal URL will not be accessible."
-                    )
-
             # Use internal service URL
             # Determine if auth is required (8443 uses kube-rbac-proxy)
             requires_auth = best_port == 8443
@@ -337,6 +239,64 @@ class ModelRegistryDiscovery:
             )
 
         return None
+
+    async def discover_with_port_forward(
+        self, fallback_url: str | None = None
+    ) -> DiscoveredModelRegistry | None:
+        """Discover the Model Registry service, using port-forward when outside cluster.
+
+        This method first discovers the service using the standard discovery flow,
+        then sets up port-forwarding if running outside the cluster.
+
+        Args:
+            fallback_url: URL to use if discovery fails
+
+        Returns:
+            DiscoveredModelRegistry with accessible URL (port-forwarded if outside cluster)
+        """
+        # First, use standard discovery to find the service
+        result = self.discover(fallback_url)
+        if not result:
+            return None
+
+        # If we're running in-cluster, use the internal URL directly
+        if _is_running_in_cluster():
+            logger.debug("Running in-cluster, using internal service URL")
+            return result
+
+        # If this is a fallback URL (not a discovered service), use it directly
+        if result.source == "fallback":
+            logger.debug("Using fallback URL, no port-forward needed")
+            return result
+
+        # Running outside cluster - set up port-forward
+        try:
+            manager = PortForwardManager.get_instance()
+            conn = await manager.forward(
+                namespace=result.namespace,
+                service_name=result.service_name,
+                remote_port=result.port,
+            )
+
+            # Return discovery result with port-forwarded URL
+            return DiscoveredModelRegistry(
+                url=conn.local_url,
+                namespace=result.namespace,
+                service_name=result.service_name,
+                port=result.port,
+                source=f"{result.source}_port_forward",
+                requires_auth=False,  # Port-forward bypasses auth
+                is_external=True,
+                port_forward_connection=conn,
+            )
+        except PortForwardError as e:
+            logger.error(f"Failed to set up port-forward: {e}")
+            logger.warning(
+                f"Running outside cluster but port-forward failed for "
+                f"{result.service_name}.{result.namespace}. "
+                f"Internal URL will not be accessible."
+            )
+            return None
 
 
 async def probe_api_type(

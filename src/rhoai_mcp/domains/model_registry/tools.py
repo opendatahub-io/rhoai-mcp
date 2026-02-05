@@ -82,7 +82,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
         if server.config.model_registry_discovery_mode == ModelRegistryDiscoveryMode.AUTO:
             discovery = ModelRegistryDiscovery(server.k8s)
-            result = discovery.discover(fallback_url=url)
+            # Use async discovery with port-forward for outside-cluster access
+            result = await discovery.discover_with_port_forward(fallback_url=url)
             if result:
                 url = result.url
                 requires_auth = result.requires_auth

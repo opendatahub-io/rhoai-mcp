@@ -21,6 +21,10 @@ Exports:
     Benchmarks:
         - BenchmarkExtractor: Extracts benchmark data from model versions
 
+    Discovery:
+        - ModelRegistryDiscovery: Auto-discovers registry from cluster
+        - DiscoveredModelRegistry: Discovery result dataclass
+
     Errors:
         - ModelRegistryError: Base exception
         - ModelNotFoundError: Model/version not found
@@ -32,6 +36,10 @@ Exports:
 
 from rhoai_mcp.domains.model_registry.benchmarks import BenchmarkExtractor
 from rhoai_mcp.domains.model_registry.client import ModelRegistryClient
+from rhoai_mcp.domains.model_registry.discovery import (
+    DiscoveredModelRegistry,
+    ModelRegistryDiscovery,
+)
 from rhoai_mcp.domains.model_registry.errors import (
     ModelNotFoundError,
     ModelRegistryConnectionError,
@@ -63,6 +71,9 @@ __all__ = [
     "ModelRegistryClient",
     # Benchmarks
     "BenchmarkExtractor",
+    # Discovery
+    "ModelRegistryDiscovery",
+    "DiscoveredModelRegistry",
     # Errors
     "ModelRegistryError",
     "ModelNotFoundError",

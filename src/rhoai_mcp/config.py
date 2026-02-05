@@ -34,6 +34,13 @@ class LogLevel(str, Enum):
     ERROR = "ERROR"
 
 
+class ModelRegistryDiscoveryMode(str, Enum):
+    """Model Registry discovery mode."""
+
+    AUTO = "auto"  # Discover from cluster, fall back to configured URL
+    MANUAL = "manual"  # Only use configured URL
+
+
 class RHOAIConfig(BaseSettings):
     """Configuration for RHOAI MCP server.
 
@@ -156,6 +163,10 @@ class RHOAIConfig(BaseSettings):
     model_registry_enabled: bool = Field(
         default=True,
         description="Enable Model Registry integration",
+    )
+    model_registry_discovery_mode: ModelRegistryDiscoveryMode = Field(
+        default=ModelRegistryDiscoveryMode.AUTO,
+        description="How to find Model Registry: auto (discover from cluster) or manual (use configured URL)",
     )
 
     @field_validator("kubeconfig_path", mode="before")

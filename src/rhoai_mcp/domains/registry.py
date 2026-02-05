@@ -243,6 +243,9 @@ class ModelRegistryPlugin(BasePlugin):
     Provides tools to interact with the OpenShift AI Model Registry service
     via its REST API. Unlike other domains that use Kubernetes CRDs, the
     Model Registry has its own HTTP-based API.
+
+    When discovery mode is AUTO, the health check will attempt to discover
+    the Model Registry service from the cluster and update the config URL.
     """
 
     def __init__(self) -> None:
@@ -264,9 +267,34 @@ class ModelRegistryPlugin(BasePlugin):
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        import logging
+
+        from rhoai_mcp.config import ModelRegistryDiscoveryMode
+
+        logger = logging.getLogger(__name__)
+
         if not server.config.model_registry_enabled:
             return False, "Model Registry is disabled"
-        return True, "Model Registry integration enabled"
+
+        # Run discovery if AUTO mode
+        if server.config.model_registry_discovery_mode == ModelRegistryDiscoveryMode.AUTO:
+            from rhoai_mcp.domains.model_registry.discovery import ModelRegistryDiscovery
+
+            discovery = ModelRegistryDiscovery(server.k8s)
+            result = discovery.discover(fallback_url=server.config.model_registry_url)
+
+            if result:
+                # Update the config with the discovered URL
+                # Note: We update the private field since model_registry_url is a pydantic field
+                object.__setattr__(server.config, "model_registry_url", result.url)
+                logger.info(f"Model Registry discovered: {result}")
+                return True, f"Model Registry discovered at {result.url} (via {result.source})"
+
+            # Discovery failed but we have a fallback
+            return True, f"Model Registry at {server.config.model_registry_url} (discovery failed, using configured URL)"
+
+        # Manual mode - just use configured URL
+        return True, f"Model Registry at {server.config.model_registry_url}"
 
 
 def get_core_plugins() -> list[BasePlugin]:

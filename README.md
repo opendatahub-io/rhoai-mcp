@@ -181,6 +181,85 @@ export RHOAI_MCP_READ_ONLY_MODE=true
 | **RBAC-Aware** | Uses OpenShift Projects API to respect user permissions | Always |
 | **Auth Validation** | Validates authentication configuration at startup | Always |
 
+### Model Registry
+
+The MCP server integrates with the RHOAI Model Registry to list and query registered models. By default, it auto-discovers the Model Registry service in the cluster.
+
+#### Discovery Modes
+
+```bash
+# Auto-discovery (default) - finds Model Registry in the cluster
+export RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=auto
+
+# Manual - use a specific URL
+export RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=manual
+export RHOAI_MCP_MODEL_REGISTRY_URL=https://model-registry.example.com
+```
+
+#### Authentication
+
+When accessing the Model Registry via an external route (outside the cluster), OAuth authentication is required:
+
+```bash
+# No authentication (default) - for in-cluster access
+export RHOAI_MCP_MODEL_REGISTRY_AUTH_MODE=none
+
+# OAuth authentication - uses your oc login token
+export RHOAI_MCP_MODEL_REGISTRY_AUTH_MODE=oauth
+
+# Explicit token authentication
+export RHOAI_MCP_MODEL_REGISTRY_AUTH_MODE=token
+export RHOAI_MCP_MODEL_REGISTRY_TOKEN=sha256~xxxxx
+```
+
+| Auth Mode | Description | Use Case |
+|-----------|-------------|----------|
+| `none` | No authentication headers | In-cluster access via port 8080 |
+| `oauth` | Uses OAuth token from kubeconfig | External route with OAuth proxy |
+| `token` | Uses explicit bearer token | Service accounts, CI/CD |
+
+#### External Route Access
+
+To access the Model Registry from outside the cluster via an OpenShift Route:
+
+```bash
+# 1. Log in to OpenShift (this stores the OAuth token in kubeconfig)
+oc login --server=https://api.cluster.example.com:6443
+
+# 2. Configure the MCP server to use the external route with OAuth
+export RHOAI_MCP_MODEL_REGISTRY_URL=https://model-catalog.apps.cluster.example.com
+export RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=manual
+export RHOAI_MCP_MODEL_REGISTRY_AUTH_MODE=oauth
+
+# 3. Optional: Skip TLS verification for self-signed certificates (not recommended)
+# export RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY=true
+```
+
+#### Port-Forwarding Alternative
+
+If no external route is available, you can use port-forwarding:
+
+```bash
+# Set up port-forwarding to the Model Registry service
+kubectl port-forward -n rhoai-model-registries svc/model-catalog 8080:8443
+
+# Configure the MCP server to use localhost
+export RHOAI_MCP_MODEL_REGISTRY_URL=http://localhost:8080
+export RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=manual
+```
+
+#### All Model Registry Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RHOAI_MCP_MODEL_REGISTRY_ENABLED` | Enable Model Registry integration | `true` |
+| `RHOAI_MCP_MODEL_REGISTRY_URL` | Model Registry service URL | Auto-discovered |
+| `RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE` | `auto` or `manual` | `auto` |
+| `RHOAI_MCP_MODEL_REGISTRY_AUTH_MODE` | `none`, `oauth`, or `token` | `none` |
+| `RHOAI_MCP_MODEL_REGISTRY_TOKEN` | Explicit bearer token (when auth_mode=token) | None |
+| `RHOAI_MCP_MODEL_REGISTRY_TIMEOUT` | Request timeout in seconds | `30` |
+| `RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `false` |
+
 ## Usage with Claude Code
 
 Add to your project's `.mcp.json` file:

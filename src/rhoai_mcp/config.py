@@ -41,6 +41,14 @@ class ModelRegistryDiscoveryMode(str, Enum):
     MANUAL = "manual"  # Only use configured URL
 
 
+class ModelRegistryAuthMode(str, Enum):
+    """Model Registry authentication mode."""
+
+    NONE = "none"  # No authentication (for in-cluster access via port 8080)
+    OAUTH = "oauth"  # Use OpenShift OAuth token from kubeconfig
+    TOKEN = "token"  # Use explicit bearer token
+
+
 class RHOAIConfig(BaseSettings):
     """Configuration for RHOAI MCP server.
 
@@ -167,6 +175,18 @@ class RHOAIConfig(BaseSettings):
     model_registry_discovery_mode: ModelRegistryDiscoveryMode = Field(
         default=ModelRegistryDiscoveryMode.AUTO,
         description="How to find Model Registry: auto (discover from cluster) or manual (use configured URL)",
+    )
+    model_registry_auth_mode: ModelRegistryAuthMode = Field(
+        default=ModelRegistryAuthMode.NONE,
+        description="Authentication mode: none (no auth), oauth (use OpenShift token), token (explicit token)",
+    )
+    model_registry_token: str | None = Field(
+        default=None,
+        description="Explicit bearer token for Model Registry (used when auth_mode is 'token')",
+    )
+    model_registry_skip_tls_verify: bool = Field(
+        default=False,
+        description="Skip TLS certificate verification for Model Registry (not recommended for production)",
     )
 
     @field_validator("kubeconfig_path", mode="before")

@@ -1,6 +1,11 @@
 """Model Registry REST API client."""
 
+from __future__ import annotations
+
+import logging
+import ssl
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -20,6 +25,138 @@ from rhoai_mcp.domains.model_registry.models import (
 if TYPE_CHECKING:
     from rhoai_mcp.config import RHOAIConfig
 
+logger = logging.getLogger(__name__)
+
+
+def _is_running_in_cluster() -> bool:
+    """Check if we're running inside a Kubernetes cluster.
+
+    Returns:
+        True if running in-cluster (as a pod), False otherwise.
+    """
+    return Path("/var/run/secrets/kubernetes.io/serviceaccount/token").exists()
+
+
+def _get_oauth_token_from_kubeconfig(config: RHOAIConfig) -> str | None:
+    """Extract the OAuth token from kubeconfig.
+
+    This retrieves the bearer token that was set when the user logged in
+    via 'oc login' or 'kubectl login'. The token is used for authenticating
+    with OpenShift services protected by OAuth proxy.
+
+    Args:
+        config: RHOAI configuration with kubeconfig settings.
+
+    Returns:
+        The OAuth bearer token, or None if not found.
+    """
+    try:
+        from kubernetes import config as k8s_config  # type: ignore[import-untyped]
+
+        # Determine which kubeconfig to use
+        kubeconfig_path = config.effective_kubeconfig_path
+        if not kubeconfig_path.exists():
+            logger.debug(f"Kubeconfig not found: {kubeconfig_path}")
+            return None
+
+        # Load the kubeconfig
+        loader = k8s_config.kube_config.KubeConfigLoader(
+            config_file=str(kubeconfig_path),
+            active_context=config.kubeconfig_context,
+        )
+
+        # Get the token from the current context's user credentials
+        # The token is stored in the user's auth-provider or directly
+        token: str | None = loader.token
+        if token:
+            logger.debug("Retrieved OAuth token from kubeconfig")
+            return str(token)
+
+        logger.debug("No token found in kubeconfig")
+        return None
+
+    except Exception as e:
+        logger.debug(f"Error extracting OAuth token from kubeconfig: {e}")
+        return None
+
+
+def _get_in_cluster_token() -> str | None:
+    """Get the service account token when running in-cluster.
+
+    Returns:
+        The service account token, or None if not running in-cluster.
+    """
+    token_path = Path("/var/run/secrets/kubernetes.io/serviceaccount/token")
+    if token_path.exists():
+        try:
+            return token_path.read_text().strip()
+        except Exception as e:
+            logger.debug(f"Error reading in-cluster token: {e}")
+    return None
+
+
+def _is_internal_k8s_url(url: str) -> bool:
+    """Check if the URL is a Kubernetes internal service URL.
+
+    Args:
+        url: The URL to check.
+
+    Returns:
+        True if the URL uses Kubernetes internal DNS (*.svc or *.svc.cluster.local).
+    """
+    return ".svc:" in url or ".svc.cluster.local" in url
+
+
+def _format_connection_error(url: str, error: Exception) -> str:
+    """Format a connection error with helpful context.
+
+    If running outside the cluster with an internal URL, provides
+    guidance on how to set up port-forwarding.
+
+    Args:
+        url: The URL that failed to connect.
+        error: The original connection error.
+
+    Returns:
+        Formatted error message with actionable guidance.
+    """
+    base_msg = f"Failed to connect to Model Registry at {url}: {error}"
+
+    # Check if this is a DNS resolution failure for an internal URL
+    error_str = str(error).lower()
+    is_dns_error = "name or service not known" in error_str or "nodename nor servname" in error_str
+
+    if is_dns_error and _is_internal_k8s_url(url) and not _is_running_in_cluster():
+        # Extract service name and namespace from URL for port-forward command
+        # URL format: https://service-name.namespace.svc:port
+        try:
+            # Parse: protocol://service.namespace.svc:port
+            host_port = url.split("://")[1]
+            host = host_port.split(":")[0]
+            port = host_port.split(":")[1].split("/")[0]
+            parts = host.split(".")
+            if len(parts) >= 2:
+                service_name = parts[0]
+                namespace = parts[1]
+
+                return (
+                    f"{base_msg}\n\n"
+                    f"The Model Registry service was discovered in the cluster, but "
+                    f"you are running outside the cluster where Kubernetes internal DNS "
+                    f"is not available.\n\n"
+                    f"To connect, either:\n"
+                    f"1. Set up port-forwarding:\n"
+                    f"   kubectl port-forward -n {namespace} svc/{service_name} 8080:{port}\n"
+                    f"   Then set: RHOAI_MCP_MODEL_REGISTRY_URL=http://localhost:8080\n\n"
+                    f"2. Or configure a direct URL if the service is exposed externally:\n"
+                    f"   RHOAI_MCP_MODEL_REGISTRY_URL=<external-url>\n"
+                    f"   RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=manual"
+                )
+        except (IndexError, ValueError):
+            pass  # Fall through to default message
+
+    return base_msg
+
 
 class ModelRegistryClient:
     """Client for OpenShift AI Model Registry REST API.
@@ -33,7 +170,7 @@ class ModelRegistryClient:
             models = await client.list_registered_models()
     """
 
-    def __init__(self, config: "RHOAIConfig") -> None:
+    def __init__(self, config: RHOAIConfig) -> None:
         """Initialize client.
 
         Args:
@@ -42,12 +179,70 @@ class ModelRegistryClient:
         self._config = config
         self._http_client: httpx.AsyncClient | None = None
 
+    def _get_auth_headers(self) -> dict[str, str]:
+        """Get authentication headers based on config.
+
+        Returns:
+            Dict of headers to include in requests.
+        """
+        from rhoai_mcp.config import ModelRegistryAuthMode
+
+        auth_mode = self._config.model_registry_auth_mode
+        headers: dict[str, str] = {}
+
+        if auth_mode == ModelRegistryAuthMode.NONE:
+            return headers
+
+        token: str | None = None
+
+        if auth_mode == ModelRegistryAuthMode.TOKEN:
+            # Use explicit token from config
+            token = self._config.model_registry_token
+            if not token:
+                logger.warning(
+                    "Model Registry auth_mode is 'token' but no token configured. "
+                    "Set RHOAI_MCP_MODEL_REGISTRY_TOKEN environment variable."
+                )
+
+        elif auth_mode == ModelRegistryAuthMode.OAUTH:
+            # Get OAuth token from kubeconfig or in-cluster SA
+            if _is_running_in_cluster():
+                token = _get_in_cluster_token()
+            else:
+                token = _get_oauth_token_from_kubeconfig(self._config)
+
+            if not token:
+                logger.warning(
+                    "Model Registry auth_mode is 'oauth' but no token found. "
+                    "Ensure you are logged in (oc login) or running in-cluster."
+                )
+
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+            logger.debug("Added Authorization header for Model Registry")
+
+        return headers
+
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
+        """Get or create HTTP client with appropriate auth and SSL settings."""
         if self._http_client is None:
+            # Get auth headers
+            headers = self._get_auth_headers()
+
+            # Configure SSL verification
+            verify: bool | ssl.SSLContext = True
+            if self._config.model_registry_skip_tls_verify:
+                verify = False
+                logger.warning(
+                    "TLS verification disabled for Model Registry. "
+                    "This is not recommended for production."
+                )
+
             self._http_client = httpx.AsyncClient(
                 base_url=self._config.model_registry_url,
                 timeout=self._config.model_registry_timeout,
+                headers=headers,
+                verify=verify,
             )
         return self._http_client
 
@@ -135,7 +330,7 @@ class ModelRegistryClient:
 
         except httpx.ConnectError as e:
             raise ModelRegistryConnectionError(
-                f"Failed to connect to Model Registry at {self._config.model_registry_url}: {e}"
+                _format_connection_error(self._config.model_registry_url, e)
             ) from e
         except httpx.TimeoutException as e:
             raise ModelRegistryConnectionError(
@@ -169,9 +364,13 @@ class ModelRegistryClient:
             return self._parse_registered_model(response.json())
 
         except httpx.ConnectError as e:
-            raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+            raise ModelRegistryConnectionError(
+                _format_connection_error(self._config.model_registry_url, e)
+            ) from e
         except httpx.TimeoutException as e:
-            raise ModelRegistryConnectionError(f"Timeout connecting to Model Registry: {e}") from e
+            raise ModelRegistryConnectionError(
+                f"Timeout connecting to Model Registry at {self._config.model_registry_url}: {e}"
+            ) from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model: {e}") from e
 
@@ -272,9 +471,13 @@ class ModelRegistryClient:
             return versions, next_token
 
         except httpx.ConnectError as e:
-            raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+            raise ModelRegistryConnectionError(
+                _format_connection_error(self._config.model_registry_url, e)
+            ) from e
         except httpx.TimeoutException as e:
-            raise ModelRegistryConnectionError(f"Timeout connecting to Model Registry: {e}") from e
+            raise ModelRegistryConnectionError(
+                f"Timeout connecting to Model Registry at {self._config.model_registry_url}: {e}"
+            ) from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model versions: {e}") from e
 
@@ -301,9 +504,13 @@ class ModelRegistryClient:
             return self._parse_model_version(response.json())
 
         except httpx.ConnectError as e:
-            raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+            raise ModelRegistryConnectionError(
+                _format_connection_error(self._config.model_registry_url, e)
+            ) from e
         except httpx.TimeoutException as e:
-            raise ModelRegistryConnectionError(f"Timeout connecting to Model Registry: {e}") from e
+            raise ModelRegistryConnectionError(
+                f"Timeout connecting to Model Registry at {self._config.model_registry_url}: {e}"
+            ) from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model version: {e}") from e
 
@@ -334,9 +541,13 @@ class ModelRegistryClient:
             return artifacts
 
         except httpx.ConnectError as e:
-            raise ModelRegistryConnectionError(f"Failed to connect to Model Registry: {e}") from e
+            raise ModelRegistryConnectionError(
+                _format_connection_error(self._config.model_registry_url, e)
+            ) from e
         except httpx.TimeoutException as e:
-            raise ModelRegistryConnectionError(f"Timeout connecting to Model Registry: {e}") from e
+            raise ModelRegistryConnectionError(
+                f"Timeout connecting to Model Registry at {self._config.model_registry_url}: {e}"
+            ) from e
         except httpx.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get artifacts: {e}") from e
 
@@ -400,7 +611,7 @@ class ModelRegistryClient:
             update_time=self._parse_timestamp(data.get("updateTime")),
         )
 
-    async def __aenter__(self) -> "ModelRegistryClient":
+    async def __aenter__(self) -> ModelRegistryClient:
         """Async context manager entry."""
         return self
 

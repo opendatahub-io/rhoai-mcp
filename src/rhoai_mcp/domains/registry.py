@@ -291,7 +291,10 @@ class ModelRegistryPlugin(BasePlugin):
                 return True, f"Model Registry discovered at {result.url} (via {result.source})"
 
             # Discovery failed but we have a fallback
-            return True, f"Model Registry at {server.config.model_registry_url} (discovery failed, using configured URL)"
+            return (
+                True,
+                f"Model Registry at {server.config.model_registry_url} (discovery failed, using configured URL)",
+            )
 
         # Manual mode - just use configured URL
         return True, f"Model Registry at {server.config.model_registry_url}"

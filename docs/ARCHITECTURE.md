@@ -467,3 +467,118 @@ During server startup, hooks are called in this order:
 3. `rhoai_register_resources` - Register all MCP resources
 4. `rhoai_register_prompts` - Register all MCP prompts
 5. `rhoai_health_check` - Run health checks (during lifespan)
+
+## Model Registry Domain
+
+**Location:** `src/rhoai_mcp/domains/model_registry/`
+
+The Model Registry domain is unique in that it communicates via REST API rather than Kubernetes CRDs.
+
+### Architecture
+
+```text
+domains/model_registry/
+├── __init__.py
+├── client.py       # HTTP REST client (not K8s client)
+├── tools.py        # MCP tool implementations
+├── models.py       # Pydantic models
+├── errors.py       # Domain-specific exceptions
+├── discovery.py    # Auto-discovery of Model Registry service
+├── crds.py         # CRD definitions for discovery only
+└── benchmarks.py   # Benchmark extraction utilities
+```
+
+### Key Differences from Other Domains
+
+| Aspect | Other Domains | Model Registry |
+|--------|---------------|----------------|
+| **Client** | Uses `K8sClient` for CRDs | Uses `httpx.AsyncClient` for REST |
+| **Authentication** | K8s API auth (kubeconfig) | Configurable: none/oauth/token |
+| **Discovery** | CRDs are always available | Auto-discovers service location |
+| **URL** | K8s API server | Configurable Model Registry URL |
+
+### Auto-Discovery
+
+**Location:** `src/rhoai_mcp/domains/model_registry/discovery.py`
+
+Discovery follows a 4-step fallback chain:
+
+1. **CRD-based**: Query `ModelRegistry` component CRD for `spec.registriesNamespace`
+2. **Namespace scan**: Look for services in common namespaces (`rhoai-model-registries`, etc.)
+3. **Service matching**: Find services named `model-catalog`, `model-registry`, etc.
+4. **Fallback**: Use configured default URL
+
+Port preference (lowest = highest priority):
+- **8080**: Direct REST API (no auth overhead)
+- **8443**: kube-rbac-proxy (requires OAuth)
+- **443**: HTTPS standard
+
+### Authentication
+
+**Location:** `src/rhoai_mcp/domains/model_registry/client.py`
+
+The client supports three authentication modes configured via `RHOAI_MCP_MODEL_REGISTRY_AUTH_MODE`:
+
+| Mode | Implementation |
+|------|----------------|
+| `none` | No `Authorization` header |
+| `oauth` | Extracts token from kubeconfig via `KubeConfigLoader.token` |
+| `token` | Uses explicit `RHOAI_MCP_MODEL_REGISTRY_TOKEN` value |
+
+For OAuth mode, the client:
+1. Checks if running in-cluster (service account token)
+2. If outside cluster, extracts OAuth token from kubeconfig
+3. Adds `Authorization: Bearer <token>` header to all requests
+
+### Client Implementation
+
+The `ModelRegistryClient` uses async HTTP:
+
+```python
+class ModelRegistryClient:
+    async def _get_client(self) -> httpx.AsyncClient:
+        headers = self._get_auth_headers()  # Based on auth_mode
+        verify = not self._config.model_registry_skip_tls_verify
+
+        self._http_client = httpx.AsyncClient(
+            base_url=self._config.model_registry_url,
+            timeout=self._config.model_registry_timeout,
+            headers=headers,
+            verify=verify,
+        )
+```
+
+### Error Handling
+
+Connection errors for internal K8s URLs when running outside the cluster include helpful guidance:
+
+```python
+def _format_connection_error(url: str, error: Exception) -> str:
+    if is_dns_error and is_internal_url and not in_cluster:
+        return f"""...
+To connect, either:
+1. Set up port-forwarding:
+   kubectl port-forward -n {namespace} svc/{service} 8080:{port}
+   Then set: RHOAI_MCP_MODEL_REGISTRY_URL=http://localhost:8080
+
+2. Or configure a direct URL if the service is exposed externally:
+   RHOAI_MCP_MODEL_REGISTRY_URL=<external-url>
+   RHOAI_MCP_MODEL_REGISTRY_AUTH_MODE=oauth
+"""
+```
+
+### Health Check
+
+The Model Registry plugin's health check (`domains/registry.py`):
+
+1. If `discovery_mode == AUTO`: Runs discovery at startup
+2. Updates `server.config.model_registry_url` with discovered URL
+3. Logs discovery source ("crd", "namespace_scan", or "fallback")
+4. Returns health status for the plugin system
+
+### Adding New Model Registry Features
+
+1. **New API endpoint**: Add method to `ModelRegistryClient`
+2. **New tool**: Add to `tools.py` following existing patterns
+3. **Handle auth**: Client automatically adds auth headers based on config
+4. **Handle errors**: Use `ModelRegistryError` and `ModelRegistryConnectionError`

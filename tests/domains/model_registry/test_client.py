@@ -6,7 +6,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from rhoai_mcp.config import RHOAIConfig
-from rhoai_mcp.domains.model_registry.client import ModelRegistryClient
+from rhoai_mcp.config import ModelRegistryAuthMode
+from rhoai_mcp.domains.model_registry.client import (
+    ModelRegistryClient,
+    _format_connection_error,
+    _get_in_cluster_token,
+    _get_oauth_token_from_kubeconfig,
+    _is_internal_k8s_url,
+    _is_running_in_cluster,
+)
 from rhoai_mcp.domains.model_registry.errors import (
     ModelNotFoundError,
     ModelRegistryConnectionError,
@@ -309,3 +317,273 @@ class TestModelRegistryClient:
 
         mock_http_client.aclose.assert_called_once()
         assert client._http_client is None
+
+
+class TestIsRunningInCluster:
+    """Test _is_running_in_cluster helper function."""
+
+    def test_in_cluster_token_exists(self) -> None:
+        """When service account token exists, we're in-cluster."""
+        with patch("pathlib.Path.exists", return_value=True):
+            assert _is_running_in_cluster() is True
+
+    def test_outside_cluster_token_missing(self) -> None:
+        """When service account token doesn't exist, we're outside cluster."""
+        with patch("pathlib.Path.exists", return_value=False):
+            assert _is_running_in_cluster() is False
+
+
+class TestIsInternalK8sUrl:
+    """Test _is_internal_k8s_url helper function."""
+
+    def test_internal_url_with_svc(self) -> None:
+        """URLs with .svc: are internal."""
+        assert _is_internal_k8s_url("https://model-registry.ns.svc:8443") is True
+        assert _is_internal_k8s_url("http://service.namespace.svc:8080") is True
+
+    def test_internal_url_with_cluster_local(self) -> None:
+        """URLs with .svc.cluster.local are internal."""
+        assert _is_internal_k8s_url("https://svc.ns.svc.cluster.local/path") is True
+
+    def test_external_url(self) -> None:
+        """External URLs are not internal."""
+        assert _is_internal_k8s_url("http://localhost:8080") is False
+        assert _is_internal_k8s_url("https://model-registry.example.com:443") is False
+
+    def test_url_without_port(self) -> None:
+        """URLs without port don't match the .svc: pattern."""
+        assert _is_internal_k8s_url("https://model-registry.ns.svc/path") is False
+
+
+class TestFormatConnectionError:
+    """Test _format_connection_error helper function."""
+
+    def test_dns_error_outside_cluster(self) -> None:
+        """DNS error for internal URL outside cluster provides guidance."""
+        url = "https://model-catalog.rhoai-model-registries.svc:8443"
+        error = Exception("[Errno -2] Name or service not known")
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client._is_running_in_cluster",
+            return_value=False,
+        ):
+            msg = _format_connection_error(url, error)
+
+        assert "outside the cluster" in msg
+        assert "kubectl port-forward" in msg
+        assert "-n rhoai-model-registries" in msg
+        assert "svc/model-catalog" in msg
+        assert "RHOAI_MCP_MODEL_REGISTRY_URL" in msg
+
+    def test_dns_error_inside_cluster(self) -> None:
+        """DNS error for internal URL inside cluster doesn't add guidance."""
+        url = "https://model-catalog.rhoai-model-registries.svc:8443"
+        error = Exception("[Errno -2] Name or service not known")
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client._is_running_in_cluster",
+            return_value=True,
+        ):
+            msg = _format_connection_error(url, error)
+
+        assert "outside the cluster" not in msg
+        assert "kubectl port-forward" not in msg
+
+    def test_non_dns_error(self) -> None:
+        """Non-DNS errors don't trigger guidance."""
+        url = "https://model-catalog.rhoai-model-registries.svc:8443"
+        error = Exception("Connection refused")
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client._is_running_in_cluster",
+            return_value=False,
+        ):
+            msg = _format_connection_error(url, error)
+
+        assert "outside the cluster" not in msg
+        assert "Connection refused" in msg
+
+    def test_external_url_with_dns_error(self) -> None:
+        """DNS errors for external URLs don't trigger port-forward guidance."""
+        url = "http://localhost:8080"
+        error = Exception("Name or service not known")
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client._is_running_in_cluster",
+            return_value=False,
+        ):
+            msg = _format_connection_error(url, error)
+
+        assert "outside the cluster" not in msg
+        assert "kubectl port-forward" not in msg
+
+
+class TestGetInClusterToken:
+    """Test _get_in_cluster_token helper function."""
+
+    def test_token_file_exists(self, tmp_path: Any) -> None:
+        """When token file exists, return its contents."""
+        token_file = tmp_path / "token"
+        token_file.write_text("my-service-account-token")
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client.Path"
+        ) as mock_path:
+            mock_path.return_value.exists.return_value = True
+            mock_path.return_value.read_text.return_value = "my-service-account-token\n"
+            token = _get_in_cluster_token()
+
+        assert token == "my-service-account-token"
+
+    def test_token_file_missing(self) -> None:
+        """When token file doesn't exist, return None."""
+        with patch(
+            "rhoai_mcp.domains.model_registry.client.Path"
+        ) as mock_path:
+            mock_path.return_value.exists.return_value = False
+            token = _get_in_cluster_token()
+
+        assert token is None
+
+
+class TestGetOAuthTokenFromKubeconfig:
+    """Test _get_oauth_token_from_kubeconfig helper function."""
+
+    def test_kubeconfig_not_found(self) -> None:
+        """When kubeconfig doesn't exist, return None."""
+        mock_config = MagicMock()
+        mock_config.effective_kubeconfig_path.exists.return_value = False
+
+        token = _get_oauth_token_from_kubeconfig(mock_config)
+
+        assert token is None
+
+    def test_kubeconfig_with_token(self) -> None:
+        """When kubeconfig has a token, return it."""
+        mock_config = MagicMock()
+        mock_config.effective_kubeconfig_path.exists.return_value = True
+        mock_config.kubeconfig_context = None
+
+        with patch(
+            "kubernetes.config.kube_config.KubeConfigLoader"
+        ) as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.token = "sha256~my-oauth-token"
+            mock_loader_class.return_value = mock_loader
+
+            token = _get_oauth_token_from_kubeconfig(mock_config)
+
+        assert token == "sha256~my-oauth-token"
+
+    def test_kubeconfig_without_token(self) -> None:
+        """When kubeconfig has no token, return None."""
+        mock_config = MagicMock()
+        mock_config.effective_kubeconfig_path.exists.return_value = True
+        mock_config.kubeconfig_context = None
+
+        with patch(
+            "kubernetes.config.kube_config.KubeConfigLoader"
+        ) as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.token = None
+            mock_loader_class.return_value = mock_loader
+
+            token = _get_oauth_token_from_kubeconfig(mock_config)
+
+        assert token is None
+
+
+class TestModelRegistryClientAuth:
+    """Test ModelRegistryClient authentication functionality."""
+
+    @pytest.fixture
+    def mock_config_no_auth(self) -> MagicMock:
+        """Create a mock config with no auth."""
+        config = MagicMock()
+        config.model_registry_url = "http://model-registry.test:8080"
+        config.model_registry_timeout = 30
+        config.model_registry_auth_mode = ModelRegistryAuthMode.NONE
+        config.model_registry_skip_tls_verify = False
+        return config
+
+    @pytest.fixture
+    def mock_config_oauth(self) -> MagicMock:
+        """Create a mock config with OAuth auth."""
+        config = MagicMock()
+        config.model_registry_url = "https://model-registry.example.com"
+        config.model_registry_timeout = 30
+        config.model_registry_auth_mode = ModelRegistryAuthMode.OAUTH
+        config.model_registry_skip_tls_verify = False
+        config.effective_kubeconfig_path.exists.return_value = True
+        config.kubeconfig_context = None
+        return config
+
+    @pytest.fixture
+    def mock_config_token(self) -> MagicMock:
+        """Create a mock config with explicit token auth."""
+        config = MagicMock()
+        config.model_registry_url = "https://model-registry.example.com"
+        config.model_registry_timeout = 30
+        config.model_registry_auth_mode = ModelRegistryAuthMode.TOKEN
+        config.model_registry_token = "my-explicit-token"
+        config.model_registry_skip_tls_verify = False
+        return config
+
+    def test_no_auth_returns_empty_headers(self, mock_config_no_auth: MagicMock) -> None:
+        """When auth mode is NONE, no headers are added."""
+        client = ModelRegistryClient(mock_config_no_auth)
+        headers = client._get_auth_headers()
+
+        assert headers == {}
+
+    def test_token_auth_adds_bearer_header(self, mock_config_token: MagicMock) -> None:
+        """When auth mode is TOKEN, Authorization header is added."""
+        client = ModelRegistryClient(mock_config_token)
+        headers = client._get_auth_headers()
+
+        assert headers["Authorization"] == "Bearer my-explicit-token"
+
+    def test_oauth_auth_outside_cluster(self, mock_config_oauth: MagicMock) -> None:
+        """When auth mode is OAUTH outside cluster, gets token from kubeconfig."""
+        client = ModelRegistryClient(mock_config_oauth)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client._is_running_in_cluster",
+            return_value=False,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.client._get_oauth_token_from_kubeconfig",
+            return_value="sha256~kubeconfig-token",
+        ):
+            headers = client._get_auth_headers()
+
+        assert headers["Authorization"] == "Bearer sha256~kubeconfig-token"
+
+    def test_oauth_auth_inside_cluster(self, mock_config_oauth: MagicMock) -> None:
+        """When auth mode is OAUTH inside cluster, gets token from SA."""
+        client = ModelRegistryClient(mock_config_oauth)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client._is_running_in_cluster",
+            return_value=True,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.client._get_in_cluster_token",
+            return_value="sa-token-123",
+        ):
+            headers = client._get_auth_headers()
+
+        assert headers["Authorization"] == "Bearer sa-token-123"
+
+    def test_oauth_auth_no_token_found(self, mock_config_oauth: MagicMock) -> None:
+        """When auth mode is OAUTH but no token found, returns empty headers."""
+        client = ModelRegistryClient(mock_config_oauth)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client._is_running_in_cluster",
+            return_value=False,
+        ), patch(
+            "rhoai_mcp.domains.model_registry.client._get_oauth_token_from_kubeconfig",
+            return_value=None,
+        ):
+            headers = client._get_auth_headers()
+
+        assert headers == {}

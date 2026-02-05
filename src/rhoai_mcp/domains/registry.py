@@ -269,7 +269,7 @@ class ModelRegistryPlugin(BasePlugin):
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
         import logging
 
-        from rhoai_mcp.config import ModelRegistryDiscoveryMode
+        from rhoai_mcp.config import ModelRegistryAuthMode, ModelRegistryDiscoveryMode
 
         logger = logging.getLogger(__name__)
 
@@ -287,6 +287,20 @@ class ModelRegistryPlugin(BasePlugin):
                 # Update the config with the discovered URL
                 # Note: We update the private field since model_registry_url is a pydantic field
                 object.__setattr__(server.config, "model_registry_url", result.url)
+
+                # Auto-enable OAuth when using external Route with auth requirements
+                if (
+                    result.is_external
+                    and result.requires_auth
+                    and server.config.model_registry_auth_mode == ModelRegistryAuthMode.NONE
+                ):
+                    object.__setattr__(
+                        server.config, "model_registry_auth_mode", ModelRegistryAuthMode.OAUTH
+                    )
+                    logger.info(
+                        "Auto-enabled OAuth authentication for external Model Registry Route"
+                    )
+
                 logger.info(f"Model Registry discovered: {result}")
                 return True, f"Model Registry discovered at {result.url} (via {result.source})"
 

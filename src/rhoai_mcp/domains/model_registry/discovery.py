@@ -8,11 +8,12 @@ and falling back to common namespace/service patterns.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from kubernetes.client import ApiException  # type: ignore[import-untyped]
 
+from rhoai_mcp.domains.model_registry.client import _is_running_in_cluster
 from rhoai_mcp.domains.model_registry.crds import ModelRegistryCRDs
 
 if TYPE_CHECKING:
@@ -49,8 +50,10 @@ class DiscoveredModelRegistry:
     namespace: str
     service_name: str
     port: int
-    source: str  # "crd", "namespace_scan", or "fallback"
+    source: str  # "crd", "namespace_scan", "fallback", or "*_route" variants
     requires_auth: bool = False
+    is_external: bool = field(default=False)  # True when using external Route
+    route_name: str | None = field(default=None)  # Name of the Route if discovered
 
     def __str__(self) -> str:
         return f"{self.url} (discovered via {self.source})"
@@ -154,6 +157,88 @@ class ModelRegistryDiscovery:
 
         return None
 
+    def _find_route_for_service(self, service_name: str, namespace: str) -> tuple[str, str] | None:
+        """Find an OpenShift Route that exposes the given service.
+
+        Args:
+            service_name: Name of the Kubernetes service to find a Route for.
+            namespace: Namespace where the service and Route are located.
+
+        Returns:
+            Tuple of (route_name, external_url) if found, None otherwise.
+        """
+        try:
+            routes = self._k8s.list_resources(ModelRegistryCRDs.ROUTE, namespace)
+        except ApiException as e:
+            logger.debug(f"Error listing Routes in {namespace}: {e}")
+            return None
+        except Exception as e:
+            logger.debug(f"Error during Route discovery: {e}")
+            return None
+
+        if not routes:
+            logger.debug(f"No Routes found in {namespace}")
+            return None
+
+        for route in routes:
+            route_obj: Any = route
+            spec = getattr(route_obj, "spec", None)
+            if not spec:
+                continue
+
+            # Check if this Route targets our service
+            to_ref = getattr(spec, "to", None)
+            if not to_ref:
+                continue
+
+            to_kind = getattr(to_ref, "kind", None)
+            to_name = getattr(to_ref, "name", None)
+
+            if to_kind != "Service" or to_name != service_name:
+                continue
+
+            # Check if Route is admitted (ready to serve traffic)
+            status = getattr(route_obj, "status", None)
+            if not status:
+                logger.debug(
+                    f"Route {getattr(route_obj.metadata, 'name', 'unknown')} has no status"
+                )
+                continue
+
+            ingress_list = getattr(status, "ingress", None) or []
+            is_admitted = False
+            host: str | None = None
+
+            for ingress in ingress_list:
+                conditions = getattr(ingress, "conditions", None) or []
+                for condition in conditions:
+                    cond_type = getattr(condition, "type", None)
+                    cond_status = getattr(condition, "status", None)
+                    if cond_type == "Admitted" and cond_status == "True":
+                        is_admitted = True
+                        host = getattr(ingress, "host", None)
+                        break
+                if is_admitted:
+                    break
+
+            if not is_admitted or not host:
+                route_name = getattr(route_obj.metadata, "name", "unknown")
+                logger.debug(f"Route {route_name} is not admitted or has no host")
+                continue
+
+            # Determine protocol based on TLS configuration
+            tls = getattr(spec, "tls", None)
+            protocol = "https" if tls else "http"
+
+            route_name = getattr(route_obj.metadata, "name", service_name)
+            external_url = f"{protocol}://{host}"
+
+            logger.debug(f"Found Route {route_name} exposing {service_name} at {external_url}")
+            return (route_name, external_url)
+
+        logger.debug(f"No Route found exposing service {service_name} in {namespace}")
+        return None
+
     def _find_service_in_namespace(
         self, namespace: str, source: str
     ) -> DiscoveredModelRegistry | None:
@@ -201,17 +286,41 @@ class ModelRegistryDiscovery:
                         best_port = port_num
 
         if best_service and best_port:
+            service_name = best_service.metadata.name
+
+            # If running outside cluster, try to find an external Route
+            if not _is_running_in_cluster():
+                route_result = self._find_route_for_service(service_name, namespace)
+                if route_result:
+                    route_name, external_url = route_result
+                    return DiscoveredModelRegistry(
+                        url=external_url,
+                        namespace=namespace,
+                        service_name=service_name,
+                        port=443,  # Routes typically use standard HTTPS port
+                        source=f"{source}_route",
+                        requires_auth=True,  # Routes typically use OAuth proxy
+                        is_external=True,
+                        route_name=route_name,
+                    )
+                else:
+                    logger.warning(
+                        f"Running outside cluster but no Route found for {service_name}. "
+                        f"Internal URL will not be accessible."
+                    )
+
+            # Use internal service URL
             # Determine if auth is required (8443 uses kube-rbac-proxy)
             requires_auth = best_port == 8443
 
             # Use HTTP for 8080, HTTPS for other ports
             protocol = "http" if best_port == 8080 else "https"
-            url = f"{protocol}://{best_service.metadata.name}.{namespace}.svc:{best_port}"
+            url = f"{protocol}://{service_name}.{namespace}.svc:{best_port}"
 
             return DiscoveredModelRegistry(
                 url=url,
                 namespace=namespace,
-                service_name=best_service.metadata.name,
+                service_name=service_name,
                 port=best_port,
                 source=source,
                 requires_auth=requires_auth,

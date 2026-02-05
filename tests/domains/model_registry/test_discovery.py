@@ -319,3 +319,264 @@ class TestModelRegistryDiscovery:
 
         assert result is not None
         assert result.source == "namespace_scan"
+
+
+class TestRouteDiscovery:
+    """Tests for Route discovery when running outside the cluster."""
+
+    @pytest.fixture
+    def mock_k8s(self) -> MagicMock:
+        """Create a mock K8sClient."""
+        k8s = MagicMock()
+        k8s.core_v1 = MagicMock()
+        return k8s
+
+    @pytest.fixture
+    def discovery(self, mock_k8s: MagicMock) -> ModelRegistryDiscovery:
+        """Create a ModelRegistryDiscovery instance."""
+        return ModelRegistryDiscovery(mock_k8s)
+
+    def _make_mock_service(
+        self, name: str, namespace: str, ports: list[int]
+    ) -> MagicMock:
+        """Create a mock Kubernetes service."""
+        svc = MagicMock()
+        svc.metadata.name = name
+        svc.metadata.namespace = namespace
+        svc.spec.ports = [MagicMock(port=p) for p in ports]
+        return svc
+
+    def _make_mock_component(self, registries_namespace: str | None) -> MagicMock:
+        """Create a mock ModelRegistry component resource."""
+        component = MagicMock()
+        if registries_namespace:
+            component.spec.registriesNamespace = registries_namespace
+        else:
+            component.spec = None
+        return component
+
+    def _make_mock_route(
+        self,
+        name: str,
+        namespace: str,
+        target_service: str,
+        host: str,
+        is_admitted: bool = True,
+        has_tls: bool = True,
+    ) -> MagicMock:
+        """Create a mock OpenShift Route.
+
+        Args:
+            name: Route name.
+            namespace: Route namespace.
+            target_service: Name of the service the Route points to.
+            host: External hostname for the Route.
+            is_admitted: Whether the Route is admitted (ready to serve).
+            has_tls: Whether the Route uses TLS.
+
+        Returns:
+            Mock Route object.
+        """
+        route = MagicMock()
+        route.metadata.name = name
+        route.metadata.namespace = namespace
+
+        # spec.to.kind and spec.to.name
+        route.spec.to.kind = "Service"
+        route.spec.to.name = target_service
+
+        # spec.tls
+        if has_tls:
+            route.spec.tls = MagicMock()
+        else:
+            route.spec.tls = None
+
+        # status.ingress[].conditions and host
+        condition = MagicMock()
+        condition.type = "Admitted"
+        condition.status = "True" if is_admitted else "False"
+
+        ingress = MagicMock()
+        ingress.host = host
+        ingress.conditions = [condition]
+
+        route.status.ingress = [ingress]
+
+        return route
+
+    def test_discover_uses_route_when_outside_cluster(
+        self, mock_k8s: MagicMock, discovery: ModelRegistryDiscovery, monkeypatch: Any
+    ) -> None:
+        """Test that Route is used when running outside the cluster."""
+        # Mock running outside cluster
+        monkeypatch.setattr(
+            "rhoai_mcp.domains.model_registry.discovery._is_running_in_cluster",
+            lambda: False,
+        )
+
+        # Setup CRD response
+        mock_k8s.list_resources.side_effect = lambda crd, ns=None: (
+            [self._make_mock_component("rhoai-model-registries")]
+            if ns is None
+            else [
+                self._make_mock_route(
+                    "model-catalog",
+                    "rhoai-model-registries",
+                    "model-catalog",
+                    "model-catalog.apps.cluster.example.com",
+                )
+            ]
+        )
+
+        # Setup service response
+        svc_list = MagicMock()
+        svc_list.items = [
+            self._make_mock_service("model-catalog", "rhoai-model-registries", [8443])
+        ]
+        mock_k8s.core_v1.list_namespaced_service.return_value = svc_list
+
+        result = discovery.discover()
+
+        assert result is not None
+        assert result.url == "https://model-catalog.apps.cluster.example.com"
+        assert result.is_external is True
+        assert result.route_name == "model-catalog"
+        assert result.source == "crd_route"
+        assert result.requires_auth is True
+
+    def test_discover_uses_internal_url_when_in_cluster(
+        self, mock_k8s: MagicMock, discovery: ModelRegistryDiscovery, monkeypatch: Any
+    ) -> None:
+        """Test that internal URL is used when running inside the cluster."""
+        # Mock running inside cluster
+        monkeypatch.setattr(
+            "rhoai_mcp.domains.model_registry.discovery._is_running_in_cluster",
+            lambda: True,
+        )
+
+        # Setup CRD response
+        mock_k8s.list_resources.return_value = [
+            self._make_mock_component("rhoai-model-registries")
+        ]
+
+        # Setup service response
+        svc_list = MagicMock()
+        svc_list.items = [
+            self._make_mock_service("model-catalog", "rhoai-model-registries", [8080])
+        ]
+        mock_k8s.core_v1.list_namespaced_service.return_value = svc_list
+
+        result = discovery.discover()
+
+        assert result is not None
+        assert result.url == "http://model-catalog.rhoai-model-registries.svc:8080"
+        assert result.is_external is False
+        assert result.route_name is None
+        assert result.source == "crd"
+
+    def test_discover_falls_back_to_internal_when_no_route(
+        self, mock_k8s: MagicMock, discovery: ModelRegistryDiscovery, monkeypatch: Any
+    ) -> None:
+        """Test fallback to internal URL when running outside cluster but no Route exists."""
+        # Mock running outside cluster
+        monkeypatch.setattr(
+            "rhoai_mcp.domains.model_registry.discovery._is_running_in_cluster",
+            lambda: False,
+        )
+
+        # Setup CRD response - returns component for CRD query, empty for Route query
+        mock_k8s.list_resources.side_effect = lambda crd, ns=None: (
+            [self._make_mock_component("rhoai-model-registries")] if ns is None else []
+        )
+
+        # Setup service response
+        svc_list = MagicMock()
+        svc_list.items = [
+            self._make_mock_service("model-catalog", "rhoai-model-registries", [8443])
+        ]
+        mock_k8s.core_v1.list_namespaced_service.return_value = svc_list
+
+        result = discovery.discover()
+
+        # Should fall back to internal URL with warning logged
+        assert result is not None
+        assert result.url == "https://model-catalog.rhoai-model-registries.svc:8443"
+        assert result.is_external is False
+        assert result.source == "crd"
+
+    def test_find_route_for_service_skips_non_admitted(
+        self, mock_k8s: MagicMock, discovery: ModelRegistryDiscovery
+    ) -> None:
+        """Test that non-admitted Routes are skipped."""
+        # Route exists but is not admitted
+        mock_k8s.list_resources.return_value = [
+            self._make_mock_route(
+                "model-catalog",
+                "rhoai-model-registries",
+                "model-catalog",
+                "model-catalog.apps.cluster.example.com",
+                is_admitted=False,
+            )
+        ]
+
+        result = discovery._find_route_for_service(
+            "model-catalog", "rhoai-model-registries"
+        )
+
+        assert result is None
+
+    def test_find_route_for_service_handles_http_routes(
+        self, mock_k8s: MagicMock, discovery: ModelRegistryDiscovery
+    ) -> None:
+        """Test that HTTP Routes (without TLS) produce http:// URLs."""
+        # Route without TLS
+        mock_k8s.list_resources.return_value = [
+            self._make_mock_route(
+                "model-catalog-http",
+                "rhoai-model-registries",
+                "model-catalog",
+                "model-catalog.apps.cluster.example.com",
+                has_tls=False,
+            )
+        ]
+
+        result = discovery._find_route_for_service(
+            "model-catalog", "rhoai-model-registries"
+        )
+
+        assert result is not None
+        route_name, external_url = result
+        assert external_url == "http://model-catalog.apps.cluster.example.com"
+        assert route_name == "model-catalog-http"
+
+    def test_find_route_for_service_skips_wrong_target(
+        self, mock_k8s: MagicMock, discovery: ModelRegistryDiscovery
+    ) -> None:
+        """Test that Routes targeting a different service are skipped."""
+        # Route targets a different service
+        mock_k8s.list_resources.return_value = [
+            self._make_mock_route(
+                "other-service-route",
+                "rhoai-model-registries",
+                "other-service",  # Different service
+                "other-service.apps.cluster.example.com",
+            )
+        ]
+
+        result = discovery._find_route_for_service(
+            "model-catalog", "rhoai-model-registries"
+        )
+
+        assert result is None
+
+    def test_new_fields_have_correct_defaults(self) -> None:
+        """Test that new fields is_external and route_name have correct defaults."""
+        result = DiscoveredModelRegistry(
+            url="http://test.svc:8080",
+            namespace="test",
+            service_name="test",
+            port=8080,
+            source="test",
+        )
+        assert result.is_external is False
+        assert result.route_name is None

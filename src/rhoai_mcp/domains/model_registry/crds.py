@@ -20,3 +20,11 @@ class ModelRegistryCRDs:
         plural="modelregistries",
         kind="ModelRegistry",
     )
+
+    # OpenShift Route for external access to services
+    ROUTE = CRDDefinition(
+        group="route.openshift.io",
+        version="v1",
+        plural="routes",
+        kind="Route",
+    )

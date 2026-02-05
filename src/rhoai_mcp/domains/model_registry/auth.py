@@ -2,6 +2,9 @@
 
 This module provides shared authentication functions used by both the
 ModelRegistryClient and ModelCatalogClient to avoid code duplication.
+
+When running outside the cluster, port-forwarding is used to access the
+Model Registry service directly on port 8080, bypassing OAuth authentication.
 """
 
 from __future__ import annotations
@@ -40,49 +43,6 @@ def _get_in_cluster_token() -> str | None:
     return None
 
 
-def _get_oauth_token_from_kubeconfig(config: RHOAIConfig) -> str | None:
-    """Extract the OAuth token from kubeconfig.
-
-    This retrieves the bearer token that was set when the user logged in
-    via 'oc login' or 'kubectl login'. The token is used for authenticating
-    with OpenShift services protected by OAuth proxy.
-
-    Args:
-        config: RHOAI configuration with kubeconfig settings.
-
-    Returns:
-        The OAuth bearer token, or None if not found.
-    """
-    try:
-        from kubernetes import config as k8s_config  # type: ignore[import-untyped]
-
-        # Determine which kubeconfig to use
-        kubeconfig_path = config.effective_kubeconfig_path
-        if not kubeconfig_path.exists():
-            logger.debug(f"Kubeconfig not found: {kubeconfig_path}")
-            return None
-
-        # Load the kubeconfig
-        loader = k8s_config.kube_config.KubeConfigLoader(
-            config_file=str(kubeconfig_path),
-            active_context=config.kubeconfig_context,
-        )
-
-        # Get the token from the current context's user credentials
-        # The token is stored in the user's auth-provider or directly
-        token: str | None = loader.token
-        if token:
-            logger.debug("Retrieved OAuth token from kubeconfig")
-            return str(token)
-
-        logger.debug("No token found in kubeconfig")
-        return None
-
-    except Exception as e:
-        logger.debug(f"Error extracting OAuth token from kubeconfig: {e}")
-        return None
-
-
 def build_auth_headers(
     config: RHOAIConfig,
     requires_auth_override: bool = False,
@@ -92,9 +52,14 @@ def build_auth_headers(
     This function consolidates the auth header construction logic used by
     ModelRegistryClient, ModelCatalogClient, and the probe_api_type function.
 
+    When running outside the cluster, port-forwarding is typically used to
+    access the service directly on port 8080, which does not require
+    authentication. This function primarily handles in-cluster SA token
+    auth and explicit token configuration.
+
     Args:
         config: RHOAI configuration with auth settings.
-        requires_auth_override: If True, attempt OAuth auth even if auth_mode is NONE.
+        requires_auth_override: If True, attempt auth even if auth_mode is NONE.
             Used when discovery indicates the endpoint requires authentication.
 
     Returns:
@@ -121,17 +86,21 @@ def build_auth_headers(
             )
 
     elif auth_mode == ModelRegistryAuthMode.OAUTH or requires_auth_override:
-        # Get OAuth token from kubeconfig or in-cluster SA
+        # When running in-cluster, use the service account token
         if _is_running_in_cluster():
             token = _get_in_cluster_token()
+            if not token:
+                logger.warning(
+                    "Model Registry auth_mode is 'oauth' but no in-cluster token found."
+                )
         else:
-            token = _get_oauth_token_from_kubeconfig(config)
-
-        if not token:
-            logger.warning(
-                "Model Registry auth_mode is 'oauth' but no token found. "
-                "Ensure you are logged in (oc login) or running in-cluster."
-            )
+            # Outside cluster: port-forwarding should handle access without auth
+            # Only warn if auth is explicitly required
+            if requires_auth_override:
+                logger.debug(
+                    "Running outside cluster with requires_auth=True. "
+                    "Port-forwarding to internal service should bypass auth."
+                )
 
     if token:
         headers["Authorization"] = f"Bearer {token}"

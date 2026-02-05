@@ -8,7 +8,6 @@ import pytest
 from rhoai_mcp.config import ModelRegistryAuthMode
 from rhoai_mcp.domains.model_registry.auth import (
     _get_in_cluster_token,
-    _get_oauth_token_from_kubeconfig,
     _is_running_in_cluster,
     build_auth_headers,
 )
@@ -48,67 +47,6 @@ class TestGetInClusterToken:
         with patch("rhoai_mcp.domains.model_registry.auth.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
             token = _get_in_cluster_token()
-
-        assert token is None
-
-
-class TestGetOAuthTokenFromKubeconfig:
-    """Test _get_oauth_token_from_kubeconfig helper function."""
-
-    def test_kubeconfig_not_found(self) -> None:
-        """When kubeconfig doesn't exist, return None."""
-        mock_config = MagicMock()
-        mock_config.effective_kubeconfig_path.exists.return_value = False
-
-        token = _get_oauth_token_from_kubeconfig(mock_config)
-
-        assert token is None
-
-    def test_kubeconfig_with_token(self) -> None:
-        """When kubeconfig has a token, return it."""
-        mock_config = MagicMock()
-        mock_config.effective_kubeconfig_path.exists.return_value = True
-        mock_config.kubeconfig_context = None
-
-        with patch(
-            "kubernetes.config.kube_config.KubeConfigLoader"
-        ) as mock_loader_class:
-            mock_loader = MagicMock()
-            mock_loader.token = "sha256~my-oauth-token"
-            mock_loader_class.return_value = mock_loader
-
-            token = _get_oauth_token_from_kubeconfig(mock_config)
-
-        assert token == "sha256~my-oauth-token"
-
-    def test_kubeconfig_without_token(self) -> None:
-        """When kubeconfig has no token, return None."""
-        mock_config = MagicMock()
-        mock_config.effective_kubeconfig_path.exists.return_value = True
-        mock_config.kubeconfig_context = None
-
-        with patch(
-            "kubernetes.config.kube_config.KubeConfigLoader"
-        ) as mock_loader_class:
-            mock_loader = MagicMock()
-            mock_loader.token = None
-            mock_loader_class.return_value = mock_loader
-
-            token = _get_oauth_token_from_kubeconfig(mock_config)
-
-        assert token is None
-
-    def test_kubeconfig_loading_error(self) -> None:
-        """When kubeconfig loading fails, return None."""
-        mock_config = MagicMock()
-        mock_config.effective_kubeconfig_path.exists.return_value = True
-        mock_config.kubeconfig_context = None
-
-        with patch(
-            "kubernetes.config.kube_config.KubeConfigLoader"
-        ) as mock_loader_class:
-            mock_loader_class.side_effect = Exception("Config error")
-            token = _get_oauth_token_from_kubeconfig(mock_config)
 
         assert token is None
 
@@ -162,17 +100,18 @@ class TestBuildAuthHeaders:
         assert headers == {}
 
     def test_oauth_auth_outside_cluster(self, mock_config_oauth: MagicMock) -> None:
-        """When auth mode is OAUTH outside cluster, gets token from kubeconfig."""
+        """When auth mode is OAUTH outside cluster, no token is returned.
+
+        Port-forwarding is used instead, which bypasses auth.
+        """
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
             return_value=False,
-        ), patch(
-            "rhoai_mcp.domains.model_registry.auth._get_oauth_token_from_kubeconfig",
-            return_value="sha256~kubeconfig-token",
         ):
             headers = build_auth_headers(mock_config_oauth)
 
-        assert headers["Authorization"] == "Bearer sha256~kubeconfig-token"
+        # Outside cluster, no auth headers are added (port-forwarding bypasses auth)
+        assert headers == {}
 
     def test_oauth_auth_inside_cluster(self, mock_config_oauth: MagicMock) -> None:
         """When auth mode is OAUTH inside cluster, gets token from SA."""
@@ -187,44 +126,44 @@ class TestBuildAuthHeaders:
 
         assert headers["Authorization"] == "Bearer sa-token-123"
 
-    def test_oauth_auth_no_token_found(self, mock_config_oauth: MagicMock) -> None:
-        """When auth mode is OAUTH but no token found, returns empty headers."""
+    def test_oauth_auth_inside_cluster_no_token(self, mock_config_oauth: MagicMock) -> None:
+        """When auth mode is OAUTH inside cluster but no token found, returns empty headers."""
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
-            return_value=False,
+            return_value=True,
         ), patch(
-            "rhoai_mcp.domains.model_registry.auth._get_oauth_token_from_kubeconfig",
+            "rhoai_mcp.domains.model_registry.auth._get_in_cluster_token",
             return_value=None,
         ):
             headers = build_auth_headers(mock_config_oauth)
 
         assert headers == {}
 
-    def test_requires_auth_override_triggers_oauth(
+    def test_requires_auth_override_inside_cluster(
         self, mock_config_none: MagicMock
     ) -> None:
-        """When requires_auth_override is True, OAuth is attempted even if mode is NONE."""
+        """When requires_auth_override is True inside cluster, uses SA token."""
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
-            return_value=False,
+            return_value=True,
         ), patch(
-            "rhoai_mcp.domains.model_registry.auth._get_oauth_token_from_kubeconfig",
-            return_value="override-token",
+            "rhoai_mcp.domains.model_registry.auth._get_in_cluster_token",
+            return_value="sa-override-token",
         ):
             headers = build_auth_headers(mock_config_none, requires_auth_override=True)
 
-        assert headers["Authorization"] == "Bearer override-token"
+        assert headers["Authorization"] == "Bearer sa-override-token"
 
-    def test_requires_auth_override_without_token(
+    def test_requires_auth_override_outside_cluster(
         self, mock_config_none: MagicMock
     ) -> None:
-        """When requires_auth_override is True but no token, returns empty headers."""
+        """When requires_auth_override is True outside cluster, no headers returned.
+
+        Port-forwarding is used for external access, bypassing auth.
+        """
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
             return_value=False,
-        ), patch(
-            "rhoai_mcp.domains.model_registry.auth._get_oauth_token_from_kubeconfig",
-            return_value=None,
         ):
             headers = build_auth_headers(mock_config_none, requires_auth_override=True)
 

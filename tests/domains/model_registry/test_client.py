@@ -8,7 +8,6 @@ import pytest
 from rhoai_mcp.config import ModelRegistryAuthMode, RHOAIConfig
 from rhoai_mcp.domains.model_registry.auth import (
     _get_in_cluster_token,
-    _get_oauth_token_from_kubeconfig,
     _is_running_in_cluster,
 )
 from rhoai_mcp.domains.model_registry.client import (
@@ -447,53 +446,6 @@ class TestGetInClusterToken:
         assert token is None
 
 
-class TestGetOAuthTokenFromKubeconfig:
-    """Test _get_oauth_token_from_kubeconfig helper function."""
-
-    def test_kubeconfig_not_found(self) -> None:
-        """When kubeconfig doesn't exist, return None."""
-        mock_config = MagicMock()
-        mock_config.effective_kubeconfig_path.exists.return_value = False
-
-        token = _get_oauth_token_from_kubeconfig(mock_config)
-
-        assert token is None
-
-    def test_kubeconfig_with_token(self) -> None:
-        """When kubeconfig has a token, return it."""
-        mock_config = MagicMock()
-        mock_config.effective_kubeconfig_path.exists.return_value = True
-        mock_config.kubeconfig_context = None
-
-        with patch(
-            "kubernetes.config.kube_config.KubeConfigLoader"
-        ) as mock_loader_class:
-            mock_loader = MagicMock()
-            mock_loader.token = "sha256~my-oauth-token"
-            mock_loader_class.return_value = mock_loader
-
-            token = _get_oauth_token_from_kubeconfig(mock_config)
-
-        assert token == "sha256~my-oauth-token"
-
-    def test_kubeconfig_without_token(self) -> None:
-        """When kubeconfig has no token, return None."""
-        mock_config = MagicMock()
-        mock_config.effective_kubeconfig_path.exists.return_value = True
-        mock_config.kubeconfig_context = None
-
-        with patch(
-            "kubernetes.config.kube_config.KubeConfigLoader"
-        ) as mock_loader_class:
-            mock_loader = MagicMock()
-            mock_loader.token = None
-            mock_loader_class.return_value = mock_loader
-
-            token = _get_oauth_token_from_kubeconfig(mock_config)
-
-        assert token is None
-
-
 class TestModelRegistryClientAuth:
     """Test ModelRegistryClient authentication functionality."""
 
@@ -545,19 +497,19 @@ class TestModelRegistryClientAuth:
         assert headers["Authorization"] == "Bearer my-explicit-token"
 
     def test_oauth_auth_outside_cluster(self, mock_config_oauth: MagicMock) -> None:
-        """When auth mode is OAUTH outside cluster, gets token from kubeconfig."""
+        """When auth mode is OAUTH outside cluster, no auth headers returned.
+
+        Port-forwarding is used for external access, bypassing auth.
+        """
         client = ModelRegistryClient(mock_config_oauth)
 
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
             return_value=False,
-        ), patch(
-            "rhoai_mcp.domains.model_registry.auth._get_oauth_token_from_kubeconfig",
-            return_value="sha256~kubeconfig-token",
         ):
             headers = client._get_auth_headers()
 
-        assert headers["Authorization"] == "Bearer sha256~kubeconfig-token"
+        assert headers == {}
 
     def test_oauth_auth_inside_cluster(self, mock_config_oauth: MagicMock) -> None:
         """When auth mode is OAUTH inside cluster, gets token from SA."""
@@ -574,15 +526,15 @@ class TestModelRegistryClientAuth:
 
         assert headers["Authorization"] == "Bearer sa-token-123"
 
-    def test_oauth_auth_no_token_found(self, mock_config_oauth: MagicMock) -> None:
-        """When auth mode is OAUTH but no token found, returns empty headers."""
+    def test_oauth_auth_inside_cluster_no_token(self, mock_config_oauth: MagicMock) -> None:
+        """When auth mode is OAUTH inside cluster but no token found, returns empty headers."""
         client = ModelRegistryClient(mock_config_oauth)
 
         with patch(
             "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
-            return_value=False,
+            return_value=True,
         ), patch(
-            "rhoai_mcp.domains.model_registry.auth._get_oauth_token_from_kubeconfig",
+            "rhoai_mcp.domains.model_registry.auth._get_in_cluster_token",
             return_value=None,
         ):
             headers = client._get_auth_headers()

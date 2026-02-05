@@ -107,6 +107,12 @@ class RHOAIServer:
                 yield
             finally:
                 logger.info("Shutting down RHOAI MCP server...")
+
+                # Close any port-forward connections
+                from rhoai_mcp.utils.port_forward import PortForwardManager
+
+                await PortForwardManager.get_instance().close_all()
+
                 if server_self._k8s_client:
                     server_self._k8s_client.disconnect()
                 server_self._k8s_client = None

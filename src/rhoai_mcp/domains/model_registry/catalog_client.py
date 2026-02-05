@@ -261,14 +261,23 @@ class ModelCatalogClient:
         for artifact_data in data.get("artifacts", []):
             artifacts.append(self._parse_catalog_artifact(artifact_data))
 
+        # Extract size from customProperties if not at top level
+        size = data.get("size")
+        if not size:
+            custom_props = data.get("customProperties", {})
+            size_prop = custom_props.get("size", {})
+            if isinstance(size_prop, dict):
+                size = size_prop.get("string_value")
+
         return CatalogModel(
             name=data.get("name", ""),
             description=data.get("description"),
             provider=data.get("provider"),
+            source_id=data.get("source_id", ""),
             source_label=data.get("sourceLabel", data.get("source_label", "")),
             task_type=data.get("taskType", data.get("task_type")),
             tags=data.get("tags", []),
-            size=data.get("size"),
+            size=size,
             license=data.get("license"),
             artifacts=artifacts,
             long_description=data.get("longDescription", data.get("long_description")),
@@ -277,9 +286,14 @@ class ModelCatalogClient:
 
     def _parse_catalog_source(self, data: dict[str, Any]) -> CatalogSource:
         """Parse a catalog source from API response."""
+        # The API returns 'id' as the source identifier for API calls
+        # and 'name' as the display name, with optional 'labels' array
+        labels = data.get("labels", [])
+        label = labels[0] if labels else data.get("label", data.get("name", ""))
         return CatalogSource(
+            id=data.get("id", ""),
             name=data.get("name", ""),
-            label=data.get("label", data.get("name", "")),
+            label=label,
             model_count=data.get("modelCount", data.get("model_count", 0)),
             description=data.get("description"),
         )

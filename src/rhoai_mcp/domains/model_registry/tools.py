@@ -567,8 +567,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
     @mcp.tool()
     async def get_catalog_model_artifacts(
-        source: str,
         model_name: str,
+        source_id: str | None = None,
     ) -> dict[str, Any]:
         """Get artifacts (storage URIs) for a model in the Model Catalog.
 
@@ -579,8 +579,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         (not a standard Kubeflow Model Registry).
 
         Args:
-            source: Source label (e.g., 'rhoai' or the source name).
-            model_name: Name of the model.
+            model_name: Name of the model (e.g., 'RedHatAI/granite-3.1-8b-instruct').
+            source_id: Optional source ID. If not provided, will be looked up
+                from the model. Use list_catalog_sources to see available sources.
 
         Returns:
             List of artifacts with storage URIs and format information.
@@ -599,18 +600,30 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
             discovery_result = _create_cached_catalog_discovery(url)
             async with ModelCatalogClient(server.config, discovery_result) as client:
-                artifacts = await client.get_model_artifacts(source, model_name)
+                # If source_id not provided, look it up from the model
+                effective_source_id = source_id
+                if not effective_source_id:
+                    # Find the model to get its source_id
+                    models = await client.list_models()
+                    for model in models:
+                        if model.name == model_name:
+                            effective_source_id = model.source_id
+                            break
+                    if not effective_source_id:
+                        return {"error": f"Model not found: {model_name}"}
+
+                artifacts = await client.get_model_artifacts(effective_source_id, model_name)
                 formatted_artifacts = [_format_catalog_artifact(a) for a in artifacts]
 
         except ModelNotFoundError:
-            return {"error": f"Model not found: {source}/{model_name}"}
+            return {"error": f"Model not found: {model_name}"}
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
             return {"error": str(e)}
 
         return {
-            "source": source,
+            "source_id": effective_source_id,
             "model_name": model_name,
             "artifacts": formatted_artifacts,
             "count": len(formatted_artifacts),
@@ -623,13 +636,14 @@ def _format_catalog_model(model: CatalogModel, verbosity: Verbosity) -> dict[str
         return {
             "name": model.name,
             "provider": model.provider,
-            "source_label": model.source_label,
+            "source_id": model.source_id,
         }
 
     result: dict[str, Any] = {
         "name": model.name,
         "description": model.description,
         "provider": model.provider,
+        "source_id": model.source_id,
         "source_label": model.source_label,
         "task_type": model.task_type,
         "size": model.size,
@@ -649,6 +663,7 @@ def _format_catalog_model(model: CatalogModel, verbosity: Verbosity) -> dict[str
 def _format_catalog_source(source: CatalogSource) -> dict[str, Any]:
     """Format a catalog source for response."""
     return {
+        "id": source.id,
         "name": source.name,
         "label": source.label,
         "model_count": source.model_count,

@@ -32,7 +32,8 @@ class CatalogModel(BaseModel):
     name: str = Field(..., description="Model name")
     description: str | None = Field(None, description="Model description")
     provider: str | None = Field(None, description="Model provider (e.g., 'Meta', 'Mistral AI')")
-    source_label: str = Field(..., description="Source label (e.g., 'Red Hat AI validated')")
+    source_id: str = Field("", description="Source ID for API calls (e.g., 'redhat_ai_validated_models')")
+    source_label: str = Field("", description="Source label (e.g., 'Red Hat AI validated')")
     task_type: str | None = Field(None, description="Task type (e.g., 'text-generation')")
     tags: list[str] = Field(default_factory=list, description="Model tags")
     size: str | None = Field(None, description="Model size description")
@@ -51,6 +52,7 @@ class CatalogSource(BaseModel):
     'Red Hat AI validated' or 'Community'.
     """
 
+    id: str = Field(..., description="Source ID for API calls (e.g., 'redhat_ai_validated_models')")
     name: str = Field(..., description="Source name")
     label: str = Field(..., description="Source label/display name")
     model_count: int = Field(0, description="Number of models from this source")

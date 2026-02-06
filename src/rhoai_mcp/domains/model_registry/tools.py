@@ -397,6 +397,15 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         Retrieves performance benchmark metrics stored in model version
         custom properties. Useful for capacity planning and deployment sizing.
 
+        Note: This tool only works with the standard Kubeflow Model Registry,
+        not the Red Hat AI Model Catalog. Model Registry stores performance
+        benchmarks (latency, throughput, GPU memory) as structured custom
+        properties on model versions, keyed by GPU type.
+
+        Model Catalog contains accuracy/evaluation benchmarks (pass@1,
+        perplexity, etc.) embedded in model readme markdown, which uses
+        a different data format not compatible with this tool.
+
         Args:
             model_name: Name of the registered model.
             version_name: Optional specific version name. If not provided,
@@ -442,6 +451,14 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         Retrieves detailed validation and benchmark metrics from model
         version custom properties, including latency percentiles,
         throughput, resource usage, and quality metrics.
+
+        Note: This tool only works with the standard Kubeflow Model Registry,
+        not the Red Hat AI Model Catalog. Model Registry stores performance
+        metrics as structured custom properties on model versions.
+
+        Model Catalog contains accuracy/evaluation metrics (pass@1,
+        perplexity, etc.) embedded in model readme markdown, which uses
+        a different data format not compatible with this tool.
 
         Args:
             model_name: Name of the registered model.
@@ -494,6 +511,15 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         Searches across all registered models to find benchmark data
         for models that have been tested on the specified GPU type.
         Useful for comparing model performance on specific hardware.
+
+        Note: This tool only works with the standard Kubeflow Model Registry,
+        not the Red Hat AI Model Catalog. Model Registry stores performance
+        benchmarks (latency, throughput, GPU memory) as structured custom
+        properties on model versions, keyed by GPU type.
+
+        Model Catalog contains accuracy/evaluation benchmarks (pass@1,
+        perplexity, etc.) embedded in model readme markdown, which uses
+        a different data format not compatible with GPU-based queries.
 
         Args:
             gpu_type: GPU type to filter by (e.g., "A100", "H100", "L40S").

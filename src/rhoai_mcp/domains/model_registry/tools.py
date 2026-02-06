@@ -142,8 +142,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         api_type, url = await _get_api_type()
         if api_type == "model_catalog":
             base_msg = (
-                "This tool requires a standard Model Registry. "
-                "The cluster has a Model Catalog"
+                "This tool requires a standard Model Registry. The cluster has a Model Catalog"
             )
             if hint:
                 base_msg += f" {hint}"

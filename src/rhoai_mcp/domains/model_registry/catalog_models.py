@@ -32,7 +32,9 @@ class CatalogModel(BaseModel):
     name: str = Field(..., description="Model name")
     description: str | None = Field(None, description="Model description")
     provider: str | None = Field(None, description="Model provider (e.g., 'Meta', 'Mistral AI')")
-    source_id: str = Field("", description="Source ID for API calls (e.g., 'redhat_ai_validated_models')")
+    source_id: str = Field(
+        "", description="Source ID for API calls (e.g., 'redhat_ai_validated_models')"
+    )
     source_label: str = Field("", description="Source label (e.g., 'Red Hat AI validated')")
     task_type: str | None = Field(None, description="Task type (e.g., 'text-generation')")
     tags: list[str] = Field(default_factory=list, description="Model tags")

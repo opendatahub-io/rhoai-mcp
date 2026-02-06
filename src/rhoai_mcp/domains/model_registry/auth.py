@@ -132,9 +132,7 @@ def build_auth_headers(
         if _is_running_in_cluster():
             token = _get_in_cluster_token()
             if not token:
-                logger.warning(
-                    "Model Registry auth_mode is 'oauth' but no in-cluster token found."
-                )
+                logger.warning("Model Registry auth_mode is 'oauth' but no in-cluster token found.")
         else:
             # Outside cluster: get token from oc/kubectl CLI
             # This is needed for port 8443 (kube-rbac-proxy) which requires auth

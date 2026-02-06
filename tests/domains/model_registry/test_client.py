@@ -370,7 +370,9 @@ class TestFormatConnectionError:
             msg = _format_connection_error(url, error)
 
         assert "outside the cluster" in msg
-        assert "kubectl port-forward" in msg
+        assert "oc login" in msg
+        assert "Copy login command" in msg
+        assert "oc port-forward" in msg
         assert "-n rhoai-model-registries" in msg
         assert "svc/model-catalog" in msg
         assert "RHOAI_MCP_MODEL_REGISTRY_URL" in msg

@@ -228,9 +228,7 @@ class PortForwardManager:
                     if process.returncode is not None:
                         _, stderr = await process.communicate()
                         error_msg = stderr.decode() if stderr else "Unknown error"
-                        raise PortForwardError(
-                            f"Port-forward process exited: {error_msg}"
-                        )
+                        raise PortForwardError(f"Port-forward process exited: {error_msg}")
                     else:
                         # Timeout but process still running - kill it
                         process.terminate()

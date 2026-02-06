@@ -224,9 +224,7 @@ class K8sClient:
                     kind=crd.kind,
                 )
             if not results:
-                raise RHOAIError(
-                    f"Resource not found: {crd.api_version}/{crd.kind}"
-                )
+                raise RHOAIError(f"Resource not found: {crd.api_version}/{crd.kind}")
             self._crd_cache[cache_key] = results[0]
         return self._crd_cache[cache_key]
 

@@ -100,7 +100,11 @@ class InferencePlugin(BasePlugin):
     def rhoai_get_crd_definitions(self) -> list[CRDDefinition]:
         from rhoai_mcp.domains.inference.crds import InferenceCRDs
 
-        return [InferenceCRDs.INFERENCE_SERVICE, InferenceCRDs.SERVING_RUNTIME]
+        return [
+            InferenceCRDs.INFERENCE_SERVICE,
+            InferenceCRDs.SERVING_RUNTIME,
+            InferenceCRDs.TEMPLATE,
+        ]
 
 
 class PipelinesPlugin(BasePlugin):

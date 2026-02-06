@@ -109,9 +109,12 @@ class RHOAIServer:
                 logger.info("Shutting down RHOAI MCP server...")
 
                 # Close any port-forward connections
-                from rhoai_mcp.utils.port_forward import PortForwardManager
+                try:
+                    from rhoai_mcp.utils.port_forward import PortForwardManager
 
-                await PortForwardManager.get_instance().close_all()
+                    await PortForwardManager.get_instance().close_all()
+                except Exception as e:
+                    logger.warning(f"Error closing port-forward connections: {e}")
 
                 if server_self._k8s_client:
                     server_self._k8s_client.disconnect()

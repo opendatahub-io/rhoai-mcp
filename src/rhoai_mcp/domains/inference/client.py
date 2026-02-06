@@ -296,13 +296,18 @@ class InferenceClient:
         # Convert to JSON string for easy substitution
         obj_str = json.dumps(obj)
 
-        # Substitute ${PARAM_NAME} patterns
+        # Substitute ${PARAM_NAME} patterns with JSON-escaped values
         for key, value in parameters.items():
+            # JSON-encode the value and strip surrounding quotes to get
+            # a properly escaped string for embedding in JSON
+            escaped_value = json.dumps(value)[1:-1]
             pattern = r"\$\{" + re.escape(key) + r"\}"
-            obj_str = re.sub(pattern, value, obj_str)
+            obj_str = re.sub(pattern, escaped_value, obj_str)
 
-        # Remove any remaining unsubstituted parameters (use defaults if available)
-        # This is a simplified approach - in production you'd want to handle defaults
+        # Warn about remaining unsubstituted parameters, then remove them
+        remaining = re.findall(r"\$\{([^}]+)\}", obj_str)
+        if remaining:
+            logger.warning(f"Unsubstituted template parameters: {remaining}")
         obj_str = re.sub(r"\$\{[^}]+\}", "", obj_str)
 
         result: dict[str, Any] = json.loads(obj_str)

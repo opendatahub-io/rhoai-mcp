@@ -115,10 +115,12 @@ class TestCatalogSource:
     def test_source_creation_minimal(self) -> None:
         """Test creating a source with required fields."""
         source = CatalogSource(
+            id="rhoai_validated",
             name="rhoai",
             label="Red Hat AI validated",
         )
 
+        assert source.id == "rhoai_validated"
         assert source.name == "rhoai"
         assert source.label == "Red Hat AI validated"
         assert source.model_count == 0  # Default
@@ -127,12 +129,14 @@ class TestCatalogSource:
     def test_source_creation_full(self) -> None:
         """Test creating a source with all fields."""
         source = CatalogSource(
+            id="community_models",
             name="community",
             label="Community",
             model_count=42,
             description="Community-contributed models",
         )
 
+        assert source.id == "community_models"
         assert source.name == "community"
         assert source.label == "Community"
         assert source.model_count == 42
@@ -183,8 +187,12 @@ class TestCatalogSourcesResponse:
     def test_response_with_sources(self) -> None:
         """Test response with sources."""
         sources = [
-            CatalogSource(name="rhoai", label="Red Hat AI validated", model_count=5),
-            CatalogSource(name="community", label="Community", model_count=15),
+            CatalogSource(
+                id="rhoai_validated", name="rhoai", label="Red Hat AI validated", model_count=5
+            ),
+            CatalogSource(
+                id="community_models", name="community", label="Community", model_count=15
+            ),
         ]
 
         response = CatalogSourcesResponse(sources=sources)

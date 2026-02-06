@@ -12,6 +12,7 @@ import asyncio
 import logging
 import shutil
 import socket
+import time
 from dataclasses import dataclass, field
 from typing import ClassVar
 
@@ -133,22 +134,25 @@ class PortForwardManager:
         Returns:
             True if port is ready, False if timeout.
         """
-        elapsed = 0.0
-        while elapsed < timeout:
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
             try:
                 # Try to connect to the port
                 _reader, writer = await asyncio.wait_for(
                     asyncio.open_connection("127.0.0.1", port),
-                    timeout=1.0,
+                    timeout=min(1.0, remaining),
                 )
                 writer.close()
                 await writer.wait_closed()
                 return True
             except (ConnectionRefusedError, asyncio.TimeoutError, OSError):
-                await asyncio.sleep(poll_interval)
-                elapsed += poll_interval
-
-        return False
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                await asyncio.sleep(min(poll_interval, remaining))
 
     async def forward(
         self,

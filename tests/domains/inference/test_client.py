@@ -43,6 +43,12 @@ class TestInferenceClientDiagnostics:
             namespace="test-ns",
             label_selector="serving.kserve.io/inferenceservice=my-model",
         )
+        mock_k8s.core_v1.read_namespaced_pod_log.assert_called_once_with(
+            name="my-model-predictor-00001-abc",
+            namespace="test-ns",
+            tail_lines=50,
+            previous=False,
+        )
 
     def test_get_inference_service_logs_with_container(
         self, client: InferenceClient, mock_k8s: MagicMock

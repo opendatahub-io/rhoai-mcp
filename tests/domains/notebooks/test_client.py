@@ -5,6 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
+
 from rhoai_mcp.domains.notebooks.client import NotebookClient
 
 
@@ -41,6 +43,12 @@ class TestNotebookClientDiagnostics:
         mock_k8s.core_v1.list_namespaced_pod.assert_called_once_with(
             namespace="test-ns",
             label_selector="notebook-name=my-wb",
+        )
+        mock_k8s.core_v1.read_namespaced_pod_log.assert_called_once_with(
+            name="my-wb-0",
+            namespace="test-ns",
+            tail_lines=50,
+            previous=False,
         )
 
     def test_get_workbench_logs_with_container(
@@ -89,7 +97,9 @@ class TestNotebookClientDiagnostics:
         mock_result = MagicMock()
         mock_result.items = [mock_pod]
         mock_k8s.core_v1.list_namespaced_pod.return_value = mock_result
-        mock_k8s.core_v1.read_namespaced_pod_log.side_effect = Exception("forbidden")
+        mock_k8s.core_v1.read_namespaced_pod_log.side_effect = ApiException(
+            status=403, reason="Forbidden"
+        )
 
         logs = client.get_workbench_logs("test-ns", "my-wb")
 
@@ -242,3 +252,39 @@ class TestNotebookClientDiagnostics:
         mock_pod.status.conditions = None
 
         assert client._is_pod_ready(mock_pod) is False
+
+    def test_format_event(
+        self, client: NotebookClient, mock_k8s: MagicMock
+    ) -> None:
+        """Test _format_event formats event fields correctly."""
+        event = MagicMock()
+        event.type = "Warning"
+        event.reason = "FailedScheduling"
+        event.message = "Insufficient gpu"
+        event.last_timestamp = datetime(2026, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        event.count = 3
+
+        result = client._format_event(event)
+
+        assert result["type"] == "Warning"
+        assert result["reason"] == "FailedScheduling"
+        assert result["message"] == "Insufficient gpu"
+        assert result["timestamp"] is not None
+        assert "2026-01-15" in result["timestamp"]
+        assert result["count"] == 3
+
+    def test_format_event_no_timestamp(
+        self, client: NotebookClient, mock_k8s: MagicMock
+    ) -> None:
+        """Test _format_event handles None timestamp."""
+        event = MagicMock()
+        event.type = "Normal"
+        event.reason = "Created"
+        event.message = "Pod created"
+        event.last_timestamp = None
+        event.count = 1
+
+        result = client._format_event(event)
+
+        assert result["timestamp"] is None
+        assert result["count"] == 1

@@ -614,24 +614,38 @@ def _diagnose_workbench(server: "RHOAIServer", name: str, namespace: str) -> dic
                 reason = event.get("reason", "")
                 message = event.get("message", "")
                 combined = f"{reason} {message}"
-                if "ImagePullBackOff" in combined or "ErrImagePull" in combined:
+                if (
+                    "ImagePullBackOff" in combined or "ErrImagePull" in combined
+                ) and "Image pull failure" not in result["issues_detected"]:
                     result["issues_detected"].append("Image pull failure")
                     result["suggested_fixes"].append(
                         "Check image name and pull secret configuration"
                     )
-                elif "CrashLoopBackOff" in combined:
+                elif (
+                    "CrashLoopBackOff" in combined
+                    and "Container crash loop" not in result["issues_detected"]
+                ):
                     result["issues_detected"].append("Container crash loop")
                     result["suggested_fixes"].append("Check container logs for crash reason")
-                elif "FailedScheduling" in combined:
+                elif (
+                    "FailedScheduling" in combined
+                    and "Pod scheduling failed" not in result["issues_detected"]
+                ):
                     result["issues_detected"].append("Pod scheduling failed")
                     result["suggested_fixes"].append("Check GPU and resource availability")
-                elif "OOMKilled" in combined:
+                elif "OOMKilled" in combined and "Out of memory" not in result["issues_detected"]:
                     result["issues_detected"].append("Out of memory")
                     result["suggested_fixes"].append("Increase memory limits for the workbench")
-                elif "FailedMount" in combined:
+                elif (
+                    "FailedMount" in combined
+                    and "Volume mount failure" not in result["issues_detected"]
+                ):
                     result["issues_detected"].append("Volume mount failure")
                     result["suggested_fixes"].append("Check PVC existence and access modes")
-                elif "Insufficient" in combined:
+                elif (
+                    "Insufficient" in combined
+                    and "Insufficient cluster resources" not in result["issues_detected"]
+                ):
                     result["issues_detected"].append("Insufficient cluster resources")
                     result["suggested_fixes"].append(
                         "Check cluster resource availability or reduce resource requests"
@@ -706,26 +720,40 @@ def _diagnose_model(server: "RHOAIServer", name: str, namespace: str) -> dict:
                 reason = event.get("reason", "")
                 message = event.get("message", "")
                 combined = f"{reason} {message}"
-                if "ImagePullBackOff" in combined or "ErrImagePull" in combined:
+                if (
+                    "ImagePullBackOff" in combined or "ErrImagePull" in combined
+                ) and "Image pull failure" not in result["issues_detected"]:
                     result["issues_detected"].append("Image pull failure")
                     result["suggested_fixes"].append(
                         "Check image name and pull secret configuration"
                     )
-                elif "CrashLoopBackOff" in combined:
+                elif (
+                    "CrashLoopBackOff" in combined
+                    and "Container crash loop" not in result["issues_detected"]
+                ):
                     result["issues_detected"].append("Container crash loop")
                     result["suggested_fixes"].append("Check container logs for crash reason")
-                elif "FailedScheduling" in combined:
+                elif (
+                    "FailedScheduling" in combined
+                    and "Pod scheduling failed" not in result["issues_detected"]
+                ):
                     result["issues_detected"].append("Pod scheduling failed")
                     result["suggested_fixes"].append("Check GPU and resource availability")
-                elif "OOMKilled" in combined:
+                elif "OOMKilled" in combined and "Out of memory" not in result["issues_detected"]:
                     result["issues_detected"].append("Out of memory")
                     result["suggested_fixes"].append(
                         "Increase memory limits for the model deployment"
                     )
-                elif "FailedMount" in combined:
+                elif (
+                    "FailedMount" in combined
+                    and "Volume mount failure" not in result["issues_detected"]
+                ):
                     result["issues_detected"].append("Volume mount failure")
                     result["suggested_fixes"].append("Check storage URI and PVC configuration")
-                elif "Insufficient" in combined:
+                elif (
+                    "Insufficient" in combined
+                    and "Insufficient cluster resources" not in result["issues_detected"]
+                ):
                     result["issues_detected"].append("Insufficient cluster resources")
                     result["suggested_fixes"].append(
                         "Check cluster resource availability or reduce resource requests"

@@ -308,10 +308,16 @@ class ModelRegistryPlugin(BasePlugin):
                 logger.info(f"Model Registry discovered: {result}")
                 return True, f"Model Registry discovered at {result.url} (via {result.source})"
 
-            # Discovery failed but we have a fallback
+            # Discovery failed - check if we have a fallback URL
+            if server.config.model_registry_url:
+                return (
+                    True,
+                    f"Model Registry at {server.config.model_registry_url} "
+                    f"(discovery failed, using configured URL)",
+                )
             return (
-                True,
-                f"Model Registry at {server.config.model_registry_url} (discovery failed, using configured URL)",
+                False,
+                "Model Registry discovery failed and no model_registry_url configured",
             )
 
         # Manual mode - just use configured URL

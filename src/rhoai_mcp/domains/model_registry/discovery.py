@@ -346,6 +346,11 @@ async def probe_api_type(
             if response.status_code == 200:
                 logger.info(f"Detected Model Catalog API at {url}")
                 return "model_catalog"
+            if response.status_code in (401, 403):
+                logger.info(
+                    f"Detected Model Catalog API at {url} (auth required, status={response.status_code})"
+                )
+                return "model_catalog"
         except Exception as e:
             logger.debug(f"Model Catalog probe failed: {e}")
 
@@ -356,6 +361,11 @@ async def probe_api_type(
             )
             if response.status_code == 200:
                 logger.info(f"Detected Model Registry API at {url}")
+                return "model_registry"
+            if response.status_code in (401, 403):
+                logger.info(
+                    f"Detected Model Registry API at {url} (auth required, status={response.status_code})"
+                )
                 return "model_registry"
         except Exception as e:
             logger.debug(f"Model Registry probe failed: {e}")

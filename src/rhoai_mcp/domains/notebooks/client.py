@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
+
 from rhoai_mcp.domains.notebooks.crds import NotebookCRDs
 from rhoai_mcp.domains.notebooks.models import NotebookImage, Workbench, WorkbenchCreate
 from rhoai_mcp.utils.annotations import RHOAIAnnotations
@@ -183,8 +185,9 @@ class NotebookClient:
                 kwargs["container"] = container
             logs: str = self._k8s.core_v1.read_namespaced_pod_log(**kwargs)
             return logs
-        except Exception as e:
-            return f"Error getting logs: {e}"
+        except ApiException as e:
+            logger.warning(f"Error getting workbench logs for '{name}': {e.reason}")
+            return f"Error getting logs: {e.reason}"
 
     def get_workbench_events(self, namespace: str, name: str) -> list[dict[str, Any]]:
         """Get Kubernetes events for a workbench and its pods.

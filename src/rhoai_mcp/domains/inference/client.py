@@ -80,9 +80,7 @@ class InferenceClient:
 
         # Get existing ServingRuntimes in the namespace
         try:
-            runtimes = self._k8s.list_resources(
-                InferenceCRDs.SERVING_RUNTIME, namespace=namespace
-            )
+            runtimes = self._k8s.list_resources(InferenceCRDs.SERVING_RUNTIME, namespace=namespace)
             for rt in runtimes:
                 runtime_info = self._parse_serving_runtime(rt)
                 runtime_info["source"] = "namespace"
@@ -95,9 +93,7 @@ class InferenceClient:
             templates = self.list_serving_runtime_templates()
             for template in templates:
                 # Check if this template is already instantiated in the namespace
-                already_exists = any(
-                    r["name"] == template["creates_runtime"] for r in results
-                )
+                already_exists = any(r["name"] == template["creates_runtime"] for r in results)
                 if not already_exists:
                     results.append(
                         {
@@ -170,12 +166,8 @@ class InferenceClient:
             results.append(
                 {
                     "name": name,
-                    "display_name": annotations.get(
-                        "openshift.io/display-name", name
-                    ),
-                    "description": annotations.get(
-                        "description", ""
-                    ),
+                    "display_name": annotations.get("openshift.io/display-name", name),
+                    "description": annotations.get("description", ""),
                     "creates_runtime": creates_runtime,
                     "supported_formats": self._get_formats_from_template(template),
                 }
@@ -324,6 +316,139 @@ class InferenceClient:
             "status": isvc.status.value,
             "url": isvc.url,
             "internal_url": isvc.internal_url,
+        }
+
+    # -------------------------------------------------------------------------
+    # Pod and Log Operations
+    # -------------------------------------------------------------------------
+
+    def get_inference_service_logs(
+        self,
+        namespace: str,
+        name: str,
+        container: str | None = None,
+        tail_lines: int = 100,
+        previous: bool = False,
+    ) -> str:
+        """Get logs from an InferenceService's pods.
+
+        Args:
+            namespace: The namespace of the service.
+            name: The name of the InferenceService.
+            container: Container name to get logs from. If None, uses first container.
+            tail_lines: Number of lines to return.
+            previous: Get logs from previous container instance.
+
+        Returns:
+            Log content as string.
+        """
+        pods = self._k8s.core_v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"serving.kserve.io/inferenceservice={name}",
+        )
+
+        if not pods.items:
+            return f"No pods found for InferenceService '{name}'"
+
+        pod = pods.items[0]
+        try:
+            kwargs: dict[str, Any] = {
+                "name": pod.metadata.name,
+                "namespace": namespace,
+                "tail_lines": tail_lines,
+                "previous": previous,
+            }
+            if container:
+                kwargs["container"] = container
+            logs: str = self._k8s.core_v1.read_namespaced_pod_log(**kwargs)
+            return logs
+        except Exception as e:
+            return f"Error getting logs: {e}"
+
+    def get_inference_service_events(self, namespace: str, name: str) -> list[dict[str, Any]]:
+        """Get Kubernetes events for an InferenceService and its pods.
+
+        Gathers events for both the InferenceService resource itself and any
+        associated pods, since pod events contain most failure info (e.g.
+        ImagePullBackOff, FailedScheduling).
+
+        Args:
+            namespace: The namespace of the service.
+            name: The name of the InferenceService.
+
+        Returns:
+            List of event dictionaries.
+        """
+        result: list[dict[str, Any]] = []
+
+        # Events for the InferenceService itself
+        isvc_events = self._k8s.core_v1.list_namespaced_event(
+            namespace=namespace,
+            field_selector=f"involvedObject.name={name}",
+        )
+        for event in isvc_events.items:
+            result.append(self._format_event(event))
+
+        # Events for associated pods
+        pods = self._k8s.core_v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"serving.kserve.io/inferenceservice={name}",
+        )
+        for pod in pods.items:
+            pod_events = self._k8s.core_v1.list_namespaced_event(
+                namespace=namespace,
+                field_selector=f"involvedObject.name={pod.metadata.name}",
+            )
+            for event in pod_events.items:
+                result.append(self._format_event(event))
+
+        return result
+
+    def get_inference_service_pods(self, namespace: str, name: str) -> list[dict[str, Any]]:
+        """List pods for an InferenceService.
+
+        Args:
+            namespace: The namespace of the service.
+            name: The name of the InferenceService.
+
+        Returns:
+            List of pod info dictionaries.
+        """
+        pods = self._k8s.core_v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"serving.kserve.io/inferenceservice={name}",
+        )
+
+        result = []
+        for pod in pods.items:
+            result.append(
+                {
+                    "name": pod.metadata.name,
+                    "phase": pod.status.phase,
+                    "node": getattr(pod.spec, "node_name", None),
+                    "ready": self._is_pod_ready(pod),
+                }
+            )
+
+        return result
+
+    def _is_pod_ready(self, pod: Any) -> bool:
+        """Check if a pod is ready."""
+        if not pod.status.conditions:
+            return False
+        for condition in pod.status.conditions:
+            if condition.type == "Ready" and condition.status == "True":
+                return True
+        return False
+
+    def _format_event(self, event: Any) -> dict[str, Any]:
+        """Format a Kubernetes event into a dict."""
+        return {
+            "type": event.type,
+            "reason": event.reason,
+            "message": event.message,
+            "timestamp": str(event.last_timestamp) if event.last_timestamp else None,
+            "count": getattr(event, "count", 1),
         }
 
     def _build_inference_service_cr(self, request: InferenceServiceCreate) -> dict[str, Any]:

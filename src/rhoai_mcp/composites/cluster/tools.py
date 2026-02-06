@@ -585,16 +585,69 @@ def _diagnose_workbench(server: "RHOAIServer", name: str, namespace: str) -> dic
         }
         result["status_summary"] = f"Workbench is {wb.status.value}"
 
+        # Related resources - volumes
+        for vol in wb.volumes:
+            result["related_resources"].append(f"PVC: {vol}")
+        if not wb.volumes:
+            result["related_resources"].append(f"PVC: {name}-pvc")
+
         # Check for issues
         if wb.status.value == "Stopped":
             result["issues_detected"].append("Workbench is stopped")
             result["suggested_fixes"].append("Use start_workbench() to start it")
-        elif wb.status.value == "Error":
-            result["issues_detected"].append("Workbench is in error state")
-            result["suggested_fixes"].append("Check pod events for details")
 
-        # Get related storage
-        result["related_resources"].append(f"PVC: {name}-pvc")
+        # Get events (Notebook + pod events)
+        events = client.get_workbench_events(namespace, name)
+        result["events"] = events
+
+        # Get logs (skip if stopped — no pods to read from)
+        if wb.status.value != "Stopped":
+            try:
+                logs = client.get_workbench_logs(namespace, name, tail_lines=50)
+                result["logs"] = logs
+            except Exception:
+                pass
+
+        # Analyze warning events for common failure patterns
+        for event in events:
+            if event.get("type") == "Warning":
+                reason = event.get("reason", "")
+                message = event.get("message", "")
+                combined = f"{reason} {message}"
+                if "ImagePullBackOff" in combined or "ErrImagePull" in combined:
+                    result["issues_detected"].append("Image pull failure")
+                    result["suggested_fixes"].append(
+                        "Check image name and pull secret configuration"
+                    )
+                elif "CrashLoopBackOff" in combined:
+                    result["issues_detected"].append("Container crash loop")
+                    result["suggested_fixes"].append("Check container logs for crash reason")
+                elif "FailedScheduling" in combined:
+                    result["issues_detected"].append("Pod scheduling failed")
+                    result["suggested_fixes"].append("Check GPU and resource availability")
+                elif "OOMKilled" in combined:
+                    result["issues_detected"].append("Out of memory")
+                    result["suggested_fixes"].append("Increase memory limits for the workbench")
+                elif "FailedMount" in combined:
+                    result["issues_detected"].append("Volume mount failure")
+                    result["suggested_fixes"].append("Check PVC existence and access modes")
+                elif "Insufficient" in combined:
+                    result["issues_detected"].append("Insufficient cluster resources")
+                    result["suggested_fixes"].append(
+                        "Check cluster resource availability or reduce resource requests"
+                    )
+
+        if wb.status.value == "Error" and not any(
+            "Image pull" in i
+            or "crash loop" in i
+            or "scheduling" in i
+            or "memory" in i
+            or "mount" in i
+            or "Insufficient" in i
+            for i in result["issues_detected"]
+        ):
+            result["issues_detected"].append("Workbench is in error state")
+            result["suggested_fixes"].append("Check pod events and logs for details")
 
     except Exception as e:
         result["issues_detected"].append(f"Failed to get workbench: {e}")
@@ -627,10 +680,56 @@ def _diagnose_model(server: "RHOAIServer", name: str, namespace: str) -> dict:
         }
         result["status_summary"] = f"Model is {isvc.status.value}"
 
+        # Related resources
+        if isvc.runtime:
+            result["related_resources"].append(f"ServingRuntime: {isvc.runtime}")
+        if isvc.storage_uri:
+            result["related_resources"].append(f"StorageURI: {isvc.storage_uri}")
+
+        # Get events (InferenceService + pod events)
+        events = client.get_inference_service_events(namespace, name)
+        result["events"] = events
+
+        # Get logs
+        try:
+            logs = client.get_inference_service_logs(namespace, name, tail_lines=50)
+            result["logs"] = logs
+        except Exception:
+            pass
+
+        # Analyze for issues
         if isvc.status.value != "Ready":
             result["issues_detected"].append(f"Model not ready: {isvc.status.value}")
-            result["suggested_fixes"].append("Wait for model to become ready")
-            result["suggested_fixes"].append("Check pod events for scheduling issues")
+
+        for event in events:
+            if event.get("type") == "Warning":
+                reason = event.get("reason", "")
+                message = event.get("message", "")
+                combined = f"{reason} {message}"
+                if "ImagePullBackOff" in combined or "ErrImagePull" in combined:
+                    result["issues_detected"].append("Image pull failure")
+                    result["suggested_fixes"].append(
+                        "Check image name and pull secret configuration"
+                    )
+                elif "CrashLoopBackOff" in combined:
+                    result["issues_detected"].append("Container crash loop")
+                    result["suggested_fixes"].append("Check container logs for crash reason")
+                elif "FailedScheduling" in combined:
+                    result["issues_detected"].append("Pod scheduling failed")
+                    result["suggested_fixes"].append("Check GPU and resource availability")
+                elif "OOMKilled" in combined:
+                    result["issues_detected"].append("Out of memory")
+                    result["suggested_fixes"].append(
+                        "Increase memory limits for the model deployment"
+                    )
+                elif "FailedMount" in combined:
+                    result["issues_detected"].append("Volume mount failure")
+                    result["suggested_fixes"].append("Check storage URI and PVC configuration")
+                elif "Insufficient" in combined:
+                    result["issues_detected"].append("Insufficient cluster resources")
+                    result["suggested_fixes"].append(
+                        "Check cluster resource availability or reduce resource requests"
+                    )
 
     except Exception as e:
         result["issues_detected"].append(f"Failed to get model: {e}")

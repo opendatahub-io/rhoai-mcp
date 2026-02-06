@@ -1,5 +1,6 @@
 """Notebook (Workbench) client operations."""
 
+import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -10,6 +11,8 @@ from rhoai_mcp.utils.labels import RHOAILabels
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
+
+logger = logging.getLogger(__name__)
 
 
 class NotebookClient:
@@ -135,6 +138,138 @@ class NotebookClient:
         Returns the OAuth-protected route URL for the workbench.
         """
         return self._get_workbench_url(name, namespace)
+
+    # -------------------------------------------------------------------------
+    # Pod and Log Operations
+    # -------------------------------------------------------------------------
+
+    def get_workbench_logs(
+        self,
+        namespace: str,
+        name: str,
+        container: str | None = None,
+        tail_lines: int = 100,
+        previous: bool = False,
+    ) -> str:
+        """Get logs from a workbench's pod.
+
+        Args:
+            namespace: The namespace of the workbench.
+            name: The name of the workbench.
+            container: Container name to get logs from. If None, uses first container.
+            tail_lines: Number of lines to return.
+            previous: Get logs from previous container instance.
+
+        Returns:
+            Log content as string.
+        """
+        pods = self._k8s.core_v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"notebook-name={name}",
+        )
+
+        if not pods.items:
+            return f"No pods found for workbench '{name}'"
+
+        pod = pods.items[0]
+        try:
+            kwargs: dict[str, Any] = {
+                "name": pod.metadata.name,
+                "namespace": namespace,
+                "tail_lines": tail_lines,
+                "previous": previous,
+            }
+            if container:
+                kwargs["container"] = container
+            logs: str = self._k8s.core_v1.read_namespaced_pod_log(**kwargs)
+            return logs
+        except Exception as e:
+            return f"Error getting logs: {e}"
+
+    def get_workbench_events(self, namespace: str, name: str) -> list[dict[str, Any]]:
+        """Get Kubernetes events for a workbench and its pods.
+
+        Gathers events for both the Notebook resource itself and any
+        associated pods, since pod events contain most failure info.
+
+        Args:
+            namespace: The namespace of the workbench.
+            name: The name of the workbench.
+
+        Returns:
+            List of event dictionaries.
+        """
+        result: list[dict[str, Any]] = []
+
+        # Events for the Notebook resource itself
+        nb_events = self._k8s.core_v1.list_namespaced_event(
+            namespace=namespace,
+            field_selector=f"involvedObject.name={name}",
+        )
+        for event in nb_events.items:
+            result.append(self._format_event(event))
+
+        # Events for associated pods
+        pods = self._k8s.core_v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"notebook-name={name}",
+        )
+        for pod in pods.items:
+            pod_events = self._k8s.core_v1.list_namespaced_event(
+                namespace=namespace,
+                field_selector=f"involvedObject.name={pod.metadata.name}",
+            )
+            for event in pod_events.items:
+                result.append(self._format_event(event))
+
+        return result
+
+    def get_workbench_pods(self, namespace: str, name: str) -> list[dict[str, Any]]:
+        """List pods for a workbench.
+
+        Args:
+            namespace: The namespace of the workbench.
+            name: The name of the workbench.
+
+        Returns:
+            List of pod info dictionaries.
+        """
+        pods = self._k8s.core_v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"notebook-name={name}",
+        )
+
+        result = []
+        for pod in pods.items:
+            result.append(
+                {
+                    "name": pod.metadata.name,
+                    "phase": pod.status.phase,
+                    "node": getattr(pod.spec, "node_name", None),
+                    "ready": self._is_pod_ready(pod),
+                }
+            )
+
+        return result
+
+    def _is_pod_ready(self, pod: Any) -> bool:
+        """Check if a pod is ready."""
+        if not pod.status.conditions:
+            return False
+        for condition in pod.status.conditions:
+            if condition.type == "Ready" and condition.status == "True":
+                return True
+        return False
+
+    def _format_event(self, event: Any) -> dict[str, Any]:
+        """Format a Kubernetes event into a dict."""
+        return {
+            "type": event.type,
+            "reason": event.reason,
+            "message": event.message,
+            "timestamp": str(event.last_timestamp) if event.last_timestamp else None,
+            "count": getattr(event, "count", 1),
+        }
 
     def _get_workbench_url(self, name: str, namespace: str) -> str | None:
         """Internal method to construct workbench URL.

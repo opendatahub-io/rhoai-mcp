@@ -258,6 +258,9 @@ class InferenceClient:
 
         created_runtime = None
         for obj in objects:
+            # Convert ResourceField objects to dicts (from kubernetes dynamic client)
+            if hasattr(obj, "to_dict"):
+                obj = obj.to_dict()
             if isinstance(obj, dict):
                 kind = obj.get("kind", "")
                 if kind == "ServingRuntime":

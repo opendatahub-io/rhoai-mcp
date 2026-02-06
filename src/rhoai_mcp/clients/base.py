@@ -208,21 +208,26 @@ class K8sClient:
         """
         cache_key = f"{crd.api_version}/{crd.plural}"
         if cache_key not in self._crd_cache:
-            # Use api_version and plural name for precise lookups.
-            # Using kind alone can match multiple resources (e.g., OpenShift's
-            # template.openshift.io/v1 has both 'templates' and 'processedtemplates'
-            # with kind=Template).
-            try:
-                self._crd_cache[cache_key] = self.dynamic.resources.get(
-                    api_version=crd.api_version,
-                    name=crd.plural,
-                )
-            except Exception:
-                # Fall back to kind-based lookup for compatibility
-                self._crd_cache[cache_key] = self.dynamic.resources.get(
+            # Use search() with kind and name filters for precise lookups.
+            # Using kind alone with get() can match multiple resources
+            # (e.g., OpenShift's template.openshift.io/v1 has both 'templates'
+            # and 'processedtemplates' with kind=Template).
+            results = self.dynamic.resources.search(
+                api_version=crd.api_version,
+                kind=crd.kind,
+                name=crd.plural,
+            )
+            if not results:
+                # Fall back to kind-only search for compatibility
+                results = self.dynamic.resources.search(
                     api_version=crd.api_version,
                     kind=crd.kind,
                 )
+            if not results:
+                raise RHOAIError(
+                    f"Resource not found: {crd.api_version}/{crd.kind}"
+                )
+            self._crd_cache[cache_key] = results[0]
         return self._crd_cache[cache_key]
 
     def get(

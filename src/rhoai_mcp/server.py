@@ -5,9 +5,12 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from rhoai_mcp.clients.base import K8sClient
 from rhoai_mcp.config import RHOAIConfig, get_config
@@ -156,6 +159,9 @@ class RHOAIServer:
 
         # Register core resources (cluster status, etc.)
         self._register_core_resources(mcp)
+
+        # Register health endpoint for Kubernetes probes
+        self._register_health_endpoint(mcp)
 
         return mcp
 
@@ -319,6 +325,40 @@ class RHOAIServer:
                 return [{"error": str(e)}]
 
         logger.info("Registered core MCP resources")
+
+    def _register_health_endpoint(self, mcp: FastMCP) -> None:
+        """Register /health endpoint for Kubernetes liveness/readiness probes."""
+
+        @mcp.custom_route("/health", methods=["GET"])
+        async def health_check(request: Request) -> JSONResponse:  # noqa: ARG001
+            """Health check endpoint for Kubernetes probes.
+
+            Returns 200 when the server is ready (K8s connected), or 503 when
+            not yet ready. This allows Kubernetes to use the endpoint for both
+            liveness (process is running) and readiness (able to serve requests).
+            """
+            kubernetes_client = self._k8s_client
+            plugin_manager = self._plugin_manager
+
+            is_connected = kubernetes_client.is_connected if kubernetes_client else False
+            total = len(plugin_manager.registered_plugins) if plugin_manager else 0
+            healthy = len(plugin_manager.healthy_plugins) if plugin_manager else 0
+            is_ready = is_connected
+
+            status_code = HTTPStatus.OK if is_ready else HTTPStatus.SERVICE_UNAVAILABLE  # 200 / 503
+            return JSONResponse(
+                {
+                    "status": "healthy" if is_ready else "unhealthy",
+                    "connected": is_connected,
+                    "plugins": {
+                        "total": total,
+                        "healthy": healthy,
+                    },
+                },
+                status_code=status_code,
+            )
+
+        logger.info("Registered /health endpoint for Kubernetes probes")
 
 
 # Global server instance

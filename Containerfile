@@ -7,7 +7,8 @@
 # =============================================================================
 # Stage 1: Builder - Install dependencies with uv
 # =============================================================================
-FROM registry.access.redhat.com/ubi9/python-312 AS builder
+ARG BUILD_PLATFORM=linux/amd64
+FROM --platform=${BUILD_PLATFORM} registry.access.redhat.com/ubi9/python-312 AS builder
 
 # Copy uv from official image for fast, reproducible builds
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -27,7 +28,7 @@ RUN uv sync --frozen --no-dev
 # =============================================================================
 # Stage 2: Runtime - Minimal production image
 # =============================================================================
-FROM registry.access.redhat.com/ubi9/python-312 AS runtime
+FROM --platform=${BUILD_PLATFORM} registry.access.redhat.com/ubi9/python-312 AS runtime
 
 # Labels for container metadata
 LABEL org.opencontainers.image.title="RHOAI MCP Server"

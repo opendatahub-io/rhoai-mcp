@@ -18,6 +18,9 @@ PORT ?= 8000
 KUBECONFIG ?= $(HOME)/.kube/config
 LOG_LEVEL ?= INFO
 
+# Build platform (force linux/amd64 for consistent builds across host architectures)
+PLATFORM ?= linux/amd64
+
 # Podman-specific flags for user namespace mapping (allows reading host user files)
 # This maps the current user to the container user for file permission compatibility
 ifeq ($(findstring podman,$(CONTAINER_RUNTIME)),podman)
@@ -89,10 +92,10 @@ check: lint typecheck ## Run all checks (lint + typecheck)
 # =============================================================================
 
 build: ## Build the container image
-	$(CONTAINER_RUNTIME) build -f Containerfile -t $(FULL_IMAGE) .
+	DOCKER_DEFAULT_PLATFORM=$(PLATFORM) $(CONTAINER_RUNTIME) build --platform=$(PLATFORM) -f Containerfile -t $(FULL_IMAGE) .
 
 build-no-cache: ## Build the container image without cache
-	$(CONTAINER_RUNTIME) build -f Containerfile --no-cache -t $(FULL_IMAGE) .
+	DOCKER_DEFAULT_PLATFORM=$(PLATFORM) $(CONTAINER_RUNTIME) build --platform=$(PLATFORM) -f Containerfile --no-cache -t $(FULL_IMAGE) .
 
 # =============================================================================
 # Run (Container)

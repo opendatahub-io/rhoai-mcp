@@ -3,6 +3,7 @@
 import pytest
 
 from rhoai_mcp.domains.model_registry.catalog_models import (
+    CatalogBenchmarkContent,
     CatalogListResponse,
     CatalogModel,
     CatalogModelArtifact,
@@ -200,3 +201,56 @@ class TestCatalogSourcesResponse:
         assert len(response.sources) == 2
         assert response.sources[0].name == "rhoai"
         assert response.sources[1].model_count == 15
+
+
+class TestCatalogBenchmarkContent:
+    """Test CatalogBenchmarkContent model."""
+
+    def test_creation_minimal(self) -> None:
+        """Test creating benchmark content with minimal fields."""
+        content = CatalogBenchmarkContent(model_name="test-model")
+
+        assert content.model_name == "test-model"
+        assert content.provider is None
+        assert content.sections == []
+        assert content.source == "model_catalog"
+        assert content.has_benchmark_content is False
+
+    def test_creation_full(self) -> None:
+        """Test creating benchmark content with all fields."""
+        sections = [
+            {"heading": "Evaluation Results", "content": "| MMLU | 72.3 |"},
+            {"heading": "Performance", "content": "| A100 | 1500 tokens/s |"},
+        ]
+
+        content = CatalogBenchmarkContent(
+            model_name="granite-3.1-8b-instruct",
+            provider="IBM",
+            sections=sections,
+            source="model_catalog",
+            has_benchmark_content=True,
+        )
+
+        assert content.model_name == "granite-3.1-8b-instruct"
+        assert content.provider == "IBM"
+        assert len(content.sections) == 2
+        assert content.sections[0]["heading"] == "Evaluation Results"
+        assert content.source == "model_catalog"
+        assert content.has_benchmark_content is True
+
+    def test_default_source(self) -> None:
+        """Test that source defaults to model_catalog."""
+        content = CatalogBenchmarkContent(model_name="test")
+
+        assert content.source == "model_catalog"
+
+    def test_empty_sections_not_benchmark(self) -> None:
+        """Test that empty sections means no benchmark content."""
+        content = CatalogBenchmarkContent(
+            model_name="test",
+            sections=[],
+            has_benchmark_content=False,
+        )
+
+        assert content.has_benchmark_content is False
+        assert content.sections == []

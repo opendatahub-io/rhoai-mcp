@@ -47,6 +47,27 @@ class CatalogModel(BaseModel):
     readme: str | None = Field(None, description="README content if available")
 
 
+class CatalogBenchmarkContent(BaseModel):
+    """Benchmark content extracted from a catalog model's README.
+
+    Model Catalog stores benchmark/evaluation data as markdown in the README
+    field rather than as structured key-value custom properties. This model
+    holds the extracted benchmark-relevant sections for the LLM agent to
+    interpret.
+    """
+
+    model_name: str = Field(..., description="Name of the catalog model")
+    provider: str | None = Field(None, description="Model provider (e.g., 'Meta', 'Mistral AI')")
+    sections: list[dict[str, str]] = Field(
+        default_factory=list,
+        description='Benchmark-relevant README sections [{"heading": "...", "content": "..."}]',
+    )
+    source: str = Field("model_catalog", description="Data source identifier")
+    has_benchmark_content: bool = Field(
+        False, description="Whether any benchmark sections were found"
+    )
+
+
 class CatalogSource(BaseModel):
     """Source/category in the Model Catalog.
 

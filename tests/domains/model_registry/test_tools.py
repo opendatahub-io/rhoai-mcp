@@ -5,6 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import rhoai_mcp.domains.model_registry.tools as tools_module
+from rhoai_mcp.domains.model_registry.catalog_models import (
+    CatalogBenchmarkContent,
+    CatalogModel,
+)
 from rhoai_mcp.domains.model_registry.models import (
     CustomProperties,
     ModelArtifact,
@@ -709,3 +714,335 @@ class TestFindBenchmarksByGpu:
         assert result["gpu_type"] == "TPU"
         assert result["count"] == 0
         assert result["benchmarks"] == []
+
+
+# --- Catalog path tests ---
+
+SAMPLE_CATALOG_README = """# Granite 3.1 8B Instruct
+
+## Model Details
+
+An 8B parameter model.
+
+## Evaluation Results
+
+| Benchmark | Score |
+|-----------|-------|
+| MMLU      | 72.3  |
+
+## Performance
+
+| GPU Type | Throughput (tokens/s) |
+|----------|----------------------|
+| A100     | 1500                 |
+
+## License
+
+Apache 2.0
+"""
+
+
+def _setup_catalog_cache() -> None:
+    """Set module-level cache to force catalog path."""
+    tools_module._cached_api_type = "model_catalog"
+    tools_module._cached_discovery_url = "https://catalog.example.com"
+    tools_module._cached_requires_auth = True
+
+
+def _reset_cache() -> None:
+    """Reset module-level cache."""
+    tools_module._cached_api_type = None
+    tools_module._cached_discovery_url = None
+    tools_module._cached_requires_auth = False
+
+
+def _make_catalog_model(
+    name: str = "granite-3.1-8b-instruct",
+    provider: str = "IBM",
+    readme: str | None = SAMPLE_CATALOG_README,
+) -> CatalogModel:
+    """Create a CatalogModel for testing."""
+    return CatalogModel(name=name, provider=provider, readme=readme)
+
+
+def _register_tools(mock_server: MagicMock) -> dict[str, Any]:
+    """Register tools and return the captured tool functions."""
+    from rhoai_mcp.domains.model_registry.tools import register_tools
+
+    mcp = MagicMock()
+    registered_tools: dict[str, Any] = {}
+
+    def capture_tool() -> Any:
+        def decorator(func: Any) -> Any:
+            registered_tools[func.__name__] = func
+            return func
+
+        return decorator
+
+    mcp.tool = capture_tool
+    register_tools(mcp, mock_server)
+    return registered_tools
+
+
+class TestGetModelBenchmarksCatalog:
+    """Test get_model_benchmarks tool with Model Catalog API."""
+
+    @pytest.fixture
+    def mock_server(self) -> MagicMock:
+        """Create a mock server."""
+        server = MagicMock()
+        server.config.model_registry_enabled = True
+        server.config.model_registry_url = "http://registry:8080"
+        server.config.model_registry_timeout = 30
+        return server
+
+    @pytest.fixture(autouse=True)
+    def setup_and_teardown(self) -> Any:
+        """Set up catalog cache and reset after each test."""
+        _setup_catalog_cache()
+        yield
+        _reset_cache()
+
+    async def test_catalog_benchmarks_success(self, mock_server: MagicMock) -> None:
+        """Test getting benchmarks from catalog model with README."""
+        registered_tools = _register_tools(mock_server)
+        model = _make_catalog_model()
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[model])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["get_model_benchmarks"](
+                "granite-3.1-8b-instruct"
+            )
+
+        assert "error" not in result
+        assert result["model_name"] == "granite-3.1-8b-instruct"
+        assert result["source"] == "model_catalog"
+        assert result["has_benchmark_content"] is True
+        assert len(result["sections"]) >= 2
+
+    async def test_catalog_benchmarks_model_not_found(
+        self, mock_server: MagicMock
+    ) -> None:
+        """Test getting benchmarks when catalog model not found."""
+        registered_tools = _register_tools(mock_server)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["get_model_benchmarks"]("nonexistent")
+
+        assert "error" in result
+        assert "not found" in result["error"].lower()
+
+    async def test_catalog_benchmarks_no_benchmark_sections(
+        self, mock_server: MagicMock
+    ) -> None:
+        """Test getting benchmarks when README has no benchmark sections."""
+        registered_tools = _register_tools(mock_server)
+        model = _make_catalog_model(readme="# Model\n\n## Usage\n\nJust use it.\n")
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[model])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["get_model_benchmarks"](
+                "granite-3.1-8b-instruct"
+            )
+
+        assert result["has_benchmark_content"] is False
+        assert result["sections"] == []
+
+    async def test_catalog_benchmarks_with_gpu_filter(
+        self, mock_server: MagicMock
+    ) -> None:
+        """Test getting benchmarks with GPU type filter on catalog."""
+        registered_tools = _register_tools(mock_server)
+        model = _make_catalog_model()
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[model])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["get_model_benchmarks"](
+                "granite-3.1-8b-instruct", gpu_type="A100"
+            )
+
+        assert result["gpu_mentioned"] is True
+
+    async def test_catalog_benchmarks_gpu_filter_not_mentioned(
+        self, mock_server: MagicMock
+    ) -> None:
+        """Test GPU filter when GPU type is not mentioned in README."""
+        registered_tools = _register_tools(mock_server)
+        model = _make_catalog_model()
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[model])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["get_model_benchmarks"](
+                "granite-3.1-8b-instruct", gpu_type="TPU"
+            )
+
+        assert result["gpu_mentioned"] is False
+
+
+class TestGetValidationMetricsCatalog:
+    """Test get_validation_metrics tool with Model Catalog API."""
+
+    @pytest.fixture
+    def mock_server(self) -> MagicMock:
+        """Create a mock server."""
+        server = MagicMock()
+        server.config.model_registry_enabled = True
+        server.config.model_registry_url = "http://registry:8080"
+        server.config.model_registry_timeout = 30
+        return server
+
+    @pytest.fixture(autouse=True)
+    def setup_and_teardown(self) -> Any:
+        """Set up catalog cache and reset after each test."""
+        _setup_catalog_cache()
+        yield
+        _reset_cache()
+
+    async def test_catalog_validation_metrics_success(
+        self, mock_server: MagicMock
+    ) -> None:
+        """Test getting validation metrics from catalog model."""
+        registered_tools = _register_tools(mock_server)
+        model = _make_catalog_model()
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[model])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["get_validation_metrics"](
+                "granite-3.1-8b-instruct", "v1.0"
+            )
+
+        assert "error" not in result
+        assert result["model_name"] == "granite-3.1-8b-instruct"
+        assert result["source"] == "model_catalog"
+        assert result["has_benchmark_content"] is True
+
+    async def test_catalog_validation_metrics_model_not_found(
+        self, mock_server: MagicMock
+    ) -> None:
+        """Test getting validation metrics when catalog model not found."""
+        registered_tools = _register_tools(mock_server)
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["get_validation_metrics"](
+                "nonexistent", "v1.0"
+            )
+
+        assert "error" in result
+        assert "not found" in result["error"].lower()
+
+
+class TestFindBenchmarksByGpuCatalog:
+    """Test find_benchmarks_by_gpu tool with Model Catalog API."""
+
+    @pytest.fixture
+    def mock_server(self) -> MagicMock:
+        """Create a mock server."""
+        server = MagicMock()
+        server.config.model_registry_enabled = True
+        server.config.model_registry_url = "http://registry:8080"
+        server.config.model_registry_timeout = 30
+        return server
+
+    @pytest.fixture(autouse=True)
+    def setup_and_teardown(self) -> Any:
+        """Set up catalog cache and reset after each test."""
+        _setup_catalog_cache()
+        yield
+        _reset_cache()
+
+    async def test_catalog_find_by_gpu_success(self, mock_server: MagicMock) -> None:
+        """Test finding benchmark data by GPU type in catalog."""
+        registered_tools = _register_tools(mock_server)
+        model1 = _make_catalog_model(name="model-1", readme=SAMPLE_CATALOG_README)
+        model2 = _make_catalog_model(
+            name="model-2", readme="# Model\n\n## Usage\n\nNo benchmarks.\n"
+        )
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[model1, model2])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["find_benchmarks_by_gpu"]("A100")
+
+        assert result["gpu_type"] == "A100"
+        assert result["source"] == "model_catalog"
+        assert result["count"] == 1
+        assert result["models"][0]["model_name"] == "model-1"
+
+    async def test_catalog_find_by_gpu_no_matches(
+        self, mock_server: MagicMock
+    ) -> None:
+        """Test finding benchmarks by GPU with no matches."""
+        registered_tools = _register_tools(mock_server)
+        model = _make_catalog_model()
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.tools.ModelCatalogClient"
+        ) as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=[model])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await registered_tools["find_benchmarks_by_gpu"]("TPU")
+
+        assert result["gpu_type"] == "TPU"
+        assert result["count"] == 0
+        assert result["models"] == []

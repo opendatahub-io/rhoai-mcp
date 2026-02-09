@@ -5,9 +5,13 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 
-from rhoai_mcp.domains.model_registry.benchmarks import BenchmarkExtractor
+from rhoai_mcp.domains.model_registry.benchmarks import (
+    BenchmarkExtractor,
+    CatalogBenchmarkExtractor,
+)
 from rhoai_mcp.domains.model_registry.catalog_client import ModelCatalogClient
 from rhoai_mcp.domains.model_registry.catalog_models import (
+    CatalogBenchmarkContent,
     CatalogModel,
     CatalogModelArtifact,
     CatalogSource,
@@ -405,43 +409,65 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     ) -> dict[str, Any]:
         """Get benchmark data for a model.
 
-        Retrieves performance benchmark metrics stored in model version
-        custom properties. Useful for capacity planning and deployment sizing.
+        Automatically detects whether the cluster has a standard Kubeflow
+        Model Registry or Red Hat AI Model Catalog and uses the appropriate
+        approach:
 
-        Note: This tool only works with the standard Kubeflow Model Registry,
-        not the Red Hat AI Model Catalog. Model Registry stores performance
-        benchmarks (latency, throughput, GPU memory) as structured custom
-        properties on model versions, keyed by GPU type.
-
-        Model Catalog contains accuracy/evaluation benchmarks (pass@1,
-        perplexity, etc.) embedded in model readme markdown, which uses
-        a different data format not compatible with this tool.
+        - **Model Registry**: Returns structured benchmark metrics (latency,
+          throughput, GPU memory) from model version custom properties.
+        - **Model Catalog**: Extracts benchmark-relevant sections from the
+          model's README markdown for the agent to interpret.
 
         Args:
             model_name: Name of the registered model.
             version_name: Optional specific version name. If not provided,
-                returns benchmarks for the latest version.
+                returns benchmarks for the latest version. Applies to Model
+                Registry only; Model Catalog does not have versions.
             gpu_type: Optional GPU type filter (e.g., "A100", "H100").
+                For Model Registry, filters by structured GPU type property.
+                For Model Catalog, reports whether the GPU is mentioned in
+                the README.
 
         Returns:
-            Benchmark data including latency, throughput, and resource metrics.
+            Benchmark data including latency, throughput, and resource metrics
+            (Model Registry), or extracted README sections with benchmark
+            content (Model Catalog).
         """
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
         try:
-            error, discovery = await _require_model_registry(
-                "which does not store benchmark data in the same format."
-            )
-            if error:
-                return error
-            async with ModelRegistryClient(server.config, discovery) as client:
-                extractor = BenchmarkExtractor(client)
-                benchmark = await extractor.get_benchmark_for_model(
-                    model_name=model_name,
-                    version_name=version_name,
-                    gpu_type=gpu_type,
-                )
+            api_type, url, requires_auth = await _get_api_type()
+
+            if api_type == "model_catalog":
+                discovery_result = _create_cached_catalog_discovery(url)
+                async with ModelCatalogClient(server.config, discovery_result) as catalog_client:
+                    models = await catalog_client.list_models()
+                    model = _find_catalog_model(models, model_name)
+                    if not model:
+                        return {"error": f"Model not found in catalog: {model_name}"}
+
+                    extractor = CatalogBenchmarkExtractor()
+                    content = extractor.extract_for_model(model)
+                    result = _format_catalog_benchmark_content(content)
+
+                    if gpu_type and model.readme:
+                        result["gpu_mentioned"] = extractor.readme_mentions_gpu(
+                            model.readme, gpu_type
+                        )
+                    elif gpu_type:
+                        result["gpu_mentioned"] = False
+
+                    return result
+            else:
+                discovery_result = _create_cached_registry_discovery(url, requires_auth)
+                async with ModelRegistryClient(server.config, discovery_result) as client:
+                    reg_extractor = BenchmarkExtractor(client)
+                    benchmark = await reg_extractor.get_benchmark_for_model(
+                        model_name=model_name,
+                        version_name=version_name,
+                        gpu_type=gpu_type,
+                    )
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -459,55 +485,73 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     ) -> dict[str, Any]:
         """Get validation metrics for a specific model version.
 
-        Retrieves detailed validation and benchmark metrics from model
-        version custom properties, including latency percentiles,
-        throughput, resource usage, and quality metrics.
+        Automatically detects whether the cluster has a standard Kubeflow
+        Model Registry or Red Hat AI Model Catalog and uses the appropriate
+        approach:
 
-        Note: This tool only works with the standard Kubeflow Model Registry,
-        not the Red Hat AI Model Catalog. Model Registry stores performance
-        metrics as structured custom properties on model versions.
-
-        Model Catalog contains accuracy/evaluation metrics (pass@1,
-        perplexity, etc.) embedded in model readme markdown, which uses
-        a different data format not compatible with this tool.
+        - **Model Registry**: Returns structured validation metrics (latency
+          percentiles, throughput, resource usage, quality metrics) from
+          model version custom properties.
+        - **Model Catalog**: Extracts benchmark-relevant sections from the
+          model's README markdown. The version_name parameter is noted but
+          does not filter results, as the catalog does not have versioned
+          metrics.
 
         Args:
             model_name: Name of the registered model.
-            version_name: Name of the model version.
+            version_name: Name of the model version. Used for Model Registry
+                lookups; noted but not used for filtering in Model Catalog.
 
         Returns:
             Validation metrics including latency, throughput, resources,
-            test conditions, and quality metrics.
+            test conditions, and quality metrics (Model Registry), or
+            extracted README sections (Model Catalog).
         """
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
         try:
-            error, discovery = await _require_model_registry(
-                "which does not store validation metrics in the same format."
-            )
-            if error:
-                return error
-            async with ModelRegistryClient(server.config, discovery) as client:
-                # Find the model
-                model = await client.get_registered_model_by_name(model_name)
-                if not model:
-                    return {"error": f"Model not found: {model_name}"}
+            api_type, url, requires_auth = await _get_api_type()
 
-                # Find the version
-                versions = await client.get_model_versions(model.id)
-                target_version = None
-                for v in versions:
-                    if v.name == version_name:
-                        target_version = v
-                        break
+            if api_type == "model_catalog":
+                discovery_result = _create_cached_catalog_discovery(url)
+                async with ModelCatalogClient(server.config, discovery_result) as catalog_client:
+                    models = await catalog_client.list_models()
+                    model = _find_catalog_model(models, model_name)
+                    if not model:
+                        return {"error": f"Model not found in catalog: {model_name}"}
 
-                if not target_version:
-                    return {"error": f"Version not found: {version_name}"}
+                    extractor = CatalogBenchmarkExtractor()
+                    content = extractor.extract_for_model(model)
+                    result = _format_catalog_benchmark_content(content)
+                    result["version_name_requested"] = version_name
+                    result["note"] = (
+                        "Model Catalog does not have versioned metrics. "
+                        "Showing benchmark content from model README."
+                    )
+                    return result
+            else:
+                discovery_result = _create_cached_registry_discovery(url, requires_auth)
+                async with ModelRegistryClient(server.config, discovery_result) as client:
+                    # Find the model
+                    reg_model = await client.get_registered_model_by_name(model_name)
+                    if not reg_model:
+                        return {"error": f"Model not found: {model_name}"}
 
-                extractor = BenchmarkExtractor(client)
-                metrics = extractor.extract_validation_metrics(target_version, model_name)
-                return _format_validation_metrics(metrics)
+                    # Find the version
+                    versions = await client.get_model_versions(reg_model.id)
+                    target_version = None
+                    for v in versions:
+                        if v.name == version_name:
+                            target_version = v
+                            break
+
+                    if not target_version:
+                        return {"error": f"Version not found: {version_name}"}
+
+                    reg_extractor = BenchmarkExtractor(client)
+                    metrics = reg_extractor.extract_validation_metrics(target_version, model_name)
+                    return _format_validation_metrics(metrics)
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -519,38 +563,58 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     ) -> dict[str, Any]:
         """Find all benchmarks for a specific GPU type.
 
-        Searches across all registered models to find benchmark data
-        for models that have been tested on the specified GPU type.
-        Useful for comparing model performance on specific hardware.
+        Automatically detects whether the cluster has a standard Kubeflow
+        Model Registry or Red Hat AI Model Catalog and uses the appropriate
+        approach:
 
-        Note: This tool only works with the standard Kubeflow Model Registry,
-        not the Red Hat AI Model Catalog. Model Registry stores performance
-        benchmarks (latency, throughput, GPU memory) as structured custom
-        properties on model versions, keyed by GPU type.
-
-        Model Catalog contains accuracy/evaluation benchmarks (pass@1,
-        perplexity, etc.) embedded in model readme markdown, which uses
-        a different data format not compatible with GPU-based queries.
+        - **Model Registry**: Searches structured benchmark custom properties
+          across all model versions for the specified GPU type.
+        - **Model Catalog**: Searches model READMEs for mentions of the GPU
+          type and returns benchmark-relevant sections from matching models.
 
         Args:
             gpu_type: GPU type to filter by (e.g., "A100", "H100", "L40S").
 
         Returns:
-            List of benchmark data for models tested on the specified GPU.
+            List of benchmark data for models tested on the specified GPU
+            (Model Registry), or list of catalog models whose READMEs
+            mention the GPU type and contain benchmark content (Model
+            Catalog).
         """
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}
 
         try:
-            error, discovery = await _require_model_registry(
-                "which does not store benchmark data in the same format."
-            )
-            if error:
-                return error
-            async with ModelRegistryClient(server.config, discovery) as client:
-                extractor = BenchmarkExtractor(client)
-                benchmarks = await extractor.find_benchmarks_by_gpu(gpu_type)
-                formatted_benchmarks = [_format_benchmark(b) for b in benchmarks]
+            api_type, url, requires_auth = await _get_api_type()
+
+            if api_type == "model_catalog":
+                discovery_result = _create_cached_catalog_discovery(url)
+                async with ModelCatalogClient(server.config, discovery_result) as catalog_client:
+                    all_models = await catalog_client.list_models()
+
+                    cat_extractor = CatalogBenchmarkExtractor()
+                    matching: list[dict[str, Any]] = []
+                    for m in all_models:
+                        if not m.readme:
+                            continue
+                        if not cat_extractor.readme_mentions_gpu(m.readme, gpu_type):
+                            continue
+                        content = cat_extractor.extract_for_model(m)
+                        if content.has_benchmark_content:
+                            matching.append(_format_catalog_benchmark_content(content))
+
+                    return {
+                        "gpu_type": gpu_type,
+                        "source": "model_catalog",
+                        "models": matching,
+                        "count": len(matching),
+                    }
+            else:
+                discovery_result = _create_cached_registry_discovery(url, requires_auth)
+                async with ModelRegistryClient(server.config, discovery_result) as client:
+                    reg_extractor = BenchmarkExtractor(client)
+                    benchmarks = await reg_extractor.find_benchmarks_by_gpu(gpu_type)
+                    formatted_benchmarks = [_format_benchmark(b) for b in benchmarks]
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}
         except ModelRegistryError as e:
@@ -715,6 +779,42 @@ def _format_catalog_artifact(artifact: CatalogModelArtifact) -> dict[str, Any]:
         "format": artifact.format,
         "size": artifact.size,
         "quantization": artifact.quantization,
+    }
+
+
+def _find_catalog_model(models: list[CatalogModel], name: str) -> CatalogModel | None:
+    """Find a catalog model by name.
+
+    Args:
+        models: List of catalog models to search.
+        name: Model name to find.
+
+    Returns:
+        The matching CatalogModel, or None if not found.
+    """
+    for model in models:
+        if model.name == name:
+            return model
+    return None
+
+
+def _format_catalog_benchmark_content(
+    content: CatalogBenchmarkContent,
+) -> dict[str, Any]:
+    """Format catalog benchmark content for tool response.
+
+    Args:
+        content: Extracted benchmark content from catalog model README.
+
+    Returns:
+        Formatted dict for tool response.
+    """
+    return {
+        "model_name": content.model_name,
+        "provider": content.provider,
+        "source": content.source,
+        "has_benchmark_content": content.has_benchmark_content,
+        "sections": content.sections,
     }
 
 

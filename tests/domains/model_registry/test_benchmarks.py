@@ -1,4 +1,4 @@
-"""Tests for BenchmarkExtractor."""
+"""Tests for BenchmarkExtractor and CatalogBenchmarkExtractor."""
 
 from datetime import datetime, timezone
 from typing import Any
@@ -8,11 +8,17 @@ import pytest
 
 from rhoai_mcp.domains.model_registry.benchmarks import (
     BENCHMARK_PROPERTY_KEYS,
+    BENCHMARK_SECTION_PATTERNS,
     BenchmarkExtractor,
+    CatalogBenchmarkExtractor,
     _get_property_value,
     _parse_datetime,
     _parse_float,
     _parse_int,
+)
+from rhoai_mcp.domains.model_registry.catalog_models import (
+    CatalogBenchmarkContent,
+    CatalogModel,
 )
 from rhoai_mcp.domains.model_registry.models import (
     CustomProperties,
@@ -383,3 +389,159 @@ class TestBenchmarkExtractor:
         assert metrics.tokens_per_second is None
         assert metrics.gpu_type is None
         assert metrics.gpu_count == 1  # Default
+
+
+SAMPLE_README_WITH_BENCHMARKS = """# Granite 3.1 8B Instruct
+
+A fine-tuned large language model for instruction following.
+
+## Model Details
+
+This model is based on the Granite architecture with 8B parameters.
+
+## Evaluation Results
+
+| Benchmark | Score |
+|-----------|-------|
+| MMLU      | 72.3  |
+| HellaSwag | 85.1  |
+| ARC-C     | 65.4  |
+
+## Performance
+
+| GPU Type | Throughput (tokens/s) | Latency P50 (ms) |
+|----------|----------------------|-------------------|
+| A100     | 1500                 | 45                |
+| H100     | 2800                 | 25                |
+
+## License
+
+Apache 2.0
+"""
+
+SAMPLE_README_NO_BENCHMARKS = """# Simple Model
+
+## Overview
+
+This is a simple model without any benchmark data.
+
+## Usage
+
+Just load and run the model.
+
+## License
+
+MIT
+"""
+
+
+class TestCatalogBenchmarkExtractor:
+    """Test CatalogBenchmarkExtractor class."""
+
+    @pytest.fixture
+    def extractor(self) -> CatalogBenchmarkExtractor:
+        """Create a CatalogBenchmarkExtractor instance."""
+        return CatalogBenchmarkExtractor()
+
+    def test_extract_sections_with_benchmark_heading(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test extracting sections with benchmark-related headings."""
+        sections = extractor.extract_benchmark_sections(SAMPLE_README_WITH_BENCHMARKS)
+
+        assert len(sections) >= 1
+        headings = [s["heading"] for s in sections]
+        assert any("Evaluation" in h for h in headings)
+
+    def test_extract_sections_multiple_matches(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test extracting multiple matching sections."""
+        sections = extractor.extract_benchmark_sections(SAMPLE_README_WITH_BENCHMARKS)
+
+        headings = [s["heading"] for s in sections]
+        # Both "Evaluation Results" and "Performance" should match
+        assert any("Evaluation" in h for h in headings)
+        assert any("Performance" in h for h in headings)
+        assert len(sections) == 2
+
+    def test_extract_sections_no_matches(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test extracting sections with no benchmark headings."""
+        sections = extractor.extract_benchmark_sections(SAMPLE_README_NO_BENCHMARKS)
+
+        assert sections == []
+
+    def test_extract_sections_empty_readme(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test extracting sections from empty/None input."""
+        assert extractor.extract_benchmark_sections("") == []
+        assert extractor.extract_benchmark_sections(None) == []  # type: ignore[arg-type]
+
+    def test_extract_sections_case_insensitive(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test that heading matching is case-insensitive."""
+        readme = "# Model\n\n## EVALUATION\n\nSome eval data.\n\n## Details\n\nOther stuff.\n"
+        sections = extractor.extract_benchmark_sections(readme)
+
+        assert len(sections) == 1
+        assert sections[0]["heading"] == "EVALUATION"
+        assert "eval data" in sections[0]["content"]
+
+    def test_extract_for_model_with_readme(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test full model extraction with a readme."""
+        model = CatalogModel(
+            name="granite-3.1-8b-instruct",
+            provider="IBM",
+            readme=SAMPLE_README_WITH_BENCHMARKS,
+        )
+        result = extractor.extract_for_model(model)
+
+        assert isinstance(result, CatalogBenchmarkContent)
+        assert result.model_name == "granite-3.1-8b-instruct"
+        assert result.provider == "IBM"
+        assert result.source == "model_catalog"
+        assert result.has_benchmark_content is True
+        assert len(result.sections) >= 2
+
+    def test_extract_for_model_no_readme(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test extraction when model has no readme."""
+        model = CatalogModel(
+            name="test-model",
+            provider="Test",
+            readme=None,
+        )
+        result = extractor.extract_for_model(model)
+
+        assert result.model_name == "test-model"
+        assert result.has_benchmark_content is False
+        assert result.sections == []
+
+    def test_readme_mentions_gpu_present(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test GPU mention detection when GPU is present."""
+        assert extractor.readme_mentions_gpu(SAMPLE_README_WITH_BENCHMARKS, "A100") is True
+        assert extractor.readme_mentions_gpu(SAMPLE_README_WITH_BENCHMARKS, "H100") is True
+
+    def test_readme_mentions_gpu_absent(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test GPU mention detection when GPU is absent."""
+        assert extractor.readme_mentions_gpu(SAMPLE_README_WITH_BENCHMARKS, "TPU") is False
+        assert extractor.readme_mentions_gpu(SAMPLE_README_WITH_BENCHMARKS, "L40S") is False
+
+    def test_readme_mentions_gpu_case_insensitive(
+        self, extractor: CatalogBenchmarkExtractor
+    ) -> None:
+        """Test GPU mention detection is case-insensitive."""
+        readme = "Tested on a100 GPU with great results."
+        assert extractor.readme_mentions_gpu(readme, "A100") is True
+        assert extractor.readme_mentions_gpu(readme, "a100") is True

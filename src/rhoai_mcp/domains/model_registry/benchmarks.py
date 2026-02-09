@@ -1,8 +1,13 @@
-"""Benchmark data extraction from Model Registry."""
+"""Benchmark data extraction from Model Registry and Model Catalog."""
 
+import re
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from rhoai_mcp.domains.model_registry.catalog_models import (
+    CatalogBenchmarkContent,
+    CatalogModel,
+)
 from rhoai_mcp.domains.model_registry.models import (
     BenchmarkData,
     ModelVersion,
@@ -334,3 +339,93 @@ class BenchmarkExtractor:
             return float(value)
         except (ValueError, TypeError):
             return None
+
+
+# Patterns for identifying benchmark-relevant README sections by heading
+BENCHMARK_SECTION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"benchmark", re.IGNORECASE),
+    re.compile(r"evaluation", re.IGNORECASE),
+    re.compile(r"performance", re.IGNORECASE),
+    re.compile(r"metrics", re.IGNORECASE),
+    re.compile(r"results", re.IGNORECASE),
+    re.compile(r"accuracy", re.IGNORECASE),
+    re.compile(r"throughput", re.IGNORECASE),
+    re.compile(r"latency", re.IGNORECASE),
+    re.compile(r"quality", re.IGNORECASE),
+]
+
+# Regex to split markdown by headings (# through ######)
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
+
+
+class CatalogBenchmarkExtractor:
+    """Extracts benchmark content from Model Catalog README markdown.
+
+    Model Catalog stores benchmark/evaluation data as markdown in the model
+    README rather than as structured custom properties. This extractor finds
+    benchmark-relevant sections by matching headings against known patterns
+    and returns them for the LLM agent to interpret.
+    """
+
+    def extract_benchmark_sections(self, readme: str | None) -> list[dict[str, str]]:
+        """Split README by markdown headings, return sections matching benchmark patterns.
+
+        Args:
+            readme: Raw README markdown content.
+
+        Returns:
+            List of matching sections as {"heading": "...", "content": "..."}.
+        """
+        if not readme:
+            return []
+
+        # Find all heading positions
+        headings = list(_HEADING_RE.finditer(readme))
+        if not headings:
+            return []
+
+        sections: list[dict[str, str]] = []
+        for i, match in enumerate(headings):
+            heading_text = match.group(2).strip()
+
+            # Check if this heading matches any benchmark pattern
+            if not any(p.search(heading_text) for p in BENCHMARK_SECTION_PATTERNS):
+                continue
+
+            # Extract content between this heading and the next
+            content_start = match.end()
+            content_end = headings[i + 1].start() if i + 1 < len(headings) else len(readme)
+            content = readme[content_start:content_end].strip()
+
+            sections.append({"heading": heading_text, "content": content})
+
+        return sections
+
+    def extract_for_model(self, model: CatalogModel) -> CatalogBenchmarkContent:
+        """Extract benchmark content from a catalog model.
+
+        Args:
+            model: The catalog model to extract from.
+
+        Returns:
+            CatalogBenchmarkContent with extracted sections.
+        """
+        sections = self.extract_benchmark_sections(model.readme)
+        return CatalogBenchmarkContent(
+            model_name=model.name,
+            provider=model.provider,
+            sections=sections,
+            has_benchmark_content=len(sections) > 0,
+        )
+
+    def readme_mentions_gpu(self, readme: str, gpu_type: str) -> bool:
+        """Case-insensitive search for GPU type in README.
+
+        Args:
+            readme: Raw README markdown content.
+            gpu_type: GPU type to search for (e.g., "A100", "H100").
+
+        Returns:
+            True if the GPU type is mentioned in the README.
+        """
+        return gpu_type.lower() in readme.lower()

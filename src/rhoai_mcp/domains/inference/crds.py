@@ -32,11 +32,3 @@ class InferenceCRDs:
         plural="templates",
         kind="Template",
     )
-
-    # OpenShift TemplateInstance (for instantiated templates)
-    TEMPLATE_INSTANCE = CRDDefinition(
-        group="template.openshift.io",
-        version="v1",
-        plural="templateinstances",
-        kind="TemplateInstance",
-    )

@@ -221,6 +221,10 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                     all_items = [
                         _format_model(m, Verbosity.from_str(verbosity)) for m in registry_models
                     ]
+                if source_label:
+                    logger.warning(
+                        "source_label filter is only supported with Model Catalog, ignoring"
+                    )
 
         except ModelRegistryConnectionError as e:
             return {"error": f"Connection failed: {e}"}

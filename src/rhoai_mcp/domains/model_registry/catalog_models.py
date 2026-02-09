@@ -80,24 +80,3 @@ class CatalogSource(BaseModel):
     label: str = Field(..., description="Source label/display name")
     model_count: int = Field(0, description="Number of models from this source")
     description: str | None = Field(None, description="Source description")
-
-
-class CatalogListResponse(BaseModel):
-    """Response from listing models in the catalog.
-
-    Contains the list of models and pagination information.
-    """
-
-    models: list[CatalogModel] = Field(default_factory=list, description="List of catalog models")
-    total_count: int = Field(0, description="Total number of models available")
-    page_size: int = Field(50, description="Requested page size")
-    next_page_token: str | None = Field(None, description="Token for next page if available")
-
-
-class CatalogSourcesResponse(BaseModel):
-    """Response from listing catalog sources.
-
-    Contains the available sources/categories in the catalog.
-    """
-
-    sources: list[CatalogSource] = Field(default_factory=list, description="List of sources")

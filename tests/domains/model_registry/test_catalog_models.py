@@ -1,14 +1,10 @@
 """Tests for Model Catalog models."""
 
-import pytest
-
 from rhoai_mcp.domains.model_registry.catalog_models import (
     CatalogBenchmarkContent,
-    CatalogListResponse,
     CatalogModel,
     CatalogModelArtifact,
     CatalogSource,
-    CatalogSourcesResponse,
 )
 
 
@@ -142,65 +138,6 @@ class TestCatalogSource:
         assert source.label == "Community"
         assert source.model_count == 42
         assert source.description == "Community-contributed models"
-
-
-class TestCatalogListResponse:
-    """Test CatalogListResponse model."""
-
-    def test_empty_response(self) -> None:
-        """Test empty response."""
-        response = CatalogListResponse()
-
-        assert response.models == []
-        assert response.total_count == 0
-        assert response.page_size == 50  # Default
-        assert response.next_page_token is None
-
-    def test_response_with_models(self) -> None:
-        """Test response with models."""
-        models = [
-            CatalogModel(name="model-1", source_label="rhoai"),
-            CatalogModel(name="model-2", source_label="rhoai"),
-        ]
-
-        response = CatalogListResponse(
-            models=models,
-            total_count=10,
-            page_size=2,
-            next_page_token="page2",
-        )
-
-        assert len(response.models) == 2
-        assert response.total_count == 10
-        assert response.page_size == 2
-        assert response.next_page_token == "page2"
-
-
-class TestCatalogSourcesResponse:
-    """Test CatalogSourcesResponse model."""
-
-    def test_empty_response(self) -> None:
-        """Test empty sources response."""
-        response = CatalogSourcesResponse()
-
-        assert response.sources == []
-
-    def test_response_with_sources(self) -> None:
-        """Test response with sources."""
-        sources = [
-            CatalogSource(
-                id="rhoai_validated", name="rhoai", label="Red Hat AI validated", model_count=5
-            ),
-            CatalogSource(
-                id="community_models", name="community", label="Community", model_count=15
-            ),
-        ]
-
-        response = CatalogSourcesResponse(sources=sources)
-
-        assert len(response.sources) == 2
-        assert response.sources[0].name == "rhoai"
-        assert response.sources[1].model_count == 15
 
 
 class TestCatalogBenchmarkContent:

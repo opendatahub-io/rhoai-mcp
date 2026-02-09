@@ -100,7 +100,7 @@ class InferenceClient:
                             "name": template["creates_runtime"],
                             "display_name": template["display_name"],
                             "supported_formats": template.get("supported_formats", []),
-                            "multi_model": False,
+                            "multi_model": template.get("multi_model", False),
                             "source": "template",
                             "template_name": template["name"],
                             "template_namespace": PLATFORM_NAMESPACE,
@@ -116,15 +116,13 @@ class InferenceClient:
         annotations = metadata.annotations or {}
         spec = rt.spec or {}
 
-        # Get supported formats
-        containers = spec.get("containers", [])
+        # Get supported formats from spec level (standard KServe location)
         supported_formats = []
-        for container in containers:
-            for model_format in container.get("supportedModelFormats", []):
-                if isinstance(model_format, dict):
-                    supported_formats.append(model_format.get("name", ""))
-                else:
-                    supported_formats.append(str(model_format))
+        for model_format in spec.get("supportedModelFormats", []):
+            if isinstance(model_format, dict):
+                supported_formats.append(model_format.get("name", ""))
+            else:
+                supported_formats.append(str(model_format))
 
         return {
             "name": metadata.name,
@@ -170,6 +168,7 @@ class InferenceClient:
                     "description": annotations.get("description", ""),
                     "creates_runtime": creates_runtime,
                     "supported_formats": self._get_formats_from_template(template),
+                    "multi_model": self._get_multi_model_from_template(template),
                 }
             )
 
@@ -212,14 +211,46 @@ class InferenceClient:
                 kind = obj.get("kind", "")
                 if kind == "ServingRuntime":
                     spec = obj.get("spec", {})
-                    containers = spec.get("containers", [])
-                    for container in containers:
-                        for model_format in container.get("supportedModelFormats", []):
-                            if isinstance(model_format, dict):
-                                fmt = model_format.get("name", "")
-                                if fmt and fmt not in formats:
-                                    formats.append(fmt)
+                    for model_format in spec.get("supportedModelFormats", []):
+                        if isinstance(model_format, dict):
+                            fmt = model_format.get("name", "")
+                            if fmt and fmt not in formats:
+                                formats.append(fmt)
+            else:
+                kind = getattr(obj, "kind", "")
+                if kind == "ServingRuntime":
+                    spec = getattr(obj, "spec", {})
+                    spec_formats = (
+                        spec.get("supportedModelFormats", [])
+                        if isinstance(spec, dict)
+                        else getattr(spec, "supportedModelFormats", []) or []
+                    )
+                    for model_format in spec_formats:
+                        if isinstance(model_format, dict):
+                            fmt = model_format.get("name", "")
+                        else:
+                            fmt = str(getattr(model_format, "name", ""))
+                        if fmt and fmt not in formats:
+                            formats.append(fmt)
         return formats
+
+    def _get_multi_model_from_template(self, template: Any) -> bool:
+        """Extract multiModel setting from a template."""
+        objects = template.objects if hasattr(template, "objects") else []
+        for obj in objects:
+            if isinstance(obj, dict):
+                kind = obj.get("kind", "")
+                if kind == "ServingRuntime":
+                    spec = obj.get("spec", {})
+                    return bool(spec.get("multiModel", False))
+            else:
+                kind = getattr(obj, "kind", "")
+                if kind == "ServingRuntime":
+                    spec = getattr(obj, "spec", {})
+                    if isinstance(spec, dict):
+                        return bool(spec.get("multiModel", False))
+                    return bool(getattr(spec, "multiModel", False))
+        return False
 
     def instantiate_serving_runtime_template(
         self,

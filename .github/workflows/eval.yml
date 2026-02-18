@@ -3,11 +3,37 @@ name: MCP Evaluation
 on:
   workflow_dispatch:
     inputs:
+      agent_provider:
+        description: "Agent LLM provider"
+        required: false
+        default: "openai"
+        type: choice
+        options:
+          - openai
+          - vllm
+          - azure
+          - anthropic
+          - anthropic-vertex
+          - google-genai
+          - google-vertex
       agent_model:
         description: "Agent LLM model"
         required: false
         default: "gpt-4o-mini"
         type: string
+      judge_provider:
+        description: "Judge LLM provider"
+        required: false
+        default: "openai"
+        type: choice
+        options:
+          - openai
+          - vllm
+          - azure
+          - anthropic
+          - anthropic-vertex
+          - google-genai
+          - google-vertex
       judge_model:
         description: "Judge LLM model for DeepEval metrics"
         required: false
@@ -24,11 +50,29 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      RHOAI_EVAL_LLM_PROVIDER: ${{ inputs.agent_provider || 'openai' }}
       RHOAI_EVAL_LLM_MODEL: ${{ inputs.agent_model || 'gpt-4o-mini' }}
-      RHOAI_EVAL_LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RHOAI_EVAL_LLM_API_KEY: >-
+        ${{
+          (inputs.agent_provider == 'anthropic' || inputs.agent_provider == 'anthropic-vertex')
+            && secrets.ANTHROPIC_API_KEY
+          || (inputs.agent_provider == 'google-genai' || inputs.agent_provider == 'google-vertex')
+            && secrets.GOOGLE_API_KEY
+          || secrets.OPENAI_API_KEY
+        }}
+      RHOAI_EVAL_EVAL_PROVIDER: ${{ inputs.judge_provider || 'openai' }}
       RHOAI_EVAL_EVAL_MODEL: ${{ inputs.judge_model || 'gpt-4o' }}
-      RHOAI_EVAL_EVAL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RHOAI_EVAL_EVAL_API_KEY: >-
+        ${{
+          (inputs.judge_provider == 'anthropic' || inputs.judge_provider == 'anthropic-vertex')
+            && secrets.ANTHROPIC_API_KEY
+          || (inputs.judge_provider == 'google-genai' || inputs.judge_provider == 'google-vertex')
+            && secrets.GOOGLE_API_KEY
+          || secrets.OPENAI_API_KEY
+        }}
       RHOAI_EVAL_CLUSTER_MODE: mock
+      RHOAI_EVAL_VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
+      RHOAI_EVAL_VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
 
     steps:
       - name: Checkout repository

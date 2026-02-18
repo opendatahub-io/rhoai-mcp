@@ -14,6 +14,10 @@ class LLMProvider(str, Enum):
     OPENAI = "openai"
     VLLM = "vllm"
     AZURE = "azure"
+    ANTHROPIC = "anthropic"
+    ANTHROPIC_VERTEX = "anthropic-vertex"
+    GOOGLE_GENAI = "google-genai"
+    GOOGLE_VERTEX = "google-vertex"
 
 
 class ClusterMode(str, Enum):
@@ -41,7 +45,7 @@ class EvalConfig(BaseSettings):
     # Agent LLM settings
     llm_provider: LLMProvider = Field(
         default=LLMProvider.OPENAI,
-        description="LLM provider for the agent: openai, vllm, or azure",
+        description="LLM provider for the agent",
     )
     llm_model: str = Field(
         default="gpt-4o",
@@ -68,6 +72,22 @@ class EvalConfig(BaseSettings):
     eval_api_key: str = Field(
         default="",
         description="API key for the judge LLM",
+    )
+
+    # Judge LLM provider (defaults to same as agent provider)
+    eval_provider: LLMProvider = Field(
+        default=LLMProvider.OPENAI,
+        description="LLM provider for the DeepEval judge",
+    )
+
+    # Vertex AI settings (for anthropic-vertex and google-vertex providers)
+    vertex_project_id: str | None = Field(
+        default=None,
+        description="Google Cloud project ID for Vertex AI",
+    )
+    vertex_location: str = Field(
+        default="us-central1",
+        description="Google Cloud region for Vertex AI",
     )
 
     # Cluster settings

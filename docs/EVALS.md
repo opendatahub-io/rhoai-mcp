@@ -8,7 +8,7 @@ The evaluation framework measures whether an LLM agent can effectively use the M
 
 The framework uses:
 
-- **A real LLM agent** (OpenAI-compatible) that receives tasks and calls MCP tools
+- **A real LLM agent** (OpenAI, Anthropic, or Google Gemini) that receives tasks and calls MCP tools
 - **The real RHOAI MCP server** running in-process with all plugins loaded
 - **A mock K8s cluster** (or optionally a live cluster) providing realistic data
 - **DeepEval metrics** with a judge LLM that scores the agent's tool usage and task completion
@@ -19,7 +19,7 @@ This replaces the earlier self-instrumentation approach (`ENABLE_EVALUATION` hoo
 
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/) package manager
-- An OpenAI-compatible API key (for the agent LLM and the DeepEval judge LLM)
+- An API key for at least one supported LLM provider (for the agent LLM and the DeepEval judge LLM)
 - (Optional) A live OpenShift cluster with RHOAI installed, for live-cluster evals
 
 ## Setup
@@ -30,7 +30,7 @@ This replaces the earlier self-instrumentation approach (`ENABLE_EVALUATION` hoo
    cp .env.eval.example .env.eval
    ```
 
-   At minimum, set `RHOAI_EVAL_LLM_API_KEY` and `RHOAI_EVAL_EVAL_API_KEY`:
+   At minimum, set the provider and API key for both agent and judge:
 
    ```bash
    RHOAI_EVAL_LLM_API_KEY=sk-...
@@ -81,17 +81,32 @@ All variables use the `RHOAI_EVAL_` prefix and can be set in `.env.eval` or as e
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LLM_PROVIDER` | `openai` | Agent LLM provider: `openai`, `vllm`, or `azure` |
+| `LLM_PROVIDER` | `openai` | Agent LLM provider (see [Supported Providers](#supported-providers)) |
 | `LLM_MODEL` | `gpt-4o` | Model name for the agent LLM |
 | `LLM_API_KEY` | (none) | API key for the agent LLM |
 | `LLM_BASE_URL` | (none) | Base URL for vLLM or Azure endpoints |
+| `EVAL_PROVIDER` | `openai` | Judge LLM provider (see [Supported Providers](#supported-providers)) |
 | `EVAL_MODEL` | `gpt-4o` | Model name for the DeepEval judge LLM |
 | `EVAL_API_KEY` | (none) | API key for the judge LLM |
 | `EVAL_MODEL_BASE_URL` | (none) | Base URL for a custom judge endpoint |
+| `VERTEX_PROJECT_ID` | (none) | Google Cloud project ID (for `anthropic-vertex` and `google-vertex`) |
+| `VERTEX_LOCATION` | `us-central1` | Google Cloud region (for `anthropic-vertex` and `google-vertex`) |
 | `CLUSTER_MODE` | `mock` | `mock` (no cluster needed) or `live` (real cluster) |
 | `MCP_USE_THRESHOLD` | `0.5` | Minimum score for MCP tool usage metrics (0.0-1.0) |
 | `TASK_COMPLETION_THRESHOLD` | `0.6` | Minimum score for task completion metrics (0.0-1.0) |
 | `MAX_AGENT_TURNS` | `20` | Maximum LLM turns per scenario (1-100) |
+
+### Supported Providers
+
+| Provider | Value | SDK | Notes |
+|----------|-------|-----|-------|
+| OpenAI | `openai` | `openai` | Default. Uses OpenAI API directly. |
+| vLLM | `vllm` | `openai` | OpenAI-compatible. Requires `LLM_BASE_URL`. |
+| Azure OpenAI | `azure` | `openai` | OpenAI-compatible. Requires `LLM_BASE_URL`. |
+| Anthropic | `anthropic` | `anthropic` | Claude models via direct API. |
+| Anthropic on Vertex AI | `anthropic-vertex` | `anthropic` | Claude models via Google Vertex AI. Requires `VERTEX_PROJECT_ID`. |
+| Google Gemini | `google-genai` | `google-genai` | Gemini models via API key. |
+| Google Gemini on Vertex AI | `google-vertex` | `google-genai` | Gemini models via Vertex AI. Requires `VERTEX_PROJECT_ID`. |
 
 ## Architecture
 
@@ -100,14 +115,21 @@ evals/
 ├── config.py                         # EvalConfig (pydantic-settings)
 ├── conftest.py                       # Shared pytest fixtures
 ├── mcp_harness.py                    # In-process MCP server lifecycle
-├── agent.py                          # LLM agent loop
+├── agent.py                          # Provider-agnostic agent loop
 ├── deepeval_helpers.py               # AgentResult -> DeepEval test case conversion
+├── providers/
+│   ├── __init__.py                   # Exports factory functions
+│   ├── base.py                       # AgentLLMProvider ABC + dataclasses
+│   ├── openai_provider.py            # OpenAI/Azure/vLLM provider
+│   ├── anthropic_provider.py         # Anthropic/Anthropic-Vertex provider
+│   ├── google_provider.py            # Google GenAI/Vertex provider
+│   ├── judge.py                      # DeepEvalBaseLLM subclasses per provider
+│   └── factory.py                    # create_agent_provider(), create_judge_llm()
 ├── mock_k8s/
 │   ├── cluster_state.py              # ClusterState dataclass + default data
 │   └── mock_client.py                # MockK8sClient (subclasses K8sClient)
 ├── metrics/
-│   ├── config.py                     # Metric factory functions
-│   └── custom_llm.py                 # CustomEvalLLM for non-OpenAI judges
+│   └── config.py                     # Metric factory functions
 └── scenarios/
     ├── test_cluster_exploration.py    # Cluster discovery scenario
     ├── test_training_workflow.py      # Training job creation scenario
@@ -122,22 +144,25 @@ evals/
 
 2. **`MCPHarness`** (`mcp_harness.py`) starts the real RHOAI MCP server in-process. In mock mode, it injects a `MockK8sClient` before the server lifespan begins, so all domain logic, plugin loading, and tool registration execute for real — only the K8s API calls are faked. In live mode, it uses the server's normal lifespan with a real cluster connection.
 
-3. **`MCPAgent`** (`agent.py`) implements an agent loop: it sends the task and all MCP tool schemas to an OpenAI-compatible LLM, executes any tool calls the LLM requests via the harness, feeds results back, and repeats until the LLM produces a final text response or hits the turn limit. It records all tool calls and messages in an `AgentResult`.
+3. **Provider abstraction** (`providers/`) decouples the agent loop from any specific LLM SDK. Each provider implements `AgentLLMProvider` — handling tool schema conversion, message formatting, API communication, and conversion back to OpenAI-style dicts for DeepEval. The factory function `create_agent_provider()` dispatches on the configured provider.
 
-4. **`deepeval_helpers.py`** converts the `AgentResult` into DeepEval test case objects (`ConversationalTestCase` for multi-turn scenarios, `LLMTestCase` for single-turn), attaching the `MCPServer` tool definitions and `MCPToolCall` records.
+4. **`MCPAgent`** (`agent.py`) implements a provider-agnostic agent loop: it calls provider methods to format tools, build messages, send completions, and append results. It records all tool calls and messages in an `AgentResult`, converting messages to OpenAI format via `messages_for_deepeval()` at the end.
 
-5. **Metrics** (`metrics/config.py`) wrap DeepEval's built-in MCP metrics with configured thresholds. A judge LLM scores whether the agent used the right tools appropriately.
+5. **`deepeval_helpers.py`** converts the `AgentResult` into DeepEval test case objects (`ConversationalTestCase` for multi-turn scenarios, `LLMTestCase` for single-turn), attaching the `MCPServer` tool definitions and `MCPToolCall` records.
 
-6. **Scenarios** (`scenarios/`) are pytest test classes marked with `@pytest.mark.eval`. Each defines a natural-language `TASK`, runs the agent, builds a DeepEval test case, and asserts that all metrics pass.
+6. **Metrics** (`metrics/config.py`) wrap DeepEval's built-in MCP metrics with configured thresholds. The `create_judge_llm()` factory creates the appropriate judge LLM based on the configured `eval_provider`.
+
+7. **Scenarios** (`scenarios/`) are pytest test classes marked with `@pytest.mark.eval`. Each defines a natural-language `TASK`, runs the agent, builds a DeepEval test case, and asserts that all metrics pass.
 
 ### Data flow
 
 ```text
 Scenario TASK ──> MCPAgent.run()
                     │
-                    ├──> LLM (OpenAI API) ──> tool_calls
-                    │                              │
-                    ├──< MCPHarness.call_tool() <──┘
+                    ├──> AgentLLMProvider.send() ──> tool_calls
+                    │         (OpenAI / Anthropic / Google)
+                    │                                  │
+                    ├──< MCPHarness.call_tool() <──────┘
                     │       │
                     │       └──> RHOAI MCP Server ──> MockK8sClient
                     │
@@ -278,6 +303,14 @@ All metrics accept a `threshold` (0.0-1.0) configurable via `RHOAI_EVAL_MCP_USE_
 
 ## Using Custom LLM Providers
 
+### OpenAI (default)
+
+```bash
+RHOAI_EVAL_LLM_PROVIDER=openai
+RHOAI_EVAL_LLM_MODEL=gpt-4o
+RHOAI_EVAL_LLM_API_KEY=sk-...
+```
+
 ### vLLM
 
 Set the provider to `vllm` and provide the endpoint URL:
@@ -298,31 +331,92 @@ RHOAI_EVAL_LLM_API_KEY=your-azure-key
 RHOAI_EVAL_LLM_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/gpt-4o
 ```
 
-### Custom judge endpoint
-
-To use a self-hosted model as the DeepEval judge (instead of OpenAI), set the judge base URL:
+### Anthropic
 
 ```bash
+RHOAI_EVAL_LLM_PROVIDER=anthropic
+RHOAI_EVAL_LLM_MODEL=claude-sonnet-4-20250514
+RHOAI_EVAL_LLM_API_KEY=sk-ant-...
+```
+
+### Anthropic on Vertex AI
+
+```bash
+RHOAI_EVAL_LLM_PROVIDER=anthropic-vertex
+RHOAI_EVAL_LLM_MODEL=claude-sonnet-4@20250514
+RHOAI_EVAL_VERTEX_PROJECT_ID=my-gcp-project
+RHOAI_EVAL_VERTEX_LOCATION=us-east5
+```
+
+Authentication uses Application Default Credentials (ADC). Ensure `gcloud auth application-default login` has been run or a service account key is configured.
+
+### Google Gemini
+
+```bash
+RHOAI_EVAL_LLM_PROVIDER=google-genai
+RHOAI_EVAL_LLM_MODEL=gemini-2.0-flash
+RHOAI_EVAL_LLM_API_KEY=AIza...
+```
+
+### Google Gemini on Vertex AI
+
+```bash
+RHOAI_EVAL_LLM_PROVIDER=google-vertex
+RHOAI_EVAL_LLM_MODEL=gemini-2.0-flash
+RHOAI_EVAL_VERTEX_PROJECT_ID=my-gcp-project
+RHOAI_EVAL_VERTEX_LOCATION=us-central1
+```
+
+Authentication uses Application Default Credentials (ADC).
+
+### Custom judge endpoint
+
+The judge provider can be different from the agent provider. Set `EVAL_PROVIDER` to control which LLM evaluates the agent:
+
+```bash
+# Use Anthropic as the agent, OpenAI as the judge
+RHOAI_EVAL_LLM_PROVIDER=anthropic
+RHOAI_EVAL_LLM_MODEL=claude-sonnet-4-20250514
+RHOAI_EVAL_LLM_API_KEY=sk-ant-...
+RHOAI_EVAL_EVAL_PROVIDER=openai
+RHOAI_EVAL_EVAL_MODEL=gpt-4o
+RHOAI_EVAL_EVAL_API_KEY=sk-...
+```
+
+For self-hosted judge endpoints (vLLM, Ollama), set the base URL:
+
+```bash
+RHOAI_EVAL_EVAL_PROVIDER=vllm
 RHOAI_EVAL_EVAL_MODEL=my-judge-model
 RHOAI_EVAL_EVAL_API_KEY=token
 RHOAI_EVAL_EVAL_MODEL_BASE_URL=http://localhost:8001/v1
 ```
 
-The `CustomEvalLLM` class in `evals/metrics/custom_llm.py` wraps any OpenAI-compatible endpoint as a DeepEval judge LLM by implementing the `DeepEvalBaseLLM` interface.
-
 ## CI/CD
 
 The GitHub Actions workflow (`.github/workflows/eval.yml`) runs mock-cluster evals on manual dispatch:
 
-- **Trigger:** `workflow_dispatch` with optional `agent_model` and `judge_model` inputs
-- **Defaults:** `gpt-4o-mini` for the agent, `gpt-4o` for the judge
-- **Required secret:** `OPENAI_API_KEY`
+- **Trigger:** `workflow_dispatch` with `agent_provider`, `agent_model`, `judge_provider`, and `judge_model` inputs
+- **Defaults:** `openai` provider, `gpt-4o-mini` for the agent, `gpt-4o` for the judge
+- **Required secrets:** Depends on provider selection:
+  - OpenAI/vLLM/Azure: `OPENAI_API_KEY`
+  - Anthropic: `ANTHROPIC_API_KEY`
+  - Google: `GOOGLE_API_KEY`
+  - Vertex AI: `VERTEX_PROJECT_ID`, `VERTEX_LOCATION`
 - **Output:** JUnit XML results uploaded as an artifact
 
 To trigger manually from the GitHub UI or CLI:
 
 ```bash
+# Default (OpenAI)
 gh workflow run eval.yml --field agent_model=gpt-4o --field judge_model=gpt-4o
+
+# Anthropic agent, OpenAI judge
+gh workflow run eval.yml \
+  --field agent_provider=anthropic \
+  --field agent_model=claude-sonnet-4-20250514 \
+  --field judge_provider=openai \
+  --field judge_model=gpt-4o
 ```
 
 ## Troubleshooting
@@ -333,7 +427,7 @@ gh workflow run eval.yml --field agent_model=gpt-4o --field judge_model=gpt-4o
 openai.AuthenticationError: Error code: 401
 ```
 
-Ensure `RHOAI_EVAL_LLM_API_KEY` and `RHOAI_EVAL_EVAL_API_KEY` are set in `.env.eval` or the environment.
+Ensure `RHOAI_EVAL_LLM_API_KEY` and `RHOAI_EVAL_EVAL_API_KEY` are set in `.env.eval` or the environment. For Anthropic, the key should start with `sk-ant-`. For Google, use a Gemini API key.
 
 ### Mock client errors
 
@@ -370,6 +464,20 @@ openai.APIConnectionError: Connection error.
 ```
 
 Verify your vLLM endpoint is running and accessible at the URL specified in `RHOAI_EVAL_LLM_BASE_URL`. The URL should include `/v1` (e.g., `http://localhost:8000/v1`).
+
+### Vertex AI authentication
+
+For `anthropic-vertex` and `google-vertex` providers, authentication uses Google Cloud Application Default Credentials. Ensure you have authenticated:
+
+```bash
+gcloud auth application-default login
+```
+
+Or set a service account key:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+```
 
 ### Verbose output
 

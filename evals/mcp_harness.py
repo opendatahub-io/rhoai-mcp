@@ -91,22 +91,6 @@ class MCPHarness:
             result.append(tool_info)
         return result
 
-    def get_openai_tools(self) -> list[dict[str, Any]]:
-        """Convert MCP tool definitions to OpenAI function-calling format."""
-        tools = self.list_tools()
-        openai_tools = []
-        for tool in tools:
-            openai_tool: dict[str, Any] = {
-                "type": "function",
-                "function": {
-                    "name": tool["name"],
-                    "description": tool["description"],
-                    "parameters": tool["parameters"],
-                },
-            }
-            openai_tools.append(openai_tool)
-        return openai_tools
-
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """Call an MCP tool by name and return the result as a string.
 

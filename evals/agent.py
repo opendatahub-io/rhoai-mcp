@@ -1,23 +1,29 @@
 """LLM agent wrapper for RHOAI MCP evaluations.
 
-Implements an agent loop that sends tasks and tool schemas to an
-OpenAI-compatible LLM, processes tool calls via the MCP harness,
+Implements a provider-agnostic agent loop that sends tasks and tool
+schemas to any supported LLM, processes tool calls via the MCP harness,
 and records tool calls and conversation turns for DeepEval metrics.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from openai import AsyncOpenAI
-
-from evals.config import EvalConfig, LLMProvider
+from evals.config import EvalConfig
 from evals.mcp_harness import MCPHarness
+from evals.providers import create_agent_provider
+from evals.providers.base import AgentLLMProvider, ToolCallResult
 
 logger = logging.getLogger(__name__)
+
+_SYSTEM_PROMPT = (
+    "You are an AI assistant interacting with a Red Hat OpenShift AI "
+    "(RHOAI) environment through MCP tools. Use the available tools "
+    "to complete the user's request. Call tools as needed, then provide "
+    "a final summary of what you found or accomplished."
+)
 
 
 @dataclass
@@ -48,25 +54,14 @@ class AgentResult:
 class MCPAgent:
     """LLM agent that interacts with the MCP server via tool calling.
 
-    Uses the OpenAI Python client, which is compatible with OpenAI,
-    vLLM, and Azure endpoints.
+    Uses a provider abstraction to support OpenAI, Anthropic, and
+    Google Gemini LLMs.
     """
 
     def __init__(self, config: EvalConfig, harness: MCPHarness) -> None:
         self._config = config
         self._harness = harness
-        self._client = self._create_client()
-
-    def _create_client(self) -> AsyncOpenAI:
-        """Create an OpenAI-compatible async client."""
-        kwargs: dict[str, Any] = {"api_key": self._config.llm_api_key}
-
-        if self._config.llm_base_url:
-            kwargs["base_url"] = self._config.llm_base_url
-        elif self._config.llm_provider == LLMProvider.VLLM:
-            raise ValueError("llm_base_url is required for vLLM provider")
-
-        return AsyncOpenAI(**kwargs)
+        self._provider: AgentLLMProvider = create_agent_provider(config)
 
     async def run(self, task: str) -> AgentResult:
         """Run the agent on a task until completion or max turns.
@@ -82,72 +77,47 @@ class MCPAgent:
         Returns:
             AgentResult with tool calls, messages, and final output.
         """
-        tools = self._harness.get_openai_tools()
-        messages: list[dict[str, Any]] = [
-            {
-                "role": "system",
-                "content": (
-                    "You are an AI assistant interacting with a Red Hat OpenShift AI "
-                    "(RHOAI) environment through MCP tools. Use the available tools "
-                    "to complete the user's request. Call tools as needed, then provide "
-                    "a final summary of what you found or accomplished."
-                ),
-            },
-            {"role": "user", "content": task},
-        ]
+        mcp_tools = self._harness.list_tools()
+        tools = self._provider.format_tools(mcp_tools)
+        messages = self._provider.build_initial_messages(_SYSTEM_PROMPT, task)
 
-        result = AgentResult(task=task, final_output="", messages=messages)
+        result = AgentResult(task=task, final_output="")
         max_turns = self._config.max_agent_turns
 
         for turn in range(max_turns):
             result.turns = turn + 1
             logger.debug(f"Agent turn {turn + 1}/{max_turns}")
 
-            response = await self._client.chat.completions.create(
-                model=self._config.llm_model,
-                messages=messages,
-                tools=tools if tools else None,
-            )
-
-            choice = response.choices[0]
-            message = choice.message
+            response = await self._provider.send(messages, tools)
 
             # Add assistant message to history
-            messages.append(message.model_dump(exclude_none=True))
+            self._provider.append_assistant_message(messages, response)
 
             # If the model didn't call any tools, we're done
-            if not message.tool_calls:
-                result.final_output = message.content or ""
+            if not response.has_tool_calls:
+                result.final_output = response.text or ""
                 break
 
             # Process each tool call
-            for tool_call in message.tool_calls:
-                fn = tool_call.function
-                tool_name = fn.name
-                try:
-                    tool_args = json.loads(fn.arguments) if fn.arguments else {}
-                except json.JSONDecodeError:
-                    tool_args = {}
+            tool_call_results: list[ToolCallResult] = []
+            for tc in response.tool_calls:
+                logger.debug(f"Calling tool: {tc.name}({tc.arguments})")
+                tool_result = await self._harness.call_tool(tc.name, tc.arguments)
 
-                logger.debug(f"Calling tool: {tool_name}({tool_args})")
-                tool_result = await self._harness.call_tool(tool_name, tool_args)
+                record = ToolCall(name=tc.name, arguments=tc.arguments, result=tool_result)
+                result.tool_calls.append(record)
 
-                tc = ToolCall(name=tool_name, arguments=tool_args, result=tool_result)
-                result.tool_calls.append(tc)
-
-                # Add tool result to conversation
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": tool_result,
-                    }
+                tool_call_results.append(
+                    ToolCallResult(id=tc.id, name=tc.name, result=tool_result)
                 )
+
+            # Feed tool results back to the LLM
+            self._provider.append_tool_results(messages, response, tool_call_results)
         else:
             # Max turns reached without a final text response
             result.final_output = (
                 f"Agent reached maximum turns ({max_turns}) without completing the task."
             )
 
-        result.messages = messages
+        result.messages = self._provider.messages_for_deepeval(messages)
         return result

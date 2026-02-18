@@ -48,6 +48,9 @@ help: ## Show this help message
 	@echo "Development:"
 	@grep -E '^(dev|install|sync|test|lint|format|check|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
+	@echo "Evaluation:"
+	@grep -E '^(eval|eval-live|eval-scenario):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo ""
 	@echo "Container:"
 	@grep -E '^(build|run|stop|logs|shell|clean|info|test-):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 

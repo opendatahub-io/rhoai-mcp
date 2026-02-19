@@ -44,11 +44,11 @@ class EvalConfig(BaseSettings):
 
     # Agent LLM settings
     llm_provider: LLMProvider = Field(
-        default=LLMProvider.OPENAI,
+        default=LLMProvider.GOOGLE_GENAI,
         description="LLM provider for the agent",
     )
     llm_model: str = Field(
-        default="gpt-4o",
+        default="gemini-2.5-flash",
         description="Model name for the agent LLM",
     )
     llm_api_key: str = Field(
@@ -62,7 +62,7 @@ class EvalConfig(BaseSettings):
 
     # Judge LLM settings (for DeepEval metrics)
     eval_model: str = Field(
-        default="gpt-4o",
+        default="gemini-2.5-flash",
         description="Model name for the DeepEval judge LLM",
     )
     eval_model_base_url: str | None = Field(
@@ -76,7 +76,7 @@ class EvalConfig(BaseSettings):
 
     # Judge LLM provider (defaults to same as agent provider)
     eval_provider: LLMProvider = Field(
-        default=LLMProvider.OPENAI,
+        default=LLMProvider.GOOGLE_GENAI,
         description="LLM provider for the DeepEval judge",
     )
 

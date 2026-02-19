@@ -6,38 +6,38 @@ on:
       agent_provider:
         description: "Agent LLM provider"
         required: false
-        default: "openai"
+        default: "google-genai"
         type: choice
         options:
+          - google-genai
+          - google-vertex
           - openai
           - vllm
           - azure
           - anthropic
           - anthropic-vertex
-          - google-genai
-          - google-vertex
       agent_model:
         description: "Agent LLM model"
         required: false
-        default: "gpt-4o-mini"
+        default: "gemini-2.5-flash"
         type: string
       judge_provider:
         description: "Judge LLM provider"
         required: false
-        default: "openai"
+        default: "google-genai"
         type: choice
         options:
+          - google-genai
+          - google-vertex
           - openai
           - vllm
           - azure
           - anthropic
           - anthropic-vertex
-          - google-genai
-          - google-vertex
       judge_model:
         description: "Judge LLM model for DeepEval metrics"
         required: false
-        default: "gpt-4o"
+        default: "gemini-2.5-flash"
         type: string
   issue_comment:
     types: [created]
@@ -76,31 +76,25 @@ jobs:
 
     env:
       RHOAI_EVAL_LLM_PROVIDER: >-
-        ${{ github.event_name == 'issue_comment' && 'google-genai'
-            || inputs.agent_provider || 'openai' }}
+        ${{ inputs.agent_provider || 'google-genai' }}
       RHOAI_EVAL_LLM_MODEL: >-
-        ${{ github.event_name == 'issue_comment' && 'gemini-2.0-flash'
-            || inputs.agent_model || 'gpt-4o-mini' }}
+        ${{ inputs.agent_model || 'gemini-2.5-flash' }}
       RHOAI_EVAL_LLM_API_KEY: >-
-        ${{ github.event_name == 'issue_comment' && secrets.GOOGLE_API_KEY
-            || (inputs.agent_provider == 'anthropic' || inputs.agent_provider == 'anthropic-vertex')
+        ${{ (inputs.agent_provider == 'anthropic' || inputs.agent_provider == 'anthropic-vertex')
               && secrets.ANTHROPIC_API_KEY
-            || (inputs.agent_provider == 'google-genai' || inputs.agent_provider == 'google-vertex')
-              && secrets.GOOGLE_API_KEY
-            || secrets.OPENAI_API_KEY }}
+            || (inputs.agent_provider == 'openai' || inputs.agent_provider == 'vllm' || inputs.agent_provider == 'azure')
+              && secrets.OPENAI_API_KEY
+            || secrets.GOOGLE_API_KEY }}
       RHOAI_EVAL_EVAL_PROVIDER: >-
-        ${{ github.event_name == 'issue_comment' && 'google-genai'
-            || inputs.judge_provider || 'openai' }}
+        ${{ inputs.judge_provider || 'google-genai' }}
       RHOAI_EVAL_EVAL_MODEL: >-
-        ${{ github.event_name == 'issue_comment' && 'gemini-2.0-flash'
-            || inputs.judge_model || 'gpt-4o' }}
+        ${{ inputs.judge_model || 'gemini-2.5-flash' }}
       RHOAI_EVAL_EVAL_API_KEY: >-
-        ${{ github.event_name == 'issue_comment' && secrets.GOOGLE_API_KEY
-            || (inputs.judge_provider == 'anthropic' || inputs.judge_provider == 'anthropic-vertex')
+        ${{ (inputs.judge_provider == 'anthropic' || inputs.judge_provider == 'anthropic-vertex')
               && secrets.ANTHROPIC_API_KEY
-            || (inputs.judge_provider == 'google-genai' || inputs.judge_provider == 'google-vertex')
-              && secrets.GOOGLE_API_KEY
-            || secrets.OPENAI_API_KEY }}
+            || (inputs.judge_provider == 'openai' || inputs.judge_provider == 'vllm' || inputs.judge_provider == 'azure')
+              && secrets.OPENAI_API_KEY
+            || secrets.GOOGLE_API_KEY }}
       RHOAI_EVAL_CLUSTER_MODE: mock
       RHOAI_EVAL_VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
       RHOAI_EVAL_VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}

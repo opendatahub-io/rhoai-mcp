@@ -104,19 +104,24 @@ class GoogleJudgeLLM(DeepEvalBaseLLM):
         api_key: str = "",
         vertex_project_id: str | None = None,
         vertex_location: str = "us-central1",
+        use_vertex: bool = False,
     ) -> None:
         self._model_name = model_name
         from google import genai
 
-        if vertex_project_id:
+        if use_vertex:
             if api_key:
                 # Vertex AI Express mode: API key auth (no project/location needed)
                 self._client = genai.Client(vertexai=True, api_key=api_key)
-            else:
+            elif vertex_project_id:
                 self._client = genai.Client(
                     vertexai=True,
                     project=vertex_project_id,
                     location=vertex_location,
+                )
+            else:
+                raise ValueError(
+                    "google-vertex provider requires an API key or vertex_project_id"
                 )
         else:
             self._client = genai.Client(api_key=api_key)

@@ -1,7 +1,8 @@
 """Google GenAI agent LLM provider.
 
 Covers Google Gemini via API key and Google Gemini on Vertex AI.
-Both use the google-genai SDK — Vertex uses vertexai=True with project/location.
+Both use the google-genai SDK — Vertex AI supports two auth modes: Express
+(vertexai=True + api_key) and ADC (vertexai=True + project/location).
 """
 
 from __future__ import annotations

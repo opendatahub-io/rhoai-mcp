@@ -97,8 +97,9 @@ def create_judge_llm(config: EvalConfig) -> Any:
         return GoogleJudgeLLM(
             model_name=config.eval_model,
             api_key=config.eval_api_key,
-            vertex_project_id=config.vertex_project_id if provider == LLMProvider.GOOGLE_VERTEX else None,
+            vertex_project_id=config.vertex_project_id,
             vertex_location=config.vertex_location,
+            use_vertex=provider == LLMProvider.GOOGLE_VERTEX,
         )
 
     raise ValueError(f"Unsupported judge LLM provider: {provider}")

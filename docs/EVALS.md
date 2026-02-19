@@ -438,6 +438,34 @@ gh workflow run eval.yml \
   --field judge_model=gpt-4o
 ```
 
+### PR Comment Trigger (`@run_evals`)
+
+Maintainers can trigger evals directly from a pull request by commenting `@run_evals` on the PR. This provides a quick way to validate changes without navigating to the Actions tab.
+
+**Who can trigger:** Repository owners, organization members, and collaborators (based on `author_association`).
+
+**What happens:**
+
+1. The workflow adds an `eyes` reaction to acknowledge the comment
+2. The PR's head branch is checked out (not the default branch)
+3. Evals run using `google-genai` / `gemini-2.0-flash` for both the agent and judge LLMs
+4. Results are posted as a PR comment with the markdown summary table
+5. A `rocket` reaction is added on success, or `thumbsdown` on failure
+
+**Required secret:** `GOOGLE_API_KEY` (Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)).
+
+**Default configuration for `@run_evals`:**
+
+| Setting | Value |
+|---------|-------|
+| Agent provider | `google-genai` |
+| Agent model | `gemini-2.0-flash` |
+| Judge provider | `google-genai` |
+| Judge model | `gemini-2.0-flash` |
+| Cluster mode | `mock` |
+
+The `workflow_dispatch` trigger remains available for full provider/model flexibility.
+
 ### CI Result Persistence
 
 Eval results are persisted across CI runs using GitHub Actions cache:

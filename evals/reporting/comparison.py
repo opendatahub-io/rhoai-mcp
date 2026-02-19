@@ -54,7 +54,7 @@ def provider_comparison_report(
     # Build rows sorted by average score descending
     row_data: list[tuple[float, list[str]]] = []
     for key, group in groups.items():
-        recent = group[-last_n:]
+        recent = sorted(group, key=lambda r: r.timestamp)[-last_n:]
         metric_avgs: dict[str, float] = {}
         for mn in all_metric_names:
             scores = [m.score for r in recent for m in r.metrics if m.name == mn]

@@ -97,6 +97,9 @@ eval-live: ## Run all MCP evaluation tests including live cluster
 	uv run --group eval pytest evals/ -v -m "eval" --tb=short
 
 eval-scenario: ## Run a single eval scenario (usage: make eval-scenario SCENARIO=cluster_exploration)
+ifndef SCENARIO
+	$(error SCENARIO is required. Usage: make eval-scenario SCENARIO=cluster_exploration)
+endif
 	uv run --group eval pytest evals/scenarios/test_$(SCENARIO).py -v --tb=short
 
 eval-report: ## Show latest eval run summary

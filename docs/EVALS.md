@@ -545,7 +545,7 @@ The file is append-only and gitignored locally. No external dependencies are req
 
 ### Missing API key
 
-```
+```text
 openai.AuthenticationError: Error code: 401
 ```
 
@@ -553,7 +553,7 @@ Ensure `RHOAI_EVAL_LLM_API_KEY` and `RHOAI_EVAL_EVAL_API_KEY` are set in `.env.e
 
 ### Mock client errors
 
-```
+```text
 NotFoundError: <resource type> '<name>' not found
 ```
 
@@ -561,7 +561,7 @@ The agent asked for a resource that doesn't exist in the mock cluster state. If 
 
 ### Agent reaches max turns
 
-```
+```text
 Agent reached maximum turns (20) without completing the task.
 ```
 
@@ -569,7 +569,7 @@ The agent couldn't finish within the turn limit. Try increasing `RHOAI_EVAL_MAX_
 
 ### Metric failures
 
-```
+```text
 Metric MCPTaskCompletionMetric failed: <reason>
 ```
 
@@ -581,7 +581,7 @@ RHOAI_EVAL_TASK_COMPLETION_THRESHOLD=0.3 make eval
 
 ### vLLM connection errors
 
-```
+```text
 openai.APIConnectionError: Connection error.
 ```
 

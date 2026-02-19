@@ -25,7 +25,7 @@ def score_trend_report(
     if not records:
         return "No eval records found."
 
-    filtered = records
+    filtered = list(records)
     if scenario:
         filtered = [r for r in filtered if r.scenario == scenario]
     if provider:

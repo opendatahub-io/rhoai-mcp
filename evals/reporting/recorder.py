@@ -120,19 +120,20 @@ def evaluate_and_record(
 
     metric_records = []
     all_passed = True
-    for md in eval_result.test_results[0].metrics_data:
-        success = bool(md.success)
-        if not success:
-            all_passed = False
-        metric_records.append(
-            MetricRecord(
-                name=md.metric_name,
-                score=float(md.score),
-                success=success,
-                threshold=float(md.threshold),
-                reason=md.reason or "",
+    for test_result in eval_result.test_results:
+        for md in test_result.metrics_data:
+            success = bool(md.success)
+            if not success:
+                all_passed = False
+            metric_records.append(
+                MetricRecord(
+                    name=md.metric_name,
+                    score=float(md.score),
+                    success=success,
+                    threshold=float(md.threshold),
+                    reason=md.reason or "",
+                )
             )
-        )
 
     record = EvalRecord(
         run_id=recorder.run_id,

@@ -6,7 +6,6 @@ Provides summary, compare, and trend subcommands for viewing eval results.
 from __future__ import annotations
 
 import argparse
-import sys
 
 from evals.reporting.comparison import provider_comparison_report
 from evals.reporting.formatting import format_summary
@@ -76,14 +75,11 @@ def main(argv: list[str] | None = None) -> None:
         output = provider_comparison_report(
             records, scenario=args.scenario, last_n=args.last, fmt=args.format,
         )
-    elif args.command == "trend":
+    else:  # trend
         output = score_trend_report(
             records, scenario=args.scenario, provider=args.provider,
             last_n=args.last, fmt=args.format,
         )
-    else:
-        parser.print_help()
-        sys.exit(1)
 
     print(output)
 

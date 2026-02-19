@@ -62,6 +62,12 @@ def create_judge_llm(config: EvalConfig) -> Any:
     """
     provider = config.eval_provider
 
+    if provider == LLMProvider.VLLM and not config.eval_model_base_url:
+        raise ValueError(
+            "VLLM judge provider requires eval_model_base_url to be set. "
+            "Set RHOAI_EVAL_EVAL_MODEL_BASE_URL to your vLLM endpoint (e.g. http://localhost:8000/v1)."
+        )
+
     if provider in (LLMProvider.OPENAI, LLMProvider.VLLM, LLMProvider.AZURE):
         # If there's a custom base URL, wrap in OpenAIJudgeLLM
         if config.eval_model_base_url:

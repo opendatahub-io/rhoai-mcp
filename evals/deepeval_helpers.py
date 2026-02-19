@@ -32,7 +32,7 @@ def build_mcp_server(harness: MCPHarness) -> MCPServer:
     ]
 
     return MCPServer(
-        name="rhoai-mcp",
+        server_name="rhoai-mcp",
         available_tools=tool_objects,
     )
 

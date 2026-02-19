@@ -121,7 +121,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.pr.outputs.ref || github.ref }}
+          ref: ${{ steps.pr.outputs.sha || github.sha }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -158,11 +158,10 @@ jobs:
         if: always() && github.event_name == 'issue_comment'
         run: |
           if [ -f eval-summary.md ]; then
-            BODY=$(cat eval-summary.md)
+            gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body-file eval-summary.md
           else
-            BODY="Eval run completed but no summary was generated."
+            gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body "Eval run completed but no summary was generated."
           fi
-          gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body "$BODY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

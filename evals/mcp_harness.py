@@ -43,25 +43,23 @@ class MCPHarness:
     async def running(eval_config: EvalConfig) -> AsyncIterator[MCPHarness]:
         """Start the MCP server and yield a harness for calling tools.
 
-        In mock mode, replaces the K8s client with a MockK8sClient
-        before entering the server lifespan.
+        In mock mode, injects a MockK8sClient *before* create_mcp() so
+        that startup() sees the pre-connected client and skips real K8s.
         """
         rhoai_config = RHOAIConfig(read_only_mode=True)
         server = RHOAIServer(config=rhoai_config)
-        mcp = server.create_mcp()
 
         if eval_config.cluster_mode == ClusterMode.MOCK:
             from evals.mock_k8s.cluster_state import create_default_cluster_state
             from evals.mock_k8s.mock_client import MockK8sClient
 
+            # Inject BEFORE create_mcp() so startup() skips real K8s
             state = create_default_cluster_state()
             mock_client = MockK8sClient(config_obj=rhoai_config, state=state)
             mock_client.connect()
             server._k8s_client = mock_client
 
-            # Skip the normal lifespan K8s connection; run health checks
-            if server._plugin_manager:
-                server._plugin_manager.run_health_checks(server)
+            server.create_mcp()
 
             harness = MCPHarness(server, eval_config)
             try:
@@ -70,10 +68,12 @@ class MCPHarness:
                 mock_client.disconnect()
                 server._k8s_client = None
         else:
-            # Live mode: use the real lifespan
-            lifespan = server._create_lifespan()
-            async with lifespan(mcp._mcp_server):
+            # Live mode: create_mcp() connects to real K8s via startup()
+            server.create_mcp()
+            try:
                 yield MCPHarness(server, eval_config)
+            finally:
+                server.shutdown()
 
     def list_tools(self) -> list[dict[str, Any]]:
         """List all registered MCP tools with their schemas.

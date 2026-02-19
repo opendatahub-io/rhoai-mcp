@@ -6,7 +6,7 @@ to integrate with the RHOAI MCP server.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pluggy
 
@@ -111,49 +111,3 @@ class RHOAIMCPHookSpec:
             plugin can operate, and message provides details.
         """
         raise NotImplementedError
-
-    @hookspec(firstresult=False)
-    def rhoai_before_tool_call(
-        self,
-        tool_name: str,
-        arguments: dict[str, Any],
-        session_id: str | None,
-    ) -> None:
-        """Called before a tool is executed.
-
-        This hook allows plugins to observe or modify behavior before
-        tool execution. The evaluation plugin uses this to record
-        tool call starts.
-
-        Args:
-            tool_name: Name of the tool being called.
-            arguments: Arguments passed to the tool.
-            session_id: Active evaluation session ID, if any.
-        """
-
-    @hookspec(firstresult=False)
-    def rhoai_after_tool_call(
-        self,
-        tool_name: str,
-        arguments: dict[str, Any],
-        result: Any,
-        duration_ms: float,
-        success: bool,
-        error: str | None,
-        session_id: str | None,
-    ) -> None:
-        """Called after a tool execution completes.
-
-        This hook allows plugins to observe tool execution results.
-        The evaluation plugin uses this to record tool call outcomes
-        for metrics calculation.
-
-        Args:
-            tool_name: Name of the tool that was called.
-            arguments: Arguments that were passed to the tool.
-            result: The result returned by the tool (may be None on error).
-            duration_ms: Execution time in milliseconds.
-            success: True if the tool completed without exception.
-            error: Error message if the tool raised an exception.
-            session_id: Active evaluation session ID, if any.
-        """

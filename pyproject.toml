@@ -55,6 +55,12 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
 ]
+eval = [
+    "deepeval>=3.7.0",
+    "openai>=1.0.0",
+    "anthropic>=0.40.0",
+    "google-genai>=1.0.0",
+]
 
 [tool.ruff]
 target-version = "py310"
@@ -93,6 +99,10 @@ plugins = ["pydantic.mypy"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-ra -q"
+markers = [
+    "eval: MCP evaluation tests (require LLM provider)",
+    "live: tests requiring a live OpenShift cluster",
+]
 
 [tool.coverage.run]
 source = ["src/rhoai_mcp"]

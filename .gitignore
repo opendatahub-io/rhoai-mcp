@@ -207,3 +207,8 @@ marimo/_lsp/
 __marimo__/
 
 .mcp.json
+
+# Eval reports, results, and env
+evals/reports/
+evals/results/
+.env.eval

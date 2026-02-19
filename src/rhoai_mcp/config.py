@@ -151,12 +151,6 @@ class RHOAIConfig(BaseSettings):
         description="Cache TTL in seconds when caching is enabled",
     )
 
-    # Evaluation harness settings
-    enable_evaluation: bool = Field(
-        default=False,
-        description="Enable evaluation harness for tracking agent performance",
-    )
-
     # Model Registry settings
     model_registry_url: str = Field(
         default="http://model-registry.odh-model-registries.svc:8080",

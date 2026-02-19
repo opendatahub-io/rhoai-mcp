@@ -1,0 +1,189 @@
+name: MCP Evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent_provider:
+        description: "Agent LLM provider"
+        required: false
+        default: "google-genai"
+        type: choice
+        options:
+          - google-genai
+          - google-vertex
+          - openai
+          - vllm
+          - azure
+          - anthropic
+          - anthropic-vertex
+      agent_model:
+        description: "Agent LLM model"
+        required: false
+        default: "gemini-2.5-flash"
+        type: string
+      judge_provider:
+        description: "Judge LLM provider"
+        required: false
+        default: "google-genai"
+        type: choice
+        options:
+          - google-genai
+          - google-vertex
+          - openai
+          - vllm
+          - azure
+          - anthropic
+          - anthropic-vertex
+      judge_model:
+        description: "Judge LLM model for DeepEval metrics"
+        required: false
+        default: "gemini-2.5-flash"
+        type: string
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      github.event_name == 'issue_comment'
+        && format('pr-{0}', github.event.issue.number)
+        || github.ref
+    }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: MCP Eval (Mock Cluster)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.action == 'created' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '@run_evals') &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.author_association == 'MEMBER' ||
+          github.event.comment.author_association == 'COLLABORATOR'
+        )
+      )
+
+    env:
+      RHOAI_EVAL_LLM_PROVIDER: >-
+        ${{ inputs.agent_provider || 'google-genai' }}
+      RHOAI_EVAL_LLM_MODEL: >-
+        ${{ inputs.agent_model || 'gemini-2.5-flash' }}
+      RHOAI_EVAL_LLM_API_KEY: >-
+        ${{ (inputs.agent_provider == 'anthropic' || inputs.agent_provider == 'anthropic-vertex')
+              && secrets.ANTHROPIC_API_KEY
+            || (inputs.agent_provider == 'openai' || inputs.agent_provider == 'vllm' || inputs.agent_provider == 'azure')
+              && secrets.OPENAI_API_KEY
+            || secrets.GOOGLE_API_KEY }}
+      RHOAI_EVAL_EVAL_PROVIDER: >-
+        ${{ inputs.judge_provider || 'google-genai' }}
+      RHOAI_EVAL_EVAL_MODEL: >-
+        ${{ inputs.judge_model || 'gemini-2.5-flash' }}
+      RHOAI_EVAL_EVAL_API_KEY: >-
+        ${{ (inputs.judge_provider == 'anthropic' || inputs.judge_provider == 'anthropic-vertex')
+              && secrets.ANTHROPIC_API_KEY
+            || (inputs.judge_provider == 'openai' || inputs.judge_provider == 'vllm' || inputs.judge_provider == 'azure')
+              && secrets.OPENAI_API_KEY
+            || secrets.GOOGLE_API_KEY }}
+      RHOAI_EVAL_CLUSTER_MODE: mock
+      RHOAI_EVAL_VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
+      RHOAI_EVAL_VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
+
+    steps:
+      - name: Acknowledge eval request
+        if: github.event_name == 'issue_comment'
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content=eyes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get PR ref
+        if: github.event_name == 'issue_comment'
+        id: pr
+        run: |
+          PR_DATA=$(gh pr view ${{ github.event.issue.number }} --repo ${{ github.repository }} --json headRefName,headRefOid)
+          echo "ref=$(echo "$PR_DATA" | jq -r .headRefName)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(echo "$PR_DATA" | jq -r .headRefOid)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.sha || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --group eval
+
+      - name: Restore eval history cache
+        uses: actions/cache@v4
+        with:
+          path: evals/results/eval_history.jsonl
+          key: eval-results-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            eval-results-${{ github.ref_name }}-
+            eval-results-main-
+
+      - name: Run mock evaluations
+        run: uv run pytest evals/ -v -m "eval and not live" --tb=short --junitxml=eval-results.xml
+
+      - name: Generate eval report
+        if: always()
+        run: |
+          uv run --group eval python -m evals.reporting.cli summary --format markdown > eval-summary.md
+          echo "" >> eval-summary.md
+          uv run --group eval python -m evals.reporting.cli trend --last 5 --format markdown >> eval-summary.md
+          cat eval-summary.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Post eval results to PR
+        if: always() && github.event_name == 'issue_comment'
+        run: |
+          if [ -f eval-summary.md ]; then
+            gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body-file eval-summary.md
+          else
+            gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body "Eval run completed but no summary was generated."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: React to comment with result
+        if: always() && github.event_name == 'issue_comment'
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            REACTION="rocket"
+          else
+            REACTION="-1"
+          fi
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content="$REACTION"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: |
+            eval-results.xml
+            evals/results/eval_history.jsonl
+            eval-summary.md

@@ -32,7 +32,7 @@ else
 endif
 
 .PHONY: help build build-no-cache run run-http run-stdio run-dev run-token stop logs shell clean info
-.PHONY: dev install sync test lint format check typecheck
+.PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend
 
 # =============================================================================
 # Help
@@ -47,6 +47,9 @@ help: ## Show this help message
 	@echo ""
 	@echo "Development:"
 	@grep -E '^(dev|install|sync|test|lint|format|check|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Evaluation:"
+	@grep -E '^(eval|eval-live|eval-scenario|eval-report|eval-compare|eval-trend):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Container:"
 	@grep -E '^(build|run|stop|logs|shell|clean|info|test-):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -86,6 +89,27 @@ typecheck: ## Run type checker (mypy)
 	uv run mypy src/
 
 check: lint typecheck ## Run all checks (lint + typecheck)
+
+eval: ## Run MCP evaluation tests (mock cluster, requires LLM API key)
+	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short
+
+eval-live: ## Run all MCP evaluation tests including live cluster
+	uv run --group eval pytest evals/ -v -m "eval" --tb=short
+
+eval-scenario: ## Run a single eval scenario (usage: make eval-scenario SCENARIO=cluster_exploration)
+ifndef SCENARIO
+	$(error SCENARIO is required. Usage: make eval-scenario SCENARIO=cluster_exploration)
+endif
+	uv run --group eval pytest evals/scenarios/test_$(SCENARIO).py -v --tb=short
+
+eval-report: ## Show latest eval run summary
+	uv run --group eval python -m evals.reporting.cli summary
+
+eval-compare: ## Compare eval scores across providers/models
+	uv run --group eval python -m evals.reporting.cli compare
+
+eval-trend: ## Show eval score trends over time
+	uv run --group eval python -m evals.reporting.cli trend
 
 # =============================================================================
 # Build

@@ -33,6 +33,11 @@ make build                       # Build container image
 make run-http                    # Run with SSE transport
 make run-stdio                   # Run with stdio transport
 make run-dev                     # Debug logging + dangerous ops enabled
+
+# MCP Evaluation (requires LLM API key, see .env.eval.example)
+make eval                        # Run mock-cluster evals
+make eval-live                   # Run all evals (including live cluster)
+make eval-scenario SCENARIO=cluster_exploration  # Run a single scenario
 ```
 
 ## Architecture
@@ -61,7 +66,7 @@ rhoai-mcp/
 │       │   ├── connections/     # S3 data connections
 │       │   ├── storage/         # PersistentVolumeClaim
 │       │   ├── training/        # Kubeflow Training Operator
-│       │   ├── evaluation/      # Model evaluation jobs
+│       │   ├── model_registry/   # Model Registry integration
 │       │   ├── prompts/         # MCP workflow prompts (18 prompts)
 │       │   └── registry.py      # Domain plugin registry (9 plugins)
 │       └── composites/          # Cross-cutting composite tools

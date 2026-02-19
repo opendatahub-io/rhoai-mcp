@@ -96,13 +96,13 @@ The `is_operation_allowed()` method on the config object controls this. Each too
 
 ### Intermittent failures
 
-Enable DEBUG logging and optionally the evaluation instrumentation to capture patterns:
+Enable DEBUG logging to capture detailed request/response patterns:
 
 ```bash
-RHOAI_MCP_LOG_LEVEL=DEBUG RHOAI_MCP_ENABLE_EVALUATION=true uv run rhoai-mcp
+RHOAI_MCP_LOG_LEVEL=DEBUG uv run rhoai-mcp
 ```
 
-The evaluation harness wraps every tool call with before/after hooks that record execution time, success/failure, and error messages.
+Each domain module uses its own named logger, so the `%(name)s` field in the log output identifies which module produced each message. Look for patterns in timing, specific namespaces, or resource types that correlate with the failures.
 
 ## Health Check Endpoint
 
@@ -197,7 +197,6 @@ Key environment variables relevant to debugging (all use the `RHOAI_MCP_` prefix
 | `KUBECONFIG_CONTEXT` | (current) | Kubeconfig context to use |
 | `READ_ONLY_MODE` | `false` | Disable all write operations |
 | `ENABLE_DANGEROUS_OPERATIONS` | `false` | Enable delete operations |
-| `ENABLE_EVALUATION` | `false` | Enable tool call instrumentation |
 | `DEFAULT_VERBOSITY` | `standard` | Response detail level: `minimal`, `standard`, `full` |
 | `ENABLE_RESPONSE_CACHING` | `false` | Cache list responses |
 | `MODEL_REGISTRY_SKIP_TLS_VERIFY` | `false` | Skip TLS for Model Registry |
@@ -209,4 +208,4 @@ Key environment variables relevant to debugging (all use the `RHOAI_MCP_` prefix
 3. **Tool returns "operation not allowed"** — Check `READ_ONLY_MODE` and `ENABLE_DANGEROUS_OPERATIONS`.
 4. **Tool hangs or times out** — Check K8s API reachability (`kubectl get nodes`), check network/VPN.
 5. **Plugin missing** — Check health endpoint or startup logs for failed health checks; CRD may not be installed.
-6. **Intermittent failures** — Enable DEBUG logging and evaluation instrumentation to capture patterns.
+6. **Intermittent failures** — Enable DEBUG logging to capture patterns.

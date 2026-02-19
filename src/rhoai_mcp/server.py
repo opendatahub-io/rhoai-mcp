@@ -30,7 +30,6 @@ class RHOAIServer:
         self._k8s_client: K8sClient | None = None
         self._mcp: FastMCP | None = None
         self._plugin_manager: PluginManager | None = None
-        self._evaluation_plugin: Any = None
 
     @property
     def config(self) -> RHOAIConfig:
@@ -135,10 +134,6 @@ class RHOAIServer:
         core_count = self._plugin_manager.load_core_plugins()
         logger.info(f"Loaded {core_count} core domain plugins")
 
-        # Load evaluation plugin if enabled
-        if self._config.enable_evaluation:
-            self._load_evaluation_plugin()
-
         # Discover and load external plugins
         external_count = self._plugin_manager.load_entrypoint_plugins()
         logger.info(f"Discovered {external_count} external plugins")
@@ -157,10 +152,6 @@ class RHOAIServer:
         # Store reference
         self._mcp = mcp
 
-        # Instrument tools for evaluation if enabled
-        if self._config.enable_evaluation and self._evaluation_plugin:
-            self._instrument_tools_for_evaluation(mcp)
-
         # Register tools, resources, and prompts from all plugins
         self._plugin_manager.register_all_tools(mcp, self)
         self._plugin_manager.register_all_resources(mcp, self)
@@ -173,37 +164,6 @@ class RHOAIServer:
         self._register_health_endpoint(mcp)
 
         return mcp
-
-    def _load_evaluation_plugin(self) -> None:
-        """Load the evaluation plugin."""
-        from rhoai_mcp.domains.evaluation.plugin import EvaluationPlugin
-
-        if self._plugin_manager is None:
-            raise RuntimeError("Plugin manager not initialized")
-
-        self._evaluation_plugin = EvaluationPlugin()
-        self._plugin_manager.register_plugin(self._evaluation_plugin, "evaluation")
-        logger.info("Loaded evaluation plugin for agent performance tracking")
-
-    def _instrument_tools_for_evaluation(self, mcp: FastMCP) -> None:
-        """Instrument MCP tools for evaluation tracking."""
-        from rhoai_mcp.evaluation.instrumentation import instrument_mcp_tools
-
-        if self._plugin_manager is None:
-            raise RuntimeError("Plugin manager not initialized")
-
-        def session_provider() -> str | None:
-            if self._evaluation_plugin:
-                session_id: str | None = self._evaluation_plugin.get_active_session_id()
-                return session_id
-            return None
-
-        instrument_mcp_tools(
-            mcp=mcp,
-            hook_caller=self._plugin_manager.hook,
-            session_provider=session_provider,
-        )
-        logger.info("Instrumented MCP tools for evaluation tracking")
 
     def _register_core_resources(self, mcp: FastMCP) -> None:
         """Register core MCP resources for cluster information."""

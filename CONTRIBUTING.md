@@ -77,6 +77,21 @@ make test-unit
 make test-integration
 ```
 
+### Evaluation
+
+The project includes a DeepEval-based evaluation framework that tests how well LLM agents use the MCP tools. See [docs/EVALS.md](docs/EVALS.md) for full documentation.
+
+Quick start:
+
+```bash
+# Copy and configure the eval environment
+cp .env.eval.example .env.eval
+# Edit .env.eval to add your LLM API key
+
+# Run mock-cluster evaluations
+make eval
+```
+
 ### Code Quality
 
 ```bash

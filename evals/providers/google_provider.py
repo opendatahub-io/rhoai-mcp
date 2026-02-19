@@ -1,7 +1,8 @@
 """Google GenAI agent LLM provider.
 
 Covers Google Gemini via API key and Google Gemini on Vertex AI.
-Both use the google-genai SDK — Vertex uses vertexai=True with project/location.
+Both use the google-genai SDK — Vertex AI supports two auth modes: Express
+(vertexai=True + api_key) and ADC (vertexai=True + project/location).
 """
 
 from __future__ import annotations
@@ -56,8 +57,13 @@ class GoogleAgentProvider(AgentLLMProvider):
     def _create_client(config: EvalConfig) -> genai.Client:
         """Create a Google GenAI client."""
         if config.llm_provider == LLMProvider.GOOGLE_VERTEX:
+            if config.llm_api_key:
+                # Vertex AI Express mode: API key auth (no project/location needed)
+                return genai.Client(vertexai=True, api_key=config.llm_api_key)
             if not config.vertex_project_id:
-                raise ValueError("vertex_project_id is required for google-vertex provider")
+                raise ValueError(
+                    "vertex_project_id is required for google-vertex provider without API key"
+                )
             return genai.Client(
                 vertexai=True,
                 project=config.vertex_project_id,

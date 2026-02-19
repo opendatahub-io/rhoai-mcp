@@ -44,7 +44,7 @@ class EvalConfig(BaseSettings):
 
     # Agent LLM settings
     llm_provider: LLMProvider = Field(
-        default=LLMProvider.GOOGLE_GENAI,
+        default=LLMProvider.GOOGLE_VERTEX,
         description="LLM provider for the agent",
     )
     llm_model: str = Field(
@@ -76,7 +76,7 @@ class EvalConfig(BaseSettings):
 
     # Judge LLM provider (defaults to same as agent provider)
     eval_provider: LLMProvider = Field(
-        default=LLMProvider.GOOGLE_GENAI,
+        default=LLMProvider.GOOGLE_VERTEX,
         description="LLM provider for the DeepEval judge",
     )
 

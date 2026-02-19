@@ -56,8 +56,13 @@ class GoogleAgentProvider(AgentLLMProvider):
     def _create_client(config: EvalConfig) -> genai.Client:
         """Create a Google GenAI client."""
         if config.llm_provider == LLMProvider.GOOGLE_VERTEX:
+            if config.llm_api_key:
+                # Vertex AI Express mode: API key auth (no project/location needed)
+                return genai.Client(vertexai=True, api_key=config.llm_api_key)
             if not config.vertex_project_id:
-                raise ValueError("vertex_project_id is required for google-vertex provider")
+                raise ValueError(
+                    "vertex_project_id is required for google-vertex provider without API key"
+                )
             return genai.Client(
                 vertexai=True,
                 project=config.vertex_project_id,

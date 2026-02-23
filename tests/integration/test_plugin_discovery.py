@@ -10,9 +10,9 @@ def test_plugin_manager_loads_core_plugins():
     pm = PluginManager()
     count = pm.load_core_plugins()
 
-    # Should load 9 core domain plugins + 3 composite plugins = 12 total
-    assert count == 12
-    assert len(pm.registered_plugins) == 12
+    # Should load 9 core domain plugins + 4 composite plugins (incl. neuralnav) = 13 total
+    assert count == 13
+    assert len(pm.registered_plugins) == 13
 
     # Core domain plugins (9)
     expected_domains = {
@@ -26,10 +26,11 @@ def test_plugin_manager_loads_core_plugins():
         "prompts",
         "model_registry",
     }
-    # Composite plugins (3)
+    # Composite plugins (4, incl. neuralnav)
     expected_composites = {
         "cluster-composites",
         "training-composites",
+        "neuralnav",
         "meta-composites",
     }
     expected_plugins = expected_domains | expected_composites
@@ -44,7 +45,7 @@ def test_core_plugins_have_valid_metadata():
     pm.load_core_plugins()
 
     metadata_list = pm.get_all_metadata()
-    assert len(metadata_list) == 12  # 9 domain + 3 composite
+    assert len(metadata_list) == 13  # 9 domain + 4 composite
 
     for meta in metadata_list:
         assert meta.name
@@ -91,7 +92,7 @@ def test_server_creates_plugin_manager():
     mcp = server.create_mcp()  # noqa: F841
 
     assert server._plugin_manager is not None
-    assert len(server.plugins) == 12  # 9 domain + 3 composite
+    assert len(server.plugins) == 13  # 9 domain + 4 composite
 
 
 def test_external_plugins_discovered():
@@ -132,7 +133,7 @@ def test_get_composite_plugins_returns_plugin_instances():
     from rhoai_mcp.plugin import BasePlugin
 
     plugins = get_composite_plugins()
-    assert len(plugins) == 3  # cluster, training, meta composites
+    assert len(plugins) == 4  # cluster, training, neuralnav, meta composites
 
     for plugin in plugins:
         assert isinstance(plugin, BasePlugin)

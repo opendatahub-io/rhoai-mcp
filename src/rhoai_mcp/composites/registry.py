@@ -80,6 +80,31 @@ class TrainingCompositesPlugin(BasePlugin):
         return True, "Training composites use training domain client"
 
 
+class NeuralNavCompositesPlugin(BasePlugin):
+    """Deployment recommendation (model + GPU) via NeuralNav backend."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="neuralnav",
+                version="0.1.0",
+                description="Deployment recommendation",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.composites.neuralnav.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
+        return True, "OK" if getattr(server.config, "neuralnav_backend_url", None) else "Set RHOAI_MCP_NEURALNAV_BACKEND_URL"
+
+
 class MetaCompositesPlugin(BasePlugin):
     """Plugin for tool discovery and workflow guidance.
 
@@ -124,5 +149,6 @@ def get_composite_plugins() -> list[BasePlugin]:
     return [
         ClusterCompositesPlugin(),
         TrainingCompositesPlugin(),
+        NeuralNavCompositesPlugin(),
         MetaCompositesPlugin(),
     ]

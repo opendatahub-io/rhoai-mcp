@@ -1,4 +1,4 @@
-"""Mock Kubernetes client for evaluation tests.
+"""Mock Kubernetes client for running without a real cluster.
 
 Subclasses K8sClient and overrides all methods to return data
 from a ClusterState instance instead of making real API calls.
@@ -12,9 +12,8 @@ from unittest.mock import MagicMock
 
 from rhoai_mcp.clients.base import CRDDefinition, K8sClient
 from rhoai_mcp.config import RHOAIConfig
-from rhoai_mcp.utils.errors import NotFoundError
-
 from rhoai_mcp.mock_k8s.cluster_state import ClusterState, MockResource
+from rhoai_mcp.utils.errors import NotFoundError
 
 logger = logging.getLogger(__name__)
 

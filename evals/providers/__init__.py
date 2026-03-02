@@ -1,5 +1,8 @@
-"""LLM provider abstraction for the evaluation framework."""
+"""LLM provider abstraction for the evaluation framework.
 
-from evals.providers.factory import create_agent_provider, create_judge_llm
+Only judge LLM creation is needed (agent loop is now handled by LCS).
+"""
 
-__all__ = ["create_agent_provider", "create_judge_llm"]
+from evals.providers.factory import create_judge_llm
+
+__all__ = ["create_judge_llm"]

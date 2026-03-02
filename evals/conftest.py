@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from evals.config import ClusterMode, EvalConfig
+from evals.config import EvalConfig
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import Callable
 
-    from evals.agent import AgentResult, MCPAgent
-    from evals.mcp_harness import MCPHarness
+    from deepeval.test_case import MCPServer
+
+    from evals.lcs_client import LCSClient, LCSResult
     from evals.reporting.recorder import EvalRecorder
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
@@ -23,9 +28,55 @@ def eval_config() -> EvalConfig:
 
 
 @pytest.fixture(scope="session")
-def is_mock(eval_config: EvalConfig) -> bool:
-    """Whether we're running against a mock cluster."""
-    return eval_config.cluster_mode == ClusterMode.MOCK
+def lcs_client(eval_config: EvalConfig) -> LCSClient:
+    """Create an LCS client and verify the service is healthy.
+
+    Retries health checks for up to 120 seconds to allow container startup.
+    """
+    from evals.lcs_client import LCSClient
+
+    client = LCSClient(
+        base_url=eval_config.lcs_url,
+        timeout=eval_config.lcs_timeout,
+    )
+
+    # Wait for LCS to be healthy
+    max_retries = 24
+    retry_interval = 5
+
+    for attempt in range(max_retries):
+        healthy = asyncio.get_event_loop().run_until_complete(client.health_check())
+        if healthy:
+            logger.info(f"LCS is healthy at {eval_config.lcs_url}")
+            return client
+        if attempt < max_retries - 1:
+            logger.info(
+                f"LCS not ready (attempt {attempt + 1}/{max_retries}), "
+                f"retrying in {retry_interval}s..."
+            )
+            import time
+
+            time.sleep(retry_interval)
+
+    pytest.fail(f"LCS not healthy after {max_retries * retry_interval}s at {eval_config.lcs_url}")
+
+
+@pytest.fixture(scope="session")
+def tool_schemas(eval_config: EvalConfig) -> list[dict[str, Any]]:
+    """Fetch tool schemas from the rhoai-mcp server."""
+    from evals.deepeval_helpers import fetch_tool_schemas
+
+    return asyncio.get_event_loop().run_until_complete(
+        fetch_tool_schemas(eval_config.rhoai_mcp_url)
+    )
+
+
+@pytest.fixture(scope="session")
+def mcp_server(tool_schemas: list[dict[str, Any]]) -> MCPServer:
+    """Build a DeepEval MCPServer from fetched tool schemas."""
+    from evals.deepeval_helpers import build_mcp_server_from_schemas
+
+    return build_mcp_server_from_schemas(tool_schemas)
 
 
 @pytest.fixture(scope="session")
@@ -37,39 +88,22 @@ def eval_recorder(eval_config: EvalConfig) -> EvalRecorder:
 
 
 @pytest.fixture
-async def harness(eval_config: EvalConfig) -> AsyncIterator[MCPHarness]:
-    """Create an MCP harness with the configured cluster mode."""
-    from evals.mcp_harness import MCPHarness
-
-    async with MCPHarness.running(eval_config) as h:
-        yield h
-
-
-@pytest.fixture
-async def agent(eval_config: EvalConfig, harness: MCPHarness) -> MCPAgent:
-    """Create an LLM agent connected to the MCP harness."""
-    from evals.agent import MCPAgent
-
-    return MCPAgent(config=eval_config, harness=harness)
-
-
-@pytest.fixture
 def evaluate_and_record(
     eval_recorder: EvalRecorder,
-) -> Callable[[str, AgentResult, list[Any], list[Any]], Any]:
+) -> Callable[[str, LCSResult, list[Any], list[Any]], Any]:
     """Return a callable that wraps deepeval.evaluate() with recording."""
     from evals.reporting.recorder import evaluate_and_record as _evaluate_and_record
 
     def _wrapper(
         scenario: str,
-        agent_result: AgentResult,
+        lcs_result: LCSResult,
         test_cases: list[Any],
         metrics: list[Any],
     ) -> Any:
         return _evaluate_and_record(
             recorder=eval_recorder,
             scenario=scenario,
-            agent_result=agent_result,
+            lcs_result=lcs_result,
             test_cases=test_cases,
             metrics=metrics,
         )

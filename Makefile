@@ -32,7 +32,7 @@ else
 endif
 
 .PHONY: help build build-no-cache run run-http run-stdio run-dev run-token stop logs shell clean info
-.PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend
+.PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
 
 # =============================================================================
 # Help
@@ -90,11 +90,41 @@ typecheck: ## Run type checker (mypy)
 
 check: lint typecheck ## Run all checks (lint + typecheck)
 
-eval: ## Run MCP evaluation tests (mock cluster, requires LLM API key)
-	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short
+eval-up: build ## Start eval services (rhoai-mcp + llama-stack + LCS)
+	docker compose -f docker-compose.eval.yml up -d
+	@echo "Waiting for services to be healthy..."
+	@timeout=120; elapsed=0; interval=5; \
+	while [ $$elapsed -lt $$timeout ]; do \
+		rhoai_ok=$$(curl -sf http://localhost:8000/health 2>/dev/null && echo "yes" || echo "no"); \
+		lcs_ok=$$(curl -sf http://localhost:8443/healthz 2>/dev/null && echo "yes" || echo "no"); \
+		if [ "$$rhoai_ok" = "yes" ] && [ "$$lcs_ok" = "yes" ]; then \
+			echo "All services healthy!"; \
+			exit 0; \
+		fi; \
+		echo "Services not ready (rhoai=$$rhoai_ok, lcs=$$lcs_ok), waiting $${interval}s... ($$elapsed/$${timeout}s)"; \
+		sleep $$interval; \
+		elapsed=$$((elapsed + interval)); \
+	done; \
+	echo "Services did not become healthy within $${timeout}s"; \
+	docker compose -f docker-compose.eval.yml logs; \
+	exit 1
+
+eval-down: ## Stop eval services
+	docker compose -f docker-compose.eval.yml down -v
+
+eval: ## Run MCP evaluation tests (starts services, runs tests, stops services)
+	$(MAKE) eval-up
+	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short; \
+	status=$$?; \
+	$(MAKE) eval-down; \
+	exit $$status
 
 eval-live: ## Run all MCP evaluation tests including live cluster
-	uv run --group eval pytest evals/ -v -m "eval" --tb=short
+	$(MAKE) eval-up
+	uv run --group eval pytest evals/ -v -m "eval" --tb=short; \
+	status=$$?; \
+	$(MAKE) eval-down; \
+	exit $$status
 
 eval-scenario: ## Run a single eval scenario (usage: make eval-scenario SCENARIO=cluster_exploration)
 ifndef SCENARIO

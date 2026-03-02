@@ -22,6 +22,8 @@ def load_records(path: str | None = None) -> list[EvalRecord]:
     """Load eval records from a JSONL file.
 
     Returns an empty list if the file doesn't exist.
+    Handles both old (llm_provider/llm_model) and new (agent_backend/agent_model)
+    field names for backwards compatibility.
     """
     p = Path(path) if path else DEFAULT_RESULTS_PATH
     if not p.exists():
@@ -35,12 +37,27 @@ def load_records(path: str | None = None) -> list[EvalRecord]:
             continue
         try:
             data = json.loads(line)
+            env_data = data.get("environment", {})
+            environment = EnvironmentRecord(
+                agent_backend=env_data.get(
+                    "agent_backend", env_data.get("llm_provider", "unknown")
+                ),
+                agent_model=env_data.get(
+                    "agent_model", env_data.get("llm_model", "unknown")
+                ),
+                lcs_url=env_data.get("lcs_url", ""),
+                eval_provider=env_data.get("eval_provider", "unknown"),
+                eval_model=env_data.get("eval_model", "unknown"),
+                cluster_mode=env_data.get("cluster_mode", "unknown"),
+                mcp_use_threshold=env_data.get("mcp_use_threshold", 0.5),
+                task_completion_threshold=env_data.get("task_completion_threshold", 0.6),
+            )
             record = EvalRecord(
                 run_id=data["run_id"],
                 timestamp=data["timestamp"],
                 scenario=data["scenario"],
                 git=GitRecord(**data["git"]),
-                environment=EnvironmentRecord(**data["environment"]),
+                environment=environment,
                 metrics=[MetricRecord(**m) for m in data.get("metrics", [])],
                 turns=data.get("turns", 0),
                 tool_names_used=data.get("tool_names_used", []),

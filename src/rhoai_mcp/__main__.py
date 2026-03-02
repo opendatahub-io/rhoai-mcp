@@ -101,6 +101,13 @@ def parse_args() -> argparse.Namespace:
         help="Enable dangerous operations like delete",
     )
 
+    # Mock cluster mode
+    parser.add_argument(
+        "--mock-cluster",
+        action="store_true",
+        help="Use mock K8s client with pre-populated cluster state (for testing)",
+    )
+
     # Logging
     parser.add_argument(
         "--log-level",
@@ -153,6 +160,9 @@ def main() -> int:
     if args.enable_dangerous:
         config_kwargs["enable_dangerous_operations"] = True
 
+    if args.mock_cluster:
+        config_kwargs["mock_cluster"] = True
+
     if args.log_level:
         config_kwargs["log_level"] = LogLevel(args.log_level)
 
@@ -165,14 +175,15 @@ def main() -> int:
     logger = logging.getLogger(__name__)
     logger.info(f"Starting RHOAI MCP server v{__version__}")
 
-    # Validate auth config
-    try:
-        warnings = config.validate_auth_config()
-        for warning in warnings:
-            logger.warning(warning)
-    except ValueError as e:
-        logger.error(f"Configuration error: {e}")
-        return 1
+    # Validate auth config (skip for mock cluster mode)
+    if not config.mock_cluster:
+        try:
+            warnings = config.validate_auth_config()
+            for warning in warnings:
+                logger.warning(warning)
+        except ValueError as e:
+            logger.error(f"Configuration error: {e}")
+            return 1
 
     # Create and run server
     # Run with appropriate transport

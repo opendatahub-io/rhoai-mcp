@@ -121,8 +121,19 @@ class RHOAIServer:
         manager has been initialised.
         """
         if self._k8s_client is None or not self._k8s_client.is_connected:
-            self._k8s_client = K8sClient(self._config)
-            self._k8s_client.connect()
+            if self._config.mock_cluster:
+                from rhoai_mcp.mock_k8s import MockK8sClient, create_default_cluster_state
+
+                state = create_default_cluster_state()
+                mock_client = MockK8sClient(
+                    config_obj=self._config, state=state
+                )
+                mock_client.connect()
+                self._k8s_client = mock_client
+                logger.info("Using mock K8s client with pre-populated cluster state")
+            else:
+                self._k8s_client = K8sClient(self._config)
+                self._k8s_client.connect()
 
         if self._plugin_manager:
             self._plugin_manager.run_health_checks(self)

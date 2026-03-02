@@ -10,16 +10,16 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from evals.agent import MCPAgent
 from evals.config import EvalConfig
-from evals.deepeval_helpers import build_mcp_server, result_to_conversational_test_case
-from evals.mcp_harness import MCPHarness
+from evals.deepeval_helpers import lcs_result_to_conversational_test_case
 from evals.metrics.config import create_multi_turn_mcp_use_metric, create_task_completion_metric
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from evals.agent import AgentResult
+    from deepeval.test_case import MCPServer
+
+    from evals.lcs_client import LCSClient, LCSResult
 
 
 @pytest.mark.eval
@@ -36,18 +36,17 @@ class TestModelDeployment:
     async def test_model_deployment(
         self,
         eval_config: EvalConfig,
-        harness: MCPHarness,
-        agent: MCPAgent,
-        evaluate_and_record: Callable[[str, AgentResult, list[Any], list[Any]], Any],
+        lcs_client: LCSClient,
+        mcp_server: MCPServer,
+        evaluate_and_record: Callable[[str, LCSResult, list[Any], list[Any]], Any],
     ) -> None:
         """Agent should use inference tools to deploy and verify a model."""
-        result = await agent.run(self.TASK)
+        result = await lcs_client.query(self.TASK)
 
         tool_names = result.tool_names_used
         assert len(tool_names) > 0, "Agent should call at least one tool"
 
-        mcp_server = build_mcp_server(harness)
-        test_case = result_to_conversational_test_case(result, mcp_server)
+        test_case = lcs_result_to_conversational_test_case(result, mcp_server)
 
         metrics = [
             create_multi_turn_mcp_use_metric(eval_config),
@@ -56,7 +55,7 @@ class TestModelDeployment:
 
         eval_result = evaluate_and_record(
             scenario="model_deployment",
-            agent_result=result,
+            lcs_result=result,
             test_cases=[test_case],
             metrics=metrics,
         )

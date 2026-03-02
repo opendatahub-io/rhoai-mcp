@@ -1,0 +1,66 @@
+# Docker Compose for RHOAI MCP evaluation stack
+#
+# Services:
+#   rhoai-mcp:  MCP server with mock K8s cluster (SSE transport)
+#   llama-stack: Llama Stack inference + agent APIs
+#   lightspeed-stack: LCS REST API (routes queries through llama-stack to rhoai-mcp)
+#
+# Usage:
+#   docker compose -f docker-compose.eval.yml up -d
+#   docker compose -f docker-compose.eval.yml down -v
+
+services:
+  rhoai-mcp:
+    build:
+      context: .
+      dockerfile: Containerfile
+    environment:
+      RHOAI_MCP_TRANSPORT: sse
+      RHOAI_MCP_HOST: "0.0.0.0"
+      RHOAI_MCP_PORT: "8000"
+      RHOAI_MCP_MOCK_CLUSTER: "true"
+      RHOAI_MCP_LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health', timeout=5).raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  llama-stack:
+    image: ${LLAMA_STACK_IMAGE:-llamastack/distribution-remote-vllm:latest}
+    environment:
+      INFERENCE_MODEL: ${INFERENCE_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      INFERENCE_API_KEY: ${INFERENCE_API_KEY:-}
+    volumes:
+      - ./evals/config/llama-stack-run.yaml:/app/run.yaml:ro
+    ports:
+      - "8321:8321"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8321/v1/health', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  lightspeed-stack:
+    image: ${LCS_IMAGE:-quay.io/redhat-ai-services/lightspeed-stack:latest}
+    environment:
+      LCS_CONFIG_FILE: /app/config/lightspeed-stack.yaml
+    volumes:
+      - ./evals/config/lightspeed-stack.yaml:/app/config/lightspeed-stack.yaml:ro
+    ports:
+      - "8443:8443"
+    depends_on:
+      rhoai-mcp:
+        condition: service_healthy
+      llama-stack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8443/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s

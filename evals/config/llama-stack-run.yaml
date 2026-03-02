@@ -1,0 +1,53 @@
+# Llama Stack run configuration for eval
+#
+# Configures:
+# - Remote inference provider (OpenAI-compatible API)
+# - Agent with MCP tool runtime
+#
+# Environment variables:
+#   INFERENCE_MODEL: Model identifier (default: meta-llama/Llama-3.1-8B-Instruct)
+#   INFERENCE_API_KEY: API key for the inference provider
+
+version: 2
+
+apis:
+  - inference
+  - agents
+  - safety
+  - tool_runtime
+
+providers:
+  inference:
+    - provider_id: remote-inference
+      provider_type: remote::vllm
+      config:
+        url: ${INFERENCE_URL:-https://api.openai.com/v1}
+        api_token: ${INFERENCE_API_KEY:-}
+
+  agents:
+    - provider_id: meta-reference
+      provider_type: inline::meta-reference
+      config:
+        persistence_store:
+          type: sqlite
+          db_path: /tmp/agents_store.db
+
+  tool_runtime:
+    - provider_id: mcp-runtime
+      provider_type: remote::mcp
+      config:
+        mcp_servers:
+          rhoai-mcp:
+            url: http://rhoai-mcp:8000/sse
+            transport: sse
+
+  safety:
+    - provider_id: llama-guard
+      provider_type: inline::llama-guard
+      config: {}
+
+models:
+  - metadata: {}
+    model_id: ${INFERENCE_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+    provider_id: remote-inference
+    provider_model_id: ${INFERENCE_MODEL:-meta-llama/Llama-3.1-8B-Instruct}

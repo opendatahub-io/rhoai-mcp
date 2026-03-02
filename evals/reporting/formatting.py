@@ -13,8 +13,12 @@ def truncate(text: str, width: int) -> str:
 
 
 def provider_label(record: EvalRecord) -> str:
-    """Format provider/model as a compact label."""
-    return f"{record.environment.llm_provider}/{record.environment.llm_model}"
+    """Format agent backend/model as a compact label."""
+    backend = record.environment.agent_backend
+    model = record.environment.agent_model
+    if model:
+        return f"{backend}/{model}"
+    return backend
 
 
 def format_table(
@@ -112,7 +116,7 @@ def format_summary(records: list[EvalRecord], run_id: str | None = None,
 
     first = run_records[0]
     title = f"Eval Run: {run_id} | {first.git.branch}@{first.git.commit}"
-    provider_info = f"Agent: {first.environment.llm_provider}/{first.environment.llm_model}"
+    provider_info = f"Agent: {provider_label(first)}"
     judge_info = f"Judge: {first.environment.eval_provider}/{first.environment.eval_model}"
 
     headers = ["Scenario", *[truncate(n, 25) for n in all_metric_names],

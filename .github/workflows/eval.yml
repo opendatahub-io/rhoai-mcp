@@ -3,24 +3,6 @@ name: MCP Evaluation
 on:
   workflow_dispatch:
     inputs:
-      agent_provider:
-        description: "Agent LLM provider"
-        required: false
-        default: "google-vertex"
-        type: choice
-        options:
-          - google-vertex
-          - google-genai
-          - openai
-          - vllm
-          - azure
-          - anthropic
-          - anthropic-vertex
-      agent_model:
-        description: "Agent LLM model"
-        required: false
-        default: "gemini-2.5-flash"
-        type: string
       judge_provider:
         description: "Judge LLM provider"
         required: false
@@ -38,6 +20,11 @@ on:
         description: "Judge LLM model for DeepEval metrics"
         required: false
         default: "gemini-2.5-flash"
+        type: string
+      inference_model:
+        description: "Inference model for Llama Stack agent"
+        required: false
+        default: "meta-llama/Llama-3.1-8B-Instruct"
         type: string
   issue_comment:
     types: [created]
@@ -58,7 +45,7 @@ concurrency:
 
 jobs:
   eval:
-    name: MCP Eval (Mock Cluster)
+    name: MCP Eval (LCS + Mock Cluster)
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -75,16 +62,7 @@ jobs:
       )
 
     env:
-      RHOAI_EVAL_LLM_PROVIDER: >-
-        ${{ inputs.agent_provider || 'google-vertex' }}
-      RHOAI_EVAL_LLM_MODEL: >-
-        ${{ inputs.agent_model || 'gemini-2.5-flash' }}
-      RHOAI_EVAL_LLM_API_KEY: >-
-        ${{ (inputs.agent_provider == 'anthropic' || inputs.agent_provider == 'anthropic-vertex')
-              && secrets.ANTHROPIC_API_KEY
-            || (inputs.agent_provider == 'openai' || inputs.agent_provider == 'vllm' || inputs.agent_provider == 'azure')
-              && secrets.OPENAI_API_KEY
-            || secrets.GOOGLE_API_KEY }}
+      # Judge LLM settings
       RHOAI_EVAL_EVAL_PROVIDER: >-
         ${{ inputs.judge_provider || 'google-vertex' }}
       RHOAI_EVAL_EVAL_MODEL: >-
@@ -95,9 +73,15 @@ jobs:
             || (inputs.judge_provider == 'openai' || inputs.judge_provider == 'vllm' || inputs.judge_provider == 'azure')
               && secrets.OPENAI_API_KEY
             || secrets.GOOGLE_API_KEY }}
-      RHOAI_EVAL_CLUSTER_MODE: mock
       RHOAI_EVAL_VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
       RHOAI_EVAL_VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
+      # LCS endpoint (container service)
+      RHOAI_EVAL_LCS_URL: http://localhost:8443
+      RHOAI_EVAL_RHOAI_MCP_URL: http://localhost:8000
+      RHOAI_EVAL_CLUSTER_MODE: mock
+      # Inference provider for Llama Stack
+      INFERENCE_MODEL: ${{ inputs.inference_model || 'meta-llama/Llama-3.1-8B-Instruct' }}
+      INFERENCE_API_KEY: ${{ secrets.INFERENCE_API_KEY || secrets.OPENAI_API_KEY }}
 
     steps:
       - name: Acknowledge eval request
@@ -123,6 +107,34 @@ jobs:
         with:
           ref: ${{ steps.pr.outputs.sha || github.sha }}
 
+      - name: Build rhoai-mcp container image
+        run: docker build -f Containerfile -t rhoai-mcp:latest .
+
+      - name: Start eval services
+        run: |
+          docker compose -f docker-compose.eval.yml up -d
+          echo "Waiting for services to be healthy..."
+
+      - name: Wait for services healthy
+        run: |
+          timeout=120
+          elapsed=0
+          interval=5
+          while [ $elapsed -lt $timeout ]; do
+            rhoai_ok=$(curl -sf http://localhost:8000/health 2>/dev/null && echo "yes" || echo "no")
+            lcs_ok=$(curl -sf http://localhost:8443/healthz 2>/dev/null && echo "yes" || echo "no")
+            if [ "$rhoai_ok" = "yes" ] && [ "$lcs_ok" = "yes" ]; then
+              echo "All services healthy!"
+              exit 0
+            fi
+            echo "Services not ready (rhoai=$rhoai_ok, lcs=$lcs_ok), waiting ${interval}s... ($elapsed/${timeout}s)"
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+          echo "Services did not become healthy within ${timeout}s"
+          docker compose -f docker-compose.eval.yml logs
+          exit 1
+
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
@@ -145,6 +157,10 @@ jobs:
 
       - name: Run mock evaluations
         run: uv run pytest evals/ -v -m "eval and not live" --tb=short --junitxml=eval-results.xml
+
+      - name: Collect container logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.eval.yml logs > container-logs.txt 2>&1
 
       - name: Generate eval report
         if: always()
@@ -178,6 +194,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Tear down services
+        if: always()
+        run: docker compose -f docker-compose.eval.yml down -v
+
       - name: Upload eval results
         if: always()
         uses: actions/upload-artifact@v4
@@ -187,3 +207,4 @@ jobs:
             eval-results.xml
             evals/results/eval_history.jsonl
             eval-summary.md
+            container-logs.txt

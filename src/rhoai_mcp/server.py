@@ -145,8 +145,10 @@ class RHOAIServer:
         # Create plugin manager
         self._plugin_manager = PluginManager()
 
-        # Load core domain plugins
-        core_count = self._plugin_manager.load_core_plugins()
+        # Load core domain plugins (filtered by config if set)
+        core_count = self._plugin_manager.load_core_plugins(
+            enabled_plugins=self._config.enabled_plugins,
+        )
         logger.info(f"Loaded {core_count} core domain plugins")
 
         # Discover and load external plugins

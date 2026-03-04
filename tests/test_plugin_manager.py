@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from rhoai_mcp.hooks import hookimpl
 from rhoai_mcp.plugin import PluginMetadata
 from rhoai_mcp.plugin_manager import PluginManager
@@ -119,9 +117,7 @@ class TestPluginManager:
 
         class TestPlugin:
             @hookimpl
-            def rhoai_register_resources(
-                self, mcp: MagicMock, server: MagicMock
-            ) -> None:
+            def rhoai_register_resources(self, mcp: MagicMock, server: MagicMock) -> None:
                 resource_calls.append(("register_resources", mcp, server))
 
         pm = PluginManager()
@@ -139,9 +135,7 @@ class TestPluginManager:
 
         class TestPlugin:
             @hookimpl
-            def rhoai_register_prompts(
-                self, mcp: MagicMock, server: MagicMock
-            ) -> None:
+            def rhoai_register_prompts(self, mcp: MagicMock, server: MagicMock) -> None:
                 prompt_calls.append(("register_prompts", mcp, server))
 
         pm = PluginManager()
@@ -266,3 +260,45 @@ class TestPluginManager:
         }
         expected = expected_domains | expected_composites
         assert set(pm.registered_plugins.keys()) == expected
+
+    def test_load_core_plugins_with_filter(self) -> None:
+        """Verify only specified plugins are loaded when filter is set."""
+        pm = PluginManager()
+        count = pm.load_core_plugins(enabled_plugins=["projects", "inference"])
+
+        assert count == 2
+        assert set(pm.registered_plugins.keys()) == {"projects", "inference"}
+
+    def test_load_core_plugins_filter_includes_composites(self) -> None:
+        """Verify composite plugins can be selected by the filter."""
+        pm = PluginManager()
+        count = pm.load_core_plugins(
+            enabled_plugins=["projects", "cluster-composites"],
+        )
+
+        assert count == 2
+        assert set(pm.registered_plugins.keys()) == {"projects", "cluster-composites"}
+
+    def test_load_core_plugins_empty_filter_loads_none(self) -> None:
+        """Verify empty filter list loads no plugins."""
+        pm = PluginManager()
+        count = pm.load_core_plugins(enabled_plugins=[])
+
+        assert count == 0
+        assert len(pm.registered_plugins) == 0
+
+    def test_load_core_plugins_filter_none_loads_all(self) -> None:
+        """Verify None filter loads all plugins (same as no filter)."""
+        pm = PluginManager()
+        count = pm.load_core_plugins(enabled_plugins=None)
+
+        assert count == 12
+        assert len(pm.registered_plugins) == 12
+
+    def test_load_core_plugins_filter_nonexistent_name(self) -> None:
+        """Verify non-existent plugin names in filter are silently ignored."""
+        pm = PluginManager()
+        count = pm.load_core_plugins(enabled_plugins=["nonexistent"])
+
+        assert count == 0
+        assert len(pm.registered_plugins) == 0

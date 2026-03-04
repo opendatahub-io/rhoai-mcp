@@ -183,6 +183,23 @@ class RHOAIConfig(BaseSettings):
         description="Skip TLS certificate verification for Model Registry (not recommended for production)",
     )
 
+    # Plugin filtering
+    enabled_plugins: list[str] | None = Field(
+        default=None,
+        description="List of plugin names to enable (None = all plugins). "
+        + "Set via RHOAI_MCP_ENABLED_PLUGINS as comma-separated values.",
+    )
+
+    @field_validator("enabled_plugins", mode="before")
+    @classmethod
+    def parse_enabled_plugins(cls, v: str | list[str] | None) -> list[str] | None:
+        """Parse comma-separated string into list."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [p.strip() for p in v.split(",") if p.strip()]
+        return v
+
     @field_validator("kubeconfig_path", mode="before")
     @classmethod
     def resolve_kubeconfig_path(cls, v: str | Path | None) -> Path | None:

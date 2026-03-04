@@ -111,11 +111,15 @@ class PluginManager:
         logger.info(f"Loaded {count} external plugins from entry points")
         return count
 
-    def load_core_plugins(self) -> int:
+    def load_core_plugins(self, enabled_plugins: list[str] | None = None) -> int:
         """Load core domain plugins and composite plugins.
 
         Imports and registers all core domain plugins from the domain registry
         and all composite plugins from the composites registry.
+
+        Args:
+            enabled_plugins: If set, only load plugins whose name is in this list.
+                None means load all plugins.
 
         Returns:
             Total number of plugins loaded.
@@ -123,22 +127,29 @@ class PluginManager:
         from rhoai_mcp.composites.registry import get_composite_plugins
         from rhoai_mcp.domains.registry import get_core_plugins
 
-        # Load core domain plugins
-        domain_plugins = get_core_plugins()
-        for plugin in domain_plugins:
+        all_plugins = get_core_plugins() + get_composite_plugins()
+
+        if enabled_plugins is not None:
+            filtered = []
+            for plugin in all_plugins:
+                meta = plugin.rhoai_get_plugin_metadata()
+                if meta.name in enabled_plugins:
+                    filtered.append(plugin)
+                else:
+                    logger.debug(f"Skipping plugin {meta.name} (not in enabled_plugins)")
+            skipped = len(all_plugins) - len(filtered)
+            if skipped:
+                logger.info(
+                    f"Plugin filter active: loading {len(filtered)} of {len(all_plugins)} "
+                    f"plugins (enabled: {enabled_plugins})"
+                )
+            all_plugins = filtered
+
+        for plugin in all_plugins:
             self.register_plugin(plugin)
 
-        logger.info(f"Loaded {len(domain_plugins)} core domain plugins")
-
-        # Load composite plugins
-        composite_plugins = get_composite_plugins()
-        for plugin in composite_plugins:
-            self.register_plugin(plugin)
-
-        logger.info(f"Loaded {len(composite_plugins)} composite plugins")
-
-        total = len(domain_plugins) + len(composite_plugins)
-        return total
+        logger.info(f"Loaded {len(all_plugins)} plugins")
+        return len(all_plugins)
 
     def get_all_metadata(self) -> list[PluginMetadata]:
         """Collect metadata from all registered plugins.

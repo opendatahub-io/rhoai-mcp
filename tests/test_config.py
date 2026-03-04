@@ -1,13 +1,14 @@
 """Tests for configuration module."""
 
-import pytest
 from pathlib import Path
 
+import pytest
+
 from rhoai_mcp.config import (
-    RHOAIConfig,
     AuthMode,
-    TransportMode,
     LogLevel,
+    RHOAIConfig,
+    TransportMode,
 )
 
 
@@ -118,3 +119,39 @@ class TestRHOAIConfig:
         config = RHOAIConfig()
         assert config.log_level == LogLevel.DEBUG
         assert config.port == 9000
+
+    def test_enabled_plugins_default_none(self):
+        """Test enabled_plugins defaults to None (all plugins)."""
+        config = RHOAIConfig()
+        assert config.enabled_plugins is None
+
+    def test_enabled_plugins_from_comma_separated_string(self):
+        """Test parsing comma-separated string into list."""
+        config = RHOAIConfig(enabled_plugins="projects,inference,training")
+        assert config.enabled_plugins == ["projects", "inference", "training"]
+
+    def test_enabled_plugins_strips_whitespace(self):
+        """Test whitespace is stripped from plugin names."""
+        config = RHOAIConfig(enabled_plugins=" projects , inference , training ")
+        assert config.enabled_plugins == ["projects", "inference", "training"]
+
+    def test_enabled_plugins_empty_string_returns_empty_list(self):
+        """Test empty string returns empty list."""
+        config = RHOAIConfig(enabled_plugins="")
+        assert config.enabled_plugins == []
+
+    def test_enabled_plugins_skips_empty_entries(self):
+        """Test empty entries from extra commas are skipped."""
+        config = RHOAIConfig(enabled_plugins="projects,,inference,")
+        assert config.enabled_plugins == ["projects", "inference"]
+
+    def test_enabled_plugins_from_list(self):
+        """Test list input passes through unchanged."""
+        config = RHOAIConfig(enabled_plugins=["projects", "inference"])
+        assert config.enabled_plugins == ["projects", "inference"]
+
+    def test_enabled_plugins_from_env(self, monkeypatch):
+        """Test enabled_plugins from environment variable."""
+        monkeypatch.setenv("RHOAI_MCP_ENABLED_PLUGINS", "projects,notebooks")
+        config = RHOAIConfig()
+        assert config.enabled_plugins == ["projects", "notebooks"]

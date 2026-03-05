@@ -21,6 +21,11 @@ LOG_LEVEL ?= INFO
 # Build platform (force linux/amd64 for consistent builds across host architectures)
 PLATFORM ?= linux/amd64
 
+# Guard: ensure a container runtime was found
+ifeq ($(CONTAINER_RUNTIME),)
+    $(error No container runtime found. Install podman or docker.)
+endif
+
 # Compose command detection (podman compose or docker compose)
 COMPOSE_CMD := $(CONTAINER_RUNTIME) compose
 
@@ -121,11 +126,17 @@ eval-up: build ## Start eval services (rhoai-mcp + llama-stack + LCS)
 	@# Register inference model with llama-stack (starter image starts with empty model list)
 	@model=$${INFERENCE_MODEL:-gemini-2.5-flash}; \
 	echo "Registering model $$model with llama-stack..."; \
-	curl -sf -X POST http://localhost:8321/v1/models \
+	http_code=$$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8321/v1/models \
 		-H "Content-Type: application/json" \
-		-d "{\"model_id\": \"$$model\", \"provider_id\": \"gemini\", \"provider_model_id\": \"$$model\"}" \
-		>/dev/null 2>&1 && echo "Model $$model registered." \
-		|| echo "Model registration returned non-zero (may already exist)."
+		-d "{\"model_id\": \"$$model\", \"provider_id\": \"gemini\", \"provider_model_id\": \"$$model\"}"); \
+	if [ "$$http_code" = "200" ] || [ "$$http_code" = "201" ]; then \
+		echo "Model $$model registered (HTTP $$http_code)."; \
+	elif [ "$$http_code" = "409" ]; then \
+		echo "Model $$model already exists (HTTP 409)."; \
+	else \
+		echo "ERROR: Model registration failed (HTTP $$http_code)." >&2; \
+		exit 1; \
+	fi
 
 eval-down: ## Stop eval services
 	$(COMPOSE_CMD) -f docker-compose.eval.yml down -v

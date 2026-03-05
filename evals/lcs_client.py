@@ -6,6 +6,7 @@ results compatible with DeepEval scoring helpers.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -101,10 +102,13 @@ class LCSClient:
                         request=response.request,
                         response=response,
                     )
-                    wait = 2 ** attempt
+                    wait = 2**attempt
                     logger.warning(
                         "LCS query returned %d, retrying in %ds (attempt %d/%d)",
-                        response.status_code, wait, attempt + 1, retries,
+                        response.status_code,
+                        wait,
+                        attempt + 1,
+                        retries,
                     )
                     await asyncio.sleep(wait)
                     continue
@@ -149,19 +153,17 @@ class LCSClient:
             tc_name = tc.get("name", "")
             tc_args = tc.get("args", {})
             if isinstance(tc_args, str):
-                import json
-
                 try:
                     tc_args = json.loads(tc_args)
                 except (json.JSONDecodeError, TypeError):
                     tc_args = {"raw": tc_args}
+            if not isinstance(tc_args, dict):
+                tc_args = {"raw": tc_args}
 
             # Match with result
             matched_result = results_by_id.get(tc_id, {})
             result_content = matched_result.get("content", "")
             if isinstance(result_content, dict | list):
-                import json
-
                 result_content = json.dumps(result_content, default=str)
 
             tool_calls.append(
@@ -231,30 +233,36 @@ class LCSClient:
                         "type": "function",
                         "function": {
                             "name": tc.name,
-                            "arguments": str(tc.arguments),
+                            "arguments": json.dumps(tc.arguments),
                         },
                     }
                     for tc, _ in round_calls
                 ]
-                messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": assistant_tool_calls,
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": assistant_tool_calls,
+                    }
+                )
 
                 # Tool result messages
                 for tc, result in round_calls:
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.call_id,
-                        "content": result,
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.call_id,
+                            "content": result,
+                        }
+                    )
 
         # Final assistant message
         if final_output:
-            messages.append({
-                "role": "assistant",
-                "content": final_output,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": final_output,
+                }
+            )
 
         return messages

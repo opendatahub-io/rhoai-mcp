@@ -43,6 +43,7 @@ services:
       start_period: 15s
 
   lightspeed-stack:
+    # TODO: Pin to a specific version once a stable release tag is available
     image: ${LCS_IMAGE:-quay.io/lightspeed-core/lightspeed-stack:latest}
     command: ["-c", "/app/config/lightspeed-stack.yaml"]
     volumes:

@@ -449,8 +449,8 @@ def create_default_cluster_state() -> ClusterState:
         kind="Secret",
         extra={
             "data": {
-                "AWS_ACCESS_KEY_ID": _b64("AKIAEXAMPLE12345"),
-                "AWS_SECRET_ACCESS_KEY": _b64("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
+                "AWS_ACCESS_KEY_ID": _b64("MOCK_ACCESS_KEY_ID"),
+                "AWS_SECRET_ACCESS_KEY": _b64("MOCK_SECRET_ACCESS_KEY"),
                 "AWS_S3_BUCKET": _b64("my-models-bucket"),
                 "AWS_DEFAULT_REGION": _b64("us-east-1"),
                 "AWS_S3_ENDPOINT": _b64("https://s3.amazonaws.com"),

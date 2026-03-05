@@ -81,7 +81,7 @@ jobs:
       RHOAI_EVAL_CLUSTER_MODE: mock
       # Inference provider for Llama Stack
       INFERENCE_MODEL: ${{ inputs.inference_model || 'meta-llama/Llama-3.1-8B-Instruct' }}
-      INFERENCE_API_KEY: ${{ secrets.INFERENCE_API_KEY || secrets.OPENAI_API_KEY }}
+      INFERENCE_API_KEY: ${{ secrets.INFERENCE_API_KEY || secrets.GOOGLE_API_KEY }}
 
     steps:
       - name: Acknowledge eval request

@@ -643,7 +643,9 @@ def _action_validate(
 
     # Validate dataset ID format (warning only - local datasets may not use org/name)
     if not re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9._-]+$", dataset_id):
-        warnings.append(f"Dataset ID '{dataset_id}' is not in standard HuggingFace 'org/name' format")
+        warnings.append(
+            f"Dataset ID '{dataset_id}' is not in standard HuggingFace 'org/name' format"
+        )
 
     return {
         "action": "validate",

@@ -155,9 +155,7 @@ def create_default_cluster_state() -> ClusterState:
         kind="AcceleratorProfile",
         api_version="dashboard.opendatahub.io/v1",
     )
-    state.resources.setdefault(
-        "dashboard.opendatahub.io/v1/acceleratorprofiles", []
-    ).append(acc)
+    state.resources.setdefault("dashboard.opendatahub.io/v1/acceleratorprofiles", []).append(acc)
 
     # --- Notebook (Workbench) ---
     notebook = MockResource(
@@ -300,9 +298,7 @@ def create_default_cluster_state() -> ClusterState:
         kind="ClusterTrainingRuntime",
         api_version="trainer.kubeflow.org/v1",
     )
-    state.resources.setdefault(
-        "trainer.kubeflow.org/v1/clustertrainingruntimes", []
-    ).append(ctr)
+    state.resources.setdefault("trainer.kubeflow.org/v1/clustertrainingruntimes", []).append(ctr)
 
     # --- TrainingRuntime (namespace-scoped) ---
     tr = MockResource(
@@ -324,9 +320,7 @@ def create_default_cluster_state() -> ClusterState:
         kind="TrainingRuntime",
         api_version="trainer.kubeflow.org/v1",
     )
-    state.resources.setdefault(
-        "trainer.kubeflow.org/v1/trainingruntimes", []
-    ).append(tr)
+    state.resources.setdefault("trainer.kubeflow.org/v1/trainingruntimes", []).append(tr)
 
     # --- InferenceService ---
     isvc = MockResource(
@@ -361,9 +355,7 @@ def create_default_cluster_state() -> ClusterState:
         kind="InferenceService",
         api_version="serving.kserve.io/v1beta1",
     )
-    state.resources.setdefault(
-        "serving.kserve.io/v1beta1/inferenceservices", []
-    ).append(isvc)
+    state.resources.setdefault("serving.kserve.io/v1beta1/inferenceservices", []).append(isvc)
 
     # --- ServingRuntime ---
     srt = MockResource(
@@ -390,9 +382,7 @@ def create_default_cluster_state() -> ClusterState:
         kind="ServingRuntime",
         api_version="serving.kserve.io/v1alpha1",
     )
-    state.resources.setdefault(
-        "serving.kserve.io/v1alpha1/servingruntimes", []
-    ).append(srt)
+    state.resources.setdefault("serving.kserve.io/v1alpha1/servingruntimes", []).append(srt)
 
     # --- Template (in redhat-ods-applications) ---
     tmpl = MockResource(
@@ -406,9 +396,7 @@ def create_default_cluster_state() -> ClusterState:
         kind="Template",
         api_version="template.openshift.io/v1",
     )
-    state.resources.setdefault(
-        "template.openshift.io/v1/templates", []
-    ).append(tmpl)
+    state.resources.setdefault("template.openshift.io/v1/templates", []).append(tmpl)
 
     # --- DSPA (DataSciencePipelinesApplication) ---
     dspa = MockResource(
@@ -436,8 +424,7 @@ def create_default_cluster_state() -> ClusterState:
         api_version="datasciencepipelinesapplications.opendatahub.io/v1alpha1",
     )
     state.resources.setdefault(
-        "datasciencepipelinesapplications.opendatahub.io/v1alpha1/"
-        "datasciencepipelinesapplications",
+        "datasciencepipelinesapplications.opendatahub.io/v1alpha1/datasciencepipelinesapplications",
         [],
     ).append(dspa)
 

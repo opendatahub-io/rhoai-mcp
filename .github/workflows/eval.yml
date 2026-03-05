@@ -107,6 +107,26 @@ jobs:
         with:
           ref: ${{ steps.pr.outputs.sha || github.sha }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --group eval
+
+      - name: Restore eval history cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: evals/results/eval_history.jsonl
+          key: eval-results-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            eval-results-${{ github.ref_name }}-
+            eval-results-main-
+
       - name: Build rhoai-mcp container image
         run: docker build -f Containerfile -t rhoai-mcp:latest .
 
@@ -121,8 +141,8 @@ jobs:
           elapsed=0
           interval=5
           while [ $elapsed -lt $timeout ]; do
-            rhoai_ok=$(curl -sf http://localhost:8000/health 2>/dev/null && echo "yes" || echo "no")
-            lcs_ok=$(curl -sf http://localhost:8443/readiness 2>/dev/null && echo "yes" || echo "no")
+            rhoai_ok=$(curl -sf http://localhost:8000/health >/dev/null 2>&1 && echo "yes" || echo "no")
+            lcs_ok=$(curl -sf http://localhost:8443/readiness >/dev/null 2>&1 && echo "yes" || echo "no")
             if [ "$rhoai_ok" = "yes" ] && [ "$lcs_ok" = "yes" ]; then
               echo "All services healthy!"
               break
@@ -146,26 +166,6 @@ jobs:
             -d "{\"model_id\": \"$MODEL\", \"provider_id\": \"gemini\", \"provider_model_id\": \"$MODEL\"}" \
             && echo "Model $MODEL registered." \
             || echo "Model registration returned non-zero (may already exist)."
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --group eval
-
-      - name: Restore eval history cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
-        with:
-          path: evals/results/eval_history.jsonl
-          key: eval-results-${{ github.ref_name }}-${{ github.run_id }}
-          restore-keys: |
-            eval-results-${{ github.ref_name }}-
-            eval-results-main-
 
       - name: Run mock evaluations
         run: uv run pytest evals/ -v -m "eval and not live" --tb=short --reruns 2 --reruns-delay 5 --junitxml=eval-results.xml

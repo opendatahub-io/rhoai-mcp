@@ -47,6 +47,10 @@ class LCSClient:
 
     Sends queries to LCS's /v1/query endpoint and parses the response
     into an LCSResult for downstream DeepEval scoring.
+
+    Creates a fresh httpx.AsyncClient per call to avoid event-loop
+    lifecycle issues when the client is shared across pytest-asyncio
+    test functions (each of which gets its own event loop).
     """
 
     def __init__(
@@ -56,38 +60,59 @@ class LCSClient:
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
-        self._client = httpx.AsyncClient(
-            base_url=self._base_url,
-            timeout=httpx.Timeout(timeout),
-        )
 
     async def close(self) -> None:
-        """Close the HTTP client."""
-        await self._client.aclose()
+        """No-op for backwards compatibility (clients are per-request now)."""
 
     async def health_check(self) -> bool:
         """Check if LCS is ready to accept queries."""
         try:
-            response = await self._client.get("/healthz")
-            return response.status_code == 200
+            async with httpx.AsyncClient(
+                base_url=self._base_url, timeout=httpx.Timeout(5)
+            ) as client:
+                response = await client.get("/readiness")
+                return response.status_code == 200
         except httpx.HTTPError:
             return False
 
-    async def query(self, task: str) -> LCSResult:
+    async def query(self, task: str, retries: int = 2) -> LCSResult:
         """Send a query to LCS and parse the response.
 
         Args:
             task: Natural language task for the agent.
+            retries: Number of retries on transient 5xx errors.
 
         Returns:
             LCSResult with final output, tool calls, and messages.
         """
-        payload = {"query": task}
-        response = await self._client.post("/v1/query", json=payload)
-        response.raise_for_status()
-        data = response.json()
+        import asyncio
 
-        return self._parse_response(task, data)
+        payload = {"query": task}
+        last_error: Exception | None = None
+
+        for attempt in range(1 + retries):
+            async with httpx.AsyncClient(
+                base_url=self._base_url, timeout=httpx.Timeout(self._timeout)
+            ) as client:
+                response = await client.post("/v1/query", json=payload)
+                if response.status_code >= 500 and attempt < retries:
+                    last_error = httpx.HTTPStatusError(
+                        f"Server error {response.status_code}",
+                        request=response.request,
+                        response=response,
+                    )
+                    wait = 2 ** attempt
+                    logger.warning(
+                        "LCS query returned %d, retrying in %ds (attempt %d/%d)",
+                        response.status_code, wait, attempt + 1, retries,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                response.raise_for_status()
+                data = response.json()
+                return self._parse_response(task, data)
+
+        raise last_error  # type: ignore[misc]
 
     def _parse_response(self, task: str, data: dict[str, Any]) -> LCSResult:
         """Parse an LCS query response into an LCSResult.
@@ -112,8 +137,14 @@ class LCSClient:
             if tr_id:
                 results_by_id[tr_id] = tr
 
+        # LCS-internal tool call types to exclude from eval results
+        _LCS_INTERNAL_TYPES = {"mcp_list_tools", "mcp_list_resources", "mcp_list_prompts"}
+
         tool_calls: list[LCSToolCall] = []
         for tc in raw_tool_calls:
+            tc_type = tc.get("type", "")
+            if tc_type in _LCS_INTERNAL_TYPES:
+                continue
             tc_id = tc.get("id", "")
             tc_name = tc.get("name", "")
             tc_args = tc.get("args", {})

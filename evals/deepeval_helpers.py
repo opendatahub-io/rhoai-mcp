@@ -12,47 +12,41 @@ from deepeval.test_case import (
     MCPToolCall,
     Turn,
 )
+from mcp.types import CallToolResult, TextContent, Tool
 
 from evals.lcs_client import LCSResult
 
 logger = logging.getLogger(__name__)
 
 
-async def fetch_tool_schemas(rhoai_mcp_url: str) -> list[dict[str, Any]]:
+async def fetch_tool_schemas(rhoai_mcp_url: str) -> list[Tool]:
     """Fetch tool schemas from a running rhoai-mcp server via MCP SSE client.
 
     Args:
         rhoai_mcp_url: Base URL of the rhoai-mcp server (e.g. http://localhost:8000).
 
     Returns:
-        List of tool dicts with 'name', 'description', 'inputSchema'.
+        List of mcp.types.Tool objects.
     """
     from mcp import ClientSession
     from mcp.client.sse import sse_client
 
     sse_url = f"{rhoai_mcp_url.rstrip('/')}/sse"
-    tools: list[dict[str, Any]] = []
 
     async with sse_client(sse_url) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
             result = await session.list_tools()
-            for tool in result.tools:
-                tools.append({
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "inputSchema": tool.inputSchema,
-                })
 
-    logger.info(f"Fetched {len(tools)} tool schemas from {rhoai_mcp_url}")
-    return tools
+    logger.info(f"Fetched {len(result.tools)} tool schemas from {rhoai_mcp_url}")
+    return list(result.tools)
 
 
-def build_mcp_server_from_schemas(tool_schemas: list[dict[str, Any]]) -> MCPServer:
+def build_mcp_server_from_schemas(tool_schemas: list[Tool]) -> MCPServer:
     """Build a DeepEval MCPServer from pre-fetched tool schemas.
 
     Args:
-        tool_schemas: List of dicts with 'name', 'description', 'inputSchema'.
+        tool_schemas: List of mcp.types.Tool objects.
 
     Returns:
         MCPServer instance for DeepEval metrics.
@@ -65,10 +59,17 @@ def build_mcp_server_from_schemas(tool_schemas: list[dict[str, Any]]) -> MCPServ
 
 def _lcs_tool_call_to_deepeval(tc: Any) -> MCPToolCall:
     """Convert an LCSToolCall to a DeepEval MCPToolCall."""
+    result_text = str(tc.result)
+    # Strip server_label from args - it's injected by LCS infrastructure
+    # and is not part of the tool's input schema
+    args = {k: v for k, v in tc.arguments.items() if k != "server_label"}
     return MCPToolCall(
         name=tc.name,
-        args=tc.arguments,
-        result=tc.result,
+        args=args,
+        result=CallToolResult(
+            content=[TextContent(type="text", text=result_text)],
+            structuredContent={"result": result_text},
+        ),
     )
 
 
@@ -103,13 +104,15 @@ def lcs_result_to_conversational_test_case(
                     tc_index += 1
 
             if mcp_tools_called:
-                turns.append(
-                    Turn(
-                        role="assistant",
-                        content=content,
-                        mcp_tools_called=mcp_tools_called,
-                    )
+                turn = Turn(
+                    role="assistant",
+                    content=content,
+                    mcp_tools_called=mcp_tools_called,
                 )
+                # Work around DeepEval/Pydantic V2 bug where PrivateAttr
+                # _mcp_interaction doesn't get set from model_validator data dict
+                turn._mcp_interaction = True
+                turns.append(turn)
             else:
                 turns.append(Turn(role="assistant", content=content))
 

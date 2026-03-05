@@ -6,19 +6,18 @@
 #   lightspeed-stack: LCS REST API (routes queries through llama-stack to rhoai-mcp)
 #
 # Usage:
-#   docker compose -f docker-compose.eval.yml up -d
-#   docker compose -f docker-compose.eval.yml down -v
+#   podman compose -f docker-compose.eval.yml up -d
+#   podman compose -f docker-compose.eval.yml down -v
 
 services:
   rhoai-mcp:
     build:
       context: .
       dockerfile: Containerfile
+    command: ["--transport", "sse", "--mock-cluster"]
     environment:
-      RHOAI_MCP_TRANSPORT: sse
       RHOAI_MCP_HOST: "0.0.0.0"
       RHOAI_MCP_PORT: "8000"
-      RHOAI_MCP_MOCK_CLUSTER: "true"
       RHOAI_MCP_LOG_LEVEL: INFO
     ports:
       - "8000:8000"
@@ -30,12 +29,10 @@ services:
       start_period: 10s
 
   llama-stack:
-    image: ${LLAMA_STACK_IMAGE:-llamastack/distribution-remote-vllm:latest}
+    image: ${LLAMA_STACK_IMAGE:-docker.io/llamastack/distribution-starter:0.4.3}
     environment:
-      INFERENCE_MODEL: ${INFERENCE_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
-      INFERENCE_API_KEY: ${INFERENCE_API_KEY:-}
-    volumes:
-      - ./evals/config/llama-stack-run.yaml:/app/run.yaml:ro
+      INFERENCE_MODEL: ${INFERENCE_MODEL:-gemini-2.5-flash}
+      GEMINI_API_KEY: ${INFERENCE_API_KEY:-}
     ports:
       - "8321:8321"
     healthcheck:
@@ -46,11 +43,10 @@ services:
       start_period: 15s
 
   lightspeed-stack:
-    image: ${LCS_IMAGE:-quay.io/redhat-ai-services/lightspeed-stack:latest}
-    environment:
-      LCS_CONFIG_FILE: /app/config/lightspeed-stack.yaml
+    image: ${LCS_IMAGE:-quay.io/lightspeed-core/lightspeed-stack:latest}
+    command: ["-c", "/app/config/lightspeed-stack.yaml"]
     volumes:
-      - ./evals/config/lightspeed-stack.yaml:/app/config/lightspeed-stack.yaml:ro
+      - ./evals/config/lightspeed-stack.yaml:/app/config/lightspeed-stack.yaml:ro,z
     ports:
       - "8443:8443"
     depends_on:
@@ -59,7 +55,7 @@ services:
       llama-stack:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8443/healthz', timeout=5)"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8443/readiness', timeout=5)"]
       interval: 10s
       timeout: 5s
       retries: 12

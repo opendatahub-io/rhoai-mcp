@@ -288,11 +288,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             checks.append(
                 {
                     "name": "Dataset ID format",
-                    "passed": False,
-                    "message": "Dataset ID should be in format 'organization/dataset-name'",
+                    "passed": True,
+                    "message": f"Dataset ID '{dataset_id}' accepted (note: HuggingFace datasets typically use 'org/name' format)",
                 }
             )
-            all_passed = False
 
         return {
             "all_passed": all_passed,
@@ -348,9 +347,9 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         if not re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9._-]+$", model_id):
             errors.append(f"Invalid model ID format: '{model_id}'")
 
-        # Validate dataset ID format
+        # Validate dataset ID format (warning only - local datasets may not use org/name)
         if not re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9._-]+$", dataset_id):
-            errors.append(f"Invalid dataset ID format: '{dataset_id}'")
+            warnings.append(f"Dataset ID '{dataset_id}' is not in standard HuggingFace 'org/name' format")
 
         return {
             "valid": len(errors) == 0,
@@ -533,8 +532,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             issues.append("Model ID should be in format 'organization/model-name'")
             prereq_passed = False
         if "/" not in dataset_id:
-            issues.append("Dataset ID should be in format 'organization/dataset-name'")
-            prereq_passed = False
+            warnings.append("Dataset ID is typically in 'organization/dataset-name' format for HuggingFace")
 
         # Step 3: Handle storage
         pvc_name = _sanitize_pvc_name("training-checkpoints", namespace)

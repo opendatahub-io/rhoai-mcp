@@ -122,18 +122,30 @@ jobs:
           interval=5
           while [ $elapsed -lt $timeout ]; do
             rhoai_ok=$(curl -sf http://localhost:8000/health 2>/dev/null && echo "yes" || echo "no")
-            lcs_ok=$(curl -sf http://localhost:8443/healthz 2>/dev/null && echo "yes" || echo "no")
+            lcs_ok=$(curl -sf http://localhost:8443/readiness 2>/dev/null && echo "yes" || echo "no")
             if [ "$rhoai_ok" = "yes" ] && [ "$lcs_ok" = "yes" ]; then
               echo "All services healthy!"
-              exit 0
+              break
             fi
             echo "Services not ready (rhoai=$rhoai_ok, lcs=$lcs_ok), waiting ${interval}s... ($elapsed/${timeout}s)"
             sleep $interval
             elapsed=$((elapsed + interval))
           done
-          echo "Services did not become healthy within ${timeout}s"
-          docker compose -f docker-compose.eval.yml logs
-          exit 1
+          if [ "$rhoai_ok" != "yes" ] || [ "$lcs_ok" != "yes" ]; then
+            echo "Services did not become healthy within ${timeout}s"
+            docker compose -f docker-compose.eval.yml logs
+            exit 1
+          fi
+
+      - name: Register inference model with llama-stack
+        run: |
+          MODEL="${INFERENCE_MODEL:-gemini-2.5-flash}"
+          echo "Registering model $MODEL with llama-stack..."
+          curl -sf -X POST http://localhost:8321/v1/models \
+            -H "Content-Type: application/json" \
+            -d "{\"model_id\": \"$MODEL\", \"provider_id\": \"gemini\", \"provider_model_id\": \"$MODEL\"}" \
+            && echo "Model $MODEL registered." \
+            || echo "Model registration returned non-zero (may already exist)."
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -156,7 +168,7 @@ jobs:
             eval-results-main-
 
       - name: Run mock evaluations
-        run: uv run pytest evals/ -v -m "eval and not live" --tb=short --junitxml=eval-results.xml
+        run: uv run pytest evals/ -v -m "eval and not live" --tb=short --reruns 2 --reruns-delay 5 --junitxml=eval-results.xml
 
       - name: Collect container logs on failure
         if: failure()

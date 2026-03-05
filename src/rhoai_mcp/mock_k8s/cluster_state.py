@@ -6,6 +6,7 @@ projects, workbenches, training jobs, inference services, and more.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,6 +32,7 @@ class MockResource:
     status: dict[str, Any] = field(default_factory=dict)
     kind: str = ""
     api_version: str = ""
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -440,6 +442,9 @@ def create_default_cluster_state() -> ClusterState:
     ).append(dspa)
 
     # --- Secrets (data connections) ---
+    def _b64(val: str) -> str:
+        return base64.b64encode(val.encode()).decode()
+
     s3_secret = MockResource(
         metadata=MockMetadata(
             name="aws-connection-models",
@@ -455,6 +460,15 @@ def create_default_cluster_state() -> ClusterState:
             uid=_make_uid("secret", "aws-connection-models"),
         ),
         kind="Secret",
+        extra={
+            "data": {
+                "AWS_ACCESS_KEY_ID": _b64("AKIAEXAMPLE12345"),
+                "AWS_SECRET_ACCESS_KEY": _b64("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
+                "AWS_S3_BUCKET": _b64("my-models-bucket"),
+                "AWS_DEFAULT_REGION": _b64("us-east-1"),
+                "AWS_S3_ENDPOINT": _b64("https://s3.amazonaws.com"),
+            },
+        },
     )
     state.secrets.append(s3_secret)
 
@@ -470,6 +484,8 @@ def create_default_cluster_state() -> ClusterState:
         spec={
             "accessModes": ["ReadWriteOnce"],
             "resources": {"requests": {"storage": "20Gi"}},
+            "storageClassName": "gp3-csi",
+            "volumeName": None,
         },
         status={"phase": "Bound"},
         kind="PersistentVolumeClaim",

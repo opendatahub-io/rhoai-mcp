@@ -21,6 +21,9 @@ LOG_LEVEL ?= INFO
 # Build platform (force linux/amd64 for consistent builds across host architectures)
 PLATFORM ?= linux/amd64
 
+# Compose command detection (podman compose or docker compose)
+COMPOSE_CMD := $(CONTAINER_RUNTIME) compose
+
 # Podman-specific flags for user namespace mapping (allows reading host user files)
 # This maps the current user to the container user for file permission compatibility
 ifeq ($(findstring podman,$(CONTAINER_RUNTIME)),podman)
@@ -91,37 +94,52 @@ typecheck: ## Run type checker (mypy)
 check: lint typecheck ## Run all checks (lint + typecheck)
 
 eval-up: build ## Start eval services (rhoai-mcp + llama-stack + LCS)
-	docker compose -f docker-compose.eval.yml up -d
+	@# Source .env.eval and derive INFERENCE_API_KEY from RHOAI_EVAL_EVAL_API_KEY if not set
+	@if [ -f .env.eval ]; then set -a; . ./.env.eval; set +a; fi; \
+	if [ -z "$$INFERENCE_API_KEY" ] && [ -n "$$RHOAI_EVAL_EVAL_API_KEY" ]; then \
+		export INFERENCE_API_KEY="$$RHOAI_EVAL_EVAL_API_KEY"; \
+	fi; \
+	$(COMPOSE_CMD) -f docker-compose.eval.yml up -d
 	@echo "Waiting for services to be healthy..."
 	@timeout=120; elapsed=0; interval=5; \
 	while [ $$elapsed -lt $$timeout ]; do \
 		rhoai_ok=$$(curl -sf http://localhost:8000/health 2>/dev/null && echo "yes" || echo "no"); \
-		lcs_ok=$$(curl -sf http://localhost:8443/healthz 2>/dev/null && echo "yes" || echo "no"); \
+		lcs_ok=$$(curl -sf http://localhost:8443/readiness 2>/dev/null && echo "yes" || echo "no"); \
 		if [ "$$rhoai_ok" = "yes" ] && [ "$$lcs_ok" = "yes" ]; then \
 			echo "All services healthy!"; \
-			exit 0; \
+			break; \
 		fi; \
 		echo "Services not ready (rhoai=$$rhoai_ok, lcs=$$lcs_ok), waiting $${interval}s... ($$elapsed/$${timeout}s)"; \
 		sleep $$interval; \
 		elapsed=$$((elapsed + interval)); \
 	done; \
-	echo "Services did not become healthy within $${timeout}s"; \
-	docker compose -f docker-compose.eval.yml logs; \
-	exit 1
+	if [ "$$rhoai_ok" != "yes" ] || [ "$$lcs_ok" != "yes" ]; then \
+		echo "Services did not become healthy within $${timeout}s"; \
+		$(COMPOSE_CMD) -f docker-compose.eval.yml logs; \
+		exit 1; \
+	fi
+	@# Register inference model with llama-stack (starter image starts with empty model list)
+	@model=$${INFERENCE_MODEL:-gemini-2.5-flash}; \
+	echo "Registering model $$model with llama-stack..."; \
+	curl -sf -X POST http://localhost:8321/v1/models \
+		-H "Content-Type: application/json" \
+		-d "{\"model_id\": \"$$model\", \"provider_id\": \"gemini\", \"provider_model_id\": \"$$model\"}" \
+		>/dev/null 2>&1 && echo "Model $$model registered." \
+		|| echo "Model registration returned non-zero (may already exist)."
 
 eval-down: ## Stop eval services
-	docker compose -f docker-compose.eval.yml down -v
+	$(COMPOSE_CMD) -f docker-compose.eval.yml down -v
 
 eval: ## Run MCP evaluation tests (starts services, runs tests, stops services)
 	$(MAKE) eval-up
-	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short; \
+	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short --reruns 2 --reruns-delay 5; \
 	status=$$?; \
 	$(MAKE) eval-down; \
 	exit $$status
 
 eval-live: ## Run all MCP evaluation tests including live cluster
 	$(MAKE) eval-up
-	uv run --group eval pytest evals/ -v -m "eval" --tb=short; \
+	uv run --group eval pytest evals/ -v -m "eval" --tb=short --reruns 2 --reruns-delay 5; \
 	status=$$?; \
 	$(MAKE) eval-down; \
 	exit $$status

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pytest
 
 from evals.config import EvalConfig
@@ -32,47 +34,47 @@ def lcs_client(eval_config: EvalConfig) -> LCSClient:
     """Create an LCS client and verify the service is healthy.
 
     Retries health checks for up to 120 seconds to allow container startup.
+    Uses synchronous HTTP for health checks to avoid event loop issues
+    (the httpx.AsyncClient is created fresh for the test event loop).
     """
     from evals.lcs_client import LCSClient
 
-    client = LCSClient(
-        base_url=eval_config.lcs_url,
-        timeout=eval_config.lcs_timeout,
-    )
-
-    # Wait for LCS to be healthy
+    # Wait for LCS to be healthy using synchronous HTTP
     max_retries = 24
     retry_interval = 5
+    health_url = f"{eval_config.lcs_url.rstrip('/')}/readiness"
 
     for attempt in range(max_retries):
-        healthy = asyncio.get_event_loop().run_until_complete(client.health_check())
-        if healthy:
-            logger.info(f"LCS is healthy at {eval_config.lcs_url}")
-            return client
+        try:
+            resp = httpx.get(health_url, timeout=5)
+            if resp.status_code == 200:
+                logger.info(f"LCS is healthy at {eval_config.lcs_url}")
+                return LCSClient(
+                    base_url=eval_config.lcs_url,
+                    timeout=eval_config.lcs_timeout,
+                )
+        except httpx.HTTPError:
+            pass
         if attempt < max_retries - 1:
             logger.info(
                 f"LCS not ready (attempt {attempt + 1}/{max_retries}), "
                 f"retrying in {retry_interval}s..."
             )
-            import time
-
             time.sleep(retry_interval)
 
     pytest.fail(f"LCS not healthy after {max_retries * retry_interval}s at {eval_config.lcs_url}")
 
 
 @pytest.fixture(scope="session")
-def tool_schemas(eval_config: EvalConfig) -> list[dict[str, Any]]:
+def tool_schemas(eval_config: EvalConfig) -> list[Any]:
     """Fetch tool schemas from the rhoai-mcp server."""
     from evals.deepeval_helpers import fetch_tool_schemas
 
-    return asyncio.get_event_loop().run_until_complete(
-        fetch_tool_schemas(eval_config.rhoai_mcp_url)
-    )
+    return asyncio.run(fetch_tool_schemas(eval_config.rhoai_mcp_url))
 
 
 @pytest.fixture(scope="session")
-def mcp_server(tool_schemas: list[dict[str, Any]]) -> MCPServer:
+def mcp_server(tool_schemas: list[Any]) -> MCPServer:
     """Build a DeepEval MCPServer from fetched tool schemas."""
     from evals.deepeval_helpers import build_mcp_server_from_schemas
 

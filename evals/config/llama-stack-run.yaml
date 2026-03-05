@@ -1,53 +1,46 @@
 # Llama Stack run configuration for eval
 #
 # Configures:
-# - Remote inference provider (OpenAI-compatible API)
-# - Agent with MCP tool runtime
+# - Remote inference provider (Gemini by default)
+# - Agent with tool runtime
+# - Model registration
 #
-# Environment variables:
-#   INFERENCE_MODEL: Model identifier (default: meta-llama/Llama-3.1-8B-Instruct)
-#   INFERENCE_API_KEY: API key for the inference provider
+# Environment variables (use llama-stack's ${env.VAR:=default} syntax):
+#   INFERENCE_MODEL: Model identifier (default: gemini-2.5-flash)
+#   GEMINI_API_KEY: API key for Gemini provider
+#   INFERENCE_API_KEY: Alternative API key env var
 
 version: 2
+image_name: starter
 
 apis:
   - inference
   - agents
-  - safety
   - tool_runtime
 
 providers:
   inference:
-    - provider_id: remote-inference
-      provider_type: remote::vllm
+    - provider_id: gemini
+      provider_type: remote::gemini
       config:
-        url: ${INFERENCE_URL:-https://api.openai.com/v1}
-        api_token: ${INFERENCE_API_KEY:-}
+        api_key: ${env.GEMINI_API_KEY:=}
 
   agents:
     - provider_id: meta-reference
       provider_type: inline::meta-reference
       config:
-        persistence_store:
-          type: sqlite
-          db_path: /tmp/agents_store.db
+        persistence:
+          agent_state:
+            backend: kv_default
+            namespace: agents
 
   tool_runtime:
     - provider_id: mcp-runtime
-      provider_type: remote::mcp
-      config:
-        mcp_servers:
-          rhoai-mcp:
-            url: http://rhoai-mcp:8000/sse
-            transport: sse
-
-  safety:
-    - provider_id: llama-guard
-      provider_type: inline::llama-guard
+      provider_type: remote::model-context-protocol
       config: {}
 
-models:
-  - metadata: {}
-    model_id: ${INFERENCE_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
-    provider_id: remote-inference
-    provider_model_id: ${INFERENCE_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+registered_resources:
+  models:
+    - model_id: ${env.INFERENCE_MODEL:=gemini-2.5-flash}
+      provider_id: gemini
+      provider_model_id: ${env.INFERENCE_MODEL:=gemini-2.5-flash}

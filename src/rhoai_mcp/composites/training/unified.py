@@ -627,6 +627,7 @@ def _action_validate(
         return {"error": "runtime_name is required for validate action"}
 
     errors = []
+    warnings = []
 
     # Validate runtime exists
     try:
@@ -640,14 +641,15 @@ def _action_validate(
     if not re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9._-]+$", model_id):
         errors.append(f"Invalid model ID format: '{model_id}'")
 
-    # Validate dataset ID format
+    # Validate dataset ID format (warning only - local datasets may not use org/name)
     if not re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9._-]+$", dataset_id):
-        errors.append(f"Invalid dataset ID format: '{dataset_id}'")
+        warnings.append(f"Dataset ID '{dataset_id}' is not in standard HuggingFace 'org/name' format")
 
     return {
         "action": "validate",
         "valid": len(errors) == 0,
         "errors": errors if errors else None,
+        "warnings": warnings if warnings else None,
         "configuration": {
             "namespace": namespace,
             "model_id": model_id,

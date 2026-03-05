@@ -58,5 +58,5 @@ class TestToolDiscovery:
 
         for metric_result in eval_result.test_results[0].metrics_data:
             assert metric_result.success, (
-                f"Metric {metric_result.metric_name} failed: {metric_result.reason}"
+                f"Metric {metric_result.name} failed: {metric_result.reason}"
             )

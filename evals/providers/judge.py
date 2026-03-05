@@ -44,9 +44,7 @@ class OpenAIJudgeLLM(DeepEvalBaseLLM):
         return response.choices[0].message.content or ""
 
     def generate(self, prompt: str, **kwargs: Any) -> str:
-        return asyncio.get_event_loop().run_until_complete(
-            self.a_generate(prompt, **kwargs)
-        )
+        return asyncio.run(self.a_generate(prompt, **kwargs))
 
 
 class AnthropicJudgeLLM(DeepEvalBaseLLM):
@@ -90,9 +88,7 @@ class AnthropicJudgeLLM(DeepEvalBaseLLM):
         return "\n".join(text_parts)
 
     def generate(self, prompt: str, **kwargs: Any) -> str:
-        return asyncio.get_event_loop().run_until_complete(
-            self.a_generate(prompt, **kwargs)
-        )
+        return asyncio.run(self.a_generate(prompt, **kwargs))
 
 
 class GoogleJudgeLLM(DeepEvalBaseLLM):
@@ -140,6 +136,4 @@ class GoogleJudgeLLM(DeepEvalBaseLLM):
         return response.text or ""
 
     def generate(self, prompt: str, **kwargs: Any) -> str:
-        return asyncio.get_event_loop().run_until_complete(
-            self.a_generate(prompt, **kwargs)
-        )
+        return asyncio.run(self.a_generate(prompt, **kwargs))

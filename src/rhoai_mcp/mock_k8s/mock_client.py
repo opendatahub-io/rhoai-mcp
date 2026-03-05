@@ -12,56 +12,52 @@ from unittest.mock import MagicMock
 
 from rhoai_mcp.clients.base import CRDDefinition, K8sClient
 from rhoai_mcp.config import RHOAIConfig
-from rhoai_mcp.mock_k8s.cluster_state import ClusterState, MockResource
+from rhoai_mcp.mock_k8s.cluster_state import ClusterState, MockMetadata, MockResource
 from rhoai_mcp.utils.errors import NotFoundError
 
 logger = logging.getLogger(__name__)
 
 
-class _AttrDict:
+def _snake_to_camel(name: str) -> str:
+    """Convert snake_case to camelCase for K8s field name lookup."""
+    parts = name.split("_")
+    if len(parts) == 1:
+        return name
+    return parts[0] + "".join(word.capitalize() for word in parts[1:])
+
+
+class _AttrDict(dict):
     """Recursively wraps dicts so attributes can be accessed with dot notation.
 
     Mimics kubernetes ResourceInstance attribute access patterns.
+    Subclasses dict so isinstance(x, dict) checks pass and dict()
+    conversion works naturally.
     """
 
     def __init__(self, data: dict[str, Any] | Any) -> None:
         if isinstance(data, dict):
+            super().__init__(data)
             self._data = data
             for key, value in data.items():
-                setattr(self, key, _wrap(value))
+                object.__setattr__(self, key, _wrap(value))
         else:
+            super().__init__()
             self._data = data
 
     def __getattr__(self, name: str) -> Any:
-        # Return None for missing attributes (like K8s ResourceInstance)
-        return None
+        # Mimic K8s ResourceInstance: support snake_case → camelCase lookup.
+        # The dynamic client exposes fields in camelCase; Python code often
+        # uses snake_case (e.g., access_modes → accessModes).
+        camel = _snake_to_camel(name)
+        if camel != name:
+            try:
+                return object.__getattribute__(self, camel)
+            except AttributeError:
+                pass
+        raise AttributeError(f"'_AttrDict' object has no attribute '{name}'")
 
     def __repr__(self) -> str:
         return f"_AttrDict({self._data!r})"
-
-    def __iter__(self) -> Any:
-        if isinstance(self._data, dict):
-            return iter(self._data)
-        raise TypeError(f"_AttrDict wrapping {type(self._data)} is not iterable")
-
-    def items(self) -> Any:
-        if isinstance(self._data, dict):
-            return self._data.items()
-        raise TypeError("items() on non-dict _AttrDict")
-
-    def get(self, key: str, default: Any = None) -> Any:
-        if isinstance(self._data, dict):
-            val = self._data.get(key, default)
-            return _wrap(val) if val is not default else default
-        return default
-
-    def __contains__(self, item: Any) -> bool:
-        if isinstance(self._data, dict):
-            return item in self._data
-        return False
-
-    def __bool__(self) -> bool:
-        return bool(self._data)
 
 
 def _wrap(value: Any) -> Any:
@@ -88,6 +84,7 @@ def _resource_to_instance(resource: MockResource) -> _AttrDict:
         "status": resource.status,
         "kind": resource.kind,
         "apiVersion": resource.api_version,
+        **resource.extra,
     }
     return _AttrDict(data)
 
@@ -110,11 +107,117 @@ class MockK8sClient(K8sClient):
         self._connected = False
 
     def connect(self) -> None:
-        """No-op connect - just set connected flag."""
+        """No-op connect - set connected flag and mock internal clients."""
         self._connected = True
-        self._core_v1 = MagicMock()
+        self._api_client = MagicMock()
+        self._core_v1 = self._build_core_v1_mock()
         self._dynamic_client = MagicMock()
         logger.info("MockK8sClient connected")
+
+    def _build_core_v1_mock(self) -> MagicMock:
+        """Build a core_v1 mock that returns realistic event and log data."""
+        mock = MagicMock()
+
+        # Mock list_namespaced_event to return realistic events
+        def mock_list_events(namespace: str, **kwargs: Any) -> MagicMock:
+            field_selector = kwargs.get("field_selector", "")
+            events_result = MagicMock()
+            events_result.items = []
+
+            # Return events for known resources
+            if "failed-training-001" in field_selector:
+                event = MagicMock()
+                event.type = "Warning"
+                event.reason = "OOMKilled"
+                event.message = "Container killed due to GPU out of memory"
+                event.count = 3
+                event.last_timestamp = "2025-01-15T12:30:00Z"
+                events_result.items = [event]
+
+            return events_result
+
+        mock.list_namespaced_event = mock_list_events
+
+        # Mock read_namespaced_pod_log to return realistic logs
+        def mock_read_pod_log(name: str, namespace: str, **kwargs: Any) -> str:
+            if "failed" in name:
+                return (
+                    "torch.cuda.OutOfMemoryError: CUDA out of memory. "
+                    "Tried to allocate 2.00 GiB. GPU 0 has 79.15 GiB total capacity. "
+                    "After allocating 71.23 GiB, only 1.48 GiB is free.\n"
+                    "Consider using gradient checkpointing or reducing batch size."
+                )
+            return "Training completed successfully."
+
+        mock.read_namespaced_pod_log = mock_read_pod_log
+
+        # Mock list_namespaced_pod to return pod info
+        def mock_list_pods(namespace: str, **kwargs: Any) -> MagicMock:
+            label_selector = kwargs.get("label_selector", "")
+            result = MagicMock()
+            result.items = []
+
+            if "failed-training-001" in label_selector:
+                pod = MagicMock()
+                pod.metadata.name = "failed-training-001-worker-0"
+                pod.metadata.namespace = namespace
+                pod.status.phase = "Failed"
+                result.items = [pod]
+            elif "llama-finetune" in label_selector:
+                pod = MagicMock()
+                pod.metadata.name = "llama-finetune-001-worker-0"
+                pod.metadata.namespace = namespace
+                pod.status.phase = "Succeeded"
+                result.items = [pod]
+
+            return result
+
+        mock.list_namespaced_pod = mock_list_pods
+
+        # Mock list_node to return nodes with GPU resources
+        def mock_list_nodes(**kwargs: Any) -> MagicMock:
+            result = MagicMock()
+            # Create two GPU nodes
+            gpu_node = MagicMock()
+            gpu_node.metadata.name = "gpu-node-1"
+            gpu_node.metadata.labels = {
+                "nvidia.com/gpu.product": "NVIDIA-A100-SXM4-80GB",
+                "node-role.kubernetes.io/worker": "",
+            }
+            gpu_node.status.capacity = {
+                "cpu": "64",
+                "memory": "512Gi",
+                "nvidia.com/gpu": "4",
+            }
+            gpu_node.status.allocatable = {
+                "cpu": "62",
+                "memory": "500Gi",
+                "nvidia.com/gpu": "4",
+            }
+
+            gpu_node2 = MagicMock()
+            gpu_node2.metadata.name = "gpu-node-2"
+            gpu_node2.metadata.labels = {
+                "nvidia.com/gpu.product": "NVIDIA-A100-SXM4-80GB",
+                "node-role.kubernetes.io/worker": "",
+            }
+            gpu_node2.status.capacity = {
+                "cpu": "64",
+                "memory": "512Gi",
+                "nvidia.com/gpu": "4",
+            }
+            gpu_node2.status.allocatable = {
+                "cpu": "62",
+                "memory": "500Gi",
+                "nvidia.com/gpu": "4",
+            }
+
+            result.items = [gpu_node, gpu_node2]
+            return result
+
+        mock.list_node = mock_list_nodes
+
+        return mock
 
     def disconnect(self) -> None:
         """No-op disconnect."""
@@ -175,7 +278,32 @@ class MockK8sClient(K8sClient):
         body: dict[str, Any],
         namespace: str | None = None,
     ) -> Any:
-        """Mock create - just return the body as an instance."""
+        """Mock create - persist resource in state and return it."""
+        metadata = body.get("metadata", {})
+        metadata.setdefault("labels", {})
+        metadata.setdefault("annotations", {})
+        metadata.setdefault("uid", "mock-uid-created")
+        metadata.setdefault("creationTimestamp", "2025-01-15T10:00:00Z")
+        body["metadata"] = metadata
+
+        # Add to state so subsequent get/list calls find it
+        ns = namespace or metadata.get("namespace")
+        resource = MockResource(
+            metadata=MockMetadata(
+                name=metadata.get("name", ""),
+                namespace=ns,
+                uid=metadata.get("uid", ""),
+                labels=metadata.get("labels", {}),
+                annotations=metadata.get("annotations", {}),
+            ),
+            spec=body.get("spec", {}),
+            status=body.get("status", {}),
+            kind=crd.kind,
+            api_version=crd.api_version,
+        )
+        key = _crd_key(crd)
+        self._state.resources.setdefault(key, []).append(resource)
+
         return _AttrDict(body)
 
     def delete(

@@ -96,13 +96,13 @@ def evaluate_and_record(
     from datetime import datetime, timezone
 
     from deepeval import evaluate
+    from deepeval.evaluate.configs import AsyncConfig
 
     start = time.monotonic()
     eval_result = evaluate(
         test_cases=test_cases,
         metrics=metrics,
-        run_async=True,
-        print_results=True,
+        async_config=AsyncConfig(run_async=False),
     )
     duration = time.monotonic() - start
 
@@ -127,7 +127,7 @@ def evaluate_and_record(
                 all_passed = False
             metric_records.append(
                 MetricRecord(
-                    name=md.metric_name,
+                    name=md.name,
                     score=float(md.score),
                     success=success,
                     threshold=float(md.threshold),

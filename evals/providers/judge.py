@@ -7,9 +7,20 @@ metrics. Only text generation is needed (no tool calling).
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from typing import Any
 
 from deepeval.models import DeepEvalBaseLLM
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling both sync and async calling contexts."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 class OpenAIJudgeLLM(DeepEvalBaseLLM):
@@ -44,7 +55,7 @@ class OpenAIJudgeLLM(DeepEvalBaseLLM):
         return response.choices[0].message.content or ""
 
     def generate(self, prompt: str, **kwargs: Any) -> str:
-        return asyncio.run(self.a_generate(prompt, **kwargs))
+        return _run_async(self.a_generate(prompt, **kwargs))
 
 
 class AnthropicJudgeLLM(DeepEvalBaseLLM):
@@ -88,7 +99,7 @@ class AnthropicJudgeLLM(DeepEvalBaseLLM):
         return "\n".join(text_parts)
 
     def generate(self, prompt: str, **kwargs: Any) -> str:
-        return asyncio.run(self.a_generate(prompt, **kwargs))
+        return _run_async(self.a_generate(prompt, **kwargs))
 
 
 class GoogleJudgeLLM(DeepEvalBaseLLM):
@@ -136,4 +147,4 @@ class GoogleJudgeLLM(DeepEvalBaseLLM):
         return response.text or ""
 
     def generate(self, prompt: str, **kwargs: Any) -> str:
-        return asyncio.run(self.a_generate(prompt, **kwargs))
+        return _run_async(self.a_generate(prompt, **kwargs))

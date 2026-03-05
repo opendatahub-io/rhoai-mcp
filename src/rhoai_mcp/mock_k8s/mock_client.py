@@ -119,7 +119,7 @@ class MockK8sClient(K8sClient):
         mock = MagicMock()
 
         # Mock list_namespaced_event to return realistic events
-        def mock_list_events(namespace: str, **kwargs: Any) -> MagicMock:
+        def mock_list_events(namespace: str, **kwargs: Any) -> MagicMock:  # noqa: ARG001
             field_selector = kwargs.get("field_selector", "")
             events_result = MagicMock()
             events_result.items = []
@@ -139,7 +139,7 @@ class MockK8sClient(K8sClient):
         mock.list_namespaced_event = mock_list_events
 
         # Mock read_namespaced_pod_log to return realistic logs
-        def mock_read_pod_log(name: str, namespace: str, **kwargs: Any) -> str:
+        def mock_read_pod_log(name: str, namespace: str, **kwargs: Any) -> str:  # noqa: ARG001
             if "failed" in name:
                 return (
                     "torch.cuda.OutOfMemoryError: CUDA out of memory. "
@@ -175,7 +175,7 @@ class MockK8sClient(K8sClient):
         mock.list_namespaced_pod = mock_list_pods
 
         # Mock list_node to return nodes with GPU resources
-        def mock_list_nodes(**kwargs: Any) -> MagicMock:
+        def mock_list_nodes(**kwargs: Any) -> MagicMock:  # noqa: ARG001
             result = MagicMock()
             # Create two GPU nodes
             gpu_node = MagicMock()

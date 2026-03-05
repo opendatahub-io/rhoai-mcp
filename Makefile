@@ -21,6 +21,14 @@ LOG_LEVEL ?= INFO
 # Build platform (force linux/amd64 for consistent builds across host architectures)
 PLATFORM ?= linux/amd64
 
+# Guard: ensure a container runtime was found
+ifeq ($(CONTAINER_RUNTIME),)
+    $(error No container runtime found. Install podman or docker.)
+endif
+
+# Compose command detection (podman compose or docker compose)
+COMPOSE_CMD := $(CONTAINER_RUNTIME) compose
+
 # Podman-specific flags for user namespace mapping (allows reading host user files)
 # This maps the current user to the container user for file permission compatibility
 ifeq ($(findstring podman,$(CONTAINER_RUNTIME)),podman)
@@ -32,7 +40,7 @@ else
 endif
 
 .PHONY: help build build-no-cache run run-http run-stdio run-dev run-token stop logs shell clean info
-.PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend
+.PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
 
 # =============================================================================
 # Help
@@ -90,11 +98,62 @@ typecheck: ## Run type checker (mypy)
 
 check: lint typecheck ## Run all checks (lint + typecheck)
 
-eval: ## Run MCP evaluation tests (mock cluster, requires LLM API key)
-	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short
+eval-up: build ## Start eval services (rhoai-mcp + llama-stack + LCS)
+	@# Source .env.eval and derive INFERENCE_API_KEY from RHOAI_EVAL_EVAL_API_KEY if not set
+	@if [ -f .env.eval ]; then set -a; . ./.env.eval; set +a; fi; \
+	if [ -z "$$INFERENCE_API_KEY" ] && [ -n "$$RHOAI_EVAL_EVAL_API_KEY" ]; then \
+		export INFERENCE_API_KEY="$$RHOAI_EVAL_EVAL_API_KEY"; \
+	fi; \
+	$(COMPOSE_CMD) -f docker-compose.eval.yml up -d
+	@echo "Waiting for services to be healthy..."
+	@timeout=120; elapsed=0; interval=5; \
+	while [ $$elapsed -lt $$timeout ]; do \
+		rhoai_ok=$$(curl -sf http://localhost:8000/health 2>/dev/null && echo "yes" || echo "no"); \
+		lcs_ok=$$(curl -sf http://localhost:8443/readiness 2>/dev/null && echo "yes" || echo "no"); \
+		if [ "$$rhoai_ok" = "yes" ] && [ "$$lcs_ok" = "yes" ]; then \
+			echo "All services healthy!"; \
+			break; \
+		fi; \
+		echo "Services not ready (rhoai=$$rhoai_ok, lcs=$$lcs_ok), waiting $${interval}s... ($$elapsed/$${timeout}s)"; \
+		sleep $$interval; \
+		elapsed=$$((elapsed + interval)); \
+	done; \
+	if [ "$$rhoai_ok" != "yes" ] || [ "$$lcs_ok" != "yes" ]; then \
+		echo "Services did not become healthy within $${timeout}s"; \
+		$(COMPOSE_CMD) -f docker-compose.eval.yml logs; \
+		exit 1; \
+	fi
+	@# Register inference model with llama-stack (starter image starts with empty model list)
+	@model=$${INFERENCE_MODEL:-gemini-2.5-flash}; \
+	echo "Registering model $$model with llama-stack..."; \
+	http_code=$$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8321/v1/models \
+		-H "Content-Type: application/json" \
+		-d "{\"model_id\": \"$$model\", \"provider_id\": \"gemini\", \"provider_model_id\": \"$$model\"}"); \
+	if [ "$$http_code" = "200" ] || [ "$$http_code" = "201" ]; then \
+		echo "Model $$model registered (HTTP $$http_code)."; \
+	elif [ "$$http_code" = "409" ]; then \
+		echo "Model $$model already exists (HTTP 409)."; \
+	else \
+		echo "ERROR: Model registration failed (HTTP $$http_code)." >&2; \
+		exit 1; \
+	fi
+
+eval-down: ## Stop eval services
+	$(COMPOSE_CMD) -f docker-compose.eval.yml down -v
+
+eval: ## Run MCP evaluation tests (starts services, runs tests, stops services)
+	$(MAKE) eval-up
+	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short --reruns 2 --reruns-delay 5; \
+	status=$$?; \
+	$(MAKE) eval-down; \
+	exit $$status
 
 eval-live: ## Run all MCP evaluation tests including live cluster
-	uv run --group eval pytest evals/ -v -m "eval" --tb=short
+	$(MAKE) eval-up
+	uv run --group eval pytest evals/ -v -m "eval" --tb=short --reruns 2 --reruns-delay 5; \
+	status=$$?; \
+	$(MAKE) eval-down; \
+	exit $$status
 
 eval-scenario: ## Run a single eval scenario (usage: make eval-scenario SCENARIO=cluster_exploration)
 ifndef SCENARIO

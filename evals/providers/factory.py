@@ -1,7 +1,7 @@
-"""Factory functions for creating agent providers and judge LLMs.
+"""Factory function for creating judge LLMs.
 
-Dispatches on LLMProvider enum values to instantiate the correct
-provider or judge implementation.
+The agent loop is now handled by LCS; only judge LLM creation
+is needed for DeepEval metrics.
 """
 
 from __future__ import annotations
@@ -12,39 +12,6 @@ from evals.config import LLMProvider
 
 if TYPE_CHECKING:
     from evals.config import EvalConfig
-    from evals.providers.base import AgentLLMProvider
-
-
-def create_agent_provider(config: EvalConfig) -> AgentLLMProvider:
-    """Create an agent LLM provider based on the configured provider type.
-
-    Args:
-        config: Evaluation configuration.
-
-    Returns:
-        An AgentLLMProvider instance for the configured provider.
-
-    Raises:
-        ValueError: If the provider is not supported.
-    """
-    provider = config.llm_provider
-
-    if provider in (LLMProvider.OPENAI, LLMProvider.VLLM, LLMProvider.AZURE):
-        from evals.providers.openai_provider import OpenAIAgentProvider
-
-        return OpenAIAgentProvider(config)
-
-    if provider in (LLMProvider.ANTHROPIC, LLMProvider.ANTHROPIC_VERTEX):
-        from evals.providers.anthropic_provider import AnthropicAgentProvider
-
-        return AnthropicAgentProvider(config)
-
-    if provider in (LLMProvider.GOOGLE_GENAI, LLMProvider.GOOGLE_VERTEX):
-        from evals.providers.google_provider import GoogleAgentProvider
-
-        return GoogleAgentProvider(config)
-
-    raise ValueError(f"Unsupported agent LLM provider: {provider}")
 
 
 def create_judge_llm(config: EvalConfig) -> Any:

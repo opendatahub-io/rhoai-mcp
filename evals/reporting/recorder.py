@@ -23,8 +23,8 @@ from evals.reporting.models import (
 )
 
 if TYPE_CHECKING:
-    from evals.agent import AgentResult
     from evals.config import EvalConfig
+    from evals.lcs_client import LCSResult
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class EvalRecorder:
 def evaluate_and_record(
     recorder: EvalRecorder,
     scenario: str,
-    agent_result: AgentResult,
+    lcs_result: LCSResult,
     test_cases: list[Any],
     metrics: list[Any],
 ) -> Any:
@@ -96,26 +96,26 @@ def evaluate_and_record(
     from datetime import datetime, timezone
 
     from deepeval import evaluate
+    from deepeval.evaluate.configs import AsyncConfig
 
     start = time.monotonic()
     eval_result = evaluate(
         test_cases=test_cases,
         metrics=metrics,
-        run_async=True,
-        print_results=True,
+        async_config=AsyncConfig(run_async=False),
     )
     duration = time.monotonic() - start
 
     config = recorder.config
     environment = EnvironmentRecord(
-        llm_provider=config.llm_provider.value,
-        llm_model=config.llm_model,
+        agent_backend="lcs",
+        agent_model="",  # Model is configured in Llama Stack, not eval framework
+        lcs_url=config.lcs_url,
         eval_provider=config.eval_provider.value,
         eval_model=config.eval_model,
         cluster_mode=config.cluster_mode.value,
         mcp_use_threshold=config.mcp_use_threshold,
         task_completion_threshold=config.task_completion_threshold,
-        max_agent_turns=config.max_agent_turns,
     )
 
     metric_records = []
@@ -127,7 +127,7 @@ def evaluate_and_record(
                 all_passed = False
             metric_records.append(
                 MetricRecord(
-                    name=md.metric_name,
+                    name=md.name,
                     score=float(md.score),
                     success=success,
                     threshold=float(md.threshold),
@@ -142,8 +142,8 @@ def evaluate_and_record(
         git=recorder.git,
         environment=environment,
         metrics=metric_records,
-        turns=agent_result.turns,
-        tool_names_used=agent_result.tool_names_used,
+        turns=lcs_result.turns,
+        tool_names_used=lcs_result.tool_names_used,
         passed=all_passed,
         duration_seconds=round(duration, 2),
     )

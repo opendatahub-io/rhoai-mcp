@@ -63,6 +63,12 @@ class RHOAIConfig(BaseSettings):
         extra="ignore",
     )
 
+    # Mock cluster mode (for evals and testing without a real K8s cluster)
+    mock_cluster: bool = Field(
+        default=False,
+        description="Use mock K8s client with pre-populated cluster state",
+    )
+
     # Authentication settings
     auth_mode: AuthMode = Field(
         default=AuthMode.AUTO,

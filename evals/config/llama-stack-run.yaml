@@ -1,0 +1,46 @@
+# Llama Stack run configuration for eval
+#
+# Configures:
+# - Remote inference provider (Gemini by default)
+# - Agent with tool runtime
+# - Model registration
+#
+# Environment variables (use llama-stack's ${env.VAR:=default} syntax):
+#   INFERENCE_MODEL: Model identifier (default: gemini-2.5-flash)
+#   GEMINI_API_KEY: API key for Gemini provider
+#   INFERENCE_API_KEY: Alternative API key env var
+
+version: 2
+image_name: starter
+
+apis:
+  - inference
+  - agents
+  - tool_runtime
+
+providers:
+  inference:
+    - provider_id: gemini
+      provider_type: remote::gemini
+      config:
+        api_key: ${env.GEMINI_API_KEY:=}
+
+  agents:
+    - provider_id: meta-reference
+      provider_type: inline::meta-reference
+      config:
+        persistence:
+          agent_state:
+            backend: kv_default
+            namespace: agents
+
+  tool_runtime:
+    - provider_id: mcp-runtime
+      provider_type: remote::model-context-protocol
+      config: {}
+
+registered_resources:
+  models:
+    - model_id: ${env.INFERENCE_MODEL:=gemini-2.5-flash}
+      provider_id: gemini
+      provider_model_id: ${env.INFERENCE_MODEL:=gemini-2.5-flash}

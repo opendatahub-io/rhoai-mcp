@@ -29,9 +29,11 @@ def score_trend_report(
     if scenario:
         filtered = [r for r in filtered if r.scenario == scenario]
     if provider:
+        from evals.reporting.formatting import provider_label
+
         filtered = [
             r for r in filtered
-            if f"{r.environment.llm_provider}/{r.environment.llm_model}" == provider
+            if provider_label(r) == provider
         ]
     if not filtered:
         parts = []

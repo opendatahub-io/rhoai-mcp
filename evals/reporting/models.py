@@ -31,14 +31,14 @@ class GitRecord:
 class EnvironmentRecord:
     """Eval environment configuration snapshot."""
 
-    llm_provider: str
-    llm_model: str
+    agent_backend: str
+    agent_model: str
+    lcs_url: str
     eval_provider: str
     eval_model: str
     cluster_mode: str
     mcp_use_threshold: float
     task_completion_threshold: float
-    max_agent_turns: int
 
 
 @dataclass

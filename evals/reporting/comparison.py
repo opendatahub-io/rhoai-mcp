@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from evals.reporting.formatting import format_table, truncate
+from evals.reporting.formatting import format_table, provider_label, truncate
 from evals.reporting.models import EvalRecord
 
 
@@ -14,9 +14,9 @@ def provider_comparison_report(
     last_n: int = 10,
     fmt: str = "terminal",
 ) -> str:
-    """Compare eval scores across providers/models.
+    """Compare eval scores across agent backends/models.
 
-    Groups records by (llm_provider, llm_model), computes average score
+    Groups records by agent backend label, computes average score
     per metric, and renders a comparison table.
 
     Args:
@@ -34,10 +34,10 @@ def provider_comparison_report(
     if not filtered:
         return f"No records found for scenario={scenario}"
 
-    # Group by provider/model
+    # Group by agent backend label
     groups: dict[str, list[EvalRecord]] = defaultdict(list)
     for r in filtered:
-        key = f"{r.environment.llm_provider}/{r.environment.llm_model}"
+        key = provider_label(r)
         groups[key].append(r)
 
     # Collect all metric names
@@ -47,7 +47,7 @@ def provider_comparison_report(
             if m.name not in all_metric_names:
                 all_metric_names.append(m.name)
 
-    headers = ["Provider/Model", *[truncate(n, 20) for n in all_metric_names],
+    headers = ["Agent Backend", *[truncate(n, 20) for n in all_metric_names],
                "Avg Turns", "Pass Rate"]
     alignments = ["l", *["r"] * len(all_metric_names), "r", "r"]
 
@@ -79,7 +79,7 @@ def provider_comparison_report(
     row_data.sort(key=lambda x: x[0], reverse=True)
     rows = [rd[1] for rd in row_data]
 
-    title = "Provider Comparison"
+    title = "Agent Backend Comparison"
     if scenario:
         title += f" - {scenario}"
 

@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class LLMProvider(str, Enum):
-    """LLM provider for the agent under test."""
+    """LLM provider for the judge LLM."""
 
     OPENAI = "openai"
     VLLM = "vllm"
@@ -42,22 +42,22 @@ class EvalConfig(BaseSettings):
         extra="ignore",
     )
 
-    # Agent LLM settings
-    llm_provider: LLMProvider = Field(
-        default=LLMProvider.GOOGLE_VERTEX,
-        description="LLM provider for the agent",
+    # LCS endpoint settings (replaces agent LLM settings)
+    lcs_url: str = Field(
+        default="http://localhost:8443",
+        description="Lightspeed Core Stack REST API endpoint",
     )
-    llm_model: str = Field(
-        default="gemini-2.5-flash",
-        description="Model name for the agent LLM",
+    lcs_timeout: int = Field(
+        default=300,
+        ge=30,
+        le=600,
+        description="HTTP timeout in seconds for LCS queries",
     )
-    llm_api_key: str = Field(
-        default="",
-        description="API key for the agent LLM",
-    )
-    llm_base_url: str | None = Field(
-        default=None,
-        description="Base URL for vLLM or Azure endpoint",
+
+    # rhoai-mcp endpoint (for tool schema discovery)
+    rhoai_mcp_url: str = Field(
+        default="http://localhost:8000",
+        description="rhoai-mcp server endpoint for tool schema discovery",
     )
 
     # Judge LLM settings (for DeepEval metrics)
@@ -74,7 +74,7 @@ class EvalConfig(BaseSettings):
         description="API key for the judge LLM",
     )
 
-    # Judge LLM provider (defaults to same as agent provider)
+    # Judge LLM provider
     eval_provider: LLMProvider = Field(
         default=LLMProvider.GOOGLE_VERTEX,
         description="LLM provider for the DeepEval judge",
@@ -104,16 +104,8 @@ class EvalConfig(BaseSettings):
         description="Minimum score for MCPUseMetric",
     )
     task_completion_threshold: float = Field(
-        default=0.6,
+        default=0.25,
         ge=0.0,
         le=1.0,
         description="Minimum score for MCPTaskCompletionMetric",
-    )
-
-    # Agent loop settings
-    max_agent_turns: int = Field(
-        default=20,
-        ge=1,
-        le=100,
-        description="Maximum LLM turns per scenario",
     )

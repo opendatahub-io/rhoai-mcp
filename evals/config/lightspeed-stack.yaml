@@ -1,0 +1,25 @@
+# Lightspeed Core Stack (LCS) configuration for eval
+#
+# LCS routes user queries through Llama Stack (agent + inference)
+# and connects to rhoai-mcp via MCP/SSE for tool execution.
+
+name: rhoai-eval
+
+service:
+  host: "0.0.0.0"
+  port: 8443
+
+llama_stack:
+  url: http://llama-stack:8321
+
+inference:
+  default_model: gemini/models/gemini-2.5-flash
+  default_provider: gemini
+
+user_data_collection:
+  feedback_enabled: false
+  transcripts_enabled: false
+
+mcp_servers:
+  - name: rhoai-mcp
+    url: http://rhoai-mcp:8000/sse

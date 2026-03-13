@@ -1,7 +1,7 @@
 """Tests for Model Registry auto-discovery."""
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from kubernetes.client import ApiException  # type: ignore[import-untyped]
@@ -418,7 +418,7 @@ class TestPortForwardDiscovery:
         assert result.source == "crd"
 
     def test_new_fields_have_correct_defaults(self) -> None:
-        """Test that new fields is_external and port_forward_connection have correct defaults."""
+        """Test that new fields is_external, port_forward_connection, skip_tls_verify have correct defaults."""
         result = DiscoveredModelRegistry(
             url="http://test.svc:8080",
             namespace="test",
@@ -428,3 +428,74 @@ class TestPortForwardDiscovery:
         )
         assert result.is_external is False
         assert result.port_forward_connection is None
+        assert result.skip_tls_verify is False
+
+    async def test_port_forward_https_sets_skip_tls_verify(
+        self, mock_k8s: MagicMock, discovery: ModelRegistryDiscovery, monkeypatch: Any
+    ) -> None:
+        """Test that port-forwarding to HTTPS ports sets skip_tls_verify=True."""
+        monkeypatch.setattr(
+            "rhoai_mcp.domains.model_registry.discovery._is_running_in_cluster",
+            lambda: False,
+        )
+
+        # Setup CRD response with HTTPS-only port
+        mock_k8s.list_resources.return_value = [
+            self._make_mock_component("rhoai-model-registries")
+        ]
+        svc_list = MagicMock()
+        svc_list.items = [
+            self._make_mock_service("model-catalog", "rhoai-model-registries", [8443])
+        ]
+        mock_k8s.core_v1.list_namespaced_service.return_value = svc_list
+
+        # Mock the PortForwardManager
+        mock_conn = MagicMock()
+        mock_conn.local_url = "https://localhost:12345"
+        mock_manager = MagicMock()
+        mock_manager.forward = AsyncMock(return_value=mock_conn)
+        monkeypatch.setattr(
+            "rhoai_mcp.domains.model_registry.discovery.PortForwardManager.get_instance",
+            lambda: mock_manager,
+        )
+
+        result = await discovery.discover_with_port_forward()
+
+        assert result is not None
+        assert result.skip_tls_verify is True
+        assert result.is_external is True
+        assert result.url == "https://localhost:12345"
+
+    async def test_port_forward_http_does_not_set_skip_tls_verify(
+        self, mock_k8s: MagicMock, discovery: ModelRegistryDiscovery, monkeypatch: Any
+    ) -> None:
+        """Test that port-forwarding to HTTP port does not set skip_tls_verify."""
+        monkeypatch.setattr(
+            "rhoai_mcp.domains.model_registry.discovery._is_running_in_cluster",
+            lambda: False,
+        )
+
+        # Setup CRD response with HTTP port
+        mock_k8s.list_resources.return_value = [
+            self._make_mock_component("rhoai-model-registries")
+        ]
+        svc_list = MagicMock()
+        svc_list.items = [
+            self._make_mock_service("model-catalog", "rhoai-model-registries", [8080])
+        ]
+        mock_k8s.core_v1.list_namespaced_service.return_value = svc_list
+
+        # Mock the PortForwardManager
+        mock_conn = MagicMock()
+        mock_conn.local_url = "http://localhost:12345"
+        mock_manager = MagicMock()
+        mock_manager.forward = AsyncMock(return_value=mock_conn)
+        monkeypatch.setattr(
+            "rhoai_mcp.domains.model_registry.discovery.PortForwardManager.get_instance",
+            lambda: mock_manager,
+        )
+
+        result = await discovery.discover_with_port_forward()
+
+        assert result is not None
+        assert result.skip_tls_verify is False

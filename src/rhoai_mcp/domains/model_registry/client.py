@@ -59,8 +59,23 @@ def _format_connection_error(url: str, error: Exception) -> str:
     """
     base_msg = f"Failed to connect to Model Registry at {url}: {error}"
 
-    # Check if this is a DNS resolution failure for an internal URL
+    # Check if this is an SSL certificate verification failure
     error_str = str(error).lower()
+    is_ssl_error = (
+        "certificate_verify_failed" in error_str
+        or "certificate verify failed" in error_str
+        or "ssl: certificate_verify_failed" in error_str
+    )
+    if is_ssl_error:
+        return (
+            f"{base_msg}\n\n"
+            f"The server's TLS certificate could not be verified. This commonly happens "
+            f"when connecting to a service that uses an internal cluster CA certificate.\n\n"
+            f"To skip TLS verification, set:\n"
+            f"   RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY=true"
+        )
+
+    # Check if this is a DNS resolution failure for an internal URL
     is_dns_error = "name or service not known" in error_str or "nodename nor servname" in error_str
 
     if is_dns_error and _is_internal_k8s_url(url) and not _is_running_in_cluster():
@@ -149,12 +164,19 @@ class ModelRegistryClient:
 
             # Configure SSL verification
             verify: bool | ssl.SSLContext = True
-            if self._config.model_registry_skip_tls_verify:
+            if self._config.model_registry_skip_tls_verify or (
+                self._discovery and self._discovery.skip_tls_verify
+            ):
                 verify = False
-                logger.warning(
-                    "TLS verification disabled for Model Registry. "
-                    "This is not recommended for production."
-                )
+                if self._discovery and self._discovery.skip_tls_verify:
+                    logger.debug(
+                        "TLS verification skipped for port-forwarded HTTPS connection"
+                    )
+                else:
+                    logger.warning(
+                        "TLS verification disabled for Model Registry. "
+                        "This is not recommended for production."
+                    )
 
             self._http_client = httpx.AsyncClient(
                 base_url=self._get_base_url(),

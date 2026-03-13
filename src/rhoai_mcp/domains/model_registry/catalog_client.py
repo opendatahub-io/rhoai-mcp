@@ -84,12 +84,19 @@ class ModelCatalogClient:
 
             # Configure SSL verification
             verify: bool | ssl.SSLContext = True
-            if self._config.model_registry_skip_tls_verify:
+            if self._config.model_registry_skip_tls_verify or (
+                self._discovery and self._discovery.skip_tls_verify
+            ):
                 verify = False
-                logger.warning(
-                    "TLS verification disabled for Model Catalog. "
-                    "This is not recommended for production."
-                )
+                if self._discovery and self._discovery.skip_tls_verify:
+                    logger.debug(
+                        "TLS verification skipped for port-forwarded HTTPS connection"
+                    )
+                else:
+                    logger.warning(
+                        "TLS verification disabled for Model Catalog. "
+                        "This is not recommended for production."
+                    )
 
             self._http_client = httpx.AsyncClient(
                 base_url=self._get_base_url(),

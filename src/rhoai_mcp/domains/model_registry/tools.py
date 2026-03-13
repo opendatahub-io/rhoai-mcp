@@ -114,6 +114,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
         url = server.config.model_registry_url
         requires_auth = False
+        skip_tls_verify = False
 
         if server.config.model_registry_discovery_mode == ModelRegistryDiscoveryMode.AUTO:
             discovery = ModelRegistryDiscovery(server.k8s)
@@ -122,6 +123,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             if result:
                 url = result.url
                 requires_auth = result.requires_auth
+                skip_tls_verify = result.skip_tls_verify
                 # If discovery already detected the API type, use it
                 if result.api_type != "unknown":
                     _cached_api_type = result.api_type
@@ -130,7 +132,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                     return result.api_type, url, requires_auth
 
         # Probe the API type
-        api_type = await probe_api_type(url, server.config, requires_auth)
+        api_type = await probe_api_type(url, server.config, requires_auth, skip_tls_verify)
         # Only cache definitive results, not "unknown"
         if api_type != "unknown":
             _cached_api_type = api_type

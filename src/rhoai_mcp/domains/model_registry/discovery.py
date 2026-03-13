@@ -69,6 +69,7 @@ class DiscoveredModelRegistry:
     is_external: bool = field(default=False)  # True when using port-forward
     api_type: str = field(default="unknown")  # "model_catalog", "model_registry", or "unknown"
     port_forward_connection: PortForwardConnection | None = field(default=None)
+    skip_tls_verify: bool = field(default=False)
 
     def __str__(self) -> str:
         return f"{self.url} (discovered via {self.source}, api_type={self.api_type})"
@@ -283,6 +284,10 @@ class ModelRegistryDiscovery:
 
             # Return discovery result with port-forwarded URL
             # Port 8080 is direct REST API (no auth), port 8443 uses kube-rbac-proxy (auth required)
+            # When port-forwarding to HTTPS ports, skip TLS verification since
+            # oc port-forward already provides a secure, authenticated tunnel and
+            # the service's internal certificate won't be valid for localhost.
+            skip_tls = use_https
             return DiscoveredModelRegistry(
                 url=conn.local_url,
                 namespace=result.namespace,
@@ -292,6 +297,7 @@ class ModelRegistryDiscovery:
                 requires_auth=result.requires_auth,  # Preserve auth requirement from discovery
                 is_external=True,
                 port_forward_connection=conn,
+                skip_tls_verify=skip_tls,
             )
         except PortForwardError as e:
             logger.error(f"Failed to set up port-forward: {e}")
@@ -307,6 +313,7 @@ async def probe_api_type(
     url: str,
     config: RHOAIConfig,
     requires_auth: bool = False,
+    skip_tls_verify: bool = False,
 ) -> str:
     """Probe which API type is available at the given URL.
 
@@ -317,6 +324,8 @@ async def probe_api_type(
         url: Base URL of the service.
         config: RHOAI configuration for auth and TLS settings.
         requires_auth: Whether the endpoint requires authentication.
+        skip_tls_verify: Whether to skip TLS verification (e.g., for
+            port-forwarded HTTPS connections).
 
     Returns:
         "model_catalog" if Model Catalog API is available,
@@ -328,7 +337,7 @@ async def probe_api_type(
 
     # Configure SSL
     verify: bool | ssl.SSLContext = True
-    if config.model_registry_skip_tls_verify:
+    if config.model_registry_skip_tls_verify or skip_tls_verify:
         verify = False
 
     async with httpx.AsyncClient(

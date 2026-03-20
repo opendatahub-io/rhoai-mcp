@@ -95,6 +95,16 @@ class TestQuickstartClient:
 
         assert method == DeploymentMethod.KUSTOMIZE
 
+    def test_detect_kustomize_inside_manifest_dir(self, tmp_path: Path) -> None:
+        """Test detecting Kustomize when kustomization.yaml is inside deploy/."""
+        (tmp_path / "deploy").mkdir()
+        (tmp_path / "deploy" / "kustomization.yaml").touch()
+
+        client = QuickstartClient()
+        method = client.detect_deployment_method(tmp_path)
+
+        assert method == DeploymentMethod.KUSTOMIZE
+
     def test_detect_manifests_deploy_dir(self, tmp_path: Path) -> None:
         """Test detecting manifests from deploy/ directory."""
         (tmp_path / "deploy").mkdir()
@@ -115,7 +125,6 @@ class TestQuickstartClient:
 
     def test_detect_unknown(self, tmp_path: Path) -> None:
         """Test returning unknown for unrecognized structure."""
-        # Empty directory - no deployment files
         client = QuickstartClient()
         method = client.detect_deployment_method(tmp_path)
 
@@ -130,16 +139,16 @@ class TestQuickstartClient:
         assert "Unknown quickstart" in (result.error or "")
         assert "Available:" in (result.error or "")
 
-    @patch("shutil.which")
-    def test_deploy_missing_cli_tools(self, mock_which: MagicMock) -> None:
-        """Test deploying without required CLI tools."""
+    @patch("rhoai_mcp.domains.quickstarts.client.shutil.which")
+    def test_deploy_missing_git(self, mock_which: MagicMock) -> None:
+        """Test deploying without git returns error."""
         mock_which.return_value = None
 
         client = QuickstartClient()
         result = client.deploy("llm-cpu-serving")
 
         assert result.success is False
-        assert "CLI tools not found" in (result.error or "")
+        assert "git" in (result.error or "")
 
     def test_get_readme_unknown_quickstart(self) -> None:
         """Test getting README for unknown quickstart."""

@@ -5,6 +5,7 @@ Handles repository cloning, README extraction, and deployment detection/executio
 
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -117,19 +118,22 @@ class QuickstartClient:
             available = ", ".join(QuickstartRegistry.QUICKSTARTS.keys())
             raise ValueError(f"Unknown quickstart: '{quickstart_name}'. Available: {available}")
 
-        # Clone the repository
-        repo_path = self._clone_repo(quickstart)
+        try:
+            repo_path = self._clone_repo(quickstart)
+        except (RuntimeError, OSError) as e:
+            raise ValueError(f"Failed to clone repository {quickstart.repo_url}: {e}") from e
 
-        # Read README.md
         readme_path = repo_path / "README.md"
         if not readme_path.exists():
-            # Try lowercase
             readme_path = repo_path / "readme.md"
 
         if not readme_path.exists():
             raise ValueError(f"No README.md found in repository: {quickstart.repo_url}")
 
-        content = readme_path.read_text(encoding="utf-8")
+        try:
+            content = readme_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            raise ValueError(f"Failed to read README from {quickstart.repo_url}: {e}") from e
 
         return QuickstartReadme(
             quickstart_name=quickstart_name,
@@ -140,13 +144,15 @@ class QuickstartClient:
     def detect_deployment_method(self, repo_path: Path) -> DeploymentMethod:
         """Detect the deployment method for a repository.
 
+        Priority: Helm > Kustomize > Manifests > Unknown.
+
         Args:
             repo_path: Path to the cloned repository.
 
         Returns:
             Detected deployment method.
         """
-        # Check for Helm
+        # Check for Helm at root
         if (repo_path / "Chart.yaml").exists():
             return DeploymentMethod.HELM
         if (repo_path / "helm").is_dir():
@@ -154,18 +160,27 @@ class QuickstartClient:
         if (repo_path / "charts").is_dir():
             return DeploymentMethod.HELM
 
-        # Check for Kustomize
+        # Check for Kustomize at root
         if (repo_path / "kustomization.yaml").exists():
             return DeploymentMethod.KUSTOMIZE
         if (repo_path / "kustomization.yml").exists():
             return DeploymentMethod.KUSTOMIZE
 
-        # Check for manifest directories
+        # Check manifest directories, preferring kustomize if present inside
+        found_manifest_dir = False
         for manifest_dir in ["deploy", "manifests", "k8s", "kubernetes"]:
-            if (repo_path / manifest_dir).is_dir():
-                return DeploymentMethod.MANIFESTS
+            dir_path = repo_path / manifest_dir
+            if dir_path.is_dir():
+                if (dir_path / "kustomization.yaml").exists() or (
+                    dir_path / "kustomization.yml"
+                ).exists():
+                    return DeploymentMethod.KUSTOMIZE
+                found_manifest_dir = True
 
-        # Check root for YAML files
+        if found_manifest_dir:
+            return DeploymentMethod.MANIFESTS
+
+        # Check root for K8s YAML files
         yaml_files = list(repo_path.glob("*.yaml")) + list(repo_path.glob("*.yml"))
         k8s_yamls = [f for f in yaml_files if self._is_k8s_manifest(f)]
         if k8s_yamls:
@@ -177,7 +192,6 @@ class QuickstartClient:
         """Check if a YAML file appears to be a Kubernetes manifest."""
         try:
             content = file_path.read_text(encoding="utf-8")
-            # Simple heuristic: contains apiVersion and kind
             return "apiVersion:" in content and "kind:" in content
         except Exception:
             return False
@@ -211,9 +225,8 @@ class QuickstartClient:
                 error=f"Unknown quickstart: '{quickstart_name}'. Available: {available}",
             )
 
-        # Check for required CLI tools
-        tool_error = self._check_cli_tools()
-        if tool_error:
+        # Always check git is available before cloning
+        if shutil.which("git") is None:
             return DeploymentResult(
                 quickstart_name=quickstart_name,
                 namespace=namespace,
@@ -221,7 +234,7 @@ class QuickstartClient:
                 command="",
                 dry_run=dry_run,
                 success=False,
-                error=tool_error,
+                error="Required CLI tool not found: git",
             )
 
         # Clone the repository
@@ -241,15 +254,16 @@ class QuickstartClient:
         # Detect deployment method
         method = self.detect_deployment_method(repo_path)
 
-        # Build deployment command
-        command = self._build_deploy_command(repo_path, method, quickstart_name, namespace)
+        # Build deployment command as argv list
+        argv = self._build_deploy_argv(repo_path, method, quickstart_name, namespace)
+        command_display = shlex.join(argv) if argv else ""
 
         if method == DeploymentMethod.UNKNOWN:
             return DeploymentResult(
                 quickstart_name=quickstart_name,
                 namespace=namespace,
                 method=method,
-                command=command,
+                command=command_display,
                 dry_run=dry_run,
                 success=False,
                 error=(
@@ -264,15 +278,29 @@ class QuickstartClient:
                 quickstart_name=quickstart_name,
                 namespace=namespace,
                 method=method,
-                command=command,
+                command=command_display,
                 dry_run=True,
                 success=True,
-                stdout=f"Dry run: would execute the following command:\n{command}",
+                stdout=f"Dry run: would execute the following command:\n{command_display}",
+            )
+
+        # Check method-specific CLI tools before executing
+        tool_error = self._check_cli_tools_for_method(method)
+        if tool_error:
+            return DeploymentResult(
+                quickstart_name=quickstart_name,
+                namespace=namespace,
+                method=method,
+                command=command_display,
+                dry_run=dry_run,
+                success=False,
+                error=tool_error,
             )
 
         # Execute the deployment
         return self._execute_deployment(
-            command=command,
+            argv=argv,
+            command_display=command_display,
             quickstart_name=quickstart_name,
             namespace=namespace,
             method=method,
@@ -310,38 +338,33 @@ class QuickstartClient:
 
         return repo_path
 
-    def _check_cli_tools(self) -> str | None:
-        """Check if required CLI tools are available.
+    def _check_cli_tools_for_method(self, method: DeploymentMethod) -> str | None:
+        """Check if CLI tools required for the given deployment method are available.
+
+        Args:
+            method: The deployment method to check tools for.
 
         Returns:
             Error message if tools missing, None if all present.
         """
-        missing = []
-
-        # Check for oc or kubectl
-        oc_available = shutil.which("oc") is not None
-        kubectl_available = shutil.which("kubectl") is not None
-
-        if not oc_available and not kubectl_available:
-            missing.append("oc or kubectl")
-
-        # Check for git
-        if shutil.which("git") is None:
-            missing.append("git")
-
-        if missing:
-            return f"Required CLI tools not found: {', '.join(missing)}"
-
+        if method == DeploymentMethod.HELM and shutil.which("helm") is None:
+            return "Required CLI tool not found: helm"
+        if (
+            method in (DeploymentMethod.KUSTOMIZE, DeploymentMethod.MANIFESTS)
+            and shutil.which("oc") is None
+            and shutil.which("kubectl") is None
+        ):
+            return "Required CLI tool not found: oc or kubectl"
         return None
 
-    def _build_deploy_command(
+    def _build_deploy_argv(
         self,
         repo_path: Path,
         method: DeploymentMethod,
         quickstart_name: str,
         namespace: str,
-    ) -> str:
-        """Build the deployment command based on detected method.
+    ) -> list[str]:
+        """Build the deployment command as an argv list.
 
         Args:
             repo_path: Path to the cloned repository.
@@ -350,44 +373,74 @@ class QuickstartClient:
             namespace: Target namespace.
 
         Returns:
-            Shell command string.
+            Command as a list of arguments for subprocess.run.
         """
         # Prefer oc if available, fall back to kubectl
         kubectl_cmd = "oc" if shutil.which("oc") else "kubectl"
 
         if method == DeploymentMethod.HELM:
-            # Find helm chart path
-            chart_path = repo_path
+            chart_path = str(repo_path)
             if (repo_path / "helm").is_dir():
-                chart_path = repo_path / "helm"
+                chart_path = str(repo_path / "helm")
             elif (repo_path / "charts").is_dir():
-                # Find first chart in charts directory
                 charts = list((repo_path / "charts").iterdir())
                 if charts:
-                    chart_path = charts[0]
+                    chart_path = str(charts[0])
 
-            return (
-                f"helm install {quickstart_name} {chart_path} "
-                f"--namespace {namespace} --create-namespace"
-            )
+            return [
+                "helm",
+                "upgrade",
+                "--install",
+                quickstart_name,
+                chart_path,
+                "--namespace",
+                namespace,
+                "--create-namespace",
+            ]
 
         elif method == DeploymentMethod.KUSTOMIZE:
-            return f"{kubectl_cmd} apply -k {repo_path} -n {namespace}"
+            # Check manifest directories for kustomization files
+            kustomize_path = str(repo_path)
+            for manifest_dir in ["deploy", "manifests", "k8s", "kubernetes"]:
+                dir_path = repo_path / manifest_dir
+                if dir_path.is_dir() and (
+                    (dir_path / "kustomization.yaml").exists()
+                    or (dir_path / "kustomization.yml").exists()
+                ):
+                    kustomize_path = str(dir_path)
+                    break
+            return [kubectl_cmd, "apply", "-k", kustomize_path, "-n", namespace]
 
         elif method == DeploymentMethod.MANIFESTS:
             # Find manifest directory
             for manifest_dir in ["deploy", "manifests", "k8s", "kubernetes"]:
                 if (repo_path / manifest_dir).is_dir():
-                    return f"{kubectl_cmd} apply -f {repo_path / manifest_dir} -n {namespace}"
+                    return [
+                        kubectl_cmd,
+                        "apply",
+                        "-f",
+                        str(repo_path / manifest_dir),
+                        "-n",
+                        namespace,
+                    ]
 
-            # Fall back to root directory YAML files
-            return f"{kubectl_cmd} apply -f {repo_path} -n {namespace}"
+            # Fall back to individual K8s YAML files in root
+            yaml_files = list(repo_path.glob("*.yaml")) + list(repo_path.glob("*.yml"))
+            k8s_yamls = [str(f) for f in yaml_files if self._is_k8s_manifest(f)]
+            if k8s_yamls:
+                args = [kubectl_cmd, "apply", "-n", namespace]
+                for f in k8s_yamls:
+                    args.extend(["-f", f])
+                return args
 
-        return ""
+            return [kubectl_cmd, "apply", "-f", str(repo_path), "-n", namespace]
+
+        return []
 
     def _execute_deployment(
         self,
-        command: str,
+        argv: list[str],
+        command_display: str,
         quickstart_name: str,
         namespace: str,
         method: DeploymentMethod,
@@ -396,7 +449,8 @@ class QuickstartClient:
         """Execute a deployment command.
 
         Args:
-            command: Shell command to execute.
+            argv: Command as argument list for subprocess.
+            command_display: Human-readable command string for display.
             quickstart_name: Name of the quickstart.
             namespace: Target namespace.
             method: Deployment method.
@@ -407,8 +461,7 @@ class QuickstartClient:
         """
         try:
             result = subprocess.run(
-                command,
-                shell=True,
+                argv,
                 capture_output=True,
                 text=True,
                 timeout=300,
@@ -419,7 +472,7 @@ class QuickstartClient:
                 quickstart_name=quickstart_name,
                 namespace=namespace,
                 method=method,
-                command=command,
+                command=command_display,
                 dry_run=False,
                 success=result.returncode == 0,
                 stdout=result.stdout,
@@ -432,7 +485,7 @@ class QuickstartClient:
                 quickstart_name=quickstart_name,
                 namespace=namespace,
                 method=method,
-                command=command,
+                command=command_display,
                 dry_run=False,
                 success=False,
                 error="Deployment timed out after 300 seconds",
@@ -442,7 +495,7 @@ class QuickstartClient:
                 quickstart_name=quickstart_name,
                 namespace=namespace,
                 method=method,
-                command=command,
+                command=command_display,
                 dry_run=False,
                 success=False,
                 error=f"Deployment failed: {e}",

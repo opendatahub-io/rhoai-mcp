@@ -115,9 +115,7 @@ class QuickstartClient:
         quickstart = QuickstartRegistry.get(quickstart_name)
         if not quickstart:
             available = ", ".join(QuickstartRegistry.QUICKSTARTS.keys())
-            raise ValueError(
-                f"Unknown quickstart: '{quickstart_name}'. Available: {available}"
-            )
+            raise ValueError(f"Unknown quickstart: '{quickstart_name}'. Available: {available}")
 
         # Clone the repository
         repo_path = self._clone_repo(quickstart)

@@ -16,6 +16,24 @@ from rhoai_mcp.composites.neuralnav.models import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_recommendation(raw: dict[str, Any]) -> ModelRecommendation:
+    """Parse a single recommendation dict into a ModelRecommendation."""
+    return ModelRecommendation(
+        model_id=raw.get("model_id"),
+        model_name=raw.get("model_name"),
+        gpu_config=raw.get("gpu_config"),
+        predicted_ttft_p95_ms=raw.get("predicted_ttft_p95_ms"),
+        predicted_itl_p95_ms=raw.get("predicted_itl_p95_ms"),
+        predicted_e2e_p95_ms=raw.get("predicted_e2e_p95_ms"),
+        predicted_throughput_qps=raw.get("predicted_throughput_qps"),
+        cost_per_hour_usd=raw.get("cost_per_hour_usd"),
+        cost_per_month_usd=raw.get("cost_per_month_usd"),
+        meets_slo=raw.get("meets_slo", False),
+        reasoning=raw["reasoning"],
+        scores=raw.get("scores"),
+    )
+
+
 class NeuralNavConnectionError(Exception):
     """Raised when NeuralNav service is unreachable."""
 
@@ -169,7 +187,7 @@ class NeuralNavClient:
         3. Fetch SLO defaults + workload profile + expected RPS
         4. Apply SLO overrides on top of fetched defaults
         5. Get ranked recommendations with all constraints
-        6. Return balanced top-5 with specification
+        6. Extract top recommendation from each ranking list
         """
         # Step 1: Extract intent
         intent = self.extract_intent(text)
@@ -231,33 +249,23 @@ class NeuralNavClient:
             percentile=percentile,
         )
 
-        # Step 6: Extract balanced list and build result
+        # Step 6: Extract top recommendation from each ranking list
         try:
-            balanced = ranked["balanced"]
+            balanced_list = ranked.get("balanced", [])
+            cost_list = ranked.get("lowest_cost", [])
+            latency_list = ranked.get("lowest_latency", [])
             total_evaluated = ranked["total_configs_evaluated"]
             after_filters = ranked["configs_after_filters"]
-            balanced_recs = [
-                ModelRecommendation(
-                    model_id=r.get("model_id"),
-                    model_name=r.get("model_name"),
-                    gpu_config=r.get("gpu_config"),
-                    predicted_ttft_p95_ms=r.get("predicted_ttft_p95_ms"),
-                    predicted_itl_p95_ms=r.get("predicted_itl_p95_ms"),
-                    predicted_e2e_p95_ms=r.get("predicted_e2e_p95_ms"),
-                    predicted_throughput_qps=r.get("predicted_throughput_qps"),
-                    cost_per_hour_usd=r.get("cost_per_hour_usd"),
-                    cost_per_month_usd=r.get("cost_per_month_usd"),
-                    meets_slo=r.get("meets_slo", False),
-                    reasoning=r.get("reasoning", ""),
-                    scores=r.get("scores"),
-                )
-                for r in balanced[:5]
-            ]
         except KeyError as e:
             raise NeuralNavAPIError(
                 status_code=502,
                 detail=f"NeuralNav ranking response missing expected field: {e}",
             ) from e
+
+        try:
+            top_balanced = _parse_recommendation(balanced_list[0]) if balanced_list else None
+            top_cost = _parse_recommendation(cost_list[0]) if cost_list else None
+            top_performance = _parse_recommendation(latency_list[0]) if latency_list else None
         except Exception as e:
             raise NeuralNavAPIError(
                 status_code=502,
@@ -279,7 +287,9 @@ class NeuralNavClient:
                     "expected_qps": expected_qps,
                 },
             },
-            recommendations=balanced_recs,
+            top_performance=top_performance,
+            top_cost=top_cost,
+            top_balanced=top_balanced,
             total_configs_evaluated=total_evaluated,
             configs_after_filters=after_filters,
         )

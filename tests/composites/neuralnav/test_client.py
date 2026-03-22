@@ -153,7 +153,6 @@ class TestNeuralNavClientExtractIntent:
         with pytest.raises(NeuralNavConnectionError):
             client.extract_intent("test")
 
-
     @patch("rhoai_mcp.composites.neuralnav.client.httpx")
     def test_extract_intent_malformed_response(self, mock_httpx: MagicMock) -> None:
         """Malformed intent response raises NeuralNavAPIError."""
@@ -304,7 +303,12 @@ class TestNeuralNavClientRecommend:
         client = NeuralNavClient("http://localhost:8000")
         result = client.recommend("I need a chatbot for 1000 users")
 
-        assert result.recommendations[0].model_id == "meta-llama/Llama-3.1-70B-Instruct"
+        assert result.top_balanced is not None
+        assert result.top_balanced.model_id == "meta-llama/Llama-3.1-70B-Instruct"
+        assert result.top_cost is not None
+        assert result.top_cost.model_id == "meta-llama/Llama-3.1-70B-Instruct"
+        assert result.top_performance is not None
+        assert result.top_performance.model_id == "meta-llama/Llama-3.1-70B-Instruct"
         assert result.specification["use_case"] == "chatbot_conversational"
         assert result.total_configs_evaluated == 2847
 

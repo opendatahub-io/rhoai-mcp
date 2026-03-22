@@ -86,8 +86,12 @@ class RecommendationResult(BaseModel):
         ...,
         description="Assembled specification (use_case, SLO targets, traffic profile)",
     )
-    recommendations: list[ModelRecommendation] = Field(
-        ..., description="Top-5 balanced model recommendations"
+    top_performance: ModelRecommendation | None = Field(
+        None, description="Top model for lowest latency"
+    )
+    top_cost: ModelRecommendation | None = Field(None, description="Top model for lowest cost")
+    top_balanced: ModelRecommendation | None = Field(
+        None, description="Top model for balanced score"
     )
     total_configs_evaluated: int = Field(0, description="Total configs evaluated")
     configs_after_filters: int = Field(0, description="Configs after filtering")

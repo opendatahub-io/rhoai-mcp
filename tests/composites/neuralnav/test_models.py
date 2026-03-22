@@ -91,11 +91,12 @@ class TestRecommendationResult:
                     "expected_qps": 10.0,
                 },
             },
-            recommendations=[],
             total_configs_evaluated=2847,
             configs_after_filters=0,
         )
-        assert len(result.recommendations) == 0
+        assert result.top_performance is None
+        assert result.top_cost is None
+        assert result.top_balanced is None
         assert result.total_configs_evaluated == 2847
 
 

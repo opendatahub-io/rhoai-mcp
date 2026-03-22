@@ -9,6 +9,7 @@ from rhoai_mcp.composites.neuralnav.client import (
     NeuralNavClient,
     NeuralNavConnectionError,
 )
+from rhoai_mcp.composites.neuralnav.models import DeploymentConfigResult
 
 SAMPLE_INTENT = {
     "use_case": "chatbot_conversational",
@@ -113,6 +114,18 @@ SAMPLE_RANKED_RESPONSE = {
             "percentile": "p95",
         },
     },
+}
+
+SAMPLE_DEPLOY_RESPONSE = {
+    "deployment_id": "chatbot-llama-3-1-70b-20260322143022",
+    "namespace": "default",
+    "files": {
+        "inferenceservice": "apiVersion: serving.kserve.io/v1beta1\nkind: InferenceService",
+        "autoscaling": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler",
+        "servicemonitor": "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor",
+    },
+    "success": True,
+    "message": "Deployment files generated successfully",
 }
 
 
@@ -696,3 +709,288 @@ class TestNeuralNavClientHealthCheck:
 
         assert healthy is False
         assert "unavailable" in msg.lower()
+
+
+class TestNeuralNavClientDeploy:
+    """Tests for deploy() method."""
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_deploy(self, mock_httpx: MagicMock) -> None:
+        """deploy() sends recommendation + namespace and returns response."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        mock_response.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        result = client.deploy(SAMPLE_RECOMMENDATION, namespace="ml-prod")
+
+        # Verify correct endpoint and payload
+        call_args = mock_client.post.call_args
+        assert "/api/v1/deploy" in call_args.args[0]
+        payload = call_args.kwargs.get("json") or call_args[1].get("json")
+        assert payload["recommendation"] == SAMPLE_RECOMMENDATION
+        assert payload["namespace"] == "ml-prod"
+
+        # Verify response passthrough
+        assert result["deployment_id"] == "chatbot-llama-3-1-70b-20260322143022"
+        assert "inferenceservice" in result["files"]
+
+
+class TestNeuralNavClientGenerateConfig:
+    """Tests for generate_config() method."""
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_generate_config_balanced(self, mock_httpx: MagicMock) -> None:
+        """generate_config with category='balanced' picks from balanced list."""
+        mock_client = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        deploy_resp = MagicMock()
+        deploy_resp.status_code = 200
+        deploy_resp.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        deploy_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        result = client.generate_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert isinstance(result, DeploymentConfigResult)
+        assert result.deployment_id == "chatbot-llama-3-1-70b-20260322143022"
+        assert result.model_name == "Llama 3.1 70B"
+        assert "inferenceservice" in result.configs
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_generate_config_cost(self, mock_httpx: MagicMock) -> None:
+        """category='cost' maps to 'lowest_cost' ranking list."""
+        mock_client = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        deploy_resp = MagicMock()
+        deploy_resp.status_code = 200
+        deploy_resp.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        deploy_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        result = client.generate_config(
+            category="cost",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert isinstance(result, DeploymentConfigResult)
+        assert result.deployment_id == "chatbot-llama-3-1-70b-20260322143022"
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_generate_config_performance(self, mock_httpx: MagicMock) -> None:
+        """category='performance' maps to 'lowest_latency' ranking list."""
+        mock_client = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        deploy_resp = MagicMock()
+        deploy_resp.status_code = 200
+        deploy_resp.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        deploy_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        result = client.generate_config(
+            category="performance",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert isinstance(result, DeploymentConfigResult)
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_generate_config_empty_category(self, mock_httpx: MagicMock) -> None:
+        """Empty category list raises NeuralNavAPIError."""
+        mock_client = MagicMock()
+
+        empty_ranked = {
+            **SAMPLE_RANKED_RESPONSE,
+            "balanced": [],
+        }
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = empty_ranked
+        ranked_resp.raise_for_status = MagicMock()
+
+        mock_client.post.return_value = ranked_resp
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        with pytest.raises(NeuralNavAPIError, match="No recommendation found"):
+            client.generate_config(
+                category="balanced",
+                use_case="chatbot_conversational",
+                user_count=1000,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=150,
+                itl_target_ms=65,
+                e2e_target_ms=2000,
+            )
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_generate_config_deploy_error(self, mock_httpx: MagicMock) -> None:
+        """Deploy failure after ranking succeeds raises NeuralNavAPIError."""
+        import httpx as real_httpx
+
+        mock_httpx.ConnectError = real_httpx.ConnectError
+        mock_httpx.TimeoutException = real_httpx.TimeoutException
+        mock_httpx.HTTPStatusError = real_httpx.HTTPStatusError
+        mock_httpx.RequestError = real_httpx.RequestError
+        mock_client = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        error_response = MagicMock()
+        error_response.status_code = 500
+        error_response.text = "Internal Server Error"
+        error_response.raise_for_status.side_effect = real_httpx.HTTPStatusError(
+            "Server Error",
+            request=MagicMock(),
+            response=error_response,
+        )
+
+        mock_client.post.side_effect = [ranked_resp, error_response]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        with pytest.raises(NeuralNavAPIError):
+            client.generate_config(
+                category="balanced",
+                use_case="chatbot_conversational",
+                user_count=1000,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=150,
+                itl_target_ms=65,
+                e2e_target_ms=2000,
+            )
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_generate_config_empty_files(self, mock_httpx: MagicMock) -> None:
+        """Deploy returns empty files dict raises NeuralNavAPIError."""
+        mock_client = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        empty_deploy = {**SAMPLE_DEPLOY_RESPONSE, "files": {}}
+        deploy_resp = MagicMock()
+        deploy_resp.status_code = 200
+        deploy_resp.json.return_value = empty_deploy
+        deploy_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        with pytest.raises(NeuralNavAPIError, match="no config files"):
+            client.generate_config(
+                category="balanced",
+                use_case="chatbot_conversational",
+                user_count=1000,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=150,
+                itl_target_ms=65,
+                e2e_target_ms=2000,
+            )
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_generate_config_model_id_fallback(self, mock_httpx: MagicMock) -> None:
+        """When model_name is None, model_id is used instead."""
+        mock_client = MagicMock()
+
+        rec_no_name = {**SAMPLE_RECOMMENDATION, "model_name": None}
+        ranked_no_name = {**SAMPLE_RANKED_RESPONSE, "balanced": [rec_no_name]}
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = ranked_no_name
+        ranked_resp.raise_for_status = MagicMock()
+
+        deploy_resp = MagicMock()
+        deploy_resp.status_code = 200
+        deploy_resp.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        deploy_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        result = client.generate_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result.model_name == "meta-llama/Llama-3.1-70B-Instruct"

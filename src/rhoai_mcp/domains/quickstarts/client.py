@@ -34,7 +34,7 @@ class QuickstartRegistry:
                 "Deploy and serve Large Language Models on CPU infrastructure. "
                 "Ideal for environments without GPU resources or for cost-effective inference."
             ),
-            repo_url="https://github.com/rh-ai-quickstart/llm-cpu-serving",
+            repo_url="git@github.com:rh-ai-quickstart/llm-cpu-serving.git",
             tags=["llm", "inference", "cpu", "serving"],
         ),
         "rag-chatbot": Quickstart(
@@ -44,7 +44,7 @@ class QuickstartRegistry:
                 "Build a Retrieval-Augmented Generation chatbot with document ingestion. "
                 "Combines vector search with LLM for context-aware responses."
             ),
-            repo_url="https://github.com/rh-ai-quickstart/rag-chatbot",
+            repo_url="git@github.com:rh-ai-quickstart/rag-chatbot.git",
             tags=["rag", "chatbot", "vector-db", "llm"],
         ),
         "product-recommender": Quickstart(
@@ -54,7 +54,7 @@ class QuickstartRegistry:
                 "ML-powered product recommendation system. "
                 "Uses collaborative filtering and embeddings for personalized recommendations."
             ),
-            repo_url="https://github.com/rh-ai-quickstart/product-recommender-system",
+            repo_url="git@github.com:rh-ai-quickstart/product-recommender-system.git",
             tags=["ml", "recommendations", "embeddings"],
         ),
         "lemonade-stand": Quickstart(
@@ -64,7 +64,7 @@ class QuickstartRegistry:
                 "AI-powered business assistant demo application. "
                 "Showcases multi-agent workflows and tool use patterns."
             ),
-            repo_url="https://github.com/rh-ai-quickstart/lemonade-stand-assistant",
+            repo_url="git@github.com:rh-ai-quickstart/lemonade-stand-assistant.git",
             tags=["agents", "demo", "tools", "workflow"],
         ),
     }

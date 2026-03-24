@@ -331,6 +331,7 @@ class QuickstartClient:
             capture_output=True,
             text=True,
             timeout=60,
+            stdin=subprocess.DEVNULL,
         )
 
         if result.returncode != 0:

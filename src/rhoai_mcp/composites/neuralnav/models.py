@@ -95,3 +95,12 @@ class RecommendationResult(BaseModel):
     )
     total_configs_evaluated: int = Field(0, description="Total configs evaluated")
     configs_after_filters: int = Field(0, description="Configs after filtering")
+
+
+class DeploymentConfigResult(BaseModel):
+    """Result of deployment config generation."""
+
+    deployment_id: str = Field(..., description="Generated deployment identifier")
+    namespace: str = Field(..., description="Target Kubernetes namespace")
+    model_name: str | None = Field(None, description="Human-readable model name")
+    configs: dict[str, str] = Field(..., description="Config type to YAML content mapping")

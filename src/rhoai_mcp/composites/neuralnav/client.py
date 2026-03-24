@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from rhoai_mcp.composites.neuralnav.models import (
+    DeploymentConfigResult,
     DeploymentIntent,
     ModelRecommendation,
     RecommendationResult,
@@ -32,6 +33,13 @@ def _parse_recommendation(raw: dict[str, Any]) -> ModelRecommendation:
         reasoning=raw["reasoning"],
         scores=raw.get("scores"),
     )
+
+
+CATEGORY_MAP: dict[str, str] = {
+    "balanced": "balanced",
+    "cost": "lowest_cost",
+    "performance": "lowest_latency",
+}
 
 
 class NeuralNavConnectionError(Exception):
@@ -293,6 +301,115 @@ class NeuralNavClient:
             total_configs_evaluated=total_evaluated,
             configs_after_filters=after_filters,
         )
+
+    def deploy(
+        self,
+        recommendation: dict[str, Any],
+        namespace: str = "default",
+    ) -> dict[str, Any]:
+        """Call POST /api/v1/deploy to generate YAML configs.
+
+        The recommendation dict must be a full DeploymentRecommendation as
+        returned by the /api/v1/ranked-recommend-from-spec endpoint.
+
+        Returns dict with deployment_id, namespace, files (config type to
+        YAML content), success, and message.
+        """
+        return self._request(
+            "POST",
+            "/api/v1/deploy",
+            json={"recommendation": recommendation, "namespace": namespace},
+        )
+
+    def generate_config(
+        self,
+        category: str,
+        use_case: str,
+        user_count: int,
+        prompt_tokens: int,
+        output_tokens: int,
+        expected_qps: float,
+        ttft_target_ms: int,
+        itl_target_ms: int,
+        e2e_target_ms: int,
+        namespace: str = "default",
+        preferred_gpu_types: list[str] | None = None,
+        min_accuracy: int | None = None,
+        max_cost: float | None = None,
+        weights: dict[str, int] | None = None,
+        percentile: str | None = None,
+    ) -> DeploymentConfigResult:
+        """Generate deployment configs for the top recommendation in a category.
+
+        1. Get ranked recommendations from specification
+        2. Pick the top recommendation from the specified category
+        3. Generate deployment YAML configs via the deploy API
+        """
+        # Step 1: Validate category before making any API calls
+        category_key = CATEGORY_MAP.get(category)
+        if category_key is None:
+            raise NeuralNavAPIError(
+                status_code=400,
+                detail=f"Invalid category '{category}'. Valid: {', '.join(CATEGORY_MAP)}",
+            )
+
+        # Step 2: Get ranked recommendations
+        ranked = self.get_recommendations(
+            use_case=use_case,
+            user_count=user_count,
+            prompt_tokens=prompt_tokens,
+            output_tokens=output_tokens,
+            expected_qps=expected_qps,
+            ttft_target_ms=ttft_target_ms,
+            itl_target_ms=itl_target_ms,
+            e2e_target_ms=e2e_target_ms,
+            preferred_gpu_types=preferred_gpu_types,
+            min_accuracy=min_accuracy,
+            max_cost=max_cost,
+            weights=weights,
+            percentile=percentile,
+        )
+
+        # Step 3: Pick top recommendation from category
+        category_list = ranked.get(category_key, [])
+        if not category_list:
+            raise NeuralNavAPIError(
+                status_code=404,
+                detail=f"No recommendation found for category '{category}'",
+            )
+        recommendation = category_list[0]
+
+        # Extract model name (model_name preferred, model_id as fallback)
+        model_name = recommendation.get("model_name") or recommendation.get("model_id")
+
+        # Step 4: Generate deployment configs
+        deploy_result = self.deploy(recommendation, namespace=namespace)
+
+        if deploy_result.get("success") is not True:
+            raise NeuralNavAPIError(
+                status_code=502,
+                detail=deploy_result.get("message", "NeuralNav deploy failed"),
+            )
+
+        files = deploy_result.get("files", {})
+        if not files:
+            raise NeuralNavAPIError(
+                status_code=502,
+                detail="NeuralNav generated no config files",
+            )
+
+        try:
+            return DeploymentConfigResult(
+                deployment_id=deploy_result["deployment_id"],
+                namespace=deploy_result["namespace"],
+                model_name=model_name,
+                configs=files,
+            )
+        except KeyError as e:
+            raise NeuralNavAPIError(
+                status_code=502,
+                detail=f"NeuralNav deploy response missing expected field: {e}",
+            ) from e
 
     def health_check(self) -> tuple[bool, str]:
         """Check if NeuralNav service is available."""

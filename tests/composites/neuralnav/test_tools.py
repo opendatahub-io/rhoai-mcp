@@ -2,7 +2,11 @@
 
 from unittest.mock import MagicMock, patch
 
-from rhoai_mcp.composites.neuralnav.models import ModelRecommendation, RecommendationResult
+from rhoai_mcp.composites.neuralnav.models import (
+    DeploymentConfigResult,
+    ModelRecommendation,
+    RecommendationResult,
+)
 from rhoai_mcp.composites.neuralnav.tools import register_tools
 
 
@@ -74,6 +78,17 @@ SAMPLE_RESULT = RecommendationResult(
     top_balanced=SAMPLE_REC,
     total_configs_evaluated=2847,
     configs_after_filters=542,
+)
+
+SAMPLE_CONFIG_RESULT = DeploymentConfigResult(
+    deployment_id="chatbot-llama-3-1-70b-20260322143022",
+    namespace="default",
+    model_name="Llama 3.1 70B",
+    configs={
+        "inferenceservice": "apiVersion: serving.kserve.io/v1beta1\nkind: InferenceService",
+        "autoscaling": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler",
+        "servicemonitor": "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor",
+    },
 )
 
 
@@ -496,3 +511,484 @@ class TestRecommendModelTool:
         assert "error" in result
         assert "max length" in result["error"]
         mock_client_class.assert_not_called()
+
+
+class TestDeploymentConfigTool:
+    """Tests for get_deployment_config tool."""
+
+    def test_tool_registration(self) -> None:
+        """get_deployment_config tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "get_deployment_config" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_successful_deployment_config(self, mock_client_class: MagicMock) -> None:
+        """Successful config generation returns formatted result."""
+        mock_client_class.return_value.generate_config.return_value = SAMPLE_CONFIG_RESULT
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["deployment_id"] == "chatbot-llama-3-1-70b-20260322143022"
+        assert result["namespace"] == "default"
+        assert result["model"] == "Llama 3.1 70B"
+        assert "inferenceservice" in result["configs"]
+        assert "autoscaling" in result["configs"]
+        assert "servicemonitor" in result["configs"]
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_deployment_config_no_model_key(self, mock_client_class: MagicMock) -> None:
+        """When model_name is None, model key is omitted from output."""
+        no_model = DeploymentConfigResult(
+            deployment_id="chatbot-unknown-20260322",
+            namespace="default",
+            configs={"inferenceservice": "yaml-content"},
+        )
+        mock_client_class.return_value.generate_config.return_value = no_model
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "model" not in result
+        assert result["deployment_id"] == "chatbot-unknown-20260322"
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_deployment_config_model_name_fallback(self, mock_client_class: MagicMock) -> None:
+        """When model_name is a model_id fallback value, it is passed through."""
+        fallback_result = DeploymentConfigResult(
+            deployment_id="chatbot-llama-20260322",
+            namespace="default",
+            model_name="meta-llama/Llama-3.1-70B-Instruct",
+            configs={"inferenceservice": "yaml-content"},
+        )
+        mock_client_class.return_value.generate_config.return_value = fallback_result
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["model"] == "meta-llama/Llama-3.1-70B-Instruct"
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_empty_category_result(self, mock_client_class: MagicMock) -> None:
+        """When no recommendations exist for category, returns error dict."""
+        from rhoai_mcp.composites.neuralnav.client import NeuralNavAPIError
+
+        mock_client_class.return_value.generate_config.side_effect = NeuralNavAPIError(
+            status_code=404, detail="No recommendation found for category 'cost'"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="cost",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert result["status_code"] == 404
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_category(self, mock_client_class: MagicMock) -> None:
+        """Invalid category returns error dict."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="fastest",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "category" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_use_case(self, mock_client_class: MagicMock) -> None:
+        """Invalid use_case returns error dict."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="invalid_case",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "use_case" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_user_count(self, mock_client_class: MagicMock) -> None:
+        """user_count <= 0 returns error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=0,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "user_count" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_slo_targets(self, mock_client_class: MagicMock) -> None:
+        """SLO targets <= 0 return error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=0,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "ttft_target_ms" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_token_counts(self, mock_client_class: MagicMock) -> None:
+        """prompt/output tokens <= 0 return error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=-1,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "prompt_tokens" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_expected_qps(self, mock_client_class: MagicMock) -> None:
+        """expected_qps <= 0 returns error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "expected_qps" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_optimization_profile(self, mock_client_class: MagicMock) -> None:
+        """Invalid optimization_profile returns error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            optimization_profile="turbo",
+        )
+
+        assert "error" in result
+        assert "optimization_profile" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_gpu_types(self, mock_client_class: MagicMock) -> None:
+        """Invalid GPU types return error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            preferred_gpu_types=["V100"],
+        )
+
+        assert "error" in result
+        assert "V100" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_min_accuracy(self, mock_client_class: MagicMock) -> None:
+        """Out-of-range min_accuracy returns error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            min_accuracy=101,
+        )
+
+        assert "error" in result
+        assert "min_accuracy" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_max_cost(self, mock_client_class: MagicMock) -> None:
+        """Negative max_cost_per_month returns error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            max_cost_per_month=-50.0,
+        )
+
+        assert "error" in result
+        assert "max_cost_per_month" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_invalid_percentile(self, mock_client_class: MagicMock) -> None:
+        """Invalid percentile returns error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            percentile="p50",
+        )
+
+        assert "error" in result
+        assert "percentile" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_connection_error(self, mock_client_class: MagicMock) -> None:
+        """NeuralNav connection error returns error dict."""
+        from rhoai_mcp.composites.neuralnav.client import NeuralNavConnectionError
+
+        mock_client_class.return_value.generate_config.side_effect = NeuralNavConnectionError(
+            "Neural Navigator service unavailable at http://localhost:8000"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "unavailable" in result["error"].lower()
+        assert "hint" in result
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_api_error(self, mock_client_class: MagicMock) -> None:
+        """NeuralNav API error returns error dict with status code."""
+        from rhoai_mcp.composites.neuralnav.client import NeuralNavAPIError
+
+        mock_client_class.return_value.generate_config.side_effect = NeuralNavAPIError(
+            status_code=500, detail="Internal Server Error"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert result["status_code"] == 500
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_empty_namespace(self, mock_client_class: MagicMock) -> None:
+        """Empty namespace returns error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        result = get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            namespace="  ",
+        )
+
+        assert "error" in result
+        assert "namespace" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    def test_optimization_profile_resolved_to_weights(self, mock_client_class: MagicMock) -> None:
+        """optimization_profile is resolved to weights dict before calling client."""
+        mock_client_class.return_value.generate_config.return_value = SAMPLE_CONFIG_RESULT
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        get_config = mock_mcp._registered_tools["get_deployment_config"]
+
+        get_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            optimization_profile="optimize_cost",
+        )
+
+        call_kwargs = mock_client_class.return_value.generate_config.call_args.kwargs
+        assert call_kwargs["weights"] == {"accuracy": 2, "price": 8, "latency": 1, "complexity": 1}

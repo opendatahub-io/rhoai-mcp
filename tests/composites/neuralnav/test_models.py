@@ -1,6 +1,7 @@
 """Tests for NeuralNav composite models."""
 
 from rhoai_mcp.composites.neuralnav.models import (
+    DeploymentConfigResult,
     DeploymentIntent,
     GPUConfig,
     ModelRecommendation,
@@ -116,3 +117,35 @@ class TestTrafficProfile:
         """Traffic profile can be constructed."""
         tp = TrafficProfile(prompt_tokens=512, output_tokens=256, expected_qps=10.0)
         assert tp.expected_qps == 10.0
+
+
+class TestDeploymentConfigResult:
+    """Tests for DeploymentConfigResult model."""
+
+    def test_full_result(self) -> None:
+        """Result with all fields populated."""
+        result = DeploymentConfigResult(
+            deployment_id="chatbot-llama-3-1-70b-20260322143022",
+            namespace="default",
+            model_name="Llama 3.1 70B",
+            configs={
+                "inferenceservice": "apiVersion: serving.kserve.io/v1beta1\nkind: InferenceService",
+                "autoscaling": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler",
+                "servicemonitor": "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor",
+            },
+        )
+        assert result.deployment_id == "chatbot-llama-3-1-70b-20260322143022"
+        assert result.namespace == "default"
+        assert result.model_name == "Llama 3.1 70B"
+        assert len(result.configs) == 3
+        assert "InferenceService" in result.configs["inferenceservice"]
+
+    def test_result_without_model_name(self) -> None:
+        """Result with model_name as None."""
+        result = DeploymentConfigResult(
+            deployment_id="chatbot-unknown-20260322",
+            namespace="ml-prod",
+            configs={"inferenceservice": "yaml-content"},
+        )
+        assert result.model_name is None
+        assert result.namespace == "ml-prod"

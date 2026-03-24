@@ -5,6 +5,7 @@ Handles repository cloning, README extraction, and deployment detection/executio
 
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 import subprocess
@@ -325,13 +326,19 @@ class QuickstartClient:
         if repo_path.exists():
             shutil.rmtree(repo_path)
 
-        # Shallow clone
+        # Shallow clone with SSH prompts disabled to avoid terminal hangs
+        env = {
+            **os.environ,
+            "GIT_SSH_COMMAND": "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new",
+            "GIT_TERMINAL_PROMPT": "0",
+        }
         result = subprocess.run(
             ["git", "clone", "--depth=1", quickstart.repo_url, str(repo_path)],
             capture_output=True,
             text=True,
             timeout=60,
             stdin=subprocess.DEVNULL,
+            env=env,
         )
 
         if result.returncode != 0:
@@ -467,6 +474,7 @@ class QuickstartClient:
                 text=True,
                 timeout=300,
                 cwd=str(repo_path),
+                stdin=subprocess.DEVNULL,
             )
 
             return DeploymentResult(

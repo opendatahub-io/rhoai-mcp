@@ -82,6 +82,13 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
             return {
                 "error": str(e),
                 "quickstart_name": quickstart_name,
+                "_source": {
+                    "kind": "QuickstartReadme",
+                    "api_version": "rhoai-mcp/v1",
+                    "name": quickstart_name,
+                    "namespace": None,
+                    "uid": None,
+                },
             }
 
     @mcp.tool()

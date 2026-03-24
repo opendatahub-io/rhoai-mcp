@@ -352,7 +352,11 @@ class QuickstartsPlugin(BasePlugin):
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
-        return True, "Quickstarts use external Git repositories"
+        import shutil
+
+        if shutil.which("git") is None:
+            return False, "Required CLI tool not found: git"
+        return True, "Quickstarts ready (git available)"
 
 
 def get_core_plugins() -> list[BasePlugin]:

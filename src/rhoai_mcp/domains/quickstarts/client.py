@@ -45,7 +45,7 @@ class QuickstartRegistry:
                 "Build a Retrieval-Augmented Generation chatbot with document ingestion. "
                 "Combines vector search with LLM for context-aware responses."
             ),
-            repo_url="git@github.com:rh-ai-quickstart/rag-chatbot.git",
+            repo_url="git@github.com:rh-ai-quickstart/RAG.git",
             tags=["rag", "chatbot", "vector-db", "llm"],
         ),
         "product-recommender": Quickstart(

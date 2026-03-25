@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: rhoai-mcp
+
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+
+# Keep ClusterRoleBinding subject namespace in sync with the configured namespace.
+# Kustomize's namespace transformer does not update subjects[].namespace, so we use
+# a replacement sourced from the ServiceAccount's metadata.namespace (which IS set
+# by the namespace transformer).
+replacements:
+  - source:
+      kind: ServiceAccount
+      name: rhoai-mcp
+      fieldPath: metadata.namespace
+    targets:
+      - select:
+          kind: ClusterRoleBinding
+          name: rhoai-mcp
+        fieldPaths:
+          - subjects.[kind=ServiceAccount].namespace

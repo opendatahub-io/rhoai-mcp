@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhoai-mcp-config
+  labels:
+    app.kubernetes.io/name: rhoai-mcp
+    app.kubernetes.io/component: config
+data:
+  RHOAI_MCP_TRANSPORT: "sse"
+  RHOAI_MCP_HOST: "0.0.0.0"
+  RHOAI_MCP_PORT: "8000"
+  RHOAI_MCP_AUTH_MODE: "auto"
+  RHOAI_MCP_LOG_LEVEL: "INFO"
+  RHOAI_MCP_READ_ONLY_MODE: "false"
+  RHOAI_MCP_ENABLE_DANGEROUS_OPERATIONS: "false"

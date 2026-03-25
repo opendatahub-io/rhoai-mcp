@@ -1,0 +1,93 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rhoai-mcp
+  labels:
+    app.kubernetes.io/name: rhoai-mcp
+    app.kubernetes.io/component: rbac
+rules:
+  # Core Kubernetes resources (read-only)
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - services
+      - events
+      - nodes
+    verbs: ["get", "list", "watch"]
+
+  # Pods (create for PVC permission fix jobs)
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs: ["create"]
+
+  # Persistent Volumes (create for NFS storage setup)
+  - apiGroups: [""]
+    resources:
+      - persistentvolumes
+    verbs: ["create"]
+
+  # Namespaces (read-write for Data Science Project management)
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+
+  # Core Kubernetes resources (read-write for data connections and storage)
+  - apiGroups: [""]
+    resources:
+      - secrets
+      - persistentvolumeclaims
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Kubeflow Notebooks
+  - apiGroups: ["kubeflow.org"]
+    resources:
+      - notebooks
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+
+  # Kubeflow Training Operator v2
+  - apiGroups: ["trainer.kubeflow.org"]
+    resources:
+      - trainjobs
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  - apiGroups: ["trainer.kubeflow.org"]
+    resources:
+      - trainingruntimes
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: ["trainer.kubeflow.org"]
+    resources:
+      - clustertrainingruntimes
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Data Science Pipelines
+  - apiGroups: ["datasciencepipelinesapplications.opendatahub.io"]
+    resources:
+      - datasciencepipelinesapplications
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Model Serving (KServe)
+  - apiGroups: ["serving.kserve.io"]
+    resources:
+      - inferenceservices
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  - apiGroups: ["serving.kserve.io"]
+    resources:
+      - servingruntimes
+    verbs: ["get", "list", "watch", "create"]
+
+  # Deployments (create for quickstart deployment)
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+    verbs: ["create"]
+
+  # Storage Classes (list for NFS storage discovery)
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - storageclasses
+    verbs: ["list"]

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhoai-mcp-config
+data:
+  RHOAI_MCP_LOG_LEVEL: "DEBUG"
+  # WARNING: Enables delete operations. This overlay is for local development only.
+  # Never apply to production clusters. Use overlays/openshift for production.
+  RHOAI_MCP_ENABLE_DANGEROUS_OPERATIONS: "true"

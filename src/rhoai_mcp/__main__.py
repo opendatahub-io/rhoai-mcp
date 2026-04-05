@@ -185,6 +185,14 @@ def main() -> int:
             logger.error(f"Configuration error: {e}")
             return 1
 
+    # Validate OIDC config
+    if config.oidc_enabled:
+        try:
+            config.validate_oidc_config()
+        except ValueError as e:
+            logger.error(f"OIDC configuration error: {e}")
+            return 1
+
     # Create and run server
     # Run with appropriate transport
     # Note: Host/port are set via RHOAI_MCP_HOST/PORT env vars which FastMCP reads

@@ -40,11 +40,26 @@ class RHOAIServer:
     def k8s(self) -> K8sClient:
         """Get the Kubernetes client.
 
+        When OIDC is enabled, returns an impersonating client for the
+        current user. Otherwise returns the shared SA client.
+
         Raises:
             RuntimeError: If server is not running.
         """
         if self._k8s_client is None:
             raise RuntimeError("Server not running. K8s client not available.")
+
+        if self._config.oidc_enabled:
+            from rhoai_mcp.auth.user_context import UserContext
+
+            ctx = UserContext.current()
+            if ctx is None:
+                raise RuntimeError(
+                    "OIDC is enabled but no UserContext is set. "
+                    "Refusing to fall back to service-account client."
+                )
+            return self._k8s_client.create_impersonating_client(ctx.username, ctx.groups)
+
         return self._k8s_client
 
     @property
@@ -202,7 +217,66 @@ class RHOAIServer:
         # Register health endpoint for Kubernetes probes
         self._register_health_endpoint(mcp)
 
+        # Register OIDC auth components if enabled
+        if self._config.oidc_enabled:
+            self._setup_oidc_auth(mcp)
+
         return mcp
+
+    def _setup_oidc_auth(self, mcp: FastMCP) -> None:
+        """Configure OIDC authentication middleware and endpoints."""
+        from rhoai_mcp.auth.metadata import build_protected_resource_metadata
+        from rhoai_mcp.auth.oidc import OIDCValidator
+
+        self._config.validate_oidc_config()
+        # issuer_url is guaranteed non-None here by validate_oidc_config()
+        assert self._config.oidc_issuer_url is not None
+        issuer_url = self._config.oidc_issuer_url
+
+        # Create OIDC validator
+        validator = OIDCValidator(
+            issuer_url=issuer_url,
+            audience=self._config.oidc_audience,
+            username_claim=self._config.oidc_username_claim,
+            groups_claim=self._config.oidc_groups_claim,
+            jwks_cache_ttl=self._config.oidc_jwks_cache_ttl,
+        )
+
+        # Build resource metadata URL
+        resource_url = f"https://{self._config.host}:{self._config.port}"
+        metadata_path = "/.well-known/oauth-protected-resource"
+
+        # Register Protected Resource Metadata endpoint
+        @mcp.custom_route(metadata_path, methods=["GET"])
+        async def protected_resource_metadata(request: Request) -> JSONResponse:  # noqa: ARG001
+            meta = build_protected_resource_metadata(
+                resource_url=resource_url,
+                issuer_url=issuer_url,
+                scopes=self._config.oidc_required_scopes,
+            )
+            return JSONResponse(meta)
+
+        # Add auth middleware
+        exclude_paths = ["/health", metadata_path]
+        self._oidc_resource_metadata_url = f"{resource_url}{metadata_path}"
+
+        from rhoai_mcp.auth.middleware import OIDCAuthMiddleware
+
+        starlette_app = getattr(mcp, "_app", None) or getattr(mcp, "app", None)
+        if starlette_app and hasattr(starlette_app, "add_middleware"):
+            starlette_app.add_middleware(
+                OIDCAuthMiddleware,
+                validator=validator,
+                exclude_paths=exclude_paths,
+                resource_metadata_url=self._oidc_resource_metadata_url,
+            )
+        else:
+            logger.warning(
+                "Could not attach OIDC middleware to FastMCP app. "
+                "Check FastMCP version for ASGI app access."
+            )
+
+        logger.info("OIDC authentication enabled")
 
     def _register_core_resources(self, mcp: FastMCP) -> None:
         """Register core MCP resources for cluster information."""

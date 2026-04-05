@@ -98,6 +98,45 @@ class RHOAIServer:
             return {}
         return self._plugin_manager.healthy_plugins
 
+    def get_allowed_tools(self) -> set[str] | None:
+        """Get the set of tool names the current user can access.
+
+        Returns None when OIDC is disabled (all tools allowed).
+        Returns a set of tool names when OIDC is enabled.
+        """
+        if not self._config.oidc_enabled:
+            return None
+
+        from rhoai_mcp.auth.rbac import RBACChecker, ToolPermission
+        from rhoai_mcp.auth.user_context import UserContext
+
+        ctx = UserContext.current()
+        if ctx is None:
+            return set()  # No user context = no tools
+
+        # Collect tool permission mappings from plugins
+        if not self._plugin_manager:
+            raise RuntimeError("OIDC enabled but plugin_manager not initialized")
+
+        raw_perms = self._plugin_manager.collect_tool_permissions()
+        if not raw_perms:
+            logger.warning("get_allowed_tools: no permission mappings, allowing all tools")
+            return None
+
+        # Convert to ToolPermission objects
+        tool_perms: dict[str, list[ToolPermission]] = {}
+        for tool_name, perm_dicts in raw_perms.items():
+            tool_perms[tool_name] = [ToolPermission.from_dict(p) for p in perm_dicts]
+
+        # Create RBAC checker using the SA's API client (not impersonating)
+        from kubernetes import client as k8s_client  # type: ignore[import-untyped]
+
+        assert self._k8s_client is not None  # guaranteed by startup()
+        authz_api = k8s_client.AuthorizationV1Api(self._k8s_client._api_client)
+        checker = RBACChecker(authz_api)
+
+        return checker.filter_tools(ctx.username, ctx.groups, tool_perms)
+
     def _init_k8s_client(self) -> None:
         """Initialize and connect the Kubernetes client.
 

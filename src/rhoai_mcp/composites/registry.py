@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from rhoai_mcp.composites.permissions import (
+    CLUSTER_PERMISSIONS,
+    TRAINING_COMPOSITE_PERMISSIONS,
+)
 from rhoai_mcp.hooks import hookimpl
 from rhoai_mcp.plugin import BasePlugin, PluginMetadata
 
@@ -43,6 +47,10 @@ class ClusterCompositesPlugin(BasePlugin):
         register_tools(mcp, server)
 
     @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return CLUSTER_PERMISSIONS
+
+    @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
         return True, "Cluster composites use core domain clients"
 
@@ -74,6 +82,10 @@ class TrainingCompositesPlugin(BasePlugin):
         reg_planning(mcp, server)
         reg_storage(mcp, server)
         reg_unified(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return TRAINING_COMPOSITE_PERMISSIONS
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002

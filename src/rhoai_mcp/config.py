@@ -49,6 +49,13 @@ class ModelRegistryAuthMode(str, Enum):
     TOKEN = "token"  # Use explicit bearer token
 
 
+class OIDCTokenMode(str, Enum):
+    """Token validation strategy for OIDC auth."""
+
+    JWT = "jwt"
+    TOKEN_REVIEW = "token-review"
+
+
 class RHOAIConfig(BaseSettings):
     """Configuration for RHOAI MCP server.
 
@@ -239,6 +246,14 @@ class RHOAIConfig(BaseSettings):
         le=86400,
         description="JWKS cache TTL in seconds",
     )
+    oidc_token_mode: OIDCTokenMode = Field(
+        default=OIDCTokenMode.JWT,
+        description="Token validation mode: jwt (JWKS-based) or token-review (K8s TokenReview API)",
+    )
+    oidc_ocp_api_url: str | None = Field(
+        default=None,
+        description="OCP API server URL for Protected Resource Metadata in token-review mode",
+    )
 
     @field_validator("enabled_plugins", mode="before")
     @classmethod
@@ -315,11 +330,13 @@ class RHOAIConfig(BaseSettings):
         if not self.oidc_enabled:
             return
 
-        if not self.oidc_issuer_url:
-            raise ValueError("oidc_issuer_url is required when oidc_enabled is true")
-
         if self.transport == TransportMode.STDIO:
             raise ValueError("OIDC authentication is not supported with stdio transport")
+
+        if self.oidc_token_mode == OIDCTokenMode.JWT and not self.oidc_issuer_url:
+            raise ValueError(
+                "oidc_issuer_url is required when oidc_enabled is true and token_mode is jwt"
+            )
 
     def is_operation_allowed(self, operation: str) -> tuple[bool, str | None]:
         """Check if an operation is allowed based on safety settings.

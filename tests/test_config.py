@@ -7,6 +7,7 @@ import pytest
 from rhoai_mcp.config import (
     AuthMode,
     LogLevel,
+    OIDCTokenMode,
     RHOAIConfig,
     TransportMode,
 )
@@ -250,7 +251,7 @@ class TestOIDCConfig:
 
     def test_validate_oidc_enabled_without_issuer_raises(self) -> None:
         """Validation fails if OIDC is enabled without issuer URL."""
-        config = RHOAIConfig(oidc_enabled=True)
+        config = RHOAIConfig(oidc_enabled=True, transport=TransportMode.SSE)
         with pytest.raises(ValueError, match="oidc_issuer_url is required"):
             config.validate_oidc_config()
 
@@ -278,4 +279,60 @@ class TestOIDCConfig:
             transport=TransportMode.STDIO,
         )
         with pytest.raises(ValueError, match="OIDC.*not supported.*stdio"):
+            config.validate_oidc_config()
+
+    def test_oidc_token_mode_default_jwt(self) -> None:
+        """OIDC token mode defaults to jwt."""
+        config = RHOAIConfig()
+        assert config.oidc_token_mode == OIDCTokenMode.JWT
+
+    def test_oidc_token_mode_token_review(self) -> None:
+        """OIDC token mode can be set to token-review."""
+        config = RHOAIConfig(oidc_token_mode="token-review")
+        assert config.oidc_token_mode == OIDCTokenMode.TOKEN_REVIEW
+
+    def test_oidc_token_mode_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OIDC token mode can be set via environment variable."""
+        monkeypatch.setenv("RHOAI_MCP_OIDC_TOKEN_MODE", "token-review")
+        config = RHOAIConfig()
+        assert config.oidc_token_mode == OIDCTokenMode.TOKEN_REVIEW
+
+    def test_oidc_ocp_api_url_default_none(self) -> None:
+        """OCP API URL defaults to None."""
+        config = RHOAIConfig()
+        assert config.oidc_ocp_api_url is None
+
+    def test_oidc_ocp_api_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OCP API URL can be set via environment variable."""
+        monkeypatch.setenv("RHOAI_MCP_OIDC_OCP_API_URL", "https://api.cluster.example.com:6443")
+        config = RHOAIConfig()
+        assert config.oidc_ocp_api_url == "https://api.cluster.example.com:6443"
+
+    def test_validate_oidc_token_review_without_issuer_passes(self) -> None:
+        """Validation passes for token-review mode without issuer URL."""
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_token_mode="token-review",
+            transport=TransportMode.SSE,
+        )
+        config.validate_oidc_config()
+
+    def test_validate_oidc_jwt_without_issuer_raises(self) -> None:
+        """Validation fails for jwt mode without issuer URL."""
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_token_mode="jwt",
+            transport=TransportMode.SSE,
+        )
+        with pytest.raises(ValueError, match="oidc_issuer_url is required"):
+            config.validate_oidc_config()
+
+    def test_validate_oidc_token_review_rejects_stdio(self) -> None:
+        """Validation fails for token-review mode with stdio transport."""
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_token_mode="token-review",
+            transport=TransportMode.STDIO,
+        )
+        with pytest.raises(ValueError, match="not supported.*stdio"):
             config.validate_oidc_config()

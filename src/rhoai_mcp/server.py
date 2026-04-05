@@ -266,20 +266,38 @@ class RHOAIServer:
         """Configure OIDC authentication middleware and endpoints."""
         from rhoai_mcp.auth.metadata import build_protected_resource_metadata
         from rhoai_mcp.auth.oidc import OIDCValidator
+        from rhoai_mcp.auth.token_review import TokenReviewValidator
+        from rhoai_mcp.config import OIDCTokenMode
 
         self._config.validate_oidc_config()
         # issuer_url is guaranteed non-None here by validate_oidc_config()
         assert self._config.oidc_issuer_url is not None
         issuer_url = self._config.oidc_issuer_url
 
-        # Create OIDC validator
-        validator = OIDCValidator(
-            issuer_url=issuer_url,
-            audience=self._config.oidc_audience,
-            username_claim=self._config.oidc_username_claim,
-            groups_claim=self._config.oidc_groups_claim,
-            jwks_cache_ttl=self._config.oidc_jwks_cache_ttl,
-        )
+        # Ensure K8s client is connected
+        if not self._k8s_client or not self._k8s_client.is_connected:
+            raise RuntimeError("K8s client not connected. Call startup() first.")
+
+        # Create the appropriate validator
+        validator: OIDCValidator | TokenReviewValidator
+        if self._config.oidc_token_mode == OIDCTokenMode.TOKEN_REVIEW:
+            api_client = self._k8s_client._api_client
+            if not api_client:
+                raise RuntimeError("K8s client API client not available")
+            validator = TokenReviewValidator(api_client)
+            # Issuer URL for metadata: explicit config, or auto-detect from K8s client
+            issuer_url = self._config.oidc_ocp_api_url or api_client.configuration.host
+            logger.info("Auth mode: TokenReview (OCP OAuth)")
+        else:
+            # issuer_url already set from assert above
+            validator = OIDCValidator(
+                issuer_url=issuer_url,
+                audience=self._config.oidc_audience,
+                username_claim=self._config.oidc_username_claim,
+                groups_claim=self._config.oidc_groups_claim,
+                jwks_cache_ttl=self._config.oidc_jwks_cache_ttl,
+            )
+            logger.info("Auth mode: OIDC JWT")
 
         # Build resource metadata URL
         resource_url = f"https://{self._config.host}:{self._config.port}"
@@ -319,133 +337,9 @@ class RHOAIServer:
 
     def _register_core_resources(self, mcp: FastMCP) -> None:
         """Register core MCP resources for cluster information."""
-        from rhoai_mcp.clients.base import CRDs
+        from rhoai_mcp.core_resources import register_core_resources
 
-        @mcp.resource("rhoai://cluster/status")
-        def cluster_status() -> dict:
-            """Get RHOAI cluster status and health.
-
-            Returns overall cluster status including RHOAI operator status,
-            available components, and loaded plugins.
-            """
-            k8s = self.k8s
-            pm = self._plugin_manager
-
-            result: dict = {
-                "connected": k8s.is_connected,
-                "rhoai_available": False,
-                "components": {},
-                "plugins": {
-                    "total": len(pm.registered_plugins) if pm else 0,
-                    "active": list(pm.healthy_plugins.keys()) if pm else [],
-                },
-                "accelerators": [],
-            }
-
-            # Check for DataScienceCluster
-            try:
-                dsc_list = k8s.list_resources(CRDs.DATA_SCIENCE_CLUSTER)
-                if dsc_list:
-                    result["rhoai_available"] = True
-                    dsc = dsc_list[0]
-                    status = getattr(dsc, "status", None)
-                    if status:
-                        # Extract component status
-                        installed = getattr(status, "installedComponents", {}) or {}
-                        for component, state in installed.items():
-                            result["components"][component] = state
-            except Exception:
-                pass
-
-            # Check for accelerator profiles
-            try:
-                accelerators = k8s.list_resources(CRDs.ACCELERATOR_PROFILE)
-                result["accelerators"] = [
-                    {
-                        "name": acc.metadata.name,
-                        "display_name": (acc.metadata.annotations or {}).get(
-                            "openshift.io/display-name", acc.metadata.name
-                        ),
-                        "enabled": getattr(acc.spec, "enabled", True)
-                        if hasattr(acc, "spec")
-                        else True,
-                    }
-                    for acc in accelerators
-                ]
-            except Exception:
-                pass
-
-            return result
-
-        @mcp.resource("rhoai://cluster/plugins")
-        def cluster_plugins() -> dict:
-            """Get information about loaded plugins.
-
-            Returns details about all plugins with their health status.
-            """
-            pm = self._plugin_manager
-            if not pm:
-                return {"plugins": {}}
-
-            plugin_info = {}
-            for name, plugin in pm.registered_plugins.items():
-                is_healthy = name in pm.healthy_plugins
-
-                # Get metadata if available
-                meta = None
-                if hasattr(plugin, "rhoai_get_plugin_metadata"):
-                    meta = plugin.rhoai_get_plugin_metadata()
-
-                plugin_info[name] = {
-                    "version": meta.version if meta else "unknown",
-                    "description": meta.description if meta else "No description",
-                    "maintainer": meta.maintainer if meta else "unknown",
-                    "requires_crds": meta.requires_crds if meta else [],
-                    "healthy": is_healthy,
-                }
-
-            return {
-                "total": len(pm.registered_plugins),
-                "active": len(pm.healthy_plugins),
-                "plugins": plugin_info,
-            }
-
-        @mcp.resource("rhoai://cluster/accelerators")
-        def cluster_accelerators() -> list[dict]:
-            """Get available accelerator profiles (GPUs).
-
-            Returns the list of AcceleratorProfile resources that define
-            available GPU types and configurations.
-            """
-            k8s = self.k8s
-
-            try:
-                accelerators = k8s.list_resources(CRDs.ACCELERATOR_PROFILE)
-                return [
-                    {
-                        "name": acc.metadata.name,
-                        "display_name": (acc.metadata.annotations or {}).get(
-                            "openshift.io/display-name", acc.metadata.name
-                        ),
-                        "description": (acc.metadata.annotations or {}).get(
-                            "openshift.io/description", ""
-                        ),
-                        "enabled": getattr(acc.spec, "enabled", True)
-                        if hasattr(acc, "spec")
-                        else True,
-                        "identifier": getattr(acc.spec, "identifier", "nvidia.com/gpu")
-                        if hasattr(acc, "spec")
-                        else "nvidia.com/gpu",
-                        "tolerations": getattr(acc.spec, "tolerations", [])
-                        if hasattr(acc, "spec")
-                        else [],
-                    }
-                    for acc in accelerators
-                ]
-            except Exception as e:
-                return [{"error": str(e)}]
-
-        logger.info("Registered core MCP resources")
+        register_core_resources(mcp, self)
 
     def _register_health_endpoint(self, mcp: FastMCP) -> None:
         """Register /health endpoint for Kubernetes liveness/readiness probes."""

@@ -110,6 +110,12 @@ rules:
       - projects
     verbs: ["get", "list", "watch"]
 
+  # OpenShift users (for TokenReview group lookup)
+  - apiGroups: ["user.openshift.io"]
+    resources:
+      - users
+    verbs: ["get"]
+
 ---
 # =============================================================================
 # ClusterRoleBinding
@@ -243,9 +249,6 @@ spec:
       serviceAccountName: rhoai-mcp
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
       containers:
         - name: rhoai-mcp
           image: rhoai-mcp:latest

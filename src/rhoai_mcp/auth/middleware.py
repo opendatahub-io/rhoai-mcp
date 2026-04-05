@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from starlette.types import ASGIApp
 
     from rhoai_mcp.auth.oidc import OIDCValidator
+    from rhoai_mcp.auth.token_review import TokenReviewValidator
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        validator: OIDCValidator,
+        validator: OIDCValidator | TokenReviewValidator,
         exclude_paths: list[str] | None = None,
         resource_metadata_url: str | None = None,
     ) -> None:

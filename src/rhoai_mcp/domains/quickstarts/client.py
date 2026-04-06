@@ -123,8 +123,7 @@ class QuickstartRegistry:
             name="rhoai-metrics-dashboard",
             display_name="RHOAI Metrics Dashboard",
             description=(
-                "Metrics dashboard for monitoring single serving models on "
-                "Red Hat OpenShift AI."
+                "Metrics dashboard for monitoring single serving models on Red Hat OpenShift AI."
             ),
             repo_url="git@github.com:rh-ai-quickstart/rhoai-metrics-dashboard.git",
             tags=["monitoring", "metrics", "dashboard", "serving"],
@@ -294,8 +293,7 @@ class QuickstartRegistry:
             name="secure-tool-planner",
             display_name="Secure Tool Planner",
             description=(
-                "Deploy a secure planner agentic app with secured MCP tools "
-                "on OpenShift AI."
+                "Deploy a secure planner agentic app with secured MCP tools on OpenShift AI."
             ),
             repo_url="git@github.com:rh-ai-quickstart/secure-tool-planner.git",
             tags=["agents", "mcp", "security", "planner"],
@@ -324,8 +322,7 @@ class QuickstartRegistry:
             name="f5-api-security",
             display_name="F5 API Security",
             description=(
-                "AI-powered API security quickstart with F5 integration "
-                "on Red Hat OpenShift AI."
+                "AI-powered API security quickstart with F5 integration on Red Hat OpenShift AI."
             ),
             repo_url="git@github.com:rh-ai-quickstart/f5-api-security.git",
             tags=["security", "api", "f5"],
@@ -354,8 +351,7 @@ class QuickstartRegistry:
             name="multi-agent-loan-origination",
             display_name="Multi-Agent Loan Origination",
             description=(
-                "Multi-agent system for loan origination workflows "
-                "on Red Hat OpenShift AI."
+                "Multi-agent system for loan origination workflows on Red Hat OpenShift AI."
             ),
             repo_url="git@github.com:rh-ai-quickstart/multi-agent-loan-origination.git",
             tags=["agents", "multi-agent", "finance", "loans"],
@@ -373,10 +369,7 @@ class QuickstartRegistry:
         "ai-supply-chain-agent": Quickstart(
             name="ai-supply-chain-agent",
             display_name="AI Supply Chain Agent",
-            description=(
-                "AI-powered supply chain management agent "
-                "on Red Hat OpenShift AI."
-            ),
+            description=("AI-powered supply chain management agent on Red Hat OpenShift AI."),
             repo_url="git@github.com:rh-ai-quickstart/ai-supply-chain-agent.git",
             tags=["agents", "supply-chain", "automation"],
         ),
@@ -384,8 +377,7 @@ class QuickstartRegistry:
             name="dagshub-ai-dev-platform",
             display_name="DagsHub AI Dev Platform",
             description=(
-                "DagsHub integration for AI development platform support "
-                "on Red Hat OpenShift AI."
+                "DagsHub integration for AI development platform support on Red Hat OpenShift AI."
             ),
             repo_url="git@github.com:rh-ai-quickstart/dagshub-ai-dev-plaform-support.git",
             tags=["mlops", "dagshub", "experiment-tracking"],
@@ -393,10 +385,7 @@ class QuickstartRegistry:
         "maas-code-assistant": Quickstart(
             name="maas-code-assistant",
             display_name="MaaS Code Assistant",
-            description=(
-                "Model-as-a-Service code assistant quickstart "
-                "on Red Hat OpenShift AI."
-            ),
+            description=("Model-as-a-Service code assistant quickstart on Red Hat OpenShift AI."),
             repo_url="git@github.com:rh-ai-quickstart/maas-code-assistant.git",
             tags=["code-assistant", "maas", "llm"],
         ),

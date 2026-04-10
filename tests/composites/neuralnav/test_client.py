@@ -327,13 +327,8 @@ class TestNeuralNavClientRecommend:
 
     @patch("rhoai_mcp.composites.neuralnav.client.httpx")
     def test_recommend_with_overrides(self, mock_httpx: MagicMock) -> None:
-        """Overrides replace extracted intent values."""
+        """When both use_case and user_count overrides are provided, extraction is skipped."""
         mock_client = MagicMock()
-
-        extract_resp = MagicMock()
-        extract_resp.status_code = 200
-        extract_resp.json.return_value = SAMPLE_INTENT
-        extract_resp.raise_for_status = MagicMock()
 
         slo_resp = MagicMock()
         slo_resp.status_code = 200
@@ -355,7 +350,8 @@ class TestNeuralNavClientRecommend:
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [extract_resp, ranked_resp]
+        # Only one POST (ranked-recommend), extraction is skipped
+        mock_client.post.side_effect = [ranked_resp]
         mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
 
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -372,6 +368,8 @@ class TestNeuralNavClientRecommend:
         # Verify the overridden use_case was used for SLO defaults fetch
         get_calls = mock_client.get.call_args_list
         assert "code_completion" in get_calls[0].args[0]
+        # Extraction was skipped — only one POST call (ranked-recommend)
+        assert mock_client.post.call_count == 1
 
     @patch("rhoai_mcp.composites.neuralnav.client.httpx")
     def test_recommend_api_error(self, mock_httpx: MagicMock) -> None:
@@ -623,6 +621,150 @@ class TestNeuralNavClientRecommend:
         assert payload["max_cost"] == 5000.0
         assert payload["weights"] == {"accuracy": 8, "price": 2, "latency": 1, "complexity": 1}
         assert payload["percentile"] == "p99"
+
+
+class TestNeuralNavClientRecommendExtractionBypass:
+    """Tests for skipping extraction when overrides are sufficient."""
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_recommend_skips_extraction_when_all_overrides_provided(
+        self, mock_httpx: MagicMock
+    ) -> None:
+        """When all overrides are provided, extraction is skipped."""
+        mock_client = MagicMock()
+
+        slo_resp = MagicMock()
+        slo_resp.status_code = 200
+        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
+        slo_resp.raise_for_status = MagicMock()
+
+        workload_resp = MagicMock()
+        workload_resp.status_code = 200
+        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
+        workload_resp.raise_for_status = MagicMock()
+
+        rps_resp = MagicMock()
+        rps_resp.status_code = 200
+        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
+        rps_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        # Only one POST call: ranked-recommend (no extract call)
+        mock_client.post.side_effect = [ranked_resp]
+        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        result = client.recommend(
+            "I need a chatbot for 1000 users",
+            use_case_override="chatbot_conversational",
+            user_count_override=1000,
+            gpu_types_override=["A100"],
+        )
+
+        # Only one POST call was made (ranked-recommend, not extract)
+        assert mock_client.post.call_count == 1
+        assert result.specification["use_case"] == "chatbot_conversational"
+        assert result.specification["user_count"] == 1000
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_recommend_still_extracts_when_only_use_case_override(
+        self, mock_httpx: MagicMock
+    ) -> None:
+        """When only use_case override is provided, extraction still runs for user_count."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        slo_resp = MagicMock()
+        slo_resp.status_code = 200
+        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
+        slo_resp.raise_for_status = MagicMock()
+
+        workload_resp = MagicMock()
+        workload_resp.status_code = 200
+        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
+        workload_resp.raise_for_status = MagicMock()
+
+        rps_resp = MagicMock()
+        rps_resp.status_code = 200
+        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
+        rps_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, ranked_resp]
+        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        result = client.recommend(
+            "I need a chatbot",
+            use_case_override="code_completion",
+        )
+
+        # Two POST calls: extract + ranked-recommend
+        assert mock_client.post.call_count == 2
+        # Use case override is applied
+        assert result.specification["use_case"] == "code_completion"
+
+    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    def test_recommend_skips_extraction_uses_gpu_override(self, mock_httpx: MagicMock) -> None:
+        """When extraction is skipped, gpu_types_override is used."""
+        mock_client = MagicMock()
+
+        slo_resp = MagicMock()
+        slo_resp.status_code = 200
+        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
+        slo_resp.raise_for_status = MagicMock()
+
+        workload_resp = MagicMock()
+        workload_resp.status_code = 200
+        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
+        workload_resp.raise_for_status = MagicMock()
+
+        rps_resp = MagicMock()
+        rps_resp.status_code = 200
+        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
+        rps_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [ranked_resp]
+        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = NeuralNavClient("http://localhost:8000")
+        client.recommend(
+            "I need a chatbot",
+            use_case_override="chatbot_conversational",
+            user_count_override=1000,
+            gpu_types_override=["H100"],
+        )
+
+        # Verify the GPU override was forwarded
+        ranked_call = mock_client.post.call_args
+        payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
+        assert payload["preferred_gpu_types"] == ["H100"]
 
 
 class TestNeuralNavClientRequestErrors:

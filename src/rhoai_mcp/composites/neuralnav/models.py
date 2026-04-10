@@ -2,24 +2,48 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+UseCaseType = Literal[
+    "chatbot_conversational",
+    "code_completion",
+    "code_generation_detailed",
+    "translation",
+    "content_generation",
+    "summarization_short",
+    "document_analysis_rag",
+    "long_document_summarization",
+    "research_legal_analysis",
+]
+
+ExperienceClassType = Literal[
+    "instant",
+    "conversational",
+    "interactive",
+    "deferred",
+    "batch",
+]
+
+PriorityType = Literal["low", "medium", "high"]
 
 
 class DeploymentIntent(BaseModel):
     """Extracted deployment intent from natural language."""
 
-    use_case: str = Field(..., description="Primary use case type")
+    use_case: UseCaseType = Field(..., description="Primary use case type")
     user_count: int = Field(..., description="Number of users or scale")
-    experience_class: str = Field(default="conversational", description="User experience class")
+    experience_class: ExperienceClassType = Field(
+        default="conversational", description="User experience class"
+    )
     preferred_gpu_types: list[str] = Field(
         default_factory=list, description="Preferred GPU types (empty = any)"
     )
-    accuracy_priority: str = Field(default="medium", description="Accuracy importance")
-    cost_priority: str = Field(default="medium", description="Cost sensitivity")
-    latency_priority: str = Field(default="medium", description="Latency importance")
-    complexity_priority: str = Field(default="medium", description="Simplicity preference")
+    accuracy_priority: PriorityType = Field(default="medium", description="Accuracy importance")
+    cost_priority: PriorityType = Field(default="medium", description="Cost sensitivity")
+    latency_priority: PriorityType = Field(default="medium", description="Latency importance")
+    complexity_priority: PriorityType = Field(default="medium", description="Simplicity preference")
     domain_specialization: list[str] = Field(
         default_factory=lambda: ["general"], description="Domain requirements"
     )

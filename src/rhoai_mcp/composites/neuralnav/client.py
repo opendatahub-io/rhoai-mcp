@@ -190,22 +190,31 @@ class NeuralNavClient:
     ) -> RecommendationResult:
         """Run the full recommendation flow.
 
-        1. Extract intent from text
+        1. Extract intent from text (skipped when overrides cover all needed fields)
         2. Apply overrides
         3. Fetch SLO defaults + workload profile + expected RPS
         4. Apply SLO overrides on top of fetched defaults
         5. Get ranked recommendations with all constraints
         6. Extract top recommendation from each ranking list
         """
-        # Step 1: Extract intent
-        intent = self.extract_intent(text)
-
-        # Step 2: Apply overrides
-        use_case = use_case_override if use_case_override is not None else intent.use_case
-        user_count = user_count_override if user_count_override is not None else intent.user_count
-        gpu_types = (
-            gpu_types_override if gpu_types_override is not None else intent.preferred_gpu_types
-        )
+        # Step 1: Extract intent (skip when all overrides are provided)
+        if (
+            use_case_override is not None
+            and user_count_override is not None
+            and gpu_types_override is not None
+        ):
+            use_case = use_case_override
+            user_count = user_count_override
+            gpu_types = gpu_types_override
+        else:
+            intent = self.extract_intent(text)
+            use_case = use_case_override if use_case_override is not None else intent.use_case
+            user_count = (
+                user_count_override if user_count_override is not None else intent.user_count
+            )
+            gpu_types = (
+                gpu_types_override if gpu_types_override is not None else intent.preferred_gpu_types
+            )
 
         # Step 3: Fetch defaults
         slo_data = self.get_slo_defaults(use_case)

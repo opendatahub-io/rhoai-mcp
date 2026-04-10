@@ -37,6 +37,18 @@ LABEL org.opencontainers.image.vendor="Red Hat"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.source="https://github.com/admiller/rhoai-mcp-prototype"
 
+# Install CLI tools required by quickstarts (git, helm, oc)
+USER 0
+RUN dnf install -y git && dnf clean all
+
+# Install Helm
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# Install oc (OpenShift CLI)
+RUN curl -fsSL https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz \
+    | tar -xz -C /usr/local/bin oc kubectl
+USER 1001
+
 # Set working directory (UBI default is /opt/app-root/src)
 WORKDIR /opt/app-root/src
 

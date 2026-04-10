@@ -557,18 +557,6 @@ class QuickstartClient:
                 error=f"Unknown quickstart: '{quickstart_name}'. Available: {available}",
             )
 
-        # Always check git is available before cloning
-        if shutil.which("git") is None:
-            return DeploymentResult(
-                quickstart_name=quickstart_name,
-                namespace=namespace,
-                method=DeploymentMethod.UNKNOWN,
-                command="",
-                dry_run=dry_run,
-                success=False,
-                error="Required CLI tool not found: git",
-            )
-
         # Clone the repository
         try:
             repo_path = self._clone_repo(quickstart)
@@ -614,19 +602,6 @@ class QuickstartClient:
                 dry_run=True,
                 success=True,
                 stdout=f"Dry run: would execute the following command:\n{command_display}",
-            )
-
-        # Check method-specific CLI tools before executing
-        tool_error = self._check_cli_tools_for_method(method)
-        if tool_error:
-            return DeploymentResult(
-                quickstart_name=quickstart_name,
-                namespace=namespace,
-                method=method,
-                command=command_display,
-                dry_run=dry_run,
-                success=False,
-                error=tool_error,
             )
 
         # Execute the deployment
@@ -677,25 +652,6 @@ class QuickstartClient:
 
         return repo_path
 
-    def _check_cli_tools_for_method(self, method: DeploymentMethod) -> str | None:
-        """Check if CLI tools required for the given deployment method are available.
-
-        Args:
-            method: The deployment method to check tools for.
-
-        Returns:
-            Error message if tools missing, None if all present.
-        """
-        if method == DeploymentMethod.HELM and shutil.which("helm") is None:
-            return "Required CLI tool not found: helm"
-        if (
-            method in (DeploymentMethod.KUSTOMIZE, DeploymentMethod.MANIFESTS)
-            and shutil.which("oc") is None
-            and shutil.which("kubectl") is None
-        ):
-            return "Required CLI tool not found: oc or kubectl"
-        return None
-
     def _build_deploy_argv(
         self,
         repo_path: Path,
@@ -714,8 +670,8 @@ class QuickstartClient:
         Returns:
             Command as a list of arguments for subprocess.run.
         """
-        # Prefer oc if available, fall back to kubectl
-        kubectl_cmd = "oc" if shutil.which("oc") else "kubectl"
+        # Use oc (pre-installed in Containerfile)
+        kubectl_cmd = "oc"
 
         if method == DeploymentMethod.HELM:
             chart_path = str(repo_path)

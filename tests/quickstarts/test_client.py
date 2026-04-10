@@ -1,7 +1,6 @@
 """Tests for quickstarts client."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -138,17 +137,6 @@ class TestQuickstartClient:
         assert result.success is False
         assert "Unknown quickstart" in (result.error or "")
         assert "Available:" in (result.error or "")
-
-    @patch("rhoai_mcp.domains.quickstarts.client.shutil.which")
-    def test_deploy_missing_git(self, mock_which: MagicMock) -> None:
-        """Test deploying without git returns error."""
-        mock_which.return_value = None
-
-        client = QuickstartClient()
-        result = client.deploy("llm-cpu-serving")
-
-        assert result.success is False
-        assert "git" in (result.error or "")
 
     def test_get_readme_unknown_quickstart(self) -> None:
         """Test getting README for unknown quickstart."""

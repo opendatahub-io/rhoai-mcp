@@ -1,11 +1,76 @@
 """Tests for InferenceClient pod diagnostic methods."""
 
 from datetime import datetime, timezone
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from rhoai_mcp.domains.inference.client import InferenceClient
+
+
+class _FakeResourceField:
+    """Simulates a K8s dynamic client ResourceField (not a dict)."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
+
+
+class TestParseServingRuntimeFormats:
+    """Test that _parse_serving_runtime extracts format names from various object types."""
+
+    @pytest.fixture
+    def client(self) -> InferenceClient:
+        return InferenceClient(MagicMock())
+
+    def test_extracts_names_from_dict_formats(self, client: InferenceClient) -> None:
+        """Standard dict format entries are handled."""
+        rt = MagicMock()
+        rt.metadata.name = "vllm-runtime"
+        rt.metadata.annotations = {}
+        rt.spec = {
+            "supportedModelFormats": [
+                {"name": "pytorch", "version": "2", "autoSelect": True},
+                {"name": "onnx", "version": "1"},
+            ]
+        }
+
+        result = client._parse_serving_runtime(rt)
+
+        assert result["supported_formats"] == ["pytorch", "onnx"]
+
+    def test_extracts_names_from_resource_field_objects(
+        self, client: InferenceClient
+    ) -> None:
+        """K8s dynamic client ResourceField objects (non-dict) are handled."""
+        rt = MagicMock()
+        rt.metadata.name = "vllm-runtime"
+        rt.metadata.annotations = {}
+        rt.spec = {
+            "supportedModelFormats": [
+                _FakeResourceField(name="pytorch", version="2", autoSelect=True),
+                _FakeResourceField(name="vLLM", autoSelect=True),
+            ]
+        }
+
+        result = client._parse_serving_runtime(rt)
+
+        assert result["supported_formats"] == ["pytorch", "vLLM"]
+
+    def test_handles_plain_string_formats(self, client: InferenceClient) -> None:
+        """Plain string entries are passed through."""
+        rt = MagicMock()
+        rt.metadata.name = "simple-runtime"
+        rt.metadata.annotations = {}
+        rt.spec = {"supportedModelFormats": ["pytorch", "onnx"]}
+
+        result = client._parse_serving_runtime(rt)
+
+        assert result["supported_formats"] == ["pytorch", "onnx"]
 
 
 class TestInferenceClientDiagnostics:

@@ -110,6 +110,21 @@ class InferenceClient:
 
         return results
 
+    @staticmethod
+    def _extract_format_name(model_format: Any) -> str:
+        """Extract format name from a supportedModelFormats entry.
+
+        Handles plain strings, dicts with "name", and K8s ResourceField objects.
+        """
+        if isinstance(model_format, str):
+            return model_format
+        if isinstance(model_format, dict):
+            name = model_format.get("name")
+            return str(name) if name is not None else ""
+        # K8s dynamic client ResourceField objects (not dicts)
+        name = getattr(model_format, "name", None)
+        return str(name) if name is not None else ""
+
     def _parse_serving_runtime(self, rt: Any) -> dict[str, Any]:
         """Parse a ServingRuntime resource into a dict."""
         metadata = rt.metadata
@@ -119,10 +134,9 @@ class InferenceClient:
         # Get supported formats from spec level (standard KServe location)
         supported_formats = []
         for model_format in spec.get("supportedModelFormats", []):
-            if isinstance(model_format, dict):
-                supported_formats.append(model_format.get("name", ""))
-            else:
-                supported_formats.append(str(model_format))
+            fmt = self._extract_format_name(model_format)
+            if fmt:
+                supported_formats.append(fmt)
 
         return {
             "name": metadata.name,
@@ -204,7 +218,7 @@ class InferenceClient:
 
     def _get_formats_from_template(self, template: Any) -> list[str]:
         """Extract supported model formats from a template."""
-        formats = []
+        formats: list[str] = []
         objects = template.objects if hasattr(template, "objects") else []
         for obj in objects:
             if isinstance(obj, dict):
@@ -212,10 +226,9 @@ class InferenceClient:
                 if kind == "ServingRuntime":
                     spec = obj.get("spec", {})
                     for model_format in spec.get("supportedModelFormats", []):
-                        if isinstance(model_format, dict):
-                            fmt = model_format.get("name", "")
-                            if fmt and fmt not in formats:
-                                formats.append(fmt)
+                        fmt = self._extract_format_name(model_format)
+                        if fmt and fmt not in formats:
+                            formats.append(fmt)
             else:
                 kind = getattr(obj, "kind", "")
                 if kind == "ServingRuntime":
@@ -226,10 +239,7 @@ class InferenceClient:
                         else getattr(spec, "supportedModelFormats", []) or []
                     )
                     for model_format in spec_formats:
-                        if isinstance(model_format, dict):
-                            fmt = model_format.get("name", "")
-                        else:
-                            fmt = str(getattr(model_format, "name", ""))
+                        fmt = self._extract_format_name(model_format)
                         if fmt and fmt not in formats:
                             formats.append(fmt)
         return formats

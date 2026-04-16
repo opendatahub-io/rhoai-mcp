@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import ssl
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +11,7 @@ import httpx
 from rhoai_mcp.domains.model_registry.auth import (
     _is_running_in_cluster,
     build_auth_headers,
+    get_tls_verify,
 )
 from rhoai_mcp.domains.model_registry.errors import (
     ModelNotFoundError,
@@ -144,20 +144,12 @@ class ModelRegistryClient:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client with appropriate auth and SSL settings."""
         if self._http_client is None:
-            # Get auth headers
             headers = self._get_auth_headers()
-
-            # Configure SSL verification
-            verify: bool | ssl.SSLContext = True
-            if self._config.model_registry_skip_tls_verify:
-                verify = False
-                logger.warning(
-                    "TLS verification disabled for Model Registry. "
-                    "This is not recommended for production."
-                )
+            base_url = self._get_base_url()
+            verify = get_tls_verify(self._config, base_url)
 
             self._http_client = httpx.AsyncClient(
-                base_url=self._get_base_url(),
+                base_url=base_url,
                 timeout=self._config.model_registry_timeout,
                 headers=headers,
                 verify=verify,

@@ -11,6 +11,7 @@ from rhoai_mcp.domains.model_registry.auth import (
     _get_in_cluster_token,
     _is_running_in_cluster,
     build_auth_headers,
+    get_tls_verify,
 )
 
 
@@ -244,3 +245,73 @@ class TestBuildAuthHeaders:
             headers = build_auth_headers(mock_config_none, requires_auth_override=True)
 
         assert headers == {}
+
+
+class TestGetTlsVerify:
+    """Test get_tls_verify helper function."""
+
+    def test_skip_tls_verify_returns_false(self) -> None:
+        """When skip_tls_verify is True, return False regardless of URL."""
+        config = MagicMock()
+        config.model_registry_skip_tls_verify = True
+
+        assert get_tls_verify(config, "https://external.example.com") is False
+
+    def test_in_cluster_with_svc_url_skips_tls(self) -> None:
+        """When in-cluster and URL is a .svc address, skip TLS."""
+        config = MagicMock()
+        config.model_registry_skip_tls_verify = False
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=True,
+        ):
+            assert get_tls_verify(
+                config, "https://model-registry.namespace.svc:8443"
+            ) is False
+
+    def test_in_cluster_with_svc_cluster_local_skips_tls(self) -> None:
+        """When in-cluster and URL is a .svc.cluster.local address, skip TLS."""
+        config = MagicMock()
+        config.model_registry_skip_tls_verify = False
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=True,
+        ):
+            assert get_tls_verify(
+                config, "https://model-registry.ns.svc.cluster.local:8443"
+            ) is False
+
+    def test_in_cluster_with_external_url_verifies_tls(self) -> None:
+        """When in-cluster but URL is external, TLS must be verified."""
+        config = MagicMock()
+        config.model_registry_skip_tls_verify = False
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=True,
+        ):
+            assert get_tls_verify(config, "https://external-registry.example.com") is True
+
+    def test_outside_cluster_returns_true(self) -> None:
+        """When running outside cluster, return True (system CA bundle)."""
+        config = MagicMock()
+        config.model_registry_skip_tls_verify = False
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=False,
+        ):
+            assert get_tls_verify(config, "https://localhost:8080") is True
+
+    def test_no_url_in_cluster_verifies_tls(self) -> None:
+        """When in-cluster but no URL provided, default to verifying TLS."""
+        config = MagicMock()
+        config.model_registry_skip_tls_verify = False
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.auth._is_running_in_cluster",
+            return_value=True,
+        ):
+            assert get_tls_verify(config) is True

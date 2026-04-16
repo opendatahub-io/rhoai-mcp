@@ -15,7 +15,6 @@ Kubeflow Model Registry or a Red Hat AI Model Catalog.
 from __future__ import annotations
 
 import logging
-import ssl
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -25,6 +24,7 @@ from kubernetes.client import ApiException  # type: ignore[import-untyped]
 from rhoai_mcp.domains.model_registry.auth import (
     _is_running_in_cluster,
     build_auth_headers,
+    get_tls_verify,
 )
 from rhoai_mcp.domains.model_registry.crds import ModelRegistryCRDs
 from rhoai_mcp.utils.port_forward import PortForwardConnection, PortForwardError, PortForwardManager
@@ -325,11 +325,7 @@ async def probe_api_type(
     """
     # Build auth headers using shared utility
     headers = build_auth_headers(config, requires_auth_override=requires_auth)
-
-    # Configure SSL
-    verify: bool | ssl.SSLContext = True
-    if config.model_registry_skip_tls_verify:
-        verify = False
+    verify = get_tls_verify(config, url)
 
     async with httpx.AsyncClient(
         base_url=url,

@@ -8,13 +8,12 @@ Model Registry (/api/model_registry/v1alpha3).
 from __future__ import annotations
 
 import logging
-import ssl
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 import httpx
 
-from rhoai_mcp.domains.model_registry.auth import build_auth_headers
+from rhoai_mcp.domains.model_registry.auth import build_auth_headers, get_tls_verify
 from rhoai_mcp.domains.model_registry.catalog_models import (
     CatalogModel,
     CatalogModelArtifact,
@@ -79,20 +78,12 @@ class ModelCatalogClient:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client with appropriate auth and SSL settings."""
         if self._http_client is None:
-            # Get auth headers
             headers = self._get_auth_headers()
-
-            # Configure SSL verification
-            verify: bool | ssl.SSLContext = True
-            if self._config.model_registry_skip_tls_verify:
-                verify = False
-                logger.warning(
-                    "TLS verification disabled for Model Catalog. "
-                    "This is not recommended for production."
-                )
+            base_url = self._get_base_url()
+            verify = get_tls_verify(self._config, base_url)
 
             self._http_client = httpx.AsyncClient(
-                base_url=self._get_base_url(),
+                base_url=base_url,
                 timeout=self._config.model_registry_timeout,
                 headers=headers,
                 verify=verify,

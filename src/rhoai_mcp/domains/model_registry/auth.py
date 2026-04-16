@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import ssl
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+CLUSTER_CA_PATH = Path("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+
 
 def _is_running_in_cluster() -> bool:
     """Check if we're running inside a Kubernetes cluster.
@@ -29,6 +32,50 @@ def _is_running_in_cluster() -> bool:
         True if running in-cluster (as a pod), False otherwise.
     """
     return Path("/var/run/secrets/kubernetes.io/serviceaccount/token").exists()
+
+
+def _is_kubernetes_service_url(url: str) -> bool:
+    """Check if a URL points to a Kubernetes in-cluster service.
+
+    Kubernetes services are reachable via DNS names ending in .svc or
+    .svc.cluster.local.  Only these addresses use certificates signed by
+    the OpenShift service-serving CA, which is separate from the SA CA
+    bundle.  External URLs should always be verified normally.
+    """
+    try:
+        from urllib.parse import urlparse
+
+        hostname = urlparse(url).hostname or ""
+    except Exception:
+        return False
+
+    return hostname.endswith(".svc") or hostname.endswith(".svc.cluster.local")
+
+
+def get_tls_verify(config: RHOAIConfig, base_url: str | None = None) -> bool | ssl.SSLContext:
+    """Get the appropriate TLS verification setting for Model Registry connections.
+
+    - If skip_tls_verify is True: returns False (no verification)
+    - If running in-cluster AND the target is a Kubernetes service URL
+      (.svc / .svc.cluster.local): returns False. OpenShift service serving
+      certs use a separate CA from the SA bundle; mounting it requires a
+      ConfigMap with service.beta.openshift.io/inject-cabundle. Skipping is
+      safe here since traffic stays on the cluster network and auth is
+      enforced via bearer token.
+    - Otherwise: returns True (system CA bundle)
+    """
+    if config.model_registry_skip_tls_verify:
+        return False
+
+    if _is_running_in_cluster() and base_url and _is_kubernetes_service_url(base_url):
+        logger.debug(
+            "Running in-cluster targeting Kubernetes service URL, skipping TLS "
+            "verification for Model Registry (service serving CA not available "
+            "in default SA bundle)"
+        )
+        return False
+
+    return True
 
 
 def _get_in_cluster_token() -> str | None:

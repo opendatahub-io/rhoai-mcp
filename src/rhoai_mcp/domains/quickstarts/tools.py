@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
+def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     """Register quickstart tools with the MCP server."""
 
     @mcp.tool()
@@ -118,6 +118,23 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
             - success: Whether deployment succeeded
             - stdout/stderr: Command output (if executed)
         """
+        if not dry_run:
+            allowed, reason = server.config.is_operation_allowed("create")
+            if not allowed:
+                return {
+                    "error": reason,
+                    "quickstart_name": quickstart_name,
+                    "namespace": target_namespace,
+                    "success": False,
+                    "_source": {
+                        "kind": "QuickstartDeployment",
+                        "api_version": "rhoai-mcp/v1",
+                        "name": quickstart_name,
+                        "namespace": target_namespace,
+                        "uid": None,
+                    },
+                }
+
         client = QuickstartClient()
         result = client.deploy(
             quickstart_name=quickstart_name,

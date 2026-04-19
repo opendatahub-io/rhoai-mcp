@@ -22,6 +22,7 @@ class Quickstart(BaseModel):
     description: str = Field(description="Brief description of the quickstart")
     repo_url: str = Field(description="GitHub repository URL")
     tags: list[str] = Field(default_factory=list, description="Tags/categories")
+    git_ref: str = Field(default="main", description="Git ref (tag, branch, or commit SHA) to pin")
 
 
 class QuickstartReadme(BaseModel):

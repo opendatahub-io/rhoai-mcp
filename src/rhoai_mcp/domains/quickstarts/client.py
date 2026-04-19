@@ -467,9 +467,7 @@ class QuickstartClient:
             try:
                 content = readme_path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError) as e:
-                raise ValueError(
-                    f"Failed to read README from {quickstart.repo_url}: {e}"
-                ) from e
+                raise ValueError(f"Failed to read README from {quickstart.repo_url}: {e}") from e
 
             return QuickstartReadme(
                 quickstart_name=quickstart_name,
@@ -644,9 +642,13 @@ class QuickstartClient:
         }
         result = subprocess.run(
             [
-                "git", "clone", "--depth=1",
-                "--branch", quickstart.git_ref,
-                quickstart.repo_url, str(repo_path),
+                "git",
+                "clone",
+                "--depth=1",
+                "--branch",
+                quickstart.git_ref,
+                quickstart.repo_url,
+                str(repo_path),
             ],
             capture_output=True,
             text=True,

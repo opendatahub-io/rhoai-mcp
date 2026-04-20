@@ -37,6 +37,26 @@ LABEL org.opencontainers.image.vendor="Red Hat"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.source="https://github.com/admiller/rhoai-mcp-prototype"
 
+# Install CLI tools required by quickstarts (git, helm, oc)
+USER 0
+RUN dnf install -y git && dnf clean all
+
+# Install Helm (pinned version with checksum verification)
+ARG HELM_VERSION=v3.18.0
+ARG HELM_SHA256=961e587fc2c03807f8a99ac25ef063fa9e6915f1894729399cbb95d2a79af931
+RUN curl -fsSLo /tmp/helm.tgz "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+    && echo "${HELM_SHA256}  /tmp/helm.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/helm.tgz -C /tmp \
+    && install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm \
+    && rm -rf /tmp/helm.tgz /tmp/linux-amd64
+
+# Install oc (OpenShift CLI, pinned version)
+ARG OC_VERSION=stable-4.18
+RUN curl -fsSLo /tmp/oc.tgz "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/openshift-client-linux.tar.gz" \
+    && tar -xzf /tmp/oc.tgz -C /usr/local/bin oc kubectl \
+    && rm -f /tmp/oc.tgz
+USER 1001
+
 # Set working directory (UBI default is /opt/app-root/src)
 WORKDIR /opt/app-root/src
 

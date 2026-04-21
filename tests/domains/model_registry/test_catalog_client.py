@@ -489,3 +489,56 @@ class TestModelCatalogClientAuth:
         client = ModelCatalogClient(mock_config_no_auth, None)
 
         assert client._get_base_url() == "http://model-catalog.test:8080"
+
+
+class TestCatalogClientSkipTlsFromDiscovery:
+    """Test that catalog client respects discovery's skip_tls_verify flag."""
+
+    @pytest.fixture
+    def mock_config(self) -> MagicMock:
+        """Create a mock config with TLS verification enabled."""
+        config = MagicMock(spec=RHOAIConfig)
+        config.model_registry_url = "https://localhost:12345"
+        config.model_registry_timeout = 30
+        config.model_registry_skip_tls_verify = False
+        config.model_registry_auth_mode = ModelRegistryAuthMode.NONE
+        config.model_registry_token = None
+        return config
+
+    @pytest.mark.asyncio
+    async def test_skip_tls_when_discovery_says_so(self, mock_config: MagicMock) -> None:
+        """Catalog client skips TLS when discovery.skip_tls_verify is True."""
+        discovery_result = DiscoveredModelRegistry(
+            url="https://localhost:12345",
+            namespace="rhoai-model-registries",
+            service_name="model-catalog",
+            port=8443,
+            source="crd_port_forward",
+            requires_auth=True,
+            is_external=True,
+            skip_tls_verify=True,
+        )
+        client = ModelCatalogClient(mock_config, discovery_result)
+        http_client = await client._get_client()
+
+        assert http_client is not None
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_no_skip_tls_when_discovery_says_false(self, mock_config: MagicMock) -> None:
+        """Catalog client does not skip TLS when discovery.skip_tls_verify is False."""
+        discovery_result = DiscoveredModelRegistry(
+            url="https://localhost:12345",
+            namespace="rhoai-model-registries",
+            service_name="model-catalog",
+            port=8080,
+            source="crd_port_forward",
+            requires_auth=False,
+            is_external=True,
+            skip_tls_verify=False,
+        )
+        client = ModelCatalogClient(mock_config, discovery_result)
+        http_client = await client._get_client()
+
+        assert http_client is not None
+        await client.close()

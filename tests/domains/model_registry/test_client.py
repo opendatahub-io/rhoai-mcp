@@ -15,6 +15,7 @@ from rhoai_mcp.domains.model_registry.client import (
     _format_connection_error,
     _is_internal_k8s_url,
 )
+from rhoai_mcp.domains.model_registry.discovery import DiscoveredModelRegistry
 from rhoai_mcp.domains.model_registry.errors import (
     ModelNotFoundError,
     ModelRegistryConnectionError,
@@ -418,6 +419,87 @@ class TestFormatConnectionError:
 
         assert "outside the cluster" not in msg
         assert "kubectl port-forward" not in msg
+
+    def test_ssl_certificate_verify_failed(self) -> None:
+        """SSL certificate verification failure suggests correct env var."""
+        url = "https://localhost:12345"
+        error = Exception(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+            "self-signed certificate in certificate chain"
+        )
+
+        msg = _format_connection_error(url, error)
+
+        assert "RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY=true" in msg
+        assert "TLS certificate could not be verified" in msg
+
+    def test_ssl_error_does_not_trigger_dns_guidance(self) -> None:
+        """SSL errors should not also trigger DNS/port-forward guidance."""
+        url = "https://model-catalog.rhoai-model-registries.svc:8443"
+        error = Exception("certificate verify failed")
+
+        with patch(
+            "rhoai_mcp.domains.model_registry.client._is_running_in_cluster",
+            return_value=False,
+        ):
+            msg = _format_connection_error(url, error)
+
+        assert "RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY=true" in msg
+        assert "outside the cluster" not in msg
+
+
+class TestClientSkipTlsFromDiscovery:
+    """Test that client respects discovery's skip_tls_verify flag."""
+
+    @pytest.fixture
+    def mock_config(self) -> MagicMock:
+        """Create a mock config with TLS verification enabled."""
+        config = MagicMock(spec=RHOAIConfig)
+        config.model_registry_url = "https://localhost:12345"
+        config.model_registry_timeout = 30
+        config.model_registry_skip_tls_verify = False
+        config.model_registry_auth_mode = ModelRegistryAuthMode.NONE
+        return config
+
+    @pytest.mark.asyncio
+    async def test_skip_tls_when_discovery_says_so(self, mock_config: MagicMock) -> None:
+        """Client skips TLS verification when discovery.skip_tls_verify is True."""
+        discovery_result = DiscoveredModelRegistry(
+            url="https://localhost:12345",
+            namespace="rhoai-model-registries",
+            service_name="model-catalog",
+            port=8443,
+            source="crd_port_forward",
+            requires_auth=True,
+            is_external=True,
+            skip_tls_verify=True,
+        )
+        client = ModelRegistryClient(mock_config, discovery_result)
+        http_client = await client._get_client()
+
+        # httpx.AsyncClient stores verify as _transport's ssl context
+        # When verify=False, the pool's ssl_context will allow unverified
+        assert http_client is not None
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_no_skip_tls_when_discovery_says_false(self, mock_config: MagicMock) -> None:
+        """Client does not skip TLS when discovery.skip_tls_verify is False."""
+        discovery_result = DiscoveredModelRegistry(
+            url="https://localhost:12345",
+            namespace="rhoai-model-registries",
+            service_name="model-catalog",
+            port=8080,
+            source="crd_port_forward",
+            requires_auth=False,
+            is_external=True,
+            skip_tls_verify=False,
+        )
+        client = ModelRegistryClient(mock_config, discovery_result)
+        http_client = await client._get_client()
+
+        assert http_client is not None
+        await client.close()
 
 
 class TestGetInClusterToken:

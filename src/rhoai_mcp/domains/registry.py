@@ -6,6 +6,7 @@ function to instantiate them. All plugins use pluggy hooks for integration.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 from rhoai_mcp.hooks import hookimpl
@@ -355,6 +356,35 @@ class QuickstartsPlugin(BasePlugin):
         return True, "Quickstarts ready"
 
 
+class ExamplePlugin(BasePlugin):
+    """Example plugin for the contributor blueprint.
+
+    Only loaded when RHOAI_MCP_EXAMPLE_PLUGIN is set. Demonstrates
+    the domain plugin pattern using ConfigMaps — no CRDs required.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="_example",
+                version="0.1.0",
+                description="Example domain for contributor blueprint",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains._example.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
+        return True, "Example domain uses core Kubernetes API"
+
+
 def get_core_plugins() -> list[BasePlugin]:
     """Return all core domain plugin instances.
 
@@ -364,7 +394,7 @@ def get_core_plugins() -> list[BasePlugin]:
     Returns:
         List of plugin instances for all core domains.
     """
-    return [
+    plugins = [
         ProjectsPlugin(),
         NotebooksPlugin(),
         InferencePlugin(),
@@ -376,3 +406,8 @@ def get_core_plugins() -> list[BasePlugin]:
         ModelRegistryPlugin(),
         QuickstartsPlugin(),
     ]
+
+    if os.environ.get("RHOAI_MCP_EXAMPLE_PLUGIN"):
+        plugins.append(ExamplePlugin())
+
+    return plugins

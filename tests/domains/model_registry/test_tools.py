@@ -110,8 +110,7 @@ class TestListRegisteredModels:
         register_tools(mcp, mock_server)
 
         models = [
-            RegisteredModel(id=f"model-{i}", name=f"model-{i}", state="LIVE")
-            for i in range(10)
+            RegisteredModel(id=f"model-{i}", name=f"model-{i}", state="LIVE") for i in range(10)
         ]
 
         with patch(
@@ -373,11 +372,14 @@ class TestGetModelBenchmarks:
             tokens_per_second=1500.0,
         )
 
-        with patch(
-            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
-        ) as mock_client_class, patch(
-            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
-        ) as mock_extractor_class:
+        with (
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+            ) as mock_client_class,
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+            ) as mock_extractor_class,
+        ):
             mock_client = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -410,11 +412,14 @@ class TestGetModelBenchmarks:
         mcp.tool = capture_tool
         register_tools(mcp, mock_server)
 
-        with patch(
-            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
-        ) as mock_client_class, patch(
-            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
-        ) as mock_extractor_class:
+        with (
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+            ) as mock_client_class,
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+            ) as mock_extractor_class,
+        ):
             mock_client = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -566,11 +571,14 @@ class TestGetValidationMetrics:
             gpu_type="A100",
         )
 
-        with patch(
-            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
-        ) as mock_client_class, patch(
-            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
-        ) as mock_extractor_class:
+        with (
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+            ) as mock_client_class,
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+            ) as mock_extractor_class,
+        ):
             mock_client = AsyncMock()
             mock_client.get_registered_model_by_name = AsyncMock(return_value=model)
             mock_client.get_model_versions = AsyncMock(return_value=[version])
@@ -656,11 +664,14 @@ class TestFindBenchmarksByGpu:
             ),
         ]
 
-        with patch(
-            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
-        ) as mock_client_class, patch(
-            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
-        ) as mock_extractor_class:
+        with (
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+            ) as mock_client_class,
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+            ) as mock_extractor_class,
+        ):
             mock_client = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -695,11 +706,14 @@ class TestFindBenchmarksByGpu:
         mcp.tool = capture_tool
         register_tools(mcp, mock_server)
 
-        with patch(
-            "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
-        ) as mock_client_class, patch(
-            "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
-        ) as mock_extractor_class:
+        with (
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.ModelRegistryClient"
+            ) as mock_client_class,
+            patch(
+                "rhoai_mcp.domains.model_registry.tools.BenchmarkExtractor"
+            ) as mock_extractor_class,
+        ):
             mock_client = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -714,6 +728,118 @@ class TestFindBenchmarksByGpu:
         assert result["gpu_type"] == "TPU"
         assert result["count"] == 0
         assert result["benchmarks"] == []
+
+
+# --- Format catalog model tests ---
+
+
+class TestFormatCatalogModel:
+    """Test _format_catalog_model includes artifacts at standard verbosity."""
+
+    def test_standard_verbosity_includes_artifacts(self) -> None:
+        """Artifacts should be included at standard verbosity for deployment URIs."""
+        from rhoai_mcp.domains.model_registry.catalog_models import (
+            CatalogModelArtifact,
+        )
+        from rhoai_mcp.domains.model_registry.tools import (
+            Verbosity,
+            _format_catalog_model,
+        )
+
+        artifact = CatalogModelArtifact(
+            uri="oci://registry.example.com/models/granite-3b:v1",
+            format="safetensors",
+            size="6.5 GB",
+        )
+        model = CatalogModel(
+            name="granite-3b",
+            source_label="Red Hat AI validated",
+            source_id="rhoai",
+            artifacts=[artifact],
+        )
+
+        result = _format_catalog_model(model, Verbosity.STANDARD)
+
+        assert "artifacts" in result
+        assert len(result["artifacts"]) == 1
+        assert result["artifacts"][0]["uri"] == "oci://registry.example.com/models/granite-3b:v1"
+
+    def test_standard_verbosity_no_artifacts_when_empty(self) -> None:
+        """No artifacts key when model has no artifacts."""
+        from rhoai_mcp.domains.model_registry.tools import (
+            Verbosity,
+            _format_catalog_model,
+        )
+
+        model = CatalogModel(
+            name="granite-3b",
+            source_label="Red Hat AI validated",
+        )
+
+        result = _format_catalog_model(model, Verbosity.STANDARD)
+
+        assert "artifacts" not in result
+
+    def test_artifact_uri_strips_credentials(self) -> None:
+        """Artifact URIs should have userinfo and query params stripped."""
+        from rhoai_mcp.domains.model_registry.catalog_models import (
+            CatalogModelArtifact,
+        )
+        from rhoai_mcp.domains.model_registry.tools import (
+            Verbosity,
+            _format_catalog_model,
+        )
+
+        artifact = CatalogModelArtifact(
+            uri="https://user:token@registry.example.com/models/granite:v1?sig=secret",
+            format="safetensors",
+        )
+        model = CatalogModel(
+            name="granite-3b",
+            source_label="imported",
+            source_id="custom",
+            artifacts=[artifact],
+        )
+
+        result = _format_catalog_model(model, Verbosity.STANDARD)
+
+        assert result["artifacts"][0]["uri"] == "https://registry.example.com/models/granite:v1"
+
+
+class TestSanitizeArtifactUri:
+    """Test _sanitize_artifact_uri strips sensitive components."""
+
+    def test_strips_userinfo(self) -> None:
+        from rhoai_mcp.domains.model_registry.tools import _sanitize_artifact_uri
+
+        assert (
+            _sanitize_artifact_uri("https://user:pass@registry.io/model:v1")
+            == "https://registry.io/model:v1"
+        )
+
+    def test_strips_query_and_fragment(self) -> None:
+        from rhoai_mcp.domains.model_registry.tools import _sanitize_artifact_uri
+
+        assert (
+            _sanitize_artifact_uri("https://registry.io/model:v1?token=abc#ref")
+            == "https://registry.io/model:v1"
+        )
+
+    def test_preserves_oci_scheme(self) -> None:
+        from rhoai_mcp.domains.model_registry.tools import _sanitize_artifact_uri
+
+        assert (
+            _sanitize_artifact_uri("oci://quay.io/org/model:latest")
+            == "oci://quay.io/org/model:latest"
+        )
+
+    def test_preserves_port(self) -> None:
+        from rhoai_mcp.domains.model_registry.tools import _sanitize_artifact_uri
+
+        assert (
+            _sanitize_artifact_uri("https://registry.io:8443/model:v1")
+            == "https://registry.io:8443/model:v1"
+        )
 
 
 # --- Catalog path tests ---
@@ -817,9 +943,7 @@ class TestGetModelBenchmarksCatalog:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = await registered_tools["get_model_benchmarks"](
-                "granite-3.1-8b-instruct"
-            )
+            result = await registered_tools["get_model_benchmarks"]("granite-3.1-8b-instruct")
 
         assert "error" not in result
         assert result["model_name"] == "granite-3.1-8b-instruct"
@@ -827,9 +951,7 @@ class TestGetModelBenchmarksCatalog:
         assert result["has_benchmark_content"] is True
         assert len(result["sections"]) >= 2
 
-    async def test_catalog_benchmarks_model_not_found(
-        self, mock_server: MagicMock
-    ) -> None:
+    async def test_catalog_benchmarks_model_not_found(self, mock_server: MagicMock) -> None:
         """Test getting benchmarks when catalog model not found."""
         registered_tools = _register_tools(mock_server)
 
@@ -847,9 +969,7 @@ class TestGetModelBenchmarksCatalog:
         assert "error" in result
         assert "not found" in result["error"].lower()
 
-    async def test_catalog_benchmarks_no_benchmark_sections(
-        self, mock_server: MagicMock
-    ) -> None:
+    async def test_catalog_benchmarks_no_benchmark_sections(self, mock_server: MagicMock) -> None:
         """Test getting benchmarks when README has no benchmark sections."""
         registered_tools = _register_tools(mock_server)
         model = _make_catalog_model(readme="# Model\n\n## Usage\n\nJust use it.\n")
@@ -863,16 +983,12 @@ class TestGetModelBenchmarksCatalog:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = await registered_tools["get_model_benchmarks"](
-                "granite-3.1-8b-instruct"
-            )
+            result = await registered_tools["get_model_benchmarks"]("granite-3.1-8b-instruct")
 
         assert result["has_benchmark_content"] is False
         assert result["sections"] == []
 
-    async def test_catalog_benchmarks_with_gpu_filter(
-        self, mock_server: MagicMock
-    ) -> None:
+    async def test_catalog_benchmarks_with_gpu_filter(self, mock_server: MagicMock) -> None:
         """Test getting benchmarks with GPU type filter on catalog."""
         registered_tools = _register_tools(mock_server)
         model = _make_catalog_model()
@@ -934,9 +1050,7 @@ class TestGetValidationMetricsCatalog:
         yield
         _reset_cache()
 
-    async def test_catalog_validation_metrics_success(
-        self, mock_server: MagicMock
-    ) -> None:
+    async def test_catalog_validation_metrics_success(self, mock_server: MagicMock) -> None:
         """Test getting validation metrics from catalog model."""
         registered_tools = _register_tools(mock_server)
         model = _make_catalog_model()
@@ -959,9 +1073,7 @@ class TestGetValidationMetricsCatalog:
         assert result["source"] == "model_catalog"
         assert result["has_benchmark_content"] is True
 
-    async def test_catalog_validation_metrics_model_not_found(
-        self, mock_server: MagicMock
-    ) -> None:
+    async def test_catalog_validation_metrics_model_not_found(self, mock_server: MagicMock) -> None:
         """Test getting validation metrics when catalog model not found."""
         registered_tools = _register_tools(mock_server)
 
@@ -974,9 +1086,7 @@ class TestGetValidationMetricsCatalog:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = await registered_tools["get_validation_metrics"](
-                "nonexistent", "v1.0"
-            )
+            result = await registered_tools["get_validation_metrics"]("nonexistent", "v1.0")
 
         assert "error" in result
         assert "not found" in result["error"].lower()
@@ -1025,9 +1135,7 @@ class TestFindBenchmarksByGpuCatalog:
         assert result["count"] == 1
         assert result["models"][0]["model_name"] == "model-1"
 
-    async def test_catalog_find_by_gpu_no_matches(
-        self, mock_server: MagicMock
-    ) -> None:
+    async def test_catalog_find_by_gpu_no_matches(self, mock_server: MagicMock) -> None:
         """Test finding benchmarks by GPU with no matches."""
         registered_tools = _register_tools(mock_server)
         model = _make_catalog_model()

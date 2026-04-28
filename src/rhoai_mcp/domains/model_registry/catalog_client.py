@@ -264,7 +264,7 @@ class ModelCatalogClient:
             name=data.get("name", ""),
             description=data.get("description"),
             provider=data.get("provider"),
-            source_id=data.get("source_id", ""),
+            source_id=data.get("sourceId", data.get("source_id", "")),
             source_label=data.get("sourceLabel", data.get("source_label", "")),
             task_type=data.get("taskType", data.get("task_type")),
             tags=data.get("tags", []),

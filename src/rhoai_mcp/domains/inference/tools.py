@@ -1,6 +1,8 @@
 """MCP Tools for Model Serving (InferenceService) operations."""
 
+import logging
 import re
+import shlex
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -15,7 +17,155 @@ from rhoai_mcp.utils.response import (
 )
 
 if TYPE_CHECKING:
+    from rhoai_mcp.config import RHOAIConfig
     from rhoai_mcp.server import RHOAIServer
+
+logger = logging.getLogger(__name__)
+
+
+async def _resolve_catalog_storage_uri(
+    config: "RHOAIConfig", k8s: Any, model_id: str
+) -> str | None:
+    """Try to resolve a model's storage URI from the Model Catalog.
+
+    Looks up the model by name in the catalog and returns the URI of its
+    first artifact if found. Performs discovery if the catalog hasn't been
+    probed yet.
+
+    Args:
+        config: Server configuration with model registry settings.
+        k8s: K8s client for discovery.
+        model_id: Model identifier (e.g., "ibm-granite/granite-3.1-8b-instruct").
+
+    Returns:
+        The artifact URI if found, or None.
+    """
+    if not config.model_registry_enabled:
+        return None
+
+    try:
+        from rhoai_mcp.domains.model_registry.catalog_client import ModelCatalogClient
+        from rhoai_mcp.domains.model_registry.discovery import (
+            ModelRegistryDiscovery,
+            probe_api_type,
+        )
+        from rhoai_mcp.domains.model_registry.tools import (
+            _cached_api_type,
+            _cached_discovery_url,
+            _create_cached_catalog_discovery,
+        )
+
+        api_type = _cached_api_type
+        url = _cached_discovery_url
+
+        # If cache isn't populated, run discovery
+        if api_type is None or url is None:
+            import rhoai_mcp.domains.model_registry.tools as mr_tools
+            from rhoai_mcp.config import ModelRegistryDiscoveryMode
+
+            url = config.model_registry_url
+            requires_auth = False
+
+            if config.model_registry_discovery_mode == ModelRegistryDiscoveryMode.AUTO:
+                discovery = ModelRegistryDiscovery(k8s)
+                result = await discovery.discover_with_port_forward(fallback_url=url)
+                if result:
+                    url = result.url
+                    requires_auth = result.requires_auth
+                    if result.api_type != "unknown":
+                        api_type = result.api_type
+
+            if not api_type or api_type == "unknown":
+                api_type = await probe_api_type(url, config, requires_auth)
+
+            # Populate the cache so subsequent calls are fast
+            if api_type != "unknown" and url:
+                mr_tools._cached_api_type = api_type
+                mr_tools._cached_discovery_url = url
+                mr_tools._cached_requires_auth = requires_auth
+
+        if api_type != "model_catalog" or not url:
+            return None
+
+        discovery_result = _create_cached_catalog_discovery(url)
+
+        async with ModelCatalogClient(config, discovery_result) as client:
+            models = await client.list_models(page_size=500)
+            for model in models:
+                if model.name == model_id and model.artifacts:
+                    return model.artifacts[0].uri
+
+            # If no match by exact name, try getting artifacts via source lookup
+            for model in models:
+                if model.name == model_id and model.source_id:
+                    artifacts = await client.get_model_artifacts(model.source_id, model_id)
+                    if artifacts:
+                        return artifacts[0].uri
+    except Exception as e:
+        logger.warning(
+            "Could not resolve storage_uri from catalog for model '%s': %s",
+            model_id,
+            e,
+        )
+
+    return None
+
+
+def _extract_oci_registry(uri: str) -> str | None:
+    """Extract the registry hostname from an OCI or docker URI.
+
+    Args:
+        uri: URI like "oci://quay.io/org/image:tag" or "docker://registry.redhat.io/image:tag".
+
+    Returns:
+        Registry hostname (e.g., "quay.io", "localhost:5000") or None if unparseable.
+    """
+    # Strip scheme
+    for prefix in ("oci://", "docker://"):
+        if uri.startswith(prefix):
+            uri = uri[len(prefix) :]
+            break
+
+    # First path component is the registry host (possibly with port)
+    parts = uri.split("/")
+    if not parts or not parts[0]:
+        return None
+    host = parts[0]
+    # Accept hostnames with a dot (quay.io), a port suffix (localhost:5000), or "localhost"
+    # A colon followed by digits indicates a port; colon with non-digits is a tag (image:latest)
+    has_port = ":" in host and host.split(":")[-1].isdigit()
+    if "." in host or has_port or host == "localhost":
+        return host
+    return None
+
+
+def _check_pull_secrets(k8s: Any, namespace: str, registry: str, warnings: list[str]) -> None:
+    """Check if a namespace has pull secrets for an OCI registry.
+
+    Checks the default service account's imagePullSecrets. If none are
+    configured, adds a warning with remediation instructions.
+    """
+    try:
+        sa = k8s.core_v1.read_namespaced_service_account(name="default", namespace=namespace)
+        pull_secrets = sa.image_pull_secrets or []
+        if not pull_secrets:
+            safe_registry = shlex.quote(registry)
+            safe_namespace = shlex.quote(namespace)
+            warnings.append(
+                f"No image pull secrets configured in namespace '{namespace}' for "
+                f"registry '{registry}'. Create a pull secret and link it to the "
+                f"default service account: "
+                f"oc create secret docker-registry <secret-name> "
+                f"--docker-server={safe_registry} --docker-username=<user> "
+                f"--docker-password=<token> -n {safe_namespace} && "
+                f"oc secrets link default <secret-name> --for=pull -n {safe_namespace}"
+            )
+    except Exception as e:
+        logger.warning("Could not check pull secrets for %s: %s", namespace, e)
+        warnings.append(
+            f"Could not verify pull secrets for registry '{registry}' in "
+            f"namespace '{namespace}': {e}"
+        )
 
 
 # Model size estimates by parameter count (in billions)
@@ -329,7 +479,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         return result
 
     @mcp.tool()
-    def prepare_model_deployment(
+    async def prepare_model_deployment(
         namespace: str,
         model_id: str,
         storage_uri: str | None = None,
@@ -341,10 +491,14 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         resource estimation, and storage validation. Use this before calling
         deploy_model() to ensure everything is ready.
 
+        If storage_uri is not provided, attempts to resolve it automatically
+        from the Model Catalog (when available).
+
         Args:
             namespace: The project (namespace) name.
             model_id: Model identifier (e.g., "meta-llama/Llama-2-7b-hf").
-            storage_uri: Model location (s3:// or pvc://). Required for deployment.
+            storage_uri: Model location (s3://, pvc://, or oci://). If not provided,
+                will attempt to look up from the Model Catalog.
             model_format: Model format. Auto-detected from model_id if None.
 
         Returns:
@@ -437,7 +591,13 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         except Exception as e:
             warnings.append(f"Could not check GPU availability: {type(e).__name__}")
 
-        # Step 6: Validate storage if provided
+        # Step 6: Resolve storage_uri from catalog if not provided
+        if not storage_uri:
+            resolved_uri = await _resolve_catalog_storage_uri(server.config, server.k8s, model_id)
+            if resolved_uri:
+                storage_uri = resolved_uri
+
+        # Step 7: Validate storage if provided
         storage_valid = True
         if storage_uri:
             if storage_uri.startswith("pvc://"):
@@ -456,6 +616,10 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             elif storage_uri.startswith("s3://"):
                 # S3 validation would require checking data connections
                 warnings.append("Ensure S3 credentials are configured via data connection")
+            elif storage_uri.startswith("oci://") or storage_uri.startswith("docker://"):
+                registry = _extract_oci_registry(storage_uri)
+                if registry:
+                    _check_pull_secrets(server.k8s, namespace, registry, warnings)
         else:
             warnings.append("No storage_uri provided - you'll need to specify model location")
 
@@ -465,7 +629,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             "namespace": namespace,
             "runtime": recommended_runtime,
             "model_format": model_format,
-            "storage_uri": storage_uri or "<model_storage_path>",
+            "storage_uri": storage_uri,
             "min_replicas": 1,
             "max_replicas": 1,
             "gpu_count": resource_requirements.get("gpu", 0),
@@ -634,6 +798,20 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                     "message": "S3 storage configured (ensure data connection exists)",
                 }
             )
+        elif storage_uri.startswith("oci://") or storage_uri.startswith("docker://"):
+            registry = _extract_oci_registry(storage_uri)
+            warnings: list[str] = []
+            if registry:
+                _check_pull_secrets(server.k8s, namespace, registry, warnings)
+            checks.append(
+                {
+                    "name": "Storage",
+                    "passed": True,
+                    "message": f"OCI registry storage ({registry or 'unknown registry'})",
+                }
+            )
+            if warnings:
+                actions_needed.extend(warnings)
         else:
             checks.append(
                 {

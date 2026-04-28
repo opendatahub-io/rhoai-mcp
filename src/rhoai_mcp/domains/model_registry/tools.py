@@ -2,6 +2,7 @@
 
 import logging
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit, urlunsplit
 
 from mcp.server.fastmcp import FastMCP
 
@@ -755,12 +756,13 @@ def _format_catalog_model(model: CatalogModel, verbosity: Verbosity) -> dict[str
         "license": model.license,
     }
 
+    if model.artifacts:
+        result["artifacts"] = [_format_catalog_artifact(a) for a in model.artifacts]
+
     if verbosity == Verbosity.FULL:
         result["tags"] = model.tags
         result["long_description"] = model.long_description
         result["readme"] = model.readme
-        if model.artifacts:
-            result["artifacts"] = [_format_catalog_artifact(a) for a in model.artifacts]
 
     return result
 
@@ -776,10 +778,26 @@ def _format_catalog_source(source: CatalogSource) -> dict[str, Any]:
     }
 
 
+def _sanitize_artifact_uri(uri: str) -> str:
+    """Strip userinfo and query/fragment from an artifact URI.
+
+    Model registry artifacts may contain imported URIs with embedded
+    credentials or signed tokens. Remove these before returning to clients.
+    """
+    parsed = urlsplit(uri)
+    hostname = parsed.hostname or ""
+    try:
+        port = f":{parsed.port}" if parsed.port else ""
+    except ValueError:
+        port = ""
+    netloc = f"{hostname}{port}" if hostname else parsed.netloc.split("@")[-1]
+    return urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
+
+
 def _format_catalog_artifact(artifact: CatalogModelArtifact) -> dict[str, Any]:
     """Format a catalog artifact for response."""
     return {
-        "uri": artifact.uri,
+        "uri": _sanitize_artifact_uri(artifact.uri) if artifact.uri else artifact.uri,
         "format": artifact.format,
         "size": artifact.size,
         "quantization": artifact.quantization,

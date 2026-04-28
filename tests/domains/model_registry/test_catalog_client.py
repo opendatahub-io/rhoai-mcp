@@ -201,6 +201,35 @@ class TestModelCatalogClient:
         assert sources[0].model_count == 12
 
     @pytest.mark.asyncio
+    async def test_list_models_parses_camelcase_source_id(
+        self,
+        client: ModelCatalogClient,
+    ) -> None:
+        """Test that sourceId (camelCase) is parsed into source_id."""
+        model_data = {
+            "name": "granite-3b-code-instruct",
+            "description": "IBM Granite 3B",
+            "provider": "IBM",
+            "sourceId": "redhat_ai_validated_models",
+            "sourceLabel": "Red Hat AI validated",
+            "taskType": "text-generation",
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"models": [model_data]}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(client, "_get_client") as mock_get_client:
+            mock_http = AsyncMock()
+            mock_http.get = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_http
+
+            models = await client.list_models()
+
+        assert len(models) == 1
+        assert models[0].source_id == "redhat_ai_validated_models"
+
+    @pytest.mark.asyncio
     async def test_get_model_artifacts(
         self,
         client: ModelCatalogClient,

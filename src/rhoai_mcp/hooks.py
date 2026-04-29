@@ -111,3 +111,15 @@ class RHOAIMCPHookSpec:
             plugin can operate, and message provides details.
         """
         raise NotImplementedError
+
+    @hookspec
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        """Return mapping of tool names to required K8s permissions.
+
+        Each permission is a dict with keys: apiGroup, resource, verb.
+        A tool is visible only if ALL its permissions are allowed.
+
+        Returns:
+            Dict mapping tool name to list of permission dicts.
+        """
+        raise NotImplementedError

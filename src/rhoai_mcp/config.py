@@ -49,6 +49,13 @@ class ModelRegistryAuthMode(str, Enum):
     TOKEN = "token"  # Use explicit bearer token
 
 
+class OIDCTokenMode(str, Enum):
+    """Token validation strategy for OIDC auth."""
+
+    JWT = "jwt"
+    TOKEN_REVIEW = "token-review"
+
+
 class RHOAIConfig(BaseSettings):
     """Configuration for RHOAI MCP server.
 
@@ -208,6 +215,51 @@ class RHOAIConfig(BaseSettings):
         + "Set via RHOAI_MCP_ENABLED_PLUGINS as comma-separated values.",
     )
 
+    # OIDC authentication settings
+    oidc_enabled: bool = Field(
+        default=False,
+        description="Enable OIDC authentication for multi-user access",
+    )
+    oidc_issuer_url: str | None = Field(
+        default=None,
+        description="OIDC issuer URL for JWT validation",
+    )
+    oidc_audience: str = Field(
+        default="rhoai-mcp",
+        description="Expected audience claim in the JWT",
+    )
+    oidc_username_claim: str = Field(
+        default="preferred_username",
+        description="JWT claim for username",
+    )
+    oidc_groups_claim: str = Field(
+        default="groups",
+        description="JWT claim for groups",
+    )
+    oidc_required_scopes: list[str] | None = Field(
+        default=None,
+        description="Scopes for Protected Resource Metadata",
+    )
+    oidc_jwks_cache_ttl: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="JWKS cache TTL in seconds",
+    )
+    oidc_token_mode: OIDCTokenMode = Field(
+        default=OIDCTokenMode.JWT,
+        description="Token validation mode: jwt (JWKS-based) or token-review (K8s TokenReview API)",
+    )
+    oidc_ocp_api_url: str | None = Field(
+        default=None,
+        description="OCP API server URL for Protected Resource Metadata in token-review mode",
+    )
+    oidc_resource_url: str | None = Field(
+        default=None,
+        description="External URL of this MCP server for Protected Resource Metadata "
+        "(e.g. the OpenShift Route URL). Defaults to https://{host}:{port}.",
+    )
+
     @field_validator("enabled_plugins", mode="before")
     @classmethod
     def parse_enabled_plugins(cls, v: str | list[str] | None) -> list[str] | None:
@@ -216,6 +268,16 @@ class RHOAIConfig(BaseSettings):
             return None
         if isinstance(v, str):
             return [p.strip() for p in v.split(",") if p.strip()]
+        return v
+
+    @field_validator("oidc_required_scopes", mode="before")
+    @classmethod
+    def parse_oidc_required_scopes(cls, v: str | list[str] | None) -> list[str] | None:
+        """Parse comma-separated string into list."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [s.strip() for s in v.split(",") if s.strip()]
         return v
 
     @field_validator("kubeconfig_path", mode="before")
@@ -263,6 +325,23 @@ class RHOAIConfig(BaseSettings):
                 )
 
         return warnings
+
+    def validate_oidc_config(self) -> None:
+        """Validate OIDC configuration.
+
+        Raises:
+            ValueError: If OIDC is enabled without required configuration.
+        """
+        if not self.oidc_enabled:
+            return
+
+        if self.transport == TransportMode.STDIO:
+            raise ValueError("OIDC authentication is not supported with stdio transport")
+
+        if self.oidc_token_mode == OIDCTokenMode.JWT and not self.oidc_issuer_url:
+            raise ValueError(
+                "oidc_issuer_url is required when oidc_enabled is true and token_mode is jwt"
+            )
 
     def is_operation_allowed(self, operation: str) -> tuple[bool, str | None]:
         """Check if an operation is allowed based on safety settings.

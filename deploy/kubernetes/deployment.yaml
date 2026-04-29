@@ -110,6 +110,12 @@ rules:
       - projects
     verbs: ["get", "list", "watch"]
 
+  # OpenShift users (for TokenReview group lookup)
+  - apiGroups: ["user.openshift.io"]
+    resources:
+      - users
+    verbs: ["get"]
+
 ---
 # =============================================================================
 # ClusterRoleBinding
@@ -125,6 +131,67 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: rhoai-mcp
+subjects:
+  - kind: ServiceAccount
+    name: rhoai-mcp
+    namespace: rhoai-mcp
+
+---
+# =============================================================================
+# ClusterRole for user impersonation (OIDC mode)
+# SECURITY NOTE: This role enables impersonation of any user/group, which is
+# required for multi-user RBAC enforcement. The MCP server uses its SA
+# credentials with Impersonate-User/Impersonate-Group headers to execute
+# K8s API calls on behalf of authenticated users. The SA token MUST be
+# protected accordingly — any compromise allows impersonating cluster users.
+# =============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rhoai-mcp-impersonator
+  labels:
+    app.kubernetes.io/name: rhoai-mcp
+    app.kubernetes.io/component: rbac
+rules:
+  - apiGroups: [""]
+    resources: ["users", "groups"]
+    verbs: ["impersonate"]
+
+---
+# =============================================================================
+# ClusterRoleBinding for impersonation
+# =============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhoai-mcp-impersonator
+  labels:
+    app.kubernetes.io/name: rhoai-mcp
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rhoai-mcp-impersonator
+subjects:
+  - kind: ServiceAccount
+    name: rhoai-mcp
+    namespace: rhoai-mcp
+
+---
+# =============================================================================
+# ClusterRoleBinding for auth delegation (TokenReview + SubjectAccessReview)
+# =============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhoai-mcp-auth-delegator
+  labels:
+    app.kubernetes.io/name: rhoai-mcp
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
 subjects:
   - kind: ServiceAccount
     name: rhoai-mcp
@@ -150,6 +217,11 @@ data:
   RHOAI_MCP_LOG_LEVEL: "INFO"
   RHOAI_MCP_READ_ONLY_MODE: "false"
   RHOAI_MCP_ENABLE_DANGEROUS_OPERATIONS: "false"
+  # OIDC authentication (disabled by default)
+  RHOAI_MCP_OIDC_ENABLED: "false"
+  # RHOAI_MCP_OIDC_TOKEN_MODE: "jwt"  # "jwt" or "token-review"
+  # RHOAI_MCP_OIDC_ISSUER_URL: "https://keycloak.example.com/realms/rhoai"
+  # RHOAI_MCP_OIDC_AUDIENCE: "rhoai-mcp"
 
 ---
 # =============================================================================
@@ -178,9 +250,6 @@ spec:
       serviceAccountName: rhoai-mcp
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
       containers:
         - name: rhoai-mcp
           image: rhoai-mcp:latest

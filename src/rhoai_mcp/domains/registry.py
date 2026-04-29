@@ -8,6 +8,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from rhoai_mcp.domains.permissions import (
+    CONNECTIONS_PERMISSIONS,
+    INFERENCE_PERMISSIONS,
+    NOTEBOOKS_PERMISSIONS,
+    PIPELINES_PERMISSIONS,
+    PROJECTS_PERMISSIONS,
+    QUICKSTARTS_PERMISSIONS,
+    STORAGE_PERMISSIONS,
+    TRAINING_PERMISSIONS,
+)
 from rhoai_mcp.hooks import hookimpl
 from rhoai_mcp.plugin import BasePlugin, PluginMetadata
 
@@ -45,6 +55,10 @@ class ProjectsPlugin(BasePlugin):
         register_resources(mcp, server)
 
     @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return PROJECTS_PERMISSIONS
+
+    @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
         return True, "Projects uses core Kubernetes and OpenShift APIs"
 
@@ -68,6 +82,10 @@ class NotebooksPlugin(BasePlugin):
         from rhoai_mcp.domains.notebooks.tools import register_tools
 
         register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return NOTEBOOKS_PERMISSIONS
 
     @hookimpl
     def rhoai_get_crd_definitions(self) -> list[CRDDefinition]:
@@ -95,6 +113,10 @@ class InferencePlugin(BasePlugin):
         from rhoai_mcp.domains.inference.tools import register_tools
 
         register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return INFERENCE_PERMISSIONS
 
     @hookimpl
     def rhoai_get_crd_definitions(self) -> list[CRDDefinition]:
@@ -128,6 +150,10 @@ class PipelinesPlugin(BasePlugin):
         register_tools(mcp, server)
 
     @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return PIPELINES_PERMISSIONS
+
+    @hookimpl
     def rhoai_get_crd_definitions(self) -> list[CRDDefinition]:
         from rhoai_mcp.domains.pipelines.crds import PipelinesCRDs
 
@@ -155,6 +181,10 @@ class ConnectionsPlugin(BasePlugin):
         register_tools(mcp, server)
 
     @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return CONNECTIONS_PERMISSIONS
+
+    @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
         return True, "Data connections use core Kubernetes API"
 
@@ -180,6 +210,10 @@ class StoragePlugin(BasePlugin):
         register_tools(mcp, server)
 
     @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return STORAGE_PERMISSIONS
+
+    @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
         return True, "Storage uses core Kubernetes API"
 
@@ -203,6 +237,10 @@ class TrainingPlugin(BasePlugin):
         from rhoai_mcp.domains.training.tools import register_tools
 
         register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return TRAINING_PERMISSIONS
 
     @hookimpl
     def rhoai_get_crd_definitions(self) -> list[CRDDefinition]:
@@ -349,6 +387,10 @@ class QuickstartsPlugin(BasePlugin):
         from rhoai_mcp.domains.quickstarts.tools import register_resources
 
         register_resources(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return QUICKSTARTS_PERMISSIONS
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002

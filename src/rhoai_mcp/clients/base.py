@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -186,6 +187,55 @@ class K8sClient:
             "No valid authentication method found. "
             "Not running in-cluster and no kubeconfig available."
         )
+
+    @staticmethod
+    def _validate_header_value(value: str, field: str) -> str:
+        """Validate a value is safe for use in HTTP headers (CWE-113)."""
+        if "\r" in value or "\n" in value or "\x00" in value:
+            raise ValueError(f"Invalid {field}: control characters are not allowed")
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"Invalid {field}: empty value")
+        if stripped != value:
+            raise ValueError(f"Invalid {field}: leading or trailing whitespace is not allowed")
+        return value
+
+    def create_impersonating_client(self, username: str, groups: list[str]) -> K8sClient:
+        """Create a new K8sClient that impersonates the given user.
+
+        Uses the current client's SA credentials with Impersonate-User
+        and Impersonate-Group headers added to every request.
+
+        Per K8s API spec, each group is sent as a separate
+        Impersonate-Group header using HTTPHeaderDict.
+        """
+        if not self._api_client:
+            raise RuntimeError("Cannot impersonate: client not connected")
+
+        from urllib3._collections import HTTPHeaderDict
+
+        # Shallow-copy the ApiClient and give it its own default_headers
+        new_api_client = copy.copy(self._api_client)
+        new_api_client.default_headers = HTTPHeaderDict(self._api_client.default_headers)
+
+        # Clear any inherited impersonation headers to prevent privilege escalation (CWE-269)
+        new_api_client.default_headers.discard("Impersonate-User")
+        new_api_client.default_headers.discard("Impersonate-Group")
+
+        new_api_client.default_headers["Impersonate-User"] = self._validate_header_value(
+            username, "username"
+        )
+        for group in groups:
+            new_api_client.default_headers.add(
+                "Impersonate-Group", self._validate_header_value(group, "group")
+            )
+
+        # Build a new K8sClient and inject the impersonating ApiClient
+        imp_client = K8sClient(self._config)
+        imp_client._api_client = new_api_client
+        imp_client._dynamic_client = DynamicClient(new_api_client)
+        imp_client._core_v1 = client.CoreV1Api(new_api_client)
+        return imp_client
 
     @property
     def dynamic(self) -> DynamicClient:

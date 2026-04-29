@@ -1,11 +1,14 @@
 """MCP Tools for tool discovery and workflow guidance."""
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
+
+logger = logging.getLogger(__name__)
 
 
 # Tool categories with workflow hints
@@ -134,8 +137,34 @@ INTENT_PATTERNS = [
 # Discovery pattern for fallback when no pattern matches
 DISCOVERY_PATTERN = next(p for p in INTENT_PATTERNS if p["category"] == "discovery")
 
+# All tool names known to meta tools — used as governed set for fail-closed behavior
+_ALL_KNOWN_TOOLS: set[str] = set()
+for _cat_info in TOOL_CATEGORIES.values():
+    _ALL_KNOWN_TOOLS.update(_cat_info["tools"])
+for _pattern in INTENT_PATTERNS:
+    _ALL_KNOWN_TOOLS.update(_pattern["workflow"])
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
+
+def _get_rbac_check(server: "RHOAIServer") -> tuple[set[str], set[str]] | None:
+    """Get allowed/governed tool sets. Returns None when OIDC is disabled."""
+    try:
+        return server.get_allowed_tools()
+    except Exception:
+        logger.warning("RBAC check failed, returning no tools (fail-closed)", exc_info=True)
+        return set(), _ALL_KNOWN_TOOLS
+
+
+def _filter_tools_by_check(
+    tool_names: list[str], check: tuple[set[str], set[str]] | None
+) -> list[str]:
+    """Filter tool names using a pre-computed RBAC check result."""
+    if check is None:
+        return tool_names
+    allowed, governed = check
+    return [t for t in tool_names if t in allowed or t not in governed]
+
+
+def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     """Register meta tools with the MCP server."""
 
     @mcp.tool()
@@ -182,12 +211,16 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
             # Default to discovery
             best_match = DISCOVERY_PATTERN
 
+        # Filter workflow tools by RBAC (single check for all tools)
+        check = _get_rbac_check(server)
+        visible_workflow = _filter_tools_by_check(list(best_match["workflow"]), check)
+
         # Build example calls
         example_calls = []
         namespace = context.get("namespace", "my-project")
         resource_name = context.get("resource_name", "my-resource")
 
-        for tool in best_match["workflow"]:
+        for tool in visible_workflow:
             if tool == "prepare_training":
                 example_calls.append(
                     {
@@ -264,7 +297,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
         return {
             "intent": intent,
             "category": best_match["category"],
-            "workflow": best_match["workflow"],
+            "workflow": visible_workflow,
             "explanation": best_match["explanation"],
             "example_calls": example_calls,
             "all_categories": list(TOOL_CATEGORIES.keys()),
@@ -280,13 +313,17 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
         Returns:
             Tool categories with descriptions and key tools.
         """
+        check = _get_rbac_check(server)
         categories = []
         for name, info in TOOL_CATEGORIES.items():
+            visible = _filter_tools_by_check(info["tools"], check)
+            if not visible:
+                continue
             categories.append(
                 {
                     "category": name,
                     "description": info["description"],
-                    "key_tools": info["tools"][:3],
+                    "key_tools": visible[:3],
                     "use_first": info.get("use_first", False),
                 }
             )

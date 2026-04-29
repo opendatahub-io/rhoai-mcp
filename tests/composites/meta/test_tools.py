@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from rhoai_mcp.composites.meta.tools import (
-    DISCOVERY_PATTERN,
     INTENT_PATTERNS,
     TOOL_CATEGORIES,
     register_tools,
@@ -32,8 +31,12 @@ def mock_mcp() -> MagicMock:
 
 @pytest.fixture
 def mock_server() -> MagicMock:
-    """Create a mock RHOAIServer."""
+    """Create a mock RHOAIServer.
+
+    Defaults get_allowed_tools to None (OIDC disabled, all tools allowed).
+    """
     server = MagicMock()
+    server.get_allowed_tools.return_value = None
     return server
 
 
@@ -172,3 +175,135 @@ class TestListToolCategories:
         result = list_categories()
 
         assert "recommendation" in result
+
+
+class TestSuggestToolsRBACFiltering:
+    """Tests that suggest_tools filters results by user RBAC permissions."""
+
+    def test_oidc_disabled_returns_all_tools(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """When OIDC is disabled (None), all workflow tools are returned."""
+        mock_server.get_allowed_tools.return_value = None
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("train a model", None)
+
+        assert result["workflow"] == ["prepare_training", "train"]
+        assert len(result["example_calls"]) == 2
+
+    def test_filters_workflow_by_rbac(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """Only allowed tools appear in workflow when RBAC is active."""
+        # User can access prepare_training but not train
+        allowed = {"prepare_training"}
+        governed = {"prepare_training", "train"}
+        mock_server.get_allowed_tools.return_value = (allowed, governed)
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("train a model", None)
+
+        assert result["workflow"] == ["prepare_training"]
+        assert len(result["example_calls"]) == 1
+        assert result["example_calls"][0]["tool"] == "prepare_training"
+
+    def test_ungoverned_tools_pass_through(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """Tools without RBAC mappings (ungoverned) are always included."""
+        # explore_cluster has no permission mapping (not governed)
+        allowed: set[str] = set()
+        governed: set[str] = set()
+        mock_server.get_allowed_tools.return_value = (allowed, governed)
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("what's running in the cluster", None)
+
+        assert "explore_cluster" in result["workflow"]
+
+    def test_all_workflow_tools_denied_returns_empty(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """When all workflow tools are denied, workflow and example_calls are empty."""
+        allowed: set[str] = set()
+        governed = {"prepare_training", "train"}
+        mock_server.get_allowed_tools.return_value = (allowed, governed)
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("train a model", None)
+
+        assert result["workflow"] == []
+        assert result["example_calls"] == []
+
+    def test_rbac_exception_returns_empty(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """On RBAC check failure, return empty results (fail-closed)."""
+        mock_server.get_allowed_tools.side_effect = RuntimeError("K8s API unreachable")
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("train a model", None)
+
+        # Fail-closed: all tools are treated as governed + denied
+        assert result["workflow"] == []
+        assert result["example_calls"] == []
+
+
+class TestListToolCategoriesRBACFiltering:
+    """Tests that list_tool_categories filters results by user RBAC permissions."""
+
+    def test_oidc_disabled_returns_all_categories(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """When OIDC is disabled, all categories and tools are returned."""
+        mock_server.get_allowed_tools.return_value = None
+        register_tools(mock_mcp, mock_server)
+        list_categories = mock_mcp._registered_tools["list_tool_categories"]
+
+        result = list_categories()
+
+        assert len(result["categories"]) == len(TOOL_CATEGORIES)
+
+    def test_filters_key_tools_by_rbac(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """key_tools are filtered to only include allowed tools."""
+        # Allow only list_workbenches, deny create/start/stop/get_workbench_url
+        allowed = {"list_workbenches"}
+        governed = {
+            "list_workbenches", "create_workbench", "start_workbench",
+            "stop_workbench", "get_workbench_url",
+        }
+        mock_server.get_allowed_tools.return_value = (allowed, governed)
+        register_tools(mock_mcp, mock_server)
+        list_categories = mock_mcp._registered_tools["list_tool_categories"]
+
+        result = list_categories()
+
+        workbench_cat = next(c for c in result["categories"] if c["category"] == "workbenches")
+        assert workbench_cat["key_tools"] == ["list_workbenches"]
+
+    def test_omits_categories_with_no_accessible_tools(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """Categories where all tools are denied are omitted entirely."""
+        # Deny every training tool
+        governed = {
+            "prepare_training", "train", "get_training_progress",
+            "get_training_logs", "analyze_training_failure",
+        }
+        allowed: set[str] = set()
+        mock_server.get_allowed_tools.return_value = (allowed, governed)
+        register_tools(mock_mcp, mock_server)
+        list_categories = mock_mcp._registered_tools["list_tool_categories"]
+
+        result = list_categories()
+
+        category_names = [c["category"] for c in result["categories"]]
+        assert "training" not in category_names

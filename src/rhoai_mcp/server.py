@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
@@ -40,11 +41,26 @@ class RHOAIServer:
     def k8s(self) -> K8sClient:
         """Get the Kubernetes client.
 
+        When OIDC is enabled, returns an impersonating client for the
+        current user. Otherwise returns the shared SA client.
+
         Raises:
             RuntimeError: If server is not running.
         """
         if self._k8s_client is None:
             raise RuntimeError("Server not running. K8s client not available.")
+
+        if self._config.oidc_enabled:
+            from rhoai_mcp.auth.user_context import UserContext
+
+            ctx = UserContext.current()
+            if ctx is None:
+                raise RuntimeError(
+                    "OIDC is enabled but no UserContext is set. "
+                    "Refusing to fall back to service-account client."
+                )
+            return self._k8s_client.create_impersonating_client(ctx.username, ctx.groups)
+
         return self._k8s_client
 
     @property
@@ -82,6 +98,55 @@ class RHOAIServer:
         if self._plugin_manager is None:
             return {}
         return self._plugin_manager.healthy_plugins
+
+    def get_allowed_tools(self) -> tuple[set[str], set[str]] | None:
+        """Get the set of tool names the current user can access.
+
+        Returns None when OIDC is disabled (all tools allowed).
+        Returns (allowed_tools, governed_tools) when OIDC is enabled.
+        ``governed_tools`` is the set of tool names that have RBAC permission
+        mappings.  Tools not in this set have no mapping and should be allowed
+        by default.
+        """
+        if not self._config.oidc_enabled:
+            logger.debug("get_allowed_tools: OIDC disabled, returning None")
+            return None
+
+        from rhoai_mcp.auth.rbac import RBACChecker, ToolPermission
+        from rhoai_mcp.auth.user_context import UserContext
+
+        ctx = UserContext.current()
+        if ctx is None:
+            logger.warning("get_allowed_tools: no UserContext, returning empty set")
+            return set(), set()  # No user context = no tools
+
+        logger.debug("get_allowed_tools: user=%s groups=%s", ctx.username, ctx.groups)
+
+        # Collect tool permission mappings from plugins
+        if not self._plugin_manager:
+            raise RuntimeError("OIDC enabled but plugin_manager not initialized")
+
+        raw_perms = self._plugin_manager.collect_tool_permissions()
+        if not raw_perms:
+            logger.warning("get_allowed_tools: no permission mappings, all tools ungoverned")
+            return set(), set()
+
+        # Convert to ToolPermission objects
+        tool_perms: dict[str, list[ToolPermission]] = {}
+        for tool_name, perm_dicts in raw_perms.items():
+            tool_perms[tool_name] = [ToolPermission.from_dict(p) for p in perm_dicts]
+
+        governed_tools = set(tool_perms.keys())
+
+        # Create RBAC checker using the SA's API client (not impersonating)
+        from kubernetes import client as k8s_client  # type: ignore[import-untyped]
+
+        assert self._k8s_client is not None  # guaranteed by startup()
+        authz_api = k8s_client.AuthorizationV1Api(self._k8s_client._api_client)
+        checker = RBACChecker(authz_api)
+
+        allowed = checker.filter_tools(ctx.username, ctx.groups, tool_perms)
+        return allowed, governed_tools
 
     def _init_k8s_client(self) -> None:
         """Initialize and connect the Kubernetes client.
@@ -202,137 +267,193 @@ class RHOAIServer:
         # Register health endpoint for Kubernetes probes
         self._register_health_endpoint(mcp)
 
+        # Register OIDC auth components if enabled
+        if self._config.oidc_enabled:
+            self._setup_auth(mcp)
+
         return mcp
+
+    def _setup_auth(self, mcp: FastMCP) -> None:
+        """Configure token validation middleware and metadata endpoint."""
+        from rhoai_mcp.auth.metadata import build_protected_resource_metadata
+        from rhoai_mcp.auth.oidc import OIDCValidator
+        from rhoai_mcp.auth.token_review import TokenReviewValidator
+        from rhoai_mcp.config import OIDCTokenMode
+
+        self._config.validate_oidc_config()
+
+        # Ensure K8s client is connected
+        if not self._k8s_client or not self._k8s_client.is_connected:
+            raise RuntimeError("K8s client not connected. Call startup() first.")
+
+        # Create the appropriate validator and determine issuer URL for metadata
+        validator: OIDCValidator | TokenReviewValidator
+        if self._config.oidc_token_mode == OIDCTokenMode.TOKEN_REVIEW:
+            api_client = self._k8s_client._api_client
+            if not api_client:
+                raise RuntimeError("K8s client API client not available")
+            validator = TokenReviewValidator(api_client)
+            # Issuer URL for metadata: explicit config, or auto-detect from K8s client
+            issuer_url = self._config.oidc_ocp_api_url or api_client.configuration.host
+            logger.info("Auth mode: TokenReview (OCP OAuth)")
+        else:
+            # JWT mode: issuer_url is guaranteed non-None by validate_oidc_config()
+            assert self._config.oidc_issuer_url is not None
+            issuer_url = self._config.oidc_issuer_url
+            validator = OIDCValidator(
+                issuer_url=issuer_url,
+                audience=self._config.oidc_audience,
+                username_claim=self._config.oidc_username_claim,
+                groups_claim=self._config.oidc_groups_claim,
+                jwks_cache_ttl=self._config.oidc_jwks_cache_ttl,
+            )
+            logger.info("Auth mode: OIDC JWT")
+
+        # Build resource metadata URL (external Route URL, or fallback to listen address)
+        resource_url = (
+            self._config.oidc_resource_url or f"https://{self._config.host}:{self._config.port}"
+        )
+        metadata_path = "/.well-known/oauth-protected-resource"
+
+        # Register Protected Resource Metadata endpoint
+        @mcp.custom_route(metadata_path, methods=["GET"])
+        async def protected_resource_metadata(request: Request) -> JSONResponse:  # noqa: ARG001
+            meta = build_protected_resource_metadata(
+                resource_url=resource_url,
+                issuer_url=issuer_url,
+                scopes=self._config.oidc_required_scopes,
+            )
+            return JSONResponse(meta)
+
+        # Wrap sse_app/streamable_http_app with auth middleware.
+        # Uses pure ASGI wrapping (not add_middleware) because
+        # BaseHTTPMiddleware is incompatible with SSE streaming.
+        exclude_paths = ["/health", metadata_path]
+        self._oidc_resource_metadata_url = f"{resource_url}{metadata_path}"
+
+        from rhoai_mcp.auth.middleware import OIDCAuthMiddleware
+
+        original_sse_app = mcp.sse_app
+
+        def patched_sse_app(mount_path: str | None = None) -> Any:
+            app = original_sse_app(mount_path)
+            return OIDCAuthMiddleware(
+                app,
+                validator=validator,
+                exclude_paths=exclude_paths,
+                resource_metadata_url=self._oidc_resource_metadata_url,
+            )
+
+        mcp.sse_app = patched_sse_app  # type: ignore[method-assign]
+
+        if hasattr(mcp, "streamable_http_app"):
+            original_http_app = mcp.streamable_http_app
+
+            def patched_http_app() -> Any:
+                app = original_http_app()
+                return OIDCAuthMiddleware(
+                    app,
+                    validator=validator,
+                    exclude_paths=exclude_paths,
+                    resource_metadata_url=self._oidc_resource_metadata_url,
+                )
+
+            mcp.streamable_http_app = patched_http_app  # type: ignore[method-assign]
+
+        logger.info("Auth middleware will be attached when transport app is created")
+
+        # Install tool-level RBAC filtering
+        self._install_tool_filtering(mcp)
+
+        logger.info("Authentication enabled")
+
+    def _install_tool_filtering(self, mcp: FastMCP) -> None:
+        """Patch lowlevel request handlers to enforce per-user RBAC filtering.
+
+        FastMCP registers protocol handlers via closures at setup time.
+        Monkey-patching methods on the FastMCP instance has no effect because
+        the lowlevel server's request_handlers dict still holds the original
+        closures. We must wrap the handlers in that dict directly.
+        """
+        from mcp import types as mcp_types
+
+        server = self
+        lowlevel = mcp._mcp_server  # noqa: SLF001
+
+        # Wrap list_tools handler
+        original_list_handler = lowlevel.request_handlers.get(mcp_types.ListToolsRequest)
+        if original_list_handler is None:
+            logger.warning("No ListToolsRequest handler registered, skipping tool filtering")
+            return
+
+        async def filtered_list_handler(req: mcp_types.ListToolsRequest) -> mcp_types.ServerResult:
+            result = await original_list_handler(req)
+            try:
+                check = await asyncio.to_thread(server.get_allowed_tools)
+            except Exception:
+                logger.error("RBAC check failed, denying all tools", exc_info=True)
+                return mcp_types.ServerResult(mcp_types.ListToolsResult(tools=[]))
+            if check is None:
+                return result
+            allowed, governed = check
+            list_result = result.root
+            assert isinstance(list_result, mcp_types.ListToolsResult)
+            all_tools = list_result.tools
+            # Tools with permission mappings must pass RBAC; unmapped tools are allowed
+            filtered = [t for t in all_tools if t.name in allowed or t.name not in governed]
+            logger.info("Tool filtering: %d/%d tools allowed", len(filtered), len(all_tools))
+            return mcp_types.ServerResult(mcp_types.ListToolsResult(tools=filtered))
+
+        lowlevel.request_handlers[mcp_types.ListToolsRequest] = filtered_list_handler
+
+        # Wrap call_tool handler
+        original_call_handler = lowlevel.request_handlers.get(mcp_types.CallToolRequest)
+        if original_call_handler is None:
+            logger.warning("No CallToolRequest handler registered, skipping call filtering")
+            return
+
+        async def filtered_call_handler(req: mcp_types.CallToolRequest) -> mcp_types.ServerResult:
+            tool_name = req.params.name
+            try:
+                check = await asyncio.to_thread(server.get_allowed_tools)
+            except Exception:
+                logger.error("RBAC check failed for tool '%s'", tool_name, exc_info=True)
+                return mcp_types.ServerResult(
+                    mcp_types.CallToolResult(
+                        content=[
+                            mcp_types.TextContent(
+                                type="text",
+                                text=f"Tool '{tool_name}' is not permitted: RBAC check failed",
+                            )
+                        ],
+                        isError=True,
+                    )
+                )
+            if check is not None:
+                allowed, governed = check
+                # Only enforce for tools with permission mappings
+                if tool_name in governed and tool_name not in allowed:
+                    return mcp_types.ServerResult(
+                        mcp_types.CallToolResult(
+                            content=[
+                                mcp_types.TextContent(
+                                    type="text",
+                                    text=f"Tool '{tool_name}' is not permitted for the current user",
+                                )
+                            ],
+                            isError=True,
+                        )
+                    )
+            return await original_call_handler(req)
+
+        lowlevel.request_handlers[mcp_types.CallToolRequest] = filtered_call_handler
+        logger.info("Tool-level RBAC filtering installed (request_handlers patched)")
 
     def _register_core_resources(self, mcp: FastMCP) -> None:
         """Register core MCP resources for cluster information."""
-        from rhoai_mcp.clients.base import CRDs
+        from rhoai_mcp.core_resources import register_core_resources
 
-        @mcp.resource("rhoai://cluster/status")
-        def cluster_status() -> dict:
-            """Get RHOAI cluster status and health.
-
-            Returns overall cluster status including RHOAI operator status,
-            available components, and loaded plugins.
-            """
-            k8s = self.k8s
-            pm = self._plugin_manager
-
-            result: dict = {
-                "connected": k8s.is_connected,
-                "rhoai_available": False,
-                "components": {},
-                "plugins": {
-                    "total": len(pm.registered_plugins) if pm else 0,
-                    "active": list(pm.healthy_plugins.keys()) if pm else [],
-                },
-                "accelerators": [],
-            }
-
-            # Check for DataScienceCluster
-            try:
-                dsc_list = k8s.list_resources(CRDs.DATA_SCIENCE_CLUSTER)
-                if dsc_list:
-                    result["rhoai_available"] = True
-                    dsc = dsc_list[0]
-                    status = getattr(dsc, "status", None)
-                    if status:
-                        # Extract component status
-                        installed = getattr(status, "installedComponents", {}) or {}
-                        for component, state in installed.items():
-                            result["components"][component] = state
-            except Exception:
-                pass
-
-            # Check for accelerator profiles
-            try:
-                accelerators = k8s.list_resources(CRDs.ACCELERATOR_PROFILE)
-                result["accelerators"] = [
-                    {
-                        "name": acc.metadata.name,
-                        "display_name": (acc.metadata.annotations or {}).get(
-                            "openshift.io/display-name", acc.metadata.name
-                        ),
-                        "enabled": getattr(acc.spec, "enabled", True)
-                        if hasattr(acc, "spec")
-                        else True,
-                    }
-                    for acc in accelerators
-                ]
-            except Exception:
-                pass
-
-            return result
-
-        @mcp.resource("rhoai://cluster/plugins")
-        def cluster_plugins() -> dict:
-            """Get information about loaded plugins.
-
-            Returns details about all plugins with their health status.
-            """
-            pm = self._plugin_manager
-            if not pm:
-                return {"plugins": {}}
-
-            plugin_info = {}
-            for name, plugin in pm.registered_plugins.items():
-                is_healthy = name in pm.healthy_plugins
-
-                # Get metadata if available
-                meta = None
-                if hasattr(plugin, "rhoai_get_plugin_metadata"):
-                    meta = plugin.rhoai_get_plugin_metadata()
-
-                plugin_info[name] = {
-                    "version": meta.version if meta else "unknown",
-                    "description": meta.description if meta else "No description",
-                    "maintainer": meta.maintainer if meta else "unknown",
-                    "requires_crds": meta.requires_crds if meta else [],
-                    "healthy": is_healthy,
-                }
-
-            return {
-                "total": len(pm.registered_plugins),
-                "active": len(pm.healthy_plugins),
-                "plugins": plugin_info,
-            }
-
-        @mcp.resource("rhoai://cluster/accelerators")
-        def cluster_accelerators() -> list[dict]:
-            """Get available accelerator profiles (GPUs).
-
-            Returns the list of AcceleratorProfile resources that define
-            available GPU types and configurations.
-            """
-            k8s = self.k8s
-
-            try:
-                accelerators = k8s.list_resources(CRDs.ACCELERATOR_PROFILE)
-                return [
-                    {
-                        "name": acc.metadata.name,
-                        "display_name": (acc.metadata.annotations or {}).get(
-                            "openshift.io/display-name", acc.metadata.name
-                        ),
-                        "description": (acc.metadata.annotations or {}).get(
-                            "openshift.io/description", ""
-                        ),
-                        "enabled": getattr(acc.spec, "enabled", True)
-                        if hasattr(acc, "spec")
-                        else True,
-                        "identifier": getattr(acc.spec, "identifier", "nvidia.com/gpu")
-                        if hasattr(acc, "spec")
-                        else "nvidia.com/gpu",
-                        "tolerations": getattr(acc.spec, "tolerations", [])
-                        if hasattr(acc, "spec")
-                        else [],
-                    }
-                    for acc in accelerators
-                ]
-            except Exception as e:
-                return [{"error": str(e)}]
-
-        logger.info("Registered core MCP resources")
+        register_core_resources(mcp, self)
 
     def _register_health_endpoint(self, mcp: FastMCP) -> None:
         """Register /health endpoint for Kubernetes liveness/readiness probes."""

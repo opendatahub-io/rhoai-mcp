@@ -237,3 +237,19 @@ class PluginManager:
             if crd_list:
                 all_crds.extend(crd_list)
         return all_crds
+
+    def collect_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        """Collect tool permission mappings from all plugins.
+
+        Returns:
+            Merged dict mapping tool name to list of permission dicts.
+        """
+        merged: dict[str, list[dict[str, str]]] = {}
+        results = self.hook.rhoai_get_tool_permissions()
+        for mapping in results:
+            if mapping:
+                for tool_name, perms in mapping.items():
+                    if not perms:
+                        continue
+                    merged.setdefault(tool_name, []).extend(perms)
+        return merged

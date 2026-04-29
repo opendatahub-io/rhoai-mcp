@@ -93,6 +93,11 @@ class BasePlugin:
         return []
 
     @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        """Return tool permissions. Override in subclass."""
+        return {}
+
+    @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
         """Check plugin health by verifying required CRDs are available.
 

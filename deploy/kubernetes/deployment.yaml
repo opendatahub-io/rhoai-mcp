@@ -43,60 +43,85 @@ metadata:
     app.kubernetes.io/name: rhoai-mcp
     app.kubernetes.io/component: rbac
 rules:
-  # Core Kubernetes resources
+  # Core Kubernetes resources (read-only)
   - apiGroups: [""]
     resources:
-      - namespaces
       - pods
       - pods/log
       - services
-      - configmaps
-      - secrets
-      - persistentvolumeclaims
       - events
+      - nodes
     verbs: ["get", "list", "watch"]
 
-  # RHOAI / Open Data Hub resources
+  # Namespaces (read-write for Data Science Project management)
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Core Kubernetes resources (read-write for data connections and storage)
+  - apiGroups: [""]
+    resources:
+      - secrets
+      - persistentvolumeclaims
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Kubeflow Notebooks
   - apiGroups: ["kubeflow.org"]
     resources:
       - notebooks
-      - profiles
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+
+  # Kubeflow Training Operator v2
+  - apiGroups: ["trainer.kubeflow.org"]
+    resources:
+      - trainjobs
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
-  # Data Science Pipelines
-  - apiGroups: ["tekton.dev"]
+  - apiGroups: ["trainer.kubeflow.org"]
     resources:
-      - pipelineruns
-      - taskruns
-      - pipelines
-      - tasks
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - trainingruntimes
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: ["trainer.kubeflow.org"]
+    resources:
+      - clustertrainingruntimes
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Data Science Pipelines
+  - apiGroups: ["datasciencepipelinesapplications.opendatahub.io"]
+    resources:
+      - datasciencepipelinesapplications
+    verbs: ["get", "list", "watch", "create", "delete"]
 
   # Model Serving (KServe)
   - apiGroups: ["serving.kserve.io"]
     resources:
       - inferenceservices
-      - servingruntimes
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["get", "list", "watch", "create", "delete"]
 
-  # Model Serving (OpenVINO)
-  - apiGroups: ["serving.openvino.ai"]
+  - apiGroups: ["serving.kserve.io"]
     resources:
-      - ovms
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - servingruntimes
+    verbs: ["get", "list", "watch", "create"]
 
-  # Data Science Project resources
-  - apiGroups: ["opendatahub.io"]
+  # ODH / RHOAI platform components (discovery)
+  - apiGroups: ["datasciencecluster.opendatahub.io"]
     resources:
       - datascienceclusters
-      - datasciencepipelinesapplications
     verbs: ["get", "list", "watch"]
 
-  # Storage connections
-  - apiGroups: ["objectbucket.io"]
+  # Model Registry (platform component discovery)
+  - apiGroups: ["components.platform.opendatahub.io"]
     resources:
-      - objectbucketclaims
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - modelregistries
+    verbs: ["get", "list", "watch"]
+
+  # OpenShift Templates (serving runtime discovery)
+  - apiGroups: ["template.openshift.io"]
+    resources:
+      - templates
+    verbs: ["get", "list", "watch"]
 
   # Routes (OpenShift)
   - apiGroups: ["route.openshift.io"]
@@ -108,7 +133,7 @@ rules:
   - apiGroups: ["project.openshift.io"]
     resources:
       - projects
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "patch"]
 
 ---
 # =============================================================================
@@ -253,6 +278,46 @@ spec:
   selector:
     app.kubernetes.io/name: rhoai-mcp
     app.kubernetes.io/component: server
+
+---
+# =============================================================================
+# NetworkPolicy: Allow rhoai-mcp to reach model-catalog service
+# Applied in the registries namespace (where the target pods live).
+# NOTE: The namespace below defaults to "rhoai-model-registries". If your
+# cluster uses a custom registries namespace (ModelRegistry.spec.registriesNamespace),
+# update metadata.namespace to match.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rhoai-mcp-to-model-catalog
+  namespace: rhoai-model-registries
+  labels:
+    app.kubernetes.io/name: rhoai-mcp
+    app.kubernetes.io/component: networkpolicy
+spec:
+  podSelector:
+    matchLabels:
+      app: model-catalog
+      app.kubernetes.io/name: model-catalog
+      component: model-catalog
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: rhoai-mcp
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rhoai-mcp
+      ports:
+        - port: 8080
+          protocol: TCP
+        - port: 8443
+          protocol: TCP
+        - port: 443
+          protocol: TCP
 
 ---
 # =============================================================================

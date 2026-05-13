@@ -38,6 +38,10 @@ def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: AR
                     "2. deploy_model() - Deploy model",
                     "3. test_model_endpoint() - Verify",
                 ],
+                "recommendation_workflow": [
+                    "1. recommend_model() - Get AI-driven model recommendations",
+                    "2. get_deployment_config() - Generate K8s deployment YAML",
+                ],
                 "troubleshooting": [
                     "diagnose_resource() - Comprehensive diagnostics",
                     "analyze_training_failure() - Training failure analysis",
@@ -50,6 +54,8 @@ def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: AR
                     "prepare_model_deployment - Combines runtime discovery + validation + resource estimation",
                     "explore_cluster - Complete cluster exploration in one call",
                     "diagnose_resource - Comprehensive resource diagnostics",
+                    "recommend_model - AI-driven model selection via Neural Navigator",
+                    "get_deployment_config - Generate K8s YAML for recommended model",
                 ],
             },
         }
@@ -130,6 +136,26 @@ def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: AR
                         "tool": "analyze_training_failure",
                         "purpose": "Deep analysis if job failed",
                         "conditional": "Only if status is Failed",
+                    },
+                ],
+            },
+            "recommend_model": {
+                "description": "Get AI-driven model recommendations and generate deployment configs",
+                "steps": [
+                    {
+                        "step": 1,
+                        "tool": "recommend_model",
+                        "purpose": "Get model recommendations from natural language description",
+                        "example": {
+                            "text": "I need a chatbot for 5000 users with low latency",
+                        },
+                    },
+                    {
+                        "step": 2,
+                        "tool": "get_deployment_config",
+                        "purpose": "Generate K8s deployment YAML for a recommended model",
+                        "note": "Use specification values from recommend_model result",
+                        "conditional": "If you want to deploy the recommended model",
                     },
                 ],
             },

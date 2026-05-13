@@ -83,6 +83,17 @@ TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
             "create_s3_data_connection",
         ],
     },
+    "recommendation": {
+        "description": "AI-driven model selection and deployment config generation (Project Navigator)",
+        "tools": [
+            "recommend_model",
+            "get_deployment_config",
+        ],
+        "typical_workflow": [
+            "recommend_model",
+            "get_deployment_config",
+        ],
+    },
 }
 
 
@@ -128,6 +139,14 @@ INTENT_PATTERNS = [
         "category": "storage",
         "workflow": ["list_storage", "list_data_connections"],
         "explanation": "Use list_storage() for PVCs, list_data_connections() for S3 connections.",
+    },
+    {
+        "patterns": ["recommend", "model selection", "which model", "best model", "gpu config",
+                      "neuralnav", "neural navigator", "project navigator"],
+        "category": "recommendation",
+        "workflow": ["recommend_model", "get_deployment_config"],
+        "explanation": "Use recommend_model() to get AI-driven model recommendations, "
+        "then get_deployment_config() to generate K8s deployment YAML.",
     },
 ]
 
@@ -242,6 +261,25 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
                         "args": {
                             "resource_type": "training_job",
                             "name": resource_name,
+                            "namespace": namespace,
+                        },
+                    }
+                )
+            elif tool == "recommend_model":
+                example_calls.append(
+                    {
+                        "tool": tool,
+                        "args": {
+                            "text": "I need a chatbot for 5000 users with low latency",
+                        },
+                    }
+                )
+            elif tool == "get_deployment_config":
+                example_calls.append(
+                    {
+                        "tool": tool,
+                        "args": {
+                            "category": "balanced",
                             "namespace": namespace,
                         },
                     }

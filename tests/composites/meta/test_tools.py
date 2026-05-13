@@ -42,7 +42,7 @@ class TestToolCategories:
 
     def test_categories_defined(self) -> None:
         """All expected categories are defined."""
-        expected = ["discovery", "training", "inference", "workbenches", "diagnostics", "resources", "storage"]
+        expected = ["discovery", "training", "inference", "workbenches", "diagnostics", "resources", "storage", "recommendation"]
         for cat in expected:
             assert cat in TOOL_CATEGORIES
 
@@ -132,6 +132,17 @@ class TestSuggestTools:
 
         # Check that namespace from context is used
         assert result["example_calls"][0]["args"]["namespace"] == "my-project"
+
+    def test_suggest_recommend_intent(self, mock_mcp: MagicMock, mock_server: MagicMock) -> None:
+        """Recommend intent returns recommendation workflow."""
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("which model should I use for my chatbot", None)
+
+        assert result["category"] == "recommendation"
+        assert "recommend_model" in result["workflow"]
+        assert "get_deployment_config" in result["workflow"]
 
     def test_suggest_unknown_intent_defaults_to_discovery(
         self, mock_mcp: MagicMock, mock_server: MagicMock

@@ -141,8 +141,16 @@ INTENT_PATTERNS = [
         "explanation": "Use list_storage() for PVCs, list_data_connections() for S3 connections.",
     },
     {
-        "patterns": ["recommend", "model selection", "which model", "best model", "gpu config",
-                      "neuralnav", "neural navigator", "project navigator"],
+        "patterns": [
+            "recommend",
+            "model selection",
+            "which model",
+            "best model",
+            "gpu config",
+            "neuralnav",
+            "neural navigator",
+            "project navigator",
+        ],
         "category": "recommendation",
         "workflow": ["recommend_model", "get_deployment_config"],
         "explanation": "Use recommend_model() to get AI-driven model recommendations, "

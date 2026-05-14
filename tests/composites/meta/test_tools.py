@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from rhoai_mcp.composites.meta.tools import (
-    DISCOVERY_PATTERN,
     INTENT_PATTERNS,
     TOOL_CATEGORIES,
     register_tools,
@@ -42,7 +41,16 @@ class TestToolCategories:
 
     def test_categories_defined(self) -> None:
         """All expected categories are defined."""
-        expected = ["discovery", "training", "inference", "workbenches", "diagnostics", "resources", "storage", "recommendation"]
+        expected = [
+            "discovery",
+            "training",
+            "inference",
+            "workbenches",
+            "diagnostics",
+            "resources",
+            "storage",
+            "recommendation",
+        ]
         for cat in expected:
             assert cat in TOOL_CATEGORIES
 
@@ -143,6 +151,28 @@ class TestSuggestTools:
         assert result["category"] == "recommendation"
         assert "recommend_model" in result["workflow"]
         assert "get_deployment_config" in result["workflow"]
+
+    def test_suggest_deploy_does_not_match_recommendation(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """Deploy intent should match inference, not recommendation."""
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("deploy a model for serving", None)
+
+        assert result["category"] == "inference"
+
+    def test_suggest_train_does_not_match_recommendation(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """Training intent should match training, not recommendation."""
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("fine-tune a model on my dataset", None)
+
+        assert result["category"] == "training"
 
     def test_suggest_unknown_intent_defaults_to_discovery(
         self, mock_mcp: MagicMock, mock_server: MagicMock

@@ -23,6 +23,7 @@ src/rhoai_mcp/
     ├── cluster/          # Cluster-wide summaries and exploration
     ├── training/         # Training workflow orchestration
     ├── meta/             # Tool discovery and guidance
+    ├── neuralnav/        # Neural Navigator (Project Navigator) model recommendations
     └── registry.py       # Composite plugin registry
 ```
 
@@ -351,6 +352,71 @@ def train_model(model_id: str, dataset_id: str, namespace: str, method: str = "l
 - **Include parameters**: Reference the prompt parameters in the output
 - **Handle edge cases**: Mention what to do if something goes wrong
 - **Keep focused**: Each prompt should address one workflow
+
+## NeuralNav Composite - Model Recommendations (Project Navigator)
+
+**Location:** `src/rhoai_mcp/composites/neuralnav/`
+
+NeuralNav (also known as Project Navigator) provides AI-driven LLM model recommendations. It communicates with an external Neural Navigator backend service via REST API to recommend optimal model + GPU configurations for a given use case.
+
+### Architecture
+
+```text
+composites/neuralnav/
+├── __init__.py
+├── client.py      # HTTP client for Neural Navigator API
+├── models.py      # Pydantic models (DeploymentIntent, RecommendationResult, etc.)
+└── tools.py       # MCP tool implementations
+```
+
+### Key Differences from Other Composites
+
+| Aspect | Other Composites | NeuralNav |
+|--------|-----------------|-----------|
+| **Client** | Uses domain K8s clients | Uses `httpx` HTTP client |
+| **Backend** | Kubernetes API | Neural Navigator REST API |
+| **Configuration** | K8s auth settings | `RHOAI_MCP_NEURALNAV_URL`, `RHOAI_MCP_NEURALNAV_TIMEOUT` |
+
+### Tools
+
+| Tool | Purpose |
+| ---- | ------- |
+| `recommend_model()` | Get LLM model recommendations from natural language |
+| `get_deployment_config()` | Generate K8s deployment YAML for a recommended model |
+
+### `recommend_model()` - Model Recommendation
+
+**Purpose:** Runs the full NeuralNav recommendation flow: extracts intent from natural language, builds technical specifications, and returns three ranked recommendations (top_performance, top_cost, top_balanced).
+
+**Implementation notes:**
+- Validates all inputs before calling the API (use case, GPU types, SLO targets, etc.)
+- `OPTIMIZATION_PROFILES` dict maps profile names to weight dicts for scoring
+- Returns compact formatted recommendations via `_format_recommendation()` helper
+- Handles `NeuralNavConnectionError` and `NeuralNavAPIError` gracefully
+
+### `get_deployment_config()` - Deployment Config Generation
+
+**Purpose:** Takes specification values from `recommend_model` output plus a category name, and generates InferenceService, HPA, and ServiceMonitor YAML configurations.
+
+**Implementation notes:**
+- `CATEGORY_MAP` maps user-facing category names to API category keys
+- Validates Kubernetes namespace against DNS-1123 label rules
+- Returns deployment_id, namespace, model name, and YAML config strings
+
+### Client Flow
+
+The `NeuralNavClient` chains multiple API calls:
+
+1. **Extract intent**: `POST /api/v1/extract` — parses natural language into `DeploymentIntent`
+2. **Fetch defaults**: `GET /api/v1/slo-defaults/{use_case}`, `GET /api/v1/workload-profile/{use_case}`, `GET /api/v1/expected-rps/{use_case}`
+3. **Get recommendations**: `POST /api/v1/ranked-recommend-from-spec` — returns ranked model+GPU configs
+4. **Generate config** (optional): `POST /api/v1/deploy` — produces K8s YAML
+
+Intent extraction is skipped when all override fields (use_case, user_count, gpu_types) are provided.
+
+### Health Check
+
+The NeuralNav plugin health check (`composites/registry.py`) calls `GET /health` on the Neural Navigator backend. If the service is unreachable, the plugin reports as unhealthy but does not block server startup.
 
 ## Common Patterns
 

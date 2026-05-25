@@ -223,3 +223,58 @@ class TestWorkflowStepProduces:
         result = my_tool(text="hello")
         assert "workflow_token" not in result
         assert result == {"error": "something went wrong with hello"}
+
+
+class TestWorkflowStepRequires:
+    """Tests for @workflow_step(requires=...)."""
+
+    def test_verifies_and_replaces_token_with_data(self) -> None:
+        """Decorator verifies token and passes data dict to function."""
+        received = {}
+
+        @workflow_step(requires="prev_step")
+        def my_tool(workflow_token: str, extra: int = 0) -> dict:
+            received["token_value"] = workflow_token
+            return {"output": "done", "extra": extra}
+
+        token = sign_step("prev_step", {"key": "val"})
+        result = my_tool(workflow_token=token, extra=42)
+
+        assert received["token_value"] == {"key": "val"}
+        assert result == {"output": "done", "extra": 42}
+        assert "workflow_token" not in result  # no produces = no signing
+
+    def test_rejects_invalid_token(self) -> None:
+        """Decorator returns error without calling the function."""
+        called = False
+
+        @workflow_step(requires="prev_step")
+        def my_tool(workflow_token: str) -> dict:  # noqa: ARG001
+            nonlocal called
+            called = True
+            return {"output": "done"}
+
+        result = my_tool(workflow_token="fabricated")
+        assert "error" in result
+        assert not called
+
+    def test_rejects_wrong_step(self) -> None:
+        """Decorator returns error when token is from wrong step."""
+        token = sign_step("wrong_step", {"x": 1})
+
+        @workflow_step(requires="expected_step")
+        def my_tool(workflow_token: str) -> dict:  # noqa: ARG001
+            return {"output": "done"}
+
+        result = my_tool(workflow_token=token)
+        assert "error" in result
+
+    def test_rejects_missing_token(self) -> None:
+        """Decorator returns error when workflow_token is not passed."""
+
+        @workflow_step(requires="prev_step")
+        def my_tool(workflow_token: str = "") -> dict:  # noqa: ARG001
+            return {"output": "done"}
+
+        result = my_tool()
+        assert "error" in result

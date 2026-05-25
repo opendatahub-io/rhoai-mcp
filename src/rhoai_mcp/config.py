@@ -5,8 +5,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEFAULT_WORKFLOW_TOKEN_TTL_SECONDS = 3600
 
 
 class AuthMode(str, Enum):
@@ -128,6 +130,19 @@ class RHOAIConfig(BaseSettings):
     read_only_mode: bool = Field(
         default=False,
         description="Disable all write operations",
+    )
+
+    # Workflow token settings
+    workflow_hmac_secret: SecretStr = Field(
+        default_factory=lambda: SecretStr(os.urandom(32).hex()),
+        min_length=1,
+        description="HMAC secret for signing workflow tokens. "
+        "If unset, a random secret is generated per process (tokens are not portable across restarts).",
+    )
+    workflow_token_ttl: int = Field(
+        default=_DEFAULT_WORKFLOW_TOKEN_TTL_SECONDS,
+        ge=1,
+        description="Workflow token time-to-live in seconds",
     )
 
     # Logging

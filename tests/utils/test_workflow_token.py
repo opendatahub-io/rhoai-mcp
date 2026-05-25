@@ -278,3 +278,85 @@ class TestWorkflowStepRequires:
 
         result = my_tool()
         assert "error" in result
+
+
+class TestWorkflowStepChain:
+    """Tests for full multi-step workflow chains."""
+
+    def test_three_step_chain(self) -> None:
+        """Token flows through a 3-step chain: produce -> require+produce -> require."""
+
+        @workflow_step(produces="step_1_done")
+        def step_1(text: str) -> dict:
+            return {"extracted": text.upper()}
+
+        @workflow_step(requires="step_1_done", produces="step_2_done")
+        def step_2(workflow_token: str, override: str | None = None) -> dict:
+            prev = workflow_token  # verified data dict
+            value = override or prev["extracted"]
+            return {"spec": value, "extra": 99}
+
+        @workflow_step(requires="step_2_done")
+        def step_3(workflow_token: str) -> dict:
+            prev = workflow_token
+            return {"final": prev["spec"], "extra": prev["extra"]}
+
+        r1 = step_1(text="hello")
+        assert "workflow_token" in r1
+
+        r2 = step_2(workflow_token=r1["workflow_token"])
+        assert r2["spec"] == "HELLO"
+        assert "workflow_token" in r2
+
+        r3 = step_3(workflow_token=r2["workflow_token"])
+        assert r3 == {"final": "HELLO", "extra": 99}
+        assert "workflow_token" not in r3
+
+    def test_chain_with_override(self) -> None:
+        """User overrides a value between steps."""
+
+        @workflow_step(produces="step_1_done")
+        def step_1(text: str) -> dict:
+            return {"extracted": text.upper(), "count": 10}
+
+        @workflow_step(requires="step_1_done", produces="step_2_done")
+        def step_2(workflow_token: str, count: int | None = None) -> dict:
+            prev = workflow_token
+            final_count = count if count is not None else prev["count"]
+            return {"value": prev["extracted"], "count": final_count}
+
+        r1 = step_1(text="hello")
+        r2 = step_2(workflow_token=r1["workflow_token"], count=999)
+        assert r2["count"] == 999
+        assert r2["value"] == "HELLO"
+
+    def test_chain_breaks_on_skip(self) -> None:
+        """Skipping step 2 and going straight to step 3 fails."""
+
+        @workflow_step(produces="step_1_done")
+        def step_1(text: str) -> dict:
+            return {"data": text}
+
+        @workflow_step(requires="step_2_done")
+        def step_3(workflow_token: str) -> dict:  # noqa: ARG001
+            return {"result": "done"}
+
+        r1 = step_1(text="hello")
+        # Try to use step_1's token for step_3 (which expects step_2_done)
+        r3 = step_3(workflow_token=r1["workflow_token"])
+        assert "error" in r3
+
+    def test_signature_preserved_for_fastmcp(self) -> None:
+        """Decorator preserves __signature__ for FastMCP schema inspection."""
+        import inspect
+
+        @workflow_step(requires="prev", produces="next")
+        def my_tool(workflow_token: str, name: str, count: int = 5) -> dict:  # noqa: ARG001
+            return {}
+
+        sig = inspect.signature(my_tool)
+        param_names = list(sig.parameters.keys())
+        assert param_names == ["workflow_token", "name", "count"]
+        # from __future__ import annotations stringifies all annotations
+        assert sig.parameters["workflow_token"].annotation in (str, "str")
+        assert sig.parameters["count"].default == 5

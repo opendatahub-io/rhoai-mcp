@@ -58,3 +58,50 @@ class TestVerifyStepRoundTrip:
         token = sign_step("specs_prepared", data)
         result = verify_step(token, "specs_prepared")
         assert result == data
+
+
+class TestVerifyStepRejection:
+    """Tests for verify_step rejection cases."""
+
+    def test_wrong_step_returns_error(self) -> None:
+        """Verifying against wrong step name returns error dict."""
+        token = sign_step("intent_extracted", {"x": 1})
+        result = verify_step(token, "specs_prepared")
+        assert "error" in result
+
+    def test_tampered_payload_returns_error(self) -> None:
+        """Modifying the payload invalidates the token."""
+        token = sign_step("step_a", {"x": 1})
+        parts = token.rsplit(".", 1)
+        tampered = parts[0] + "XX." + parts[1]
+        result = verify_step(tampered, "step_a")
+        assert "error" in result
+
+    def test_tampered_signature_returns_error(self) -> None:
+        """Modifying the signature invalidates the token."""
+        token = sign_step("step_a", {"x": 1})
+        parts = token.rsplit(".", 1)
+        tampered = parts[0] + "." + "bad" * 16
+        result = verify_step(tampered, "step_a")
+        assert "error" in result
+
+    def test_malformed_token_no_dot_returns_error(self) -> None:
+        """Token without dot separator returns error."""
+        result = verify_step("nodothere", "step_a")
+        assert "error" in result
+
+    def test_empty_token_returns_error(self) -> None:
+        """Empty string returns error."""
+        result = verify_step("", "step_a")
+        assert "error" in result
+
+    def test_fabricated_token_returns_error(self) -> None:
+        """A plausible but fabricated token is rejected."""
+        import base64
+        import json
+
+        fake_payload = json.dumps({"step": "step_a", "data": {"x": 1}, "ts": 9999999999})
+        encoded = base64.urlsafe_b64encode(fake_payload.encode()).decode()
+        fake_token = f"{encoded}.{'a' * 64}"
+        result = verify_step(fake_token, "step_a")
+        assert "error" in result

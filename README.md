@@ -181,6 +181,25 @@ export RHOAI_MCP_READ_ONLY_MODE=true
 | **RBAC-Aware** | Uses OpenShift Projects API to respect user permissions | Always |
 | **Auth Validation** | Validates authentication configuration at startup | Always |
 
+### Workflow Tokens
+
+Workflow tokens enforce ordering of multi-step MCP tool calls. When tools are decorated with `@workflow_step`, each step signs its output with an HMAC token that the next step must present and verify before executing. This prevents agents from skipping prerequisite steps.
+
+```bash
+# Set an explicit HMAC secret (recommended for production — tokens survive restarts)
+export RHOAI_MCP_WORKFLOW_HMAC_SECRET=my-secret-key
+
+# Adjust token time-to-live (default: 3600 seconds / 1 hour)
+export RHOAI_MCP_WORKFLOW_TOKEN_TTL=1800
+```
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RHOAI_MCP_WORKFLOW_HMAC_SECRET` | HMAC secret for signing workflow tokens | Random per process |
+| `RHOAI_MCP_WORKFLOW_TOKEN_TTL` | Token time-to-live in seconds | `3600` |
+
+If no secret is configured, a random one is generated at process startup. This means tokens are not portable across server restarts — suitable for development but not production deployments where long-running workflows may span restarts.
+
 ### Model Registry
 
 The MCP server integrates with the RHOAI Model Registry to list and query registered models. By default, it auto-discovers the Model Registry service in the cluster.

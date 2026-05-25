@@ -352,6 +352,52 @@ def train_model(model_id: str, dataset_id: str, namespace: str, method: str = "l
 - **Handle edge cases**: Mention what to do if something goes wrong
 - **Keep focused**: Each prompt should address one workflow
 
+## Workflow Token System
+
+**Location:** `src/rhoai_mcp/utils/workflow_token.py`
+
+Provides stateless, HMAC-signed tokens that enforce ordered multi-step tool execution. Each tool signs its output; the next tool verifies the token before proceeding.
+
+### Core Functions
+
+| Function | Purpose |
+| -------- | ------- |
+| `sign_step(step, data)` | Encode step name + data + timestamp into a base64 payload with SHA-256 HMAC signature |
+| `verify_step(token, expected_step)` | Validate format, signature (constant-time), step name, and TTL; return data or error dict |
+| `@workflow_step(requires=..., produces=...)` | Decorator that wires verification and signing into MCP tool functions |
+
+### Token Format
+
+```text
+base64url({"step": "...", "data": {...}, "ts": epoch}).hmac_sha256_hex
+```
+
+The HMAC secret and TTL are configured via `RHOAIConfig` (`RHOAI_MCP_WORKFLOW_HMAC_SECRET`, `RHOAI_MCP_WORKFLOW_TOKEN_TTL`).
+
+### `@workflow_step` Decorator
+
+Wraps MCP tool functions to handle token flow automatically:
+
+- **`requires`**: Verifies the incoming `workflow_token` kwarg matches the expected step. On success, replaces the raw token string with the verified data dict. On failure, returns an error dict without calling the tool function.
+- **`produces`**: Signs the tool's return dict (excluding any existing `workflow_token` key) and adds a `workflow_token` key. Skipped when the return dict contains an `"error"` key.
+
+The decorator preserves `__signature__` so FastMCP generates correct JSON schemas.
+
+### Example Chain
+
+```python
+@workflow_step(produces="intent_extracted")
+def extract_intent(text: str) -> dict: ...
+
+@workflow_step(requires="intent_extracted", produces="specs_prepared")
+def prepare_specs(workflow_token: str, override: str | None = None) -> dict: ...
+
+@workflow_step(requires="specs_prepared")
+def deploy(workflow_token: str) -> dict: ...
+```
+
+Skipping `prepare_specs` and calling `deploy` directly with `extract_intent`'s token fails because the step name doesn't match.
+
 ## Common Patterns
 
 ### Lazy Imports

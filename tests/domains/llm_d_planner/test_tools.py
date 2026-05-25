@@ -114,3 +114,22 @@ class TestExtractIntentTool:
 
         assert "error" in result
         assert "unavailable" in result["error"].lower()
+
+    @patch("rhoai_mcp.domains.llm_d_planner.tools.PlannerClient")
+    def test_api_error(self, mock_client_class: MagicMock) -> None:
+        """API error returns error dict with status code."""
+        from rhoai_mcp.domains.llm_d_planner.client import PlannerAPIError
+
+        mock_client_class.return_value.extract_intent.side_effect = PlannerAPIError(
+            status_code=500,
+            detail="Internal server error"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        extract_intent = mock_mcp._registered_tools["extract_intent"]
+
+        result = extract_intent(text="I need a chatbot")
+
+        assert "error" in result
+        assert "api error" in result["error"].lower()
+        assert result["status_code"] == 500

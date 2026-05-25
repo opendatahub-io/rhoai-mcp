@@ -158,40 +158,40 @@ class TestRHOAIConfig:
         assert config.enabled_plugins == ["projects", "notebooks"]
 
 
-class TestNeuralNavConfig:
-    """Tests for NeuralNav configuration."""
+class TestPlannerConfig:
+    """Tests for llm-d-planner configuration."""
 
-    def test_neuralnav_url_default(self) -> None:
-        """Default NeuralNav URL points to in-cluster service."""
+    def test_planner_url_default(self) -> None:
+        """Default planner URL points to in-cluster service."""
         config = RHOAIConfig()
-        assert config.neuralnav_url == "http://backend.neuralnav.svc.cluster.local:8000"
+        assert config.planner_url == "http://backend.planner.svc.cluster.local:8000"
 
-    def test_neuralnav_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """NeuralNav URL can be set via environment variable."""
-        monkeypatch.setenv("RHOAI_MCP_NEURALNAV_URL", "http://localhost:9999")
+    def test_planner_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Planner URL can be set via environment variable."""
+        monkeypatch.setenv("RHOAI_MCP_PLANNER_URL", "http://localhost:9999")
         config = RHOAIConfig()
-        assert config.neuralnav_url == "http://localhost:9999"
+        assert config.planner_url == "http://localhost:9999"
 
-    def test_neuralnav_timeout_default(self) -> None:
-        """Default NeuralNav timeout is applied."""
+    def test_planner_timeout_default(self) -> None:
+        """Default planner timeout is 120 seconds."""
         config = RHOAIConfig()
-        assert config.neuralnav_timeout == 120
+        assert config.planner_timeout == 120
 
-    def test_neuralnav_timeout_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """NeuralNav timeout can be set via environment variable."""
-        monkeypatch.setenv("RHOAI_MCP_NEURALNAV_TIMEOUT", "300")
+    def test_planner_timeout_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Planner timeout can be set via environment variable."""
+        monkeypatch.setenv("RHOAI_MCP_PLANNER_TIMEOUT", "300")
         config = RHOAIConfig()
-        assert config.neuralnav_timeout == 300
+        assert config.planner_timeout == 300
 
-    def test_neuralnav_timeout_below_minimum(self) -> None:
-        """NeuralNav timeout rejects values below minimum."""
+    def test_planner_timeout_below_minimum(self) -> None:
+        """Planner timeout rejects values below minimum."""
         with pytest.raises(ValueError):
-            RHOAIConfig(neuralnav_timeout=9)
+            RHOAIConfig(planner_timeout=9)
 
-    def test_neuralnav_timeout_above_maximum(self) -> None:
-        """NeuralNav timeout rejects values above maximum."""
+    def test_planner_timeout_above_maximum(self) -> None:
+        """Planner timeout rejects values above maximum."""
         with pytest.raises(ValueError):
-            RHOAIConfig(neuralnav_timeout=601)
+            RHOAIConfig(planner_timeout=601)
 
 
 class TestOIDCConfig:

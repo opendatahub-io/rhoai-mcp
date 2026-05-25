@@ -10,9 +10,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import inspect
 import json
 import time
-from typing import Any
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, TypeVar
 
 from rhoai_mcp.config import get_config
 
@@ -96,3 +99,49 @@ def verify_step(token: str, expected_step: str) -> dict[str, Any]:
         return {"error": "Workflow token expired — restart from the first step"}
 
     return data
+
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def workflow_step(
+    *,
+    requires: str | None = None,
+    produces: str | None = None,
+) -> Callable[[_F], _F]:
+    """Decorator enforcing workflow token verification and signing.
+
+    Args:
+        requires: Step name the incoming ``workflow_token`` must match.
+            If set, verifies the token and replaces the ``workflow_token``
+            keyword argument with the verified data dict. Returns an error
+            dict immediately if verification fails (tool function is not
+            called).
+        produces: Step name to sign the return value under. If set, adds
+            a ``workflow_token`` key to the returned dict. Skipped when
+            the return dict contains an ``"error"`` key.
+    """
+
+    def decorator(fn: _F) -> _F:
+        @wraps(fn)
+        def wrapper(**kwargs: Any) -> Any:
+            if requires:
+                token = kwargs.get("workflow_token", "")
+                prev = verify_step(str(token), requires)
+                if "error" in prev:
+                    return prev
+                kwargs["workflow_token"] = prev
+
+            result = fn(**kwargs)
+
+            if produces and isinstance(result, dict) and "error" not in result:
+                sign_data = {k: v for k, v in result.items() if k != "workflow_token"}
+                result["workflow_token"] = sign_step(produces, sign_data)
+
+            return result
+
+        # Preserve original signature so FastMCP sees the right parameters
+        wrapper.__signature__ = inspect.signature(fn)  # type: ignore[attr-defined]
+        return wrapper  # type: ignore[return-value]
+
+    return decorator  # type: ignore[return-value]

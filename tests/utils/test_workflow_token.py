@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from rhoai_mcp.utils.workflow_token import sign_step, verify_step
+from rhoai_mcp.utils.workflow_token import sign_step, verify_step, workflow_step
 
 
 class TestSignStep:
@@ -186,3 +186,40 @@ class TestWorkflowTokenConfig:
             result = verify_step(token, "step_a")
             assert "error" in result
             assert "expired" in result["error"].lower()
+
+
+class TestWorkflowStepProduces:
+    """Tests for @workflow_step(produces=...)."""
+
+    def test_adds_workflow_token_to_return(self) -> None:
+        """Decorator adds workflow_token key to the return dict."""
+
+        @workflow_step(produces="step_done")
+        def my_tool(text: str) -> dict:
+            return {"result": text.upper()}
+
+        result = my_tool(text="hello")
+        assert result["result"] == "HELLO"
+        assert "workflow_token" in result
+
+    def test_produced_token_is_verifiable(self) -> None:
+        """Token added by decorator can be verified."""
+
+        @workflow_step(produces="step_done")
+        def my_tool(text: str) -> dict:
+            return {"result": text.upper()}
+
+        result = my_tool(text="hello")
+        verified = verify_step(result["workflow_token"], "step_done")
+        assert verified == {"result": "HELLO"}
+
+    def test_does_not_sign_error_responses(self) -> None:
+        """Decorator does not add token to error responses."""
+
+        @workflow_step(produces="step_done")
+        def my_tool(text: str) -> dict:
+            return {"error": f"something went wrong with {text}"}
+
+        result = my_tool(text="hello")
+        assert "workflow_token" not in result
+        assert result == {"error": "something went wrong with hello"}

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import pytest
+
 from rhoai_mcp.utils.workflow_token import sign_step, verify_step
 
 
@@ -105,3 +109,80 @@ class TestVerifyStepRejection:
         fake_token = f"{encoded}.{'a' * 64}"
         result = verify_step(fake_token, "step_a")
         assert "error" in result
+
+
+class TestVerifyStepTTL:
+    """Tests for token expiration."""
+
+    def test_expired_token_returns_error(self) -> None:
+        """Token older than TTL is rejected."""
+        with (
+            patch("rhoai_mcp.utils.workflow_token._get_ttl", return_value=3600),
+            patch("rhoai_mcp.utils.workflow_token.time") as mock_time,
+        ):
+            mock_time.time.return_value = 1000.0
+            token = sign_step("step_a", {"x": 1})
+
+            mock_time.time.return_value = 4601.0  # 3601s later, past 1h default
+            result = verify_step(token, "step_a")
+            assert "error" in result
+            assert "expired" in result["error"].lower()
+
+    def test_token_within_ttl_succeeds(self) -> None:
+        """Token within TTL is accepted."""
+        with (
+            patch("rhoai_mcp.utils.workflow_token._get_ttl", return_value=3600),
+            patch("rhoai_mcp.utils.workflow_token.time") as mock_time,
+        ):
+            mock_time.time.return_value = 1000.0
+            token = sign_step("step_a", {"x": 1})
+
+            mock_time.time.return_value = 2800.0  # 1800s later, within 1h
+            result = verify_step(token, "step_a")
+            assert result == {"x": 1}
+
+
+class TestWorkflowTokenConfig:
+    """Tests for configuration."""
+
+    def test_custom_secret_rejects_cross_secret_tokens(self) -> None:
+        """Token signed with one secret is rejected under a different secret."""
+        with patch("rhoai_mcp.utils.workflow_token._get_secret", return_value=b"secret-one"):
+            token = sign_step("step_a", {"x": 1})
+
+        with patch("rhoai_mcp.utils.workflow_token._get_secret", return_value=b"secret-two"):
+            result = verify_step(token, "step_a")
+            assert "error" in result
+            assert "invalid" in result["error"].lower()
+
+    def test_empty_hmac_secret_rejected_by_config(self) -> None:
+        """Empty HMAC secret is rejected by pydantic validation."""
+        from pydantic import ValidationError
+
+        from rhoai_mcp.config import RHOAIConfig
+
+        with pytest.raises(ValidationError, match="workflow_hmac_secret"):
+            RHOAIConfig(workflow_hmac_secret="")
+
+    def test_invalid_ttl_rejected_by_config(self) -> None:
+        """Non-integer TTL value is rejected by pydantic validation."""
+        from pydantic import ValidationError
+
+        from rhoai_mcp.config import RHOAIConfig
+
+        with pytest.raises(ValidationError, match="workflow_token_ttl"):
+            RHOAIConfig(workflow_token_ttl="60s")  # type: ignore[arg-type]
+
+    def test_custom_ttl(self) -> None:
+        """Custom TTL is respected."""
+        with (
+            patch("rhoai_mcp.utils.workflow_token._get_ttl", return_value=60),
+            patch("rhoai_mcp.utils.workflow_token.time") as mock_time,
+        ):
+            mock_time.time.return_value = 1000.0
+            token = sign_step("step_a", {"x": 1})
+
+            mock_time.time.return_value = 1061.0  # 61s later, past 60s TTL
+            result = verify_step(token, "step_a")
+            assert "error" in result
+            assert "expired" in result["error"].lower()

@@ -397,6 +397,46 @@ class QuickstartsPlugin(BasePlugin):
         return True, "Quickstarts ready"
 
 
+class LlmDPlannerPlugin(BasePlugin):
+    """Plugin for llm-d-planner model recommendations.
+
+    Provides workflow-chained tools that guide AI agents through
+    model selection: extract_intent → prepare_model_tech_specs →
+    get_recommended_models → get_deployment_config.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="llm_d_planner",
+                version="0.1.0",
+                description="llm-d-planner model recommendation tools",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.llm_d_planner.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return {}  # Uses external REST API, not K8s RBAC
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        from rhoai_mcp.domains.llm_d_planner.client import PlannerClient
+
+        client = PlannerClient(
+            server.config.planner_url,
+            timeout=server.config.planner_timeout,
+        )
+        return client.health_check()
+
+
 def get_core_plugins() -> list[BasePlugin]:
     """Return all core domain plugin instances.
 
@@ -417,4 +457,5 @@ def get_core_plugins() -> list[BasePlugin]:
         PromptsPlugin(),
         ModelRegistryPlugin(),
         QuickstartsPlugin(),
+        LlmDPlannerPlugin(),
     ]

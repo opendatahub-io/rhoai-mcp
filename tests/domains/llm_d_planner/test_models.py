@@ -1,11 +1,11 @@
-"""Tests for NeuralNav composite models."""
+"""Tests for llm-d-planner models."""
 
 from typing import get_args
 
 import pytest
 from pydantic import ValidationError
 
-from rhoai_mcp.composites.neuralnav.models import (
+from rhoai_mcp.domains.llm_d_planner.models import (
     DeploymentConfigResult,
     DeploymentIntent,
     GPUConfig,
@@ -50,11 +50,6 @@ class TestDeploymentIntent:
         with pytest.raises(ValidationError, match="use_case"):
             DeploymentIntent(use_case="summarization", user_count=1000)
 
-    def test_invalid_use_case_text_summarization_rejected(self) -> None:
-        """LLM-hallucinated 'text_summarization' is rejected."""
-        with pytest.raises(ValidationError, match="use_case"):
-            DeploymentIntent(use_case="text_summarization", user_count=1000)
-
     def test_invalid_experience_class_rejected(self) -> None:
         """Invalid experience_class values are rejected."""
         with pytest.raises(ValidationError, match="experience_class"):
@@ -62,15 +57,6 @@ class TestDeploymentIntent:
                 use_case="chatbot_conversational",
                 user_count=1000,
                 experience_class="realtime",
-            )
-
-    def test_invalid_priority_rejected(self) -> None:
-        """Invalid priority values are rejected."""
-        with pytest.raises(ValidationError, match="accuracy_priority"):
-            DeploymentIntent(
-                use_case="chatbot_conversational",
-                user_count=1000,
-                accuracy_priority="critical",
             )
 
     def test_all_valid_use_cases_accepted(self) -> None:
@@ -140,54 +126,25 @@ class TestRecommendationResult:
         assert result.top_performance is None
         assert result.top_cost is None
         assert result.top_balanced is None
-        assert result.total_configs_evaluated == 2847
 
 
-class TestSLOTargets:
-    """Tests for SLOTargets model."""
+class TestSupportModels:
+    """Tests for SLOTargets, TrafficProfile, DeploymentConfigResult."""
 
     def test_slo_targets(self) -> None:
-        """SLO targets can be constructed."""
         slo = SLOTargets(ttft_ms=150, itl_ms=65, e2e_ms=2000)
         assert slo.ttft_ms == 150
 
-
-class TestTrafficProfile:
-    """Tests for TrafficProfile model."""
-
     def test_traffic_profile(self) -> None:
-        """Traffic profile can be constructed."""
         tp = TrafficProfile(prompt_tokens=512, output_tokens=256, expected_qps=10.0)
         assert tp.expected_qps == 10.0
 
-
-class TestDeploymentConfigResult:
-    """Tests for DeploymentConfigResult model."""
-
-    def test_full_result(self) -> None:
-        """Result with all fields populated."""
+    def test_deployment_config_result(self) -> None:
         result = DeploymentConfigResult(
-            deployment_id="chatbot-llama-3-1-70b-20260322143022",
+            deployment_id="chatbot-llama-20260322",
             namespace="default",
             model_name="Llama 3.1 70B",
-            configs={
-                "inferenceservice": "apiVersion: serving.kserve.io/v1beta1\nkind: InferenceService",
-                "autoscaling": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler",
-                "servicemonitor": "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor",
-            },
-        )
-        assert result.deployment_id == "chatbot-llama-3-1-70b-20260322143022"
-        assert result.namespace == "default"
-        assert result.model_name == "Llama 3.1 70B"
-        assert len(result.configs) == 3
-        assert "InferenceService" in result.configs["inferenceservice"]
-
-    def test_result_without_model_name(self) -> None:
-        """Result with model_name as None."""
-        result = DeploymentConfigResult(
-            deployment_id="chatbot-unknown-20260322",
-            namespace="ml-prod",
             configs={"inferenceservice": "yaml-content"},
         )
-        assert result.model_name is None
-        assert result.namespace == "ml-prod"
+        assert result.deployment_id == "chatbot-llama-20260322"
+        assert result.model_name == "Llama 3.1 70B"

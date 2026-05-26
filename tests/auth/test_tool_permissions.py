@@ -14,8 +14,8 @@ class TestToolPermissionDeclarations:
             if meta.name == "prompts":
                 assert perms == {}
                 continue
-            # Model registry uses REST API, not K8s RBAC
-            if meta.name == "model_registry":
+            # Model registry and llm-d-planner use REST APIs, not K8s RBAC
+            if meta.name in ("model_registry", "llm_d_planner"):
                 assert perms == {}
                 continue
             # All other plugins should have at least one tool mapped
@@ -28,8 +28,8 @@ class TestToolPermissionDeclarations:
             meta = plugin.rhoai_get_plugin_metadata()
             perms = plugin.rhoai_get_tool_permissions()
             assert isinstance(perms, dict), f"Plugin {meta.name} returned non-dict"
-            # Meta and NeuralNav composites don't access K8s resources
-            if meta.name in ("meta-composites", "neuralnav-composites"):
+            # Meta composites don't access K8s resources
+            if meta.name == "meta-composites":
                 assert perms == {}, f"Plugin {meta.name} should return empty dict"
                 continue
             assert len(perms) > 0, f"Plugin {meta.name} has no tool permissions"

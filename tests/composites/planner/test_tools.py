@@ -1,13 +1,13 @@
-"""Tests for NeuralNav recommend_model MCP tool."""
+"""Tests for Planner recommend_model MCP tool."""
 
 from unittest.mock import MagicMock, patch
 
-from rhoai_mcp.composites.neuralnav.models import (
+from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
     ModelRecommendation,
     RecommendationResult,
 )
-from rhoai_mcp.composites.neuralnav.tools import register_tools
+from rhoai_mcp.composites.planner.tools import register_tools
 
 
 def _make_mock_mcp() -> MagicMock:
@@ -30,8 +30,8 @@ def _make_mock_mcp() -> MagicMock:
 def _make_mock_server() -> MagicMock:
     """Create a mock RHOAIServer."""
     server = MagicMock()
-    server.config.neuralnav_url = "http://localhost:8000"
-    server.config.neuralnav_timeout = 120
+    server.config.planner_url = "http://localhost:8000"
+    server.config.planner_timeout = 120
     return server
 
 
@@ -101,7 +101,7 @@ class TestRecommendModelTool:
         register_tools(mock_mcp, _make_mock_server())
         assert "recommend_model" in mock_mcp._registered_tools
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_successful_recommendation(self, mock_client_class: MagicMock) -> None:
         """Successful recommendation returns formatted result."""
         mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
@@ -122,7 +122,7 @@ class TestRecommendModelTool:
         assert "top_performance" in recs
         assert "top_cost" in recs
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_overrides(self, mock_client_class: MagicMock) -> None:
         """Overrides are passed to the client."""
         mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
@@ -153,13 +153,13 @@ class TestRecommendModelTool:
             percentile=None,
         )
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_connection_error(self, mock_client_class: MagicMock) -> None:
         """Connection error returns error dict."""
-        from rhoai_mcp.composites.neuralnav.client import NeuralNavConnectionError
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
 
-        mock_client_class.return_value.recommend.side_effect = NeuralNavConnectionError(
-            "Neural Navigator service unavailable at http://localhost:8000"
+        mock_client_class.return_value.recommend.side_effect = PlannerConnectionError(
+            "Planner service unavailable at http://localhost:8000"
         )
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
@@ -173,12 +173,12 @@ class TestRecommendModelTool:
         assert "unavailable" in result["error"].lower()
         assert "hint" in result
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_api_error(self, mock_client_class: MagicMock) -> None:
         """API error returns error dict with status code."""
-        from rhoai_mcp.composites.neuralnav.client import NeuralNavAPIError
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
 
-        mock_client_class.return_value.recommend.side_effect = NeuralNavAPIError(
+        mock_client_class.return_value.recommend.side_effect = PlannerAPIError(
             status_code=500,
             detail="Internal Server Error",
         )
@@ -193,7 +193,7 @@ class TestRecommendModelTool:
         assert "error" in result
         assert result["status_code"] == 500
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_slo_overrides(self, mock_client_class: MagicMock) -> None:
         """SLO override parameters are passed to the client."""
         mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
@@ -224,7 +224,7 @@ class TestRecommendModelTool:
             percentile=None,
         )
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_optimization_profile(self, mock_client_class: MagicMock) -> None:
         """Optimization profile is resolved to weights dict."""
         mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
@@ -242,7 +242,7 @@ class TestRecommendModelTool:
         call_kwargs = mock_client_class.return_value.recommend.call_args.kwargs
         assert call_kwargs["weights"] == {"accuracy": 2, "price": 2, "latency": 8, "complexity": 1}
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_all_constraints(self, mock_client_class: MagicMock) -> None:
         """All constraint parameters are forwarded to the client."""
         mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
@@ -280,7 +280,7 @@ class TestRecommendModelTool:
             percentile="p99",
         )
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_optimization_profile(self, mock_client_class: MagicMock) -> None:
         """Invalid optimization profile returns error dict."""
         mock_mcp = _make_mock_mcp()
@@ -300,7 +300,7 @@ class TestRecommendModelTool:
         mock_client_class.assert_not_called()
         mock_client_class.return_value.recommend.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_use_case(self, mock_client_class: MagicMock) -> None:
         """Invalid use_case returns error dict without calling the client."""
         mock_mcp = _make_mock_mcp()
@@ -321,7 +321,7 @@ class TestRecommendModelTool:
         mock_client_class.assert_not_called()
         mock_client_class.return_value.recommend.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_valid_use_case_accepted(self, mock_client_class: MagicMock) -> None:
         """Valid use_case is passed through to the client."""
         mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
@@ -340,7 +340,7 @@ class TestRecommendModelTool:
         call_kwargs = mock_client_class.return_value.recommend.call_args.kwargs
         assert call_kwargs["use_case_override"] == "chatbot_conversational"
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_percentile(self, mock_client_class: MagicMock) -> None:
         """Invalid percentile returns error without calling client."""
         mock_mcp = _make_mock_mcp()
@@ -353,7 +353,7 @@ class TestRecommendModelTool:
         assert "percentile" in result["error"]
         mock_client_class.return_value.recommend.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_user_count(self, mock_client_class: MagicMock) -> None:
         """Non-positive user_count returns error."""
         mock_mcp = _make_mock_mcp()
@@ -366,7 +366,7 @@ class TestRecommendModelTool:
         assert "user_count" in result["error"]
         mock_client_class.return_value.recommend.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_slo_target(self, mock_client_class: MagicMock) -> None:
         """Non-positive SLO target returns error."""
         mock_mcp = _make_mock_mcp()
@@ -379,7 +379,7 @@ class TestRecommendModelTool:
         assert "ttft_max_ms" in result["error"]
         mock_client_class.return_value.recommend.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_min_accuracy(self, mock_client_class: MagicMock) -> None:
         """Out-of-range min_accuracy returns error."""
         mock_mcp = _make_mock_mcp()
@@ -392,7 +392,7 @@ class TestRecommendModelTool:
         assert "min_accuracy" in result["error"]
         mock_client_class.return_value.recommend.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_max_cost(self, mock_client_class: MagicMock) -> None:
         """Negative max_cost_per_month returns error."""
         mock_mcp = _make_mock_mcp()
@@ -405,7 +405,7 @@ class TestRecommendModelTool:
         assert "max_cost_per_month" in result["error"]
         mock_client_class.return_value.recommend.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_gpu_types(self, mock_client_class: MagicMock) -> None:
         """Invalid GPU types return error listing valid options."""
         mock_mcp = _make_mock_mcp()
@@ -419,7 +419,7 @@ class TestRecommendModelTool:
         assert "preferred_gpu_types" in result["error"]
         mock_client_class.return_value.recommend.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_empty_recommendations(self, mock_client_class: MagicMock) -> None:
         """Empty recommendations returns message."""
         empty_result = RecommendationResult(
@@ -444,7 +444,7 @@ class TestRecommendModelTool:
         assert result["recommendations"] == {}
         assert "message" in result
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_partial_recommendations(self, mock_client_class: MagicMock) -> None:
         """When some categories are None, only populated ones appear."""
         partial_result = RecommendationResult(
@@ -473,7 +473,7 @@ class TestRecommendModelTool:
         assert "top_cost" not in result["recommendations"]
         assert "message" not in result
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_empty_text_returns_error(self, mock_client_class: MagicMock) -> None:
         """Empty text returns error without calling client."""
         mock_mcp = _make_mock_mcp()
@@ -486,7 +486,7 @@ class TestRecommendModelTool:
         assert "non-empty" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_whitespace_text_returns_error(self, mock_client_class: MagicMock) -> None:
         """Whitespace-only text returns error without calling client."""
         mock_mcp = _make_mock_mcp()
@@ -499,7 +499,7 @@ class TestRecommendModelTool:
         assert "non-empty" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_text_exceeds_max_length(self, mock_client_class: MagicMock) -> None:
         """Text exceeding max length returns error without calling client."""
         mock_mcp = _make_mock_mcp()
@@ -522,7 +522,7 @@ class TestDeploymentConfigTool:
         register_tools(mock_mcp, _make_mock_server())
         assert "get_deployment_config" in mock_mcp._registered_tools
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_successful_deployment_config(self, mock_client_class: MagicMock) -> None:
         """Successful config generation returns formatted result."""
         mock_client_class.return_value.generate_config.return_value = SAMPLE_CONFIG_RESULT
@@ -549,7 +549,7 @@ class TestDeploymentConfigTool:
         assert "autoscaling" in result["configs"]
         assert "servicemonitor" in result["configs"]
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_deployment_config_no_model_key(self, mock_client_class: MagicMock) -> None:
         """When model_name is None, model key is omitted from output."""
         no_model = DeploymentConfigResult(
@@ -577,7 +577,7 @@ class TestDeploymentConfigTool:
         assert "model" not in result
         assert result["deployment_id"] == "chatbot-unknown-20260322"
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_deployment_config_model_name_fallback(self, mock_client_class: MagicMock) -> None:
         """When model_name is a model_id fallback value, it is passed through."""
         fallback_result = DeploymentConfigResult(
@@ -605,12 +605,12 @@ class TestDeploymentConfigTool:
 
         assert result["model"] == "meta-llama/Llama-3.1-70B-Instruct"
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_empty_category_result(self, mock_client_class: MagicMock) -> None:
         """When no recommendations exist for category, returns error dict."""
-        from rhoai_mcp.composites.neuralnav.client import NeuralNavAPIError
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
 
-        mock_client_class.return_value.generate_config.side_effect = NeuralNavAPIError(
+        mock_client_class.return_value.generate_config.side_effect = PlannerAPIError(
             status_code=404, detail="No recommendation found for category 'cost'"
         )
         mock_mcp = _make_mock_mcp()
@@ -632,7 +632,7 @@ class TestDeploymentConfigTool:
         assert "error" in result
         assert result["status_code"] == 404
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_category(self, mock_client_class: MagicMock) -> None:
         """Invalid category returns error dict."""
         mock_mcp = _make_mock_mcp()
@@ -655,7 +655,7 @@ class TestDeploymentConfigTool:
         assert "category" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_use_case(self, mock_client_class: MagicMock) -> None:
         """Invalid use_case returns error dict."""
         mock_mcp = _make_mock_mcp()
@@ -678,7 +678,7 @@ class TestDeploymentConfigTool:
         assert "use_case" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_user_count(self, mock_client_class: MagicMock) -> None:
         """user_count <= 0 returns error."""
         mock_mcp = _make_mock_mcp()
@@ -701,7 +701,7 @@ class TestDeploymentConfigTool:
         assert "user_count" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_slo_targets(self, mock_client_class: MagicMock) -> None:
         """SLO targets <= 0 return error."""
         mock_mcp = _make_mock_mcp()
@@ -724,7 +724,7 @@ class TestDeploymentConfigTool:
         assert "ttft_target_ms" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_token_counts(self, mock_client_class: MagicMock) -> None:
         """prompt/output tokens <= 0 return error."""
         mock_mcp = _make_mock_mcp()
@@ -747,7 +747,7 @@ class TestDeploymentConfigTool:
         assert "prompt_tokens" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_expected_qps(self, mock_client_class: MagicMock) -> None:
         """expected_qps <= 0 returns error."""
         mock_mcp = _make_mock_mcp()
@@ -770,7 +770,7 @@ class TestDeploymentConfigTool:
         assert "expected_qps" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_optimization_profile(self, mock_client_class: MagicMock) -> None:
         """Invalid optimization_profile returns error."""
         mock_mcp = _make_mock_mcp()
@@ -794,7 +794,7 @@ class TestDeploymentConfigTool:
         assert "optimization_profile" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_gpu_types(self, mock_client_class: MagicMock) -> None:
         """Invalid GPU types return error."""
         mock_mcp = _make_mock_mcp()
@@ -818,7 +818,7 @@ class TestDeploymentConfigTool:
         assert "V100" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_min_accuracy(self, mock_client_class: MagicMock) -> None:
         """Out-of-range min_accuracy returns error."""
         mock_mcp = _make_mock_mcp()
@@ -842,7 +842,7 @@ class TestDeploymentConfigTool:
         assert "min_accuracy" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_max_cost(self, mock_client_class: MagicMock) -> None:
         """Negative max_cost_per_month returns error."""
         mock_mcp = _make_mock_mcp()
@@ -866,7 +866,7 @@ class TestDeploymentConfigTool:
         assert "max_cost_per_month" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_percentile(self, mock_client_class: MagicMock) -> None:
         """Invalid percentile returns error."""
         mock_mcp = _make_mock_mcp()
@@ -890,13 +890,13 @@ class TestDeploymentConfigTool:
         assert "percentile" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_connection_error(self, mock_client_class: MagicMock) -> None:
-        """NeuralNav connection error returns error dict."""
-        from rhoai_mcp.composites.neuralnav.client import NeuralNavConnectionError
+        """Planner connection error returns error dict."""
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
 
-        mock_client_class.return_value.generate_config.side_effect = NeuralNavConnectionError(
-            "Neural Navigator service unavailable at http://localhost:8000"
+        mock_client_class.return_value.generate_config.side_effect = PlannerConnectionError(
+            "Planner service unavailable at http://localhost:8000"
         )
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
@@ -918,12 +918,12 @@ class TestDeploymentConfigTool:
         assert "unavailable" in result["error"].lower()
         assert "hint" in result
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_api_error(self, mock_client_class: MagicMock) -> None:
-        """NeuralNav API error returns error dict with status code."""
-        from rhoai_mcp.composites.neuralnav.client import NeuralNavAPIError
+        """Planner API error returns error dict with status code."""
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
 
-        mock_client_class.return_value.generate_config.side_effect = NeuralNavAPIError(
+        mock_client_class.return_value.generate_config.side_effect = PlannerAPIError(
             status_code=500, detail="Internal Server Error"
         )
         mock_mcp = _make_mock_mcp()
@@ -945,7 +945,7 @@ class TestDeploymentConfigTool:
         assert "error" in result
         assert result["status_code"] == 500
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_empty_namespace(self, mock_client_class: MagicMock) -> None:
         """Empty namespace returns error."""
         mock_mcp = _make_mock_mcp()
@@ -969,7 +969,7 @@ class TestDeploymentConfigTool:
         assert "namespace" in result["error"]
         mock_client_class.assert_not_called()
 
-    @patch("rhoai_mcp.composites.neuralnav.tools.NeuralNavClient")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_optimization_profile_resolved_to_weights(self, mock_client_class: MagicMock) -> None:
         """optimization_profile is resolved to weights dict before calling client."""
         mock_client_class.return_value.generate_config.return_value = SAMPLE_CONFIG_RESULT

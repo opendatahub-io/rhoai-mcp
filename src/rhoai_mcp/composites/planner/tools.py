@@ -1,4 +1,4 @@
-"""MCP tool for Neural Navigator model recommendations."""
+"""MCP tool for Planner model recommendations."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 
-from rhoai_mcp.composites.neuralnav.client import (
+from rhoai_mcp.composites.planner.client import (
     CATEGORY_MAP,
-    NeuralNavAPIError,
-    NeuralNavClient,
-    NeuralNavConnectionError,
+    PlannerAPIError,
+    PlannerClient,
+    PlannerConnectionError,
 )
-from rhoai_mcp.composites.neuralnav.models import ModelRecommendation
+from rhoai_mcp.composites.planner.models import ModelRecommendation
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any
 
 
 def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
-    """Register NeuralNav composite tools with the MCP server."""
+    """Register Planner composite tools with the MCP server."""
 
     @mcp.tool()
     def recommend_model(
@@ -85,9 +85,9 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         optimization_profile: str | None = None,
         percentile: str | None = None,
     ) -> dict[str, Any]:
-        """Get LLM model recommendations from Neural Navigator.
+        """Get LLM model recommendations from Planner.
 
-        Runs the full NeuralNav recommendation flow: extracts intent from
+        Runs the full Planner recommendation flow: extracts intent from
         natural language, builds technical specifications, and returns
         three named recommendations: top_performance (lowest latency),
         top_cost (cheapest), and top_balanced (weighted composite).
@@ -185,9 +185,9 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 }
             weights = OPTIMIZATION_PROFILES[optimization_profile]
 
-        client = NeuralNavClient(
-            server.config.neuralnav_url,
-            timeout=float(server.config.neuralnav_timeout),
+        client = PlannerClient(
+            server.config.planner_url,
+            timeout=float(server.config.planner_timeout),
         )
 
         try:
@@ -204,18 +204,18 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 weights=weights,
                 percentile=percentile,
             )
-        except NeuralNavConnectionError as e:
-            logger.warning("NeuralNav connection error")
-            logger.debug("NeuralNav connection error detail: %s", e)
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
             return {
-                "error": "Neural Navigator unavailable",
-                "hint": "Neural Navigator may be warming up. Retry shortly.",
+                "error": "Planner unavailable",
+                "hint": "Planner may be warming up. Retry shortly.",
             }
-        except NeuralNavAPIError as e:
-            logger.warning("NeuralNav API error status=%s", e.status_code)
-            logger.debug("NeuralNav API error detail (truncated): %s", str(e.detail)[:512])
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
             return {
-                "error": "Neural Navigator API error",
+                "error": "Planner API error",
                 "status_code": e.status_code,
             }
 
@@ -373,9 +373,9 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 }
             weights = OPTIMIZATION_PROFILES[optimization_profile]
 
-        client = NeuralNavClient(
-            server.config.neuralnav_url,
-            timeout=float(server.config.neuralnav_timeout),
+        client = PlannerClient(
+            server.config.planner_url,
+            timeout=float(server.config.planner_timeout),
         )
 
         try:
@@ -396,18 +396,18 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 weights=weights,
                 percentile=percentile,
             )
-        except NeuralNavConnectionError as e:
-            logger.warning("NeuralNav connection error")
-            logger.debug("NeuralNav connection error detail: %s", e)
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
             return {
-                "error": "Neural Navigator unavailable",
-                "hint": "Neural Navigator may be warming up. Retry shortly.",
+                "error": "Planner unavailable",
+                "hint": "Planner may be warming up. Retry shortly.",
             }
-        except NeuralNavAPIError as e:
-            logger.warning("NeuralNav API error status=%s", e.status_code)
-            logger.debug("NeuralNav API error detail (truncated): %s", str(e.detail)[:512])
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
             return {
-                "error": "Neural Navigator API error",
+                "error": "Planner API error",
                 "status_code": e.status_code,
             }
 

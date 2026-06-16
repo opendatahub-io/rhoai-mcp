@@ -32,7 +32,7 @@ def test_plugin_manager_loads_core_plugins():
         "cluster-composites",
         "training-composites",
         "meta-composites",
-        "neuralnav-composites",
+        "planner-composites",
     }
     expected_plugins = expected_domains | expected_composites
     assert set(pm.registered_plugins.keys()) == expected_plugins
@@ -137,7 +137,7 @@ def test_get_composite_plugins_returns_plugin_instances():
     from rhoai_mcp.plugin import BasePlugin
 
     plugins = get_composite_plugins()
-    assert len(plugins) == 4  # cluster, training, meta, neuralnav composites
+    assert len(plugins) == 4  # cluster, training, meta, planner composites
 
     for plugin in plugins:
         assert isinstance(plugin, BasePlugin)

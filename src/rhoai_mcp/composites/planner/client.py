@@ -1,4 +1,4 @@
-"""HTTP client for Neural Navigator API."""
+"""HTTP client for Planner API."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from rhoai_mcp.composites.neuralnav.models import (
+from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
     DeploymentIntent,
     ModelRecommendation,
@@ -42,23 +42,23 @@ CATEGORY_MAP: dict[str, str] = {
 }
 
 
-class NeuralNavConnectionError(Exception):
-    """Raised when NeuralNav service is unreachable."""
+class PlannerConnectionError(Exception):
+    """Raised when Planner service is unreachable."""
 
 
-class NeuralNavAPIError(Exception):
-    """Raised when NeuralNav API returns an error response."""
+class PlannerAPIError(Exception):
+    """Raised when Planner API returns an error response."""
 
     def __init__(self, status_code: int, detail: str) -> None:
         self.status_code = status_code
         self.detail = detail
-        super().__init__(f"NeuralNav API error ({status_code}): {detail}")
+        super().__init__(f"Planner API error ({status_code}): {detail}")
 
 
-class NeuralNavClient:
-    """HTTP client for Neural Navigator API.
+class PlannerClient:
+    """HTTP client for Planner API.
 
-    Provides methods for each NeuralNav endpoint and a high-level
+    Provides methods for each Planner endpoint and a high-level
     `recommend()` method that chains the full flow.
     """
 
@@ -73,7 +73,7 @@ class NeuralNavClient:
         json: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Make an HTTP request to NeuralNav."""
+        """Make an HTTP request to Planner."""
         url = f"{self._base_url}{path}"
         try:
             with httpx.Client(timeout=self._timeout) as client:
@@ -86,24 +86,20 @@ class NeuralNavClient:
                 try:
                     return response.json()  # type: ignore[no-any-return]
                 except ValueError as e:
-                    raise NeuralNavAPIError(
+                    raise PlannerAPIError(
                         status_code=502,
-                        detail="NeuralNav returned invalid JSON",
+                        detail="Planner returned invalid JSON",
                     ) from e
         except httpx.TimeoutException as e:
-            raise NeuralNavConnectionError(
-                f"Neural Navigator request timed out at {self._base_url}{path}"
+            raise PlannerConnectionError(
+                f"Planner request timed out at {self._base_url}{path}"
             ) from e
         except httpx.ConnectError as e:
-            raise NeuralNavConnectionError(
-                f"Neural Navigator service unavailable at {self._base_url}"
-            ) from e
+            raise PlannerConnectionError(f"Planner service unavailable at {self._base_url}") from e
         except httpx.RequestError as e:
-            raise NeuralNavConnectionError(
-                f"Neural Navigator request failed: {type(e).__name__}"
-            ) from e
+            raise PlannerConnectionError(f"Planner request failed: {type(e).__name__}") from e
         except httpx.HTTPStatusError as e:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=e.response.status_code,
                 detail=e.response.text,
             ) from e
@@ -114,9 +110,9 @@ class NeuralNavClient:
         try:
             return DeploymentIntent(**data)
         except Exception as e:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=502,
-                detail=f"NeuralNav returned invalid intent response: {type(e).__name__}",
+                detail=f"Planner returned invalid intent response: {type(e).__name__}",
             ) from e
 
     def get_slo_defaults(self, use_case: str) -> dict[str, Any]:
@@ -229,9 +225,9 @@ class NeuralNavClient:
             prompt_tokens = workload_profile["prompt_tokens"]
             output_tokens = workload_profile["output_tokens"]
         except KeyError as e:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=502,
-                detail=f"NeuralNav response missing expected field: {e}",
+                detail=f"Planner response missing expected field: {e}",
             ) from e
 
         # Step 4: Apply SLO overrides on top of fetched defaults
@@ -240,9 +236,9 @@ class NeuralNavClient:
             itl_default = slo_defaults["itl_ms"]["default"]
             e2e_default = slo_defaults["e2e_ms"]["default"]
         except KeyError as e:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=502,
-                detail=f"NeuralNav response missing expected SLO default field: {e}",
+                detail=f"Planner response missing expected SLO default field: {e}",
             ) from e
 
         ttft_target = ttft_override_ms if ttft_override_ms is not None else ttft_default
@@ -274,9 +270,9 @@ class NeuralNavClient:
             total_evaluated = ranked["total_configs_evaluated"]
             after_filters = ranked["configs_after_filters"]
         except KeyError as e:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=502,
-                detail=f"NeuralNav ranking response missing expected field: {e}",
+                detail=f"Planner ranking response missing expected field: {e}",
             ) from e
 
         try:
@@ -284,9 +280,9 @@ class NeuralNavClient:
             top_cost = _parse_recommendation(cost_list[0]) if cost_list else None
             top_performance = _parse_recommendation(latency_list[0]) if latency_list else None
         except Exception as e:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=502,
-                detail=f"NeuralNav returned invalid recommendation data: {type(e).__name__}",
+                detail=f"Planner returned invalid recommendation data: {type(e).__name__}",
             ) from e
 
         return RecommendationResult(
@@ -357,7 +353,7 @@ class NeuralNavClient:
         # Step 1: Validate category before making any API calls
         category_key = CATEGORY_MAP.get(category)
         if category_key is None:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=400,
                 detail=f"Invalid category '{category}'. Valid: {', '.join(CATEGORY_MAP)}",
             )
@@ -382,7 +378,7 @@ class NeuralNavClient:
         # Step 3: Pick top recommendation from category
         category_list = ranked.get(category_key, [])
         if not category_list:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=404,
                 detail=f"No recommendation found for category '{category}'",
             )
@@ -395,16 +391,16 @@ class NeuralNavClient:
         deploy_result = self.deploy(recommendation, namespace=namespace)
 
         if deploy_result.get("success") is not True:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=502,
-                detail=deploy_result.get("message", "NeuralNav deploy failed"),
+                detail=deploy_result.get("message", "Planner deploy failed"),
             )
 
         files = deploy_result.get("files", {})
         if not files:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=502,
-                detail="NeuralNav generated no config files",
+                detail="Planner generated no config files",
             )
 
         try:
@@ -415,16 +411,16 @@ class NeuralNavClient:
                 configs=files,
             )
         except KeyError as e:
-            raise NeuralNavAPIError(
+            raise PlannerAPIError(
                 status_code=502,
-                detail=f"NeuralNav deploy response missing expected field: {e}",
+                detail=f"Planner deploy response missing expected field: {e}",
             ) from e
 
     def health_check(self) -> tuple[bool, str]:
-        """Check if NeuralNav service is available."""
+        """Check if Planner service is available."""
         try:
             self._request("GET", "/health")
-            return True, "Neural Navigator available"
-        except (NeuralNavConnectionError, NeuralNavAPIError) as e:
-            logger.debug("NeuralNav health check failed (%s)", type(e).__name__)
-            return False, "Neural Navigator unavailable"
+            return True, "Planner available"
+        except (PlannerConnectionError, PlannerAPIError) as e:
+            logger.debug("Planner health check failed (%s)", type(e).__name__)
+            return False, "Planner unavailable"

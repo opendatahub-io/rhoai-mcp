@@ -28,8 +28,8 @@ class TestToolPermissionDeclarations:
             meta = plugin.rhoai_get_plugin_metadata()
             perms = plugin.rhoai_get_tool_permissions()
             assert isinstance(perms, dict), f"Plugin {meta.name} returned non-dict"
-            # Meta and NeuralNav composites don't access K8s resources
-            if meta.name in ("meta-composites", "neuralnav-composites"):
+            # Meta and Planner composites don't access K8s resources
+            if meta.name in ("meta-composites", "planner-composites"):
                 assert perms == {}, f"Plugin {meta.name} should return empty dict"
                 continue
             assert len(perms) > 0, f"Plugin {meta.name} has no tool permissions"

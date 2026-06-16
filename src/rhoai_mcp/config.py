@@ -211,16 +211,16 @@ class RHOAIConfig(BaseSettings):
         description="Skip TLS certificate verification for Model Registry (not recommended for production)",
     )
 
-    # Neural Navigator settings
-    neuralnav_url: str = Field(
-        default="http://backend.neuralnav.svc.cluster.local:8000",
-        description="Neural Navigator backend URL",
+    # Planner settings
+    planner_url: str = Field(
+        default="http://backend.planner.svc.cluster.local:8000",
+        description="Planner backend URL",
     )
-    neuralnav_timeout: int = Field(
+    planner_timeout: int = Field(
         default=120,
         ge=10,
         le=600,
-        description="Neural Navigator request timeout in seconds (extract endpoint can be slow on cold starts)",
+        description="Planner request timeout in seconds (extract endpoint can be slow on cold starts)",
     )
 
     # Plugin filtering

@@ -1,4 +1,4 @@
-"""Pydantic models for NeuralNav API request/response types."""
+"""Pydantic models for Planner API request/response types."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ class RecommendationScores(BaseModel):
 
 
 class ModelRecommendation(BaseModel):
-    """A single model recommendation from NeuralNav."""
+    """A single model recommendation from Planner."""
 
     model_id: str | None = Field(None, description="Model identifier")
     model_name: str | None = Field(None, description="Human-readable model name")

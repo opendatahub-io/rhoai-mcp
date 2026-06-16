@@ -1,15 +1,15 @@
-"""Tests for NeuralNav HTTP client."""
+"""Tests for Planner HTTP client."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from rhoai_mcp.composites.neuralnav.client import (
-    NeuralNavAPIError,
-    NeuralNavClient,
-    NeuralNavConnectionError,
+from rhoai_mcp.composites.planner.client import (
+    PlannerAPIError,
+    PlannerClient,
+    PlannerConnectionError,
 )
-from rhoai_mcp.composites.neuralnav.models import DeploymentConfigResult
+from rhoai_mcp.composites.planner.models import DeploymentConfigResult
 
 SAMPLE_INTENT = {
     "use_case": "chatbot_conversational",
@@ -129,10 +129,10 @@ SAMPLE_DEPLOY_RESPONSE = {
 }
 
 
-class TestNeuralNavClientExtractIntent:
+class TestPlannerClientExtractIntent:
     """Tests for intent extraction."""
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_extract_intent_success(self, mock_httpx: MagicMock) -> None:
         """Successful intent extraction returns DeploymentIntent."""
         mock_response = MagicMock()
@@ -143,15 +143,15 @@ class TestNeuralNavClientExtractIntent:
         mock_httpx.Client.return_value.__enter__.return_value.post.return_value = mock_response
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         intent = client.extract_intent("I need a chatbot for 1000 users")
 
         assert intent.use_case == "chatbot_conversational"
         assert intent.user_count == 1000
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_extract_intent_connection_error(self, mock_httpx: MagicMock) -> None:
-        """Connection failure raises NeuralNavConnectionError."""
+        """Connection failure raises PlannerConnectionError."""
         import httpx as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
@@ -162,13 +162,13 @@ class TestNeuralNavClientExtractIntent:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
-        with pytest.raises(NeuralNavConnectionError):
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerConnectionError):
             client.extract_intent("test")
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_extract_intent_malformed_response(self, mock_httpx: MagicMock) -> None:
-        """Malformed intent response raises NeuralNavAPIError."""
+        """Malformed intent response raises PlannerAPIError."""
         import httpx as real_httpx
 
         mock_httpx.TimeoutException = real_httpx.TimeoutException
@@ -184,15 +184,15 @@ class TestNeuralNavClientExtractIntent:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
-        with pytest.raises(NeuralNavAPIError, match="invalid intent response"):
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError, match="invalid intent response"):
             client.extract_intent("test")
 
 
-class TestNeuralNavClientGetDefaults:
+class TestPlannerClientGetDefaults:
     """Tests for fetching SLO/workload defaults."""
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_get_slo_defaults(self, mock_httpx: MagicMock) -> None:
         """SLO defaults are fetched and parsed."""
         mock_response = MagicMock()
@@ -204,12 +204,12 @@ class TestNeuralNavClientGetDefaults:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         defaults = client.get_slo_defaults("chatbot_conversational")
 
         assert defaults["slo_defaults"]["ttft_ms"]["default"] == 150
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_get_workload_profile(self, mock_httpx: MagicMock) -> None:
         """Workload profile is fetched and parsed."""
         mock_response = MagicMock()
@@ -221,12 +221,12 @@ class TestNeuralNavClientGetDefaults:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         profile = client.get_workload_profile("chatbot_conversational")
 
         assert profile["workload_profile"]["prompt_tokens"] == 512
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_get_expected_rps(self, mock_httpx: MagicMock) -> None:
         """Expected RPS is fetched and parsed."""
         mock_response = MagicMock()
@@ -238,16 +238,16 @@ class TestNeuralNavClientGetDefaults:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         rps = client.get_expected_rps("chatbot_conversational", 1000)
 
         assert rps["expected_rps"] == 10.0
 
 
-class TestNeuralNavClientRecommend:
+class TestPlannerClientRecommend:
     """Tests for the full recommendation flow."""
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_get_recommendations(self, mock_httpx: MagicMock) -> None:
         """Ranked recommendations are fetched and parsed."""
         mock_response = MagicMock()
@@ -259,7 +259,7 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.get_recommendations(
             use_case="chatbot_conversational",
             user_count=1000,
@@ -274,7 +274,7 @@ class TestNeuralNavClientRecommend:
         assert len(result["balanced"]) == 1
         assert result["total_configs_evaluated"] == 2847
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_full_flow(self, mock_httpx: MagicMock) -> None:
         """Full recommend() chains extract -> defaults -> recommendations."""
         mock_client = MagicMock()
@@ -313,7 +313,7 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.recommend("I need a chatbot for 1000 users")
 
         assert result.top_balanced is not None
@@ -325,7 +325,7 @@ class TestNeuralNavClientRecommend:
         assert result.specification["use_case"] == "chatbot_conversational"
         assert result.total_configs_evaluated == 2847
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_with_overrides(self, mock_httpx: MagicMock) -> None:
         """When both use_case and user_count overrides are provided, extraction is skipped."""
         mock_client = MagicMock()
@@ -357,7 +357,7 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         client.recommend(
             "I need a chatbot",
             use_case_override="code_completion",
@@ -371,9 +371,9 @@ class TestNeuralNavClientRecommend:
         # Extraction was skipped — only one POST call (ranked-recommend)
         assert mock_client.post.call_count == 1
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_api_error(self, mock_httpx: MagicMock) -> None:
-        """API error during recommendation raises NeuralNavAPIError."""
+        """API error during recommendation raises PlannerAPIError."""
         import httpx as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
@@ -395,11 +395,11 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
-        with pytest.raises(NeuralNavAPIError):
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError):
             client.extract_intent("test")
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_get_recommendations_with_constraints(self, mock_httpx: MagicMock) -> None:
         """Constraint parameters are included in the POST payload."""
         mock_response = MagicMock()
@@ -411,7 +411,7 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         client.get_recommendations(
             use_case="chatbot_conversational",
             user_count=1000,
@@ -435,7 +435,7 @@ class TestNeuralNavClientRecommend:
         assert payload["weights"] == {"accuracy": 2, "price": 2, "latency": 8, "complexity": 1}
         assert payload["percentile"] == "p99"
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_get_recommendations_without_constraints(self, mock_httpx: MagicMock) -> None:
         """When no constraints are provided, they are omitted from payload."""
         mock_response = MagicMock()
@@ -447,7 +447,7 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         client.get_recommendations(
             use_case="chatbot_conversational",
             user_count=1000,
@@ -466,7 +466,7 @@ class TestNeuralNavClientRecommend:
         assert "weights" not in payload
         assert payload["percentile"] == "p95"
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_with_slo_overrides(self, mock_httpx: MagicMock) -> None:
         """SLO overrides replace fetched defaults in the recommendation payload."""
         mock_client = MagicMock()
@@ -502,7 +502,7 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.recommend(
             "I need a chatbot",
             ttft_override_ms=100,
@@ -522,7 +522,7 @@ class TestNeuralNavClientRecommend:
         assert payload["itl_target_ms"] == 30
         assert payload["e2e_target_ms"] == 1500
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_with_partial_slo_overrides(self, mock_httpx: MagicMock) -> None:
         """Partial SLO overrides only replace the specified values."""
         mock_client = MagicMock()
@@ -558,7 +558,7 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.recommend(
             "I need a chatbot",
             ttft_override_ms=100,  # Override only TTFT
@@ -569,7 +569,7 @@ class TestNeuralNavClientRecommend:
         assert result.specification["slo_targets"]["itl_ms"] == 65  # default
         assert result.specification["slo_targets"]["e2e_ms"] == 2000  # default
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_forwards_constraints(self, mock_httpx: MagicMock) -> None:
         """min_accuracy, max_cost, weights, and percentile are forwarded."""
         mock_client = MagicMock()
@@ -605,7 +605,7 @@ class TestNeuralNavClientRecommend:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         client.recommend(
             "I need a chatbot",
             min_accuracy=70,
@@ -623,10 +623,10 @@ class TestNeuralNavClientRecommend:
         assert payload["percentile"] == "p99"
 
 
-class TestNeuralNavClientRecommendExtractionBypass:
+class TestPlannerClientRecommendExtractionBypass:
     """Tests for skipping extraction when overrides are sufficient."""
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_skips_extraction_when_all_overrides_provided(
         self, mock_httpx: MagicMock
     ) -> None:
@@ -660,7 +660,7 @@ class TestNeuralNavClientRecommendExtractionBypass:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.recommend(
             "I need a chatbot for 1000 users",
             use_case_override="chatbot_conversational",
@@ -673,7 +673,7 @@ class TestNeuralNavClientRecommendExtractionBypass:
         assert result.specification["use_case"] == "chatbot_conversational"
         assert result.specification["user_count"] == 1000
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_still_extracts_when_only_use_case_override(
         self, mock_httpx: MagicMock
     ) -> None:
@@ -711,7 +711,7 @@ class TestNeuralNavClientRecommendExtractionBypass:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.recommend(
             "I need a chatbot",
             use_case_override="code_completion",
@@ -722,7 +722,7 @@ class TestNeuralNavClientRecommendExtractionBypass:
         # Use case override is applied
         assert result.specification["use_case"] == "code_completion"
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_skips_extraction_uses_gpu_override(self, mock_httpx: MagicMock) -> None:
         """When extraction is skipped, gpu_types_override is used."""
         mock_client = MagicMock()
@@ -753,7 +753,7 @@ class TestNeuralNavClientRecommendExtractionBypass:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         client.recommend(
             "I need a chatbot",
             use_case_override="chatbot_conversational",
@@ -767,12 +767,12 @@ class TestNeuralNavClientRecommendExtractionBypass:
         assert payload["preferred_gpu_types"] == ["H100"]
 
 
-class TestNeuralNavClientRequestErrors:
+class TestPlannerClientRequestErrors:
     """Tests for _request error handling edge cases."""
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_invalid_json_response(self, mock_httpx: MagicMock) -> None:
-        """Non-JSON response raises NeuralNavAPIError."""
+        """Non-JSON response raises PlannerAPIError."""
         import httpx as real_httpx
 
         mock_httpx.TimeoutException = real_httpx.TimeoutException
@@ -788,13 +788,13 @@ class TestNeuralNavClientRequestErrors:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
-        with pytest.raises(NeuralNavAPIError, match="invalid JSON"):
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError, match="invalid JSON"):
             client.get_slo_defaults("chatbot_conversational")
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generic_request_error(self, mock_httpx: MagicMock) -> None:
-        """Other httpx.RequestError subtypes raise NeuralNavConnectionError."""
+        """Other httpx.RequestError subtypes raise PlannerConnectionError."""
         import httpx as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
@@ -806,15 +806,15 @@ class TestNeuralNavClientRequestErrors:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
-        with pytest.raises(NeuralNavConnectionError, match="request failed"):
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerConnectionError, match="request failed"):
             client.get_slo_defaults("chatbot_conversational")
 
 
-class TestNeuralNavClientHealthCheck:
+class TestPlannerClientHealthCheck:
     """Tests for health check."""
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_health_check_healthy(self, mock_httpx: MagicMock) -> None:
         """Health check returns True when service is reachable."""
         mock_response = MagicMock()
@@ -825,7 +825,7 @@ class TestNeuralNavClientHealthCheck:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         healthy, msg = client.health_check()
 
         assert healthy is True
@@ -833,7 +833,7 @@ class TestNeuralNavClientHealthCheck:
         # Verify health check uses /health endpoint (not /api/v1/)
         mock_client.get.assert_called_once_with("http://localhost:8000/health", params=None)
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_health_check_unhealthy(self, mock_httpx: MagicMock) -> None:
         """Health check returns False when service is unreachable."""
         import httpx as real_httpx
@@ -846,17 +846,17 @@ class TestNeuralNavClientHealthCheck:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         healthy, msg = client.health_check()
 
         assert healthy is False
         assert "unavailable" in msg.lower()
 
 
-class TestNeuralNavClientDeploy:
+class TestPlannerClientDeploy:
     """Tests for deploy() method."""
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_deploy(self, mock_httpx: MagicMock) -> None:
         """deploy() sends recommendation + namespace and returns response."""
         mock_response = MagicMock()
@@ -868,7 +868,7 @@ class TestNeuralNavClientDeploy:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.deploy(SAMPLE_RECOMMENDATION, namespace="ml-prod")
 
         # Verify correct endpoint and payload
@@ -883,10 +883,10 @@ class TestNeuralNavClientDeploy:
         assert "inferenceservice" in result["files"]
 
 
-class TestNeuralNavClientGenerateConfig:
+class TestPlannerClientGenerateConfig:
     """Tests for generate_config() method."""
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_balanced(self, mock_httpx: MagicMock) -> None:
         """generate_config with category='balanced' picks from balanced list."""
         mock_client = MagicMock()
@@ -905,7 +905,7 @@ class TestNeuralNavClientGenerateConfig:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.generate_config(
             category="balanced",
             use_case="chatbot_conversational",
@@ -923,7 +923,7 @@ class TestNeuralNavClientGenerateConfig:
         assert result.model_name == "Llama 3.1 70B"
         assert "inferenceservice" in result.configs
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_cost(self, mock_httpx: MagicMock) -> None:
         """category='cost' maps to 'lowest_cost' ranking list."""
         mock_client = MagicMock()
@@ -942,7 +942,7 @@ class TestNeuralNavClientGenerateConfig:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.generate_config(
             category="cost",
             use_case="chatbot_conversational",
@@ -958,7 +958,7 @@ class TestNeuralNavClientGenerateConfig:
         assert isinstance(result, DeploymentConfigResult)
         assert result.deployment_id == "chatbot-llama-3-1-70b-20260322143022"
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_performance(self, mock_httpx: MagicMock) -> None:
         """category='performance' maps to 'lowest_latency' ranking list."""
         mock_client = MagicMock()
@@ -977,7 +977,7 @@ class TestNeuralNavClientGenerateConfig:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.generate_config(
             category="performance",
             use_case="chatbot_conversational",
@@ -992,9 +992,9 @@ class TestNeuralNavClientGenerateConfig:
 
         assert isinstance(result, DeploymentConfigResult)
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_empty_category(self, mock_httpx: MagicMock) -> None:
-        """Empty category list raises NeuralNavAPIError."""
+        """Empty category list raises PlannerAPIError."""
         mock_client = MagicMock()
 
         empty_ranked = {
@@ -1010,8 +1010,8 @@ class TestNeuralNavClientGenerateConfig:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
-        with pytest.raises(NeuralNavAPIError, match="No recommendation found"):
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError, match="No recommendation found"):
             client.generate_config(
                 category="balanced",
                 use_case="chatbot_conversational",
@@ -1024,9 +1024,9 @@ class TestNeuralNavClientGenerateConfig:
                 e2e_target_ms=2000,
             )
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_deploy_error(self, mock_httpx: MagicMock) -> None:
-        """Deploy failure after ranking succeeds raises NeuralNavAPIError."""
+        """Deploy failure after ranking succeeds raises PlannerAPIError."""
         import httpx as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
@@ -1053,8 +1053,8 @@ class TestNeuralNavClientGenerateConfig:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
-        with pytest.raises(NeuralNavAPIError):
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError):
             client.generate_config(
                 category="balanced",
                 use_case="chatbot_conversational",
@@ -1067,9 +1067,9 @@ class TestNeuralNavClientGenerateConfig:
                 e2e_target_ms=2000,
             )
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_empty_files(self, mock_httpx: MagicMock) -> None:
-        """Deploy returns empty files dict raises NeuralNavAPIError."""
+        """Deploy returns empty files dict raises PlannerAPIError."""
         mock_client = MagicMock()
 
         ranked_resp = MagicMock()
@@ -1087,8 +1087,8 @@ class TestNeuralNavClientGenerateConfig:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
-        with pytest.raises(NeuralNavAPIError, match="no config files"):
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError, match="no config files"):
             client.generate_config(
                 category="balanced",
                 use_case="chatbot_conversational",
@@ -1101,7 +1101,7 @@ class TestNeuralNavClientGenerateConfig:
                 e2e_target_ms=2000,
             )
 
-    @patch("rhoai_mcp.composites.neuralnav.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_model_id_fallback(self, mock_httpx: MagicMock) -> None:
         """When model_name is None, model_id is used instead."""
         mock_client = MagicMock()
@@ -1122,7 +1122,7 @@ class TestNeuralNavClientGenerateConfig:
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
-        client = NeuralNavClient("http://localhost:8000")
+        client = PlannerClient("http://localhost:8000")
         result = client.generate_config(
             category="balanced",
             use_case="chatbot_conversational",

@@ -258,7 +258,7 @@ class TestPluginManager:
             "cluster-composites",
             "training-composites",
             "meta-composites",
-            "neuralnav-composites",
+            "planner-composites",
         }
         expected = expected_domains | expected_composites
         assert set(pm.registered_plugins.keys()) == expected

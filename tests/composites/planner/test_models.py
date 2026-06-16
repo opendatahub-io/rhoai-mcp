@@ -1,11 +1,11 @@
-"""Tests for NeuralNav composite models."""
+"""Tests for Planner composite models."""
 
 from typing import get_args
 
 import pytest
 from pydantic import ValidationError
 
-from rhoai_mcp.composites.neuralnav.models import (
+from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
     DeploymentIntent,
     GPUConfig,

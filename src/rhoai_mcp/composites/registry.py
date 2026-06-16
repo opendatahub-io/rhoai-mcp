@@ -127,19 +127,19 @@ class MetaCompositesPlugin(BasePlugin):
         return True, "Meta composites require no external dependencies"
 
 
-class NeuralNavCompositesPlugin(BasePlugin):
-    """Plugin for Neural Navigator model recommendations.
+class PlannerCompositesPlugin(BasePlugin):
+    """Plugin for Planner model recommendations.
 
-    Provides a tool that orchestrates NeuralNav APIs to recommend
+    Provides a tool that orchestrates Planner APIs to recommend
     LLM models based on natural language use case descriptions.
     """
 
     def __init__(self) -> None:
         super().__init__(
             PluginMetadata(
-                name="neuralnav-composites",
+                name="planner-composites",
                 version="1.0.0",
-                description="Neural Navigator model recommendation tools",
+                description="Planner model recommendation tools",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=[],
             )
@@ -147,17 +147,17 @@ class NeuralNavCompositesPlugin(BasePlugin):
 
     @hookimpl
     def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
-        from rhoai_mcp.composites.neuralnav.tools import register_tools
+        from rhoai_mcp.composites.planner.tools import register_tools
 
         register_tools(mcp, server)
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
-        from rhoai_mcp.composites.neuralnav.client import NeuralNavClient
+        from rhoai_mcp.composites.planner.client import PlannerClient
 
-        client = NeuralNavClient(
-            server.config.neuralnav_url,
-            timeout=server.config.neuralnav_timeout,
+        client = PlannerClient(
+            server.config.planner_url,
+            timeout=server.config.planner_timeout,
         )
         return client.health_check()
 
@@ -172,5 +172,5 @@ def get_composite_plugins() -> list[BasePlugin]:
         ClusterCompositesPlugin(),
         TrainingCompositesPlugin(),
         MetaCompositesPlugin(),
-        NeuralNavCompositesPlugin(),
+        PlannerCompositesPlugin(),
     ]

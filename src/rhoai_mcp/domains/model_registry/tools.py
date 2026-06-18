@@ -709,12 +709,21 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 # If source_id not provided, look it up from the model
                 effective_source_id = source_id
                 if not effective_source_id:
-                    # Find the model to get its source_id
+                    # Find the model to get its source_id (exact or suffix match)
                     models = await client.list_models()
+                    matched_model = None
+                    model_name_lower = model_name.lower()
                     for model in models:
-                        if model.name == model_name:
-                            effective_source_id = model.source_id
+                        name_lower = model.name.lower()
+                        if name_lower == model_name_lower:
+                            matched_model = model
                             break
+                        if "/" in name_lower and name_lower.endswith("/" + model_name_lower):
+                            matched_model = model
+                            break
+                    if matched_model:
+                        effective_source_id = matched_model.source_id
+                        model_name = matched_model.name
                     if not effective_source_id:
                         return {"error": f"Model not found: {model_name}"}
 

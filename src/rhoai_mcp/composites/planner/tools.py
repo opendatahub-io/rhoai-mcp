@@ -63,6 +63,8 @@ def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any
     compact["meets_slo"] = rec.meets_slo
     if slot == "top_balanced" and rec.scores:
         compact["score"] = rec.scores.balanced_score
+    if rec.model_uri:
+        compact["model_uri"] = rec.model_uri
     if rec.reasoning:
         compact["reasoning"] = rec.reasoning
     return compact

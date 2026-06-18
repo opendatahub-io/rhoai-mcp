@@ -91,16 +91,23 @@ async def _resolve_catalog_storage_uri(
 
         async with ModelCatalogClient(config, discovery_result) as client:
             models = await client.list_models(page_size=500)
-            for model in models:
-                if model.name == model_id and model.artifacts:
-                    return model.artifacts[0].uri
 
-            # If no match by exact name, try getting artifacts via source lookup
+            # Find matching model (exact or suffix match for bare names)
+            matched = None
+            model_id_lower = model_id.lower()
             for model in models:
-                if model.name == model_id and model.source_id:
-                    artifacts = await client.get_model_artifacts(model.source_id, model_id)
-                    if artifacts:
-                        return artifacts[0].uri
+                name_lower = model.name.lower()
+                if name_lower == model_id_lower:
+                    matched = model
+                    break
+                if "/" in name_lower and name_lower.endswith("/" + model_id_lower):
+                    matched = model
+                    break
+
+            if matched and matched.source_id:
+                artifacts = await client.get_model_artifacts(matched.source_id, matched.name)
+                if artifacts:
+                    return artifacts[0].uri
     except Exception as e:
         logger.warning(
             "Could not resolve storage_uri from catalog for model '%s': %s",

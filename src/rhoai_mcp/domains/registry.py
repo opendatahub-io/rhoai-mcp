@@ -324,6 +324,36 @@ class ModelRegistryPlugin(BasePlugin):
         return True, f"Model Registry at {server.config.model_registry_url}"
 
 
+class NavigatorPlugin(BasePlugin):
+    """Plugin for Project Navigator runtime compatibility detection.
+
+    Provides tools to query CUDA compatibility matrix for runtime version
+    compatibility detection between serving runtimes, CUDA drivers, and
+    hardware capabilities (GPUs).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="navigator",
+                version="0.1.0",
+                description="Runtime compatibility detection for Project Navigator",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.navigator.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
+        return True, "Navigator uses ConfigMap or static compatibility matrix"
+
+
 def get_core_plugins() -> list[BasePlugin]:
     """Return all core domain plugin instances.
 
@@ -343,4 +373,5 @@ def get_core_plugins() -> list[BasePlugin]:
         TrainingPlugin(),
         PromptsPlugin(),
         ModelRegistryPlugin(),
+        NavigatorPlugin(),
     ]

@@ -109,9 +109,7 @@ class CudaCompatibilityClient:
             ValueError: If the static file is missing or invalid
         """
         if not self.STATIC_DATA_PATH.exists():
-            raise ValueError(
-                f"Static CUDA compatibility data not found at {self.STATIC_DATA_PATH}"
-            )
+            raise ValueError(f"Static CUDA compatibility data not found at {self.STATIC_DATA_PATH}")
 
         with open(self.STATIC_DATA_PATH) as f:
             data = json.load(f)

@@ -59,7 +59,8 @@ class CudaCompatibilityClient:
                 logger.info("Successfully loaded CUDA compatibility matrix from ConfigMap")
                 self._matrix = matrix
                 return self._matrix
-        except Exception as e:
+        except (ApiException, OSError, ConnectionError, TimeoutError) as e:
+            # Only catch expected connection/API errors - let validation errors propagate
             logger.warning(f"Failed to load from ConfigMap: {e}")
 
         # Fallback to static file
@@ -192,13 +193,18 @@ class CudaCompatibilityClient:
         """Get list of all CUDA versions in the matrix.
 
         Returns:
-            List of CUDA versions
+            List of CUDA versions (sorted semantically)
         """
         matrix = self.load_matrix()
         versions = set()
         for mapping in matrix.cuda_drivers:
             versions.update(mapping.cuda_version)
-        return sorted(versions)
+
+        # Sort by semantic version (major.minor) instead of lexicographic
+        def version_key(version: str) -> tuple[int, ...]:
+            return tuple(int(part) for part in version.split("."))
+
+        return sorted(versions, key=version_key)
 
     def list_all_compute_capabilities(self) -> list[str]:
         """Get list of all GPU compute capabilities in the matrix.

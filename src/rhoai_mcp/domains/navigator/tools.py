@@ -46,13 +46,24 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             }
         except ValueError as e:
             logger.warning(f"Runtime image not found: {image}")
-            available_images = cuda_client.list_all_runtime_images()
+            try:
+                available_images = cuda_client.list_all_runtime_images()[:10]
+            except Exception:
+                available_images = []
             return {
                 "image": image,
                 "cuda_versions": [],
                 "status": "not_found",
                 "error": str(e),
-                "available_images": available_images[:10],  # Return first 10 as hint
+                "available_images": available_images,  # First 10 as hint
+            }
+        except Exception as e:
+            logger.error(f"Backend error querying runtime image {image}: {e}")
+            return {
+                "image": image,
+                "cuda_versions": [],
+                "status": "backend_error",
+                "error": str(e),
             }
 
     @mcp.tool()
@@ -77,13 +88,24 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             }
         except ValueError as e:
             logger.warning(f"CUDA version not found: {cuda_version}")
-            available_versions = cuda_client.list_all_cuda_versions()
+            try:
+                available_versions = cuda_client.list_all_cuda_versions()
+            except Exception:
+                available_versions = []
             return {
                 "cuda_version": cuda_version,
                 "min_driver_versions": [],
                 "status": "not_found",
                 "error": str(e),
                 "available_cuda_versions": available_versions,
+            }
+        except Exception as e:
+            logger.error(f"Backend error querying CUDA version {cuda_version}: {e}")
+            return {
+                "cuda_version": cuda_version,
+                "min_driver_versions": [],
+                "status": "backend_error",
+                "error": str(e),
             }
 
     @mcp.tool()
@@ -108,13 +130,24 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             }
         except ValueError as e:
             logger.warning(f"Compute capability not found: {compute_capability}")
-            available_capabilities = cuda_client.list_all_compute_capabilities()
+            try:
+                available_capabilities = cuda_client.list_all_compute_capabilities()
+            except Exception:
+                available_capabilities = []
             return {
                 "compute_capability": compute_capability,
                 "supported_cuda_versions": [],
                 "status": "not_found",
                 "error": str(e),
                 "available_compute_capabilities": available_capabilities,
+            }
+        except Exception as e:
+            logger.error(f"Backend error querying compute capability {compute_capability}: {e}")
+            return {
+                "compute_capability": compute_capability,
+                "supported_cuda_versions": [],
+                "status": "backend_error",
+                "error": str(e),
             }
 
     logger.info("Registered 3 CUDA compatibility tools")

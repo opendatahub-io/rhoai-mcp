@@ -61,29 +61,9 @@
       "notes": "CONFIRMED from serving team spreadsheet. vLLM 0.18.0. Released Jun 9, 2026."
     },
     {
-      "image": "rhaiis/vllm-cuda-rhel9:3.4.2",
-      "cuda_version": ["13.0"],
-      "notes": "CONFIRMED from serving team spreadsheet. vLLM 0.18.0. Released Jul 13, 2026."
-    },
-    {
-      "image": "rhaiis/vllm-cuda-rhel9:3.4.3",
-      "cuda_version": ["13.0"],
-      "notes": "CONFIRMED from serving team spreadsheet. vLLM 0.18.0. Released Aug 12, 2026."
-    },
-    {
       "image": "rhaiis/vllm-cuda-rhel9:3.5-ea1",
       "cuda_version": ["13.0"],
       "notes": "CONFIRMED from serving team spreadsheet. vLLM 0.19.1. Released Jun 17, 2026."
-    },
-    {
-      "image": "rhaiis/vllm-cuda-rhel9:3.5-ea2",
-      "cuda_version": ["13.0"],
-      "notes": "CONFIRMED from serving team spreadsheet. vLLM 0.21.0. Released Jul 16, 2026."
-    },
-    {
-      "image": "rhaiis/vllm-cuda-rhel9:3.5.0",
-      "cuda_version": ["13.0"],
-      "notes": "CONFIRMED from serving team spreadsheet. vLLM 0.23.0 (tentative). Expected release Aug 20, 2026."
     },
     {
       "image": "rhoai/odh-vllm-cuda-rhel9:2.21",

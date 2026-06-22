@@ -423,8 +423,18 @@ class NavigatorPlugin(BasePlugin):
         register_tools(mcp, server)
 
     @hookimpl
-    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
-        return True, "Navigator uses ConfigMap or static compatibility matrix"
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        """Verify Navigator can load CUDA compatibility matrix."""
+        from rhoai_mcp.domains.navigator.client import CudaCompatibilityClient
+
+        try:
+            client = CudaCompatibilityClient(server.k8s)
+            matrix = client.load_matrix()
+            image_count = len(matrix.runtime_images)
+            cuda_count = len(matrix.cuda_drivers)
+            return True, f"Navigator loaded {image_count} images, {cuda_count} CUDA versions"
+        except Exception as e:
+            return False, f"Navigator failed to load compatibility matrix: {e}"
 
 
 def get_core_plugins() -> list[BasePlugin]:

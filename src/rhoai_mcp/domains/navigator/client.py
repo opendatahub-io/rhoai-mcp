@@ -12,7 +12,7 @@ from kubernetes.client.exceptions import ApiException
 from rhoai_mcp.domains.navigator.models import CudaCompatibilityMatrix
 
 if TYPE_CHECKING:
-    from rhoai_mcp.clients.base import KubernetesClient
+    from rhoai_mcp.clients.base import K8sClient
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class CudaCompatibilityClient:
     # Path to the static fallback JSON file (relative to this file)
     STATIC_DATA_PATH = Path(__file__).parent / "data" / "cuda_compat_default.json"
 
-    def __init__(self, k8s_client: KubernetesClient) -> None:
+    def __init__(self, k8s_client: K8sClient) -> None:
         """Initialize the CUDA compatibility client.
 
         Args:

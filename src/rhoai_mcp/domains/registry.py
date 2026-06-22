@@ -424,17 +424,16 @@ class NavigatorPlugin(BasePlugin):
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
-        """Verify Navigator can load CUDA compatibility matrix."""
+        """Verify Navigator static data file exists."""
+        from pathlib import Path
+
         from rhoai_mcp.domains.navigator.client import CudaCompatibilityClient
 
-        try:
-            client = CudaCompatibilityClient(server.k8s)
-            matrix = client.load_matrix()
-            image_count = len(matrix.runtime_images)
-            cuda_count = len(matrix.cuda_drivers)
-            return True, f"Navigator loaded {image_count} images, {cuda_count} CUDA versions"
-        except Exception as e:
-            return False, f"Navigator failed to load compatibility matrix: {e}"
+        # Check if static data file exists (don't try to load from cluster during health check)
+        data_path = CudaCompatibilityClient.STATIC_DATA_PATH
+        if data_path.exists():
+            return True, f"Navigator static compatibility data available at {data_path.name}"
+        return False, f"Navigator static compatibility data not found at {data_path}"
 
 
 def get_core_plugins() -> list[BasePlugin]:

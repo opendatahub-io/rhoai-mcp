@@ -22,8 +22,6 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
     """
     from rhoai_mcp.domains.navigator.client import CudaCompatibilityClient
 
-    cuda_client = CudaCompatibilityClient(server.k8s)
-
     @mcp.tool()
     def get_cuda_version_for_runtime(image: str) -> dict[str, str | list[str]]:
         """Get CUDA toolkit version(s) for a RHOAI serving runtime image.
@@ -37,6 +35,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         Returns:
             Dictionary with image name and list of CUDA versions
         """
+        cuda_client = CudaCompatibilityClient(server.k8s)
         try:
             cuda_versions = cuda_client.get_cuda_for_runtime(image)
             return {
@@ -79,6 +78,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         Returns:
             Dictionary with CUDA version and minimum driver version(s)
         """
+        cuda_client = CudaCompatibilityClient(server.k8s)
         try:
             min_driver = cuda_client.get_min_driver_for_cuda(cuda_version)
             return {
@@ -121,6 +121,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         Returns:
             Dictionary with compute capability and list of supported CUDA versions
         """
+        cuda_client = CudaCompatibilityClient(server.k8s)
         try:
             supported_cuda = cuda_client.get_supported_cuda_for_compute(compute_capability)
             return {

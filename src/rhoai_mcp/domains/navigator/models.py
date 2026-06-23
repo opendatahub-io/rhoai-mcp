@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RuntimeImageMapping(BaseModel):
@@ -40,5 +40,4 @@ class CudaCompatibilityMatrix(BaseModel):
         ..., alias="GPU compute capability", description="GPU compute to CUDA version mappings"
     )
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)

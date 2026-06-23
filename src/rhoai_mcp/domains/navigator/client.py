@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kubernetes.client.exceptions import ApiException
+from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
 
 from rhoai_mcp.domains.navigator.models import CudaCompatibilityMatrix
 

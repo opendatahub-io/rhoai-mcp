@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 from rhoai_mcp.domains.permissions import (
     CONNECTIONS_PERMISSIONS,
     INFERENCE_PERMISSIONS,
-    NAVIGATOR_PERMISSIONS,
     NOTEBOOKS_PERMISSIONS,
     PIPELINES_PERMISSIONS,
     PROJECTS_PERMISSIONS,
@@ -430,10 +429,8 @@ class NavigatorPlugin(BasePlugin):
         return NAVIGATOR_PERMISSIONS
 
     @hookimpl
-    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
         """Verify Navigator static data file exists."""
-        from pathlib import Path
-
         from rhoai_mcp.domains.navigator.client import CudaCompatibilityClient
 
         # Check if static data file exists (don't try to load from cluster during health check)

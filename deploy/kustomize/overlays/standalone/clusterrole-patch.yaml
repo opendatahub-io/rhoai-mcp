@@ -1,0 +1,90 @@
+# Write permissions for standalone (non-OIDC) deployments.
+# When OIDC is enabled, write operations use user impersonation and the
+# user's own RBAC governs access — these extra verbs are not needed.
+
+# Namespaces — Data Science Project management
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "patch", "delete"]
+
+# Secrets and PVCs — data connections and storage
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: [""]
+    resources: ["secrets", "persistentvolumeclaims"]
+    verbs: ["create", "delete"]
+
+# Pods — PVC permission fix jobs
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create"]
+
+# Persistent Volumes — NFS storage setup
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["create"]
+
+# Kubeflow Notebooks
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["kubeflow.org"]
+    resources: ["notebooks"]
+    verbs: ["create", "patch", "delete"]
+
+# Kubeflow Training Operator v2
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["trainer.kubeflow.org"]
+    resources: ["trainjobs"]
+    verbs: ["create", "update", "patch", "delete"]
+
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["trainer.kubeflow.org"]
+    resources: ["clustertrainingruntimes"]
+    verbs: ["create", "delete"]
+
+# Data Science Pipelines
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["datasciencepipelinesapplications.opendatahub.io"]
+    resources: ["datasciencepipelinesapplications"]
+    verbs: ["create", "delete"]
+
+# Model Serving — KServe InferenceServices
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["serving.kserve.io"]
+    resources: ["inferenceservices"]
+    verbs: ["create", "delete"]
+
+# Model Serving — KServe ServingRuntimes
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["serving.kserve.io"]
+    resources: ["servingruntimes"]
+    verbs: ["create"]
+
+# Deployments — quickstart deployment
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create"]

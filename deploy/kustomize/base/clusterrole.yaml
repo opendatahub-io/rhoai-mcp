@@ -12,81 +12,48 @@ rules:
       - pods
       - pods/log
       - services
+      - serviceaccounts
       - events
       - nodes
-    verbs: ["get", "list", "watch"]
-
-  # Pods (create for PVC permission fix jobs)
-  - apiGroups: [""]
-    resources:
-      - pods
-    verbs: ["create"]
-
-  # Persistent Volumes (create for NFS storage setup)
-  - apiGroups: [""]
-    resources:
-      - persistentvolumes
-    verbs: ["create"]
-
-  # Namespaces (read-write for Data Science Project management)
-  - apiGroups: [""]
-    resources:
       - namespaces
-    verbs: ["get", "list", "watch", "create", "patch", "delete"]
-
-  # Core Kubernetes resources (read-write for data connections and storage)
-  - apiGroups: [""]
-    resources:
       - secrets
       - persistentvolumeclaims
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["get", "list", "watch"]
 
-  # Kubeflow Notebooks
+  # Kubeflow Notebooks (read-only)
   - apiGroups: ["kubeflow.org"]
     resources:
       - notebooks
-    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+    verbs: ["get", "list", "watch"]
 
-  # Kubeflow Training Operator v2
+  # Kubeflow Training Operator v2 (read-only)
   - apiGroups: ["trainer.kubeflow.org"]
     resources:
       - trainjobs
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  - apiGroups: ["trainer.kubeflow.org"]
-    resources:
       - trainingruntimes
+      - clustertrainingruntimes
     verbs: ["get", "list", "watch"]
 
-  - apiGroups: ["trainer.kubeflow.org"]
-    resources:
-      - clustertrainingruntimes
-    verbs: ["get", "list", "watch", "create", "delete"]
-
-  # Data Science Pipelines
+  # Data Science Pipelines (read-only)
   - apiGroups: ["datasciencepipelinesapplications.opendatahub.io"]
     resources:
       - datasciencepipelinesapplications
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["get", "list", "watch"]
 
-  # Model Serving (KServe)
+  # Model Serving — KServe (read-only)
   - apiGroups: ["serving.kserve.io"]
     resources:
       - inferenceservices
-    verbs: ["get", "list", "watch", "create", "delete"]
-
-  - apiGroups: ["serving.kserve.io"]
-    resources:
       - servingruntimes
-    verbs: ["get", "list", "watch", "create"]
+    verbs: ["get", "list", "watch"]
 
-  # Deployments (create for quickstart deployment)
+  # Deployments (read-only)
   - apiGroups: ["apps"]
     resources:
       - deployments
-    verbs: ["create"]
+    verbs: ["get", "list", "watch"]
 
-  # Storage Classes (list for NFS storage discovery)
+  # Storage Classes (read-only for discovery)
   - apiGroups: ["storage.k8s.io"]
     resources:
       - storageclasses

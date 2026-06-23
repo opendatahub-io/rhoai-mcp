@@ -8,6 +8,9 @@ resources:
   - serviceaccount.yaml
   - clusterrole.yaml
   - clusterrolebinding.yaml
+  - clusterrole-impersonator.yaml
+  - clusterrolebinding-impersonator.yaml
+  - clusterrolebinding-auth-delegator.yaml
   - configmap.yaml
   - deployment.yaml
   - service.yaml
@@ -52,5 +55,15 @@ replacements:
       - select:
           kind: ClusterRoleBinding
           name: rhoai-mcp
+        fieldPaths:
+          - subjects.[kind=ServiceAccount].namespace
+      - select:
+          kind: ClusterRoleBinding
+          name: rhoai-mcp-impersonator
+        fieldPaths:
+          - subjects.[kind=ServiceAccount].namespace
+      - select:
+          kind: ClusterRoleBinding
+          name: rhoai-mcp-auth-delegator
         fieldPaths:
           - subjects.[kind=ServiceAccount].namespace

@@ -31,6 +31,16 @@ replacements:
         fieldPaths:
           - subjects.[kind=ServiceAccount].namespace
       - select:
+          kind: ClusterRoleBinding
+          name: rhoai-mcp-impersonator
+        fieldPaths:
+          - subjects.[kind=ServiceAccount].namespace
+      - select:
+          kind: ClusterRoleBinding
+          name: rhoai-mcp-auth-delegator
+        fieldPaths:
+          - subjects.[kind=ServiceAccount].namespace
+      - select:
           kind: Route
           name: rhoai-mcp
         fieldPaths:

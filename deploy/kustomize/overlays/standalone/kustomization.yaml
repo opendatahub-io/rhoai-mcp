@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Standalone overlay for non-OIDC deployments.
+# Extends the read-only base with write permissions so the SA can
+# create/delete resources directly (no user impersonation).
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: ClusterRole
+      name: rhoai-mcp
+    path: clusterrole-patch.yaml

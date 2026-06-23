@@ -26,7 +26,7 @@ def test_plugin_manager_loads_core_plugins():
         "prompts",
         "model_registry",
         "quickstarts",
-        "navigator",
+        "model_runtimes",
     }
     # Composite plugins (4)
     expected_composites = {

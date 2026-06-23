@@ -397,8 +397,8 @@ class QuickstartsPlugin(BasePlugin):
         return True, "Quickstarts ready"
 
 
-class NavigatorPlugin(BasePlugin):
-    """Plugin for Project Navigator runtime compatibility detection.
+class ModelRuntimesPlugin(BasePlugin):
+    """Plugin for Model Runtimes CUDA compatibility detection.
 
     Provides tools to query CUDA compatibility matrix for runtime version
     compatibility detection between serving runtimes, CUDA drivers, and
@@ -408,9 +408,9 @@ class NavigatorPlugin(BasePlugin):
     def __init__(self) -> None:
         super().__init__(
             PluginMetadata(
-                name="navigator",
+                name="model_runtimes",
                 version="0.1.0",
-                description="Runtime compatibility detection for Project Navigator",
+                description="CUDA compatibility detection for model serving runtimes",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=[],
             )
@@ -418,26 +418,21 @@ class NavigatorPlugin(BasePlugin):
 
     @hookimpl
     def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
-        from rhoai_mcp.domains.navigator.tools import register_tools
+        from rhoai_mcp.domains.model_runtimes.tools import register_tools
 
         register_tools(mcp, server)
 
     @hookimpl
     def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
-        from rhoai_mcp.domains.permissions import NAVIGATOR_PERMISSIONS
+        from rhoai_mcp.domains.permissions import MODEL_RUNTIMES_PERMISSIONS
 
-        return NAVIGATOR_PERMISSIONS
+        return MODEL_RUNTIMES_PERMISSIONS
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
-        """Verify Navigator static data file exists."""
-        from rhoai_mcp.domains.navigator.client import CudaCompatibilityClient
-
-        # Check if static data file exists (don't try to load from cluster during health check)
-        data_path = CudaCompatibilityClient.STATIC_DATA_PATH
-        if data_path.exists():
-            return True, f"Navigator static compatibility data available at {data_path.name}"
-        return False, f"Navigator static compatibility data not found at {data_path}"
+        """Check if CUDA compatibility ConfigMap exists."""
+        # Health check just returns True - ConfigMap is optional
+        return True, "Model Runtimes ready"
 
 
 def get_core_plugins() -> list[BasePlugin]:
@@ -460,5 +455,5 @@ def get_core_plugins() -> list[BasePlugin]:
         PromptsPlugin(),
         ModelRegistryPlugin(),
         QuickstartsPlugin(),
-        NavigatorPlugin(),
+        ModelRuntimesPlugin(),
     ]

@@ -1,7 +1,5 @@
 """Pydantic models for CUDA compatibility matrix."""
 
-from __future__ import annotations
-
 from pydantic import BaseModel, ConfigDict, Field
 
 

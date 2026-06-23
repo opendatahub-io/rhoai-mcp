@@ -252,7 +252,7 @@ class TestPluginManager:
             "prompts",
             "model_registry",
             "quickstarts",
-            "navigator",
+            "model_runtimes",
         }
         # Composite plugins (4)
         expected_composites = {

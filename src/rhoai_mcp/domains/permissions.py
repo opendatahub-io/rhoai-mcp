@@ -214,7 +214,13 @@ TRAINING_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
-NAVIGATOR_PERMISSIONS: dict[str, list[dict[str, str]]] = {
+# NOTE: Model Runtimes tools require configmaps:get permission.
+# The base ClusterRole will need to be updated to include:
+#   - apiGroups: [""]
+#     resources: ["configmaps"]
+#     verbs: ["get"]
+# This will be added after PR #42 merges with manifest changes.
+MODEL_RUNTIMES_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     "get_cuda_version_for_runtime": [
         {"apiGroup": "", "resource": "configmaps", "verb": "get"},
     ],

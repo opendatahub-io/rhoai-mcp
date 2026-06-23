@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from rhoai_mcp.domains.permissions import (
     CONNECTIONS_PERMISSIONS,
     INFERENCE_PERMISSIONS,
+    NAVIGATOR_PERMISSIONS,
     NOTEBOOKS_PERMISSIONS,
     PIPELINES_PERMISSIONS,
     PROJECTS_PERMISSIONS,
@@ -421,6 +422,12 @@ class NavigatorPlugin(BasePlugin):
         from rhoai_mcp.domains.navigator.tools import register_tools
 
         register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        from rhoai_mcp.domains.permissions import NAVIGATOR_PERMISSIONS
+
+        return NAVIGATOR_PERMISSIONS
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:

@@ -213,3 +213,15 @@ TRAINING_PERMISSIONS: dict[str, list[dict[str, str]]] = {
         {"apiGroup": "", "resource": "pods/log", "verb": "get"},
     ],
 }
+
+NAVIGATOR_PERMISSIONS: dict[str, list[dict[str, str]]] = {
+    "get_cuda_version_for_runtime": [
+        {"apiGroup": "", "resource": "configmaps", "verb": "get"},
+    ],
+    "get_min_driver_for_cuda_version": [
+        {"apiGroup": "", "resource": "configmaps", "verb": "get"},
+    ],
+    "get_supported_cuda_for_gpu": [
+        {"apiGroup": "", "resource": "configmaps", "verb": "get"},
+    ],
+}

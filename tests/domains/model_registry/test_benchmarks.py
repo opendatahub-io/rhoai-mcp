@@ -1,14 +1,12 @@
 """Tests for BenchmarkExtractor and CatalogBenchmarkExtractor."""
 
 from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from rhoai_mcp.domains.model_registry.benchmarks import (
     BENCHMARK_PROPERTY_KEYS,
-    BENCHMARK_SECTION_PATTERNS,
     BenchmarkExtractor,
     CatalogBenchmarkExtractor,
     _get_property_value,

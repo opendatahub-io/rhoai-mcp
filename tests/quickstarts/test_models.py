@@ -1,6 +1,5 @@
 """Tests for quickstarts models."""
 
-import pytest
 
 from rhoai_mcp.domains.quickstarts.models import (
     DeploymentMethod,

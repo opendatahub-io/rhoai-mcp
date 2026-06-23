@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
-from jwt import PyJWKSet
 from jwt.algorithms import RSAAlgorithm
 
 from rhoai_mcp.auth.oidc import OIDCValidationError, OIDCValidator, ValidatedIdentity
@@ -222,7 +221,6 @@ class TestValidateToken:
         v._jwks_fetched_at = time.time()
 
         import jwt as pyjwt
-
         from cryptography.hazmat.primitives.asymmetric import rsa
 
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -273,7 +271,6 @@ class TestValidateToken:
         v._jwks_fetched_at = time.time()
 
         import jwt as pyjwt
-
         from cryptography.hazmat.primitives.asymmetric import rsa
 
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)

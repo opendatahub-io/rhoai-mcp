@@ -6,12 +6,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from rhoai_mcp.utils.cache import (
+    _cache,
     cache_stats,
     cached,
     clear_cache,
     clear_expired,
     invalidate,
-    _cache,
 )
 
 

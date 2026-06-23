@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-
 from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
 
 from rhoai_mcp.domains.notebooks.client import NotebookClient

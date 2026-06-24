@@ -429,8 +429,8 @@ class ModelRuntimesPlugin(BasePlugin):
         return MODEL_RUNTIMES_PERMISSIONS
 
     @hookimpl
-    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
-        """Check if CUDA compatibility ConfigMap exists and is accessible."""
+    async def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        """Check if CUDA compatibility ConfigMap exists and is loadable."""
         from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
 
         from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
@@ -439,13 +439,12 @@ class ModelRuntimesPlugin(BasePlugin):
             client = CudaCompatibilityClient(server.k8s)
             configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
 
-            server.k8s.core_v1.read_namespaced_config_map(
-                name=configmap_name, namespace=client.namespace
-            )
-            return True, f"CUDA compatibility ConfigMap '{configmap_name}' accessible"
+            # Load and validate the matrix to catch missing-key/parse failures
+            await client.load_matrix()
+            return True, f"CUDA compatibility ConfigMap '{configmap_name}' loaded successfully"
         except ApiException as e:
             configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
-            namespace = "redhat-ods-applications"
+            namespace = client.namespace
             if e.status == 404:
                 return (
                     False,

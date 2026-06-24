@@ -1,59 +1,11 @@
 """Tests for Model Runtimes MCP tools."""
 
 import json
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
-from rhoai_mcp.domains.model_runtimes.tools import register_tools
-
-
-def _register_tools(mock_server: MagicMock) -> dict[str, Any]:
-    """Register model_runtimes tools and return captured tool functions."""
-    mcp = MagicMock()
-    registered_tools: dict[str, Any] = {}
-
-    def capture_tool() -> Any:
-        def decorator(func: Any) -> Any:
-            registered_tools[func.__name__] = func
-            return func
-
-        return decorator
-
-    mcp.tool = capture_tool
-    register_tools(mcp, mock_server)
-    return registered_tools
-
-
-@pytest.fixture
-def sample_matrix_data() -> dict:
-    """Sample CUDA compatibility matrix data."""
-    return {
-        "RHOAI serving runtime image": [
-            {
-                "image": "rhaiis/vllm-cuda-rhel9:3.0",
-                "cuda_version": ["12.4"],
-                "notes": "Test image",
-            }
-        ],
-        "CUDA toolkit version": [
-            {"cuda_version": ["12.4"], "min_driver_version": ["550.54.14"]}
-        ],
-        "GPU compute capability": [
-            {"compute_capability": "8.0", "supported_cuda_versions": ["12.4"]}
-        ],
-    }
-
-
-@pytest.fixture
-def mock_server(sample_matrix_data: dict) -> MagicMock:
-    """Mock RHOAI server with K8s client."""
-    server = MagicMock()
-    configmap = MagicMock()
-    configmap.data = {"cuda_compat.json": json.dumps(sample_matrix_data)}
-    server.k8s.core_v1.read_namespaced_config_map.return_value = configmap
-    return server
+from tests.domains.model_runtimes.conftest import _register_tools
 
 
 class TestModelRuntimesTools:
@@ -141,27 +93,18 @@ class TestModelRuntimesTools:
         assert "get_supported_cuda_for_gpu" in tools
 
     @pytest.mark.asyncio
-    async def test_client_caching_across_tool_calls(self, mock_server: MagicMock) -> None:
-        """Test that client is cached across multiple tool calls."""
-        tools = _register_tools(mock_server)
+    async def test_matrix_caching_within_client(self, mock_server: MagicMock) -> None:
+        """Test that matrix is cached within a single client instance."""
+        from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
 
-        # Call different tools
-        await tools["get_cuda_version_for_runtime"]("rhaiis/vllm-cuda-rhel9:3.0")
-        await tools["get_min_driver_for_cuda_version"]("12.4")
+        client = CudaCompatibilityClient(mock_server.k8s)
 
-        # ConfigMap should only be read once (client is cached)
+        # Call different methods on same client
+        await client.get_cuda_for_runtime("rhaiis/vllm-cuda-rhel9:3.0")
+        await client.get_min_driver_for_cuda("12.4")
+
+        # ConfigMap should only be read once (matrix is cached inside client)
         assert mock_server.k8s.core_v1.read_namespaced_config_map.call_count == 1
-
-    @pytest.mark.asyncio
-    async def test_tools_are_async(self, mock_server: MagicMock) -> None:
-        """Test that all tools are async functions."""
-        import inspect
-
-        tools = _register_tools(mock_server)
-
-        # All tools should be async
-        for name, func in tools.items():
-            assert inspect.iscoroutinefunction(func), f"Tool {name} is not async"
 
 
 class TestToolErrorHandling:

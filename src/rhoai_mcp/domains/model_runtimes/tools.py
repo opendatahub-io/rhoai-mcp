@@ -20,15 +20,9 @@ def register_tools(mcp: "FastMCP", server: "RHOAIServer") -> None:
     """
     from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
 
-    # Lazy-initialize client on first tool call to avoid accessing k8s during registration
-    _cuda_client: CudaCompatibilityClient | None = None
-
     def get_client() -> CudaCompatibilityClient:
-        nonlocal _cuda_client
-        if _cuda_client is None:
-            # Use default namespace (redhat-ods-applications) - will be made configurable later
-            _cuda_client = CudaCompatibilityClient(server.k8s)
-        return _cuda_client
+        """Create a new client instance (matrix is cached inside the client)."""
+        return CudaCompatibilityClient(server.k8s)
 
     @mcp.tool()
     async def get_cuda_version_for_runtime(image: str) -> dict[str, str | list[str]]:

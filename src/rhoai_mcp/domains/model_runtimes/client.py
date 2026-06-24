@@ -45,10 +45,6 @@ class CudaCompatibilityClient:
             return self._matrix
 
         try:
-            logger.debug(
-                f"Loading CUDA compatibility matrix from ConfigMap "
-                f"{self.namespace}/{self.CONFIGMAP_NAME}"
-            )
             configmap = self.k8s.core_v1.read_namespaced_config_map(
                 name=self.CONFIGMAP_NAME, namespace=self.namespace
             )
@@ -62,7 +58,6 @@ class CudaCompatibilityClient:
             json_data = configmap.data[self.CONFIGMAP_DATA_KEY]
             data = json.loads(json_data)
             self._matrix = CudaCompatibilityMatrix.model_validate(data)
-            logger.debug("Successfully loaded CUDA compatibility matrix from ConfigMap")
             return self._matrix
 
         except ApiException as e:
@@ -91,10 +86,11 @@ class CudaCompatibilityClient:
             if mapping.image == image:
                 return mapping.cuda_version
 
-        # If no exact match, try matching by suffix (handles full registry refs)
+        # If no exact match, try matching with full registry prefix
         # e.g., "registry.redhat.io/rhaiis/vllm:3.0" matches "rhaiis/vllm:3.0"
+        # Require "/" separator to avoid false matches like ":3.0"
         for mapping in matrix.runtime_images:
-            if image.endswith(mapping.image) or mapping.image.endswith(image):
+            if image.endswith("/" + mapping.image):
                 return mapping.cuda_version
 
         raise ValueError(f"Runtime image not found in compatibility matrix: {image}")
@@ -165,9 +161,9 @@ class CudaCompatibilityClient:
         def safe_parse(v: str) -> Version:
             try:
                 return parse(v)
-            except Exception:
-                # Fallback for non-standard versions
-                return Version("0.0.0")
+            except Exception as e:
+                logger.error(f"Failed to parse CUDA version '{v}': {e}")
+                raise ValueError(f"Invalid CUDA version format: {v}") from e
 
         return sorted(versions, key=safe_parse)
 

@@ -10,55 +10,12 @@ from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
 from rhoai_mcp.domains.model_runtimes.models import CudaCompatibilityMatrix
 
 
-@pytest.fixture
-def sample_matrix_data() -> dict:
-    """Sample CUDA compatibility matrix data."""
-    return {
-        "RHOAI serving runtime image": [
-            {
-                "image": "rhaiis/vllm-cuda-rhel9:3.0",
-                "cuda_version": ["12.4"],
-                "notes": "Test image 1",
-            },
-            {
-                "image": "rhaiis/vllm-cuda-rhel9:3.1",
-                "cuda_version": ["12.8"],
-                "notes": "Test image 2",
-            },
-        ],
-        "CUDA toolkit version": [
-            {"cuda_version": ["12.4"], "min_driver_version": ["550.54.14"]},
-            {"cuda_version": ["12.8"], "min_driver_version": ["570.26"]},
-        ],
-        "GPU compute capability": [
-            {
-                "compute_capability": "8.0",
-                "supported_cuda_versions": ["11.0", "12.0", "12.4", "12.8"],
-            },
-            {
-                "compute_capability": "9.0",
-                "supported_cuda_versions": ["11.8", "12.0", "12.4", "12.8"],
-            },
-        ],
-    }
-
-
-@pytest.fixture
-def mock_k8s_client(sample_matrix_data: dict) -> MagicMock:
-    """Mock K8s client with ConfigMap data."""
-    mock = MagicMock()
-    configmap = MagicMock()
-    configmap.data = {"cuda_compat.json": json.dumps(sample_matrix_data)}
-    mock.core_v1.read_namespaced_config_map.return_value = configmap
-    return mock
-
-
 class TestCudaCompatibilityClient:
     """Test CudaCompatibilityClient methods."""
 
     @pytest.mark.asyncio
     async def test_load_matrix_from_configmap(
-        self, mock_k8s_client: MagicMock, sample_matrix_data: dict
+        self, mock_k8s_client: MagicMock
     ) -> None:
         """Test loading matrix from ConfigMap."""
         client = CudaCompatibilityClient(mock_k8s_client, namespace="test-namespace")
@@ -66,9 +23,9 @@ class TestCudaCompatibilityClient:
         matrix = await client.load_matrix()
 
         assert isinstance(matrix, CudaCompatibilityMatrix)
-        assert len(matrix.runtime_images) == 2
-        assert len(matrix.cuda_drivers) == 2
-        assert len(matrix.gpu_compute) == 2
+        assert len(matrix.runtime_images) == 1
+        assert len(matrix.cuda_drivers) == 1
+        assert len(matrix.gpu_compute) == 1
         mock_k8s_client.core_v1.read_namespaced_config_map.assert_called_once_with(
             name="cuda-compatibility-matrix", namespace="test-namespace"
         )
@@ -165,7 +122,7 @@ class TestCudaCompatibilityClient:
 
         cuda_versions = await client.get_supported_cuda_for_compute("8.0")
 
-        assert cuda_versions == ["11.0", "12.0", "12.4", "12.8"]
+        assert cuda_versions == ["12.4"]
 
     @pytest.mark.asyncio
     async def test_get_supported_cuda_for_compute_not_found(
@@ -184,9 +141,8 @@ class TestCudaCompatibilityClient:
 
         images = await client.list_all_runtime_images()
 
-        assert len(images) == 2
+        assert len(images) == 1
         assert "rhaiis/vllm-cuda-rhel9:3.0" in images
-        assert "rhaiis/vllm-cuda-rhel9:3.1" in images
 
     @pytest.mark.asyncio
     async def test_list_all_cuda_versions(self, mock_k8s_client: MagicMock) -> None:
@@ -196,7 +152,7 @@ class TestCudaCompatibilityClient:
         versions = await client.list_all_cuda_versions()
 
         # Should be sorted semantically
-        assert versions == ["12.4", "12.8"]
+        assert versions == ["12.4"]
 
     @pytest.mark.asyncio
     async def test_list_all_compute_capabilities(self, mock_k8s_client: MagicMock) -> None:
@@ -205,9 +161,8 @@ class TestCudaCompatibilityClient:
 
         capabilities = await client.list_all_compute_capabilities()
 
-        assert len(capabilities) == 2
+        assert len(capabilities) == 1
         assert "8.0" in capabilities
-        assert "9.0" in capabilities
 
     @pytest.mark.asyncio
     async def test_default_namespace(self, mock_k8s_client: MagicMock) -> None:

@@ -429,10 +429,30 @@ class ModelRuntimesPlugin(BasePlugin):
         return MODEL_RUNTIMES_PERMISSIONS
 
     @hookimpl
-    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
-        """Check if CUDA compatibility ConfigMap exists."""
-        # Health check just returns True - ConfigMap is optional
-        return True, "Model Runtimes ready"
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        """Check if CUDA compatibility ConfigMap exists and is accessible."""
+        from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
+
+        from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
+
+        try:
+            # Try to read the ConfigMap to verify it exists and is accessible
+            configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
+            namespace = "redhat-ods-applications"  # Default namespace
+
+            server.k8s.core_v1.read_namespaced_config_map(
+                name=configmap_name, namespace=namespace
+            )
+            return True, f"CUDA compatibility ConfigMap '{configmap_name}' accessible"
+        except ApiException as e:
+            if e.status == 404:
+                return (
+                    False,
+                    f"ConfigMap '{configmap_name}' not found in namespace '{namespace}'",
+                )
+            return False, f"Cannot access ConfigMap: {e.reason}"
+        except Exception as e:
+            return False, f"Model Runtimes health check failed: {str(e)}"
 
 
 def get_core_plugins() -> list[BasePlugin]:

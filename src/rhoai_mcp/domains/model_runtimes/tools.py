@@ -21,7 +21,7 @@ def register_tools(mcp: "FastMCP", server: "RHOAIServer") -> None:
     from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
 
     def get_client() -> CudaCompatibilityClient:
-        """Create a new client instance (matrix is cached inside the client)."""
+        """Create a new client instance."""
         return CudaCompatibilityClient(server.k8s)
 
     @mcp.tool()
@@ -89,5 +89,3 @@ def register_tools(mcp: "FastMCP", server: "RHOAIServer") -> None:
             "compute_capability": compute_capability,
             "supported_cuda_versions": supported_cuda,
         }
-
-    logger.info("Registered 3 CUDA compatibility tools")

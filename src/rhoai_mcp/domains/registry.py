@@ -436,15 +436,16 @@ class ModelRuntimesPlugin(BasePlugin):
         from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
 
         try:
-            # Try to read the ConfigMap to verify it exists and is accessible
+            client = CudaCompatibilityClient(server.k8s)
             configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
-            namespace = "redhat-ods-applications"  # Default namespace
 
             server.k8s.core_v1.read_namespaced_config_map(
-                name=configmap_name, namespace=namespace
+                name=configmap_name, namespace=client.namespace
             )
             return True, f"CUDA compatibility ConfigMap '{configmap_name}' accessible"
         except ApiException as e:
+            configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
+            namespace = "redhat-ods-applications"
             if e.status == 404:
                 return (
                     False,

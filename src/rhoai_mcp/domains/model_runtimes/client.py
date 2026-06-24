@@ -81,16 +81,11 @@ class CudaCompatibilityClient:
         """
         matrix = await self.load_matrix()
 
-        # First try exact match
-        for mapping in matrix.runtime_images:
-            if mapping.image == image:
-                return mapping.cuda_version
-
-        # If no exact match, try matching with full registry prefix
+        # Try exact match or full registry prefix match
         # e.g., "registry.redhat.io/rhaiis/vllm:3.0" matches "rhaiis/vllm:3.0"
         # Require "/" separator to avoid false matches like ":3.0"
         for mapping in matrix.runtime_images:
-            if image.endswith("/" + mapping.image):
+            if mapping.image == image or image.endswith("/" + mapping.image):
                 return mapping.cuda_version
 
         raise ValueError(f"Runtime image not found in compatibility matrix: {image}")
@@ -157,15 +152,8 @@ class CudaCompatibilityClient:
         for mapping in matrix.cuda_drivers:
             versions.update(mapping.cuda_version)
 
-        # Sort by semantic version using packaging.version
-        def safe_parse(v: str) -> Version:
-            try:
-                return parse(v)
-            except Exception as e:
-                logger.error(f"Failed to parse CUDA version '{v}': {e}")
-                raise ValueError(f"Invalid CUDA version format: {v}") from e
-
-        return sorted(versions, key=safe_parse)
+        # Sort by semantic version
+        return sorted(versions, key=parse)
 
     async def list_all_compute_capabilities(self) -> list[str]:
         """Get list of all GPU compute capabilities in the matrix.

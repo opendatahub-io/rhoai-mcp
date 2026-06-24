@@ -39,9 +39,9 @@ class TestCudaCompatibilityClient:
         matrix1 = await client.load_matrix()
         matrix2 = await client.load_matrix()
 
-        # Should only call K8s once
-        assert mock_k8s_client.core_v1.read_namespaced_config_map.call_count == 1
-        assert matrix1 is matrix2  # Same instance
+        # Matrix should be cached (same instance)
+        assert matrix1 is matrix2
+        mock_k8s_client.core_v1.read_namespaced_config_map.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_load_matrix_configmap_not_found(self) -> None:
@@ -175,10 +175,6 @@ class TestCudaCompatibilityClient:
         mock_k8s_client.core_v1.read_namespaced_config_map.assert_called_once_with(
             name="cuda-compatibility-matrix", namespace="redhat-ods-applications"
         )
-
-
-class TestVersionSorting:
-    """Test semantic version sorting."""
 
     @pytest.mark.asyncio
     async def test_semantic_version_sorting(self, mock_k8s_client: MagicMock) -> None:

@@ -1,6 +1,7 @@
 """Shared fixtures for model_runtimes tests."""
 
 import json
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -9,7 +10,6 @@ import pytest
 
 @pytest.fixture
 def sample_matrix_data() -> dict:
-    """Sample CUDA compatibility matrix data."""
     return {
         "RHOAI serving runtime image": [
             {
@@ -38,16 +38,14 @@ def mock_k8s_client(sample_matrix_data: dict) -> MagicMock:
 
 
 @pytest.fixture
-def mock_server(sample_matrix_data: dict) -> MagicMock:
+def mock_server(mock_k8s_client: MagicMock) -> MagicMock:
     """Mock RHOAI server with K8s client."""
     server = MagicMock()
-    configmap = MagicMock()
-    configmap.data = {"cuda_compat.json": json.dumps(sample_matrix_data)}
-    server.k8s.core_v1.read_namespaced_config_map.return_value = configmap
+    server.k8s = mock_k8s_client
     return server
 
 
-def _register_tools(mock_server: MagicMock) -> dict[str, Any]:
+def _register_tools(mock_server: MagicMock) -> dict[str, Callable]:
     """Register model_runtimes tools and return captured tool functions."""
     from rhoai_mcp.domains.model_runtimes.tools import register_tools
 

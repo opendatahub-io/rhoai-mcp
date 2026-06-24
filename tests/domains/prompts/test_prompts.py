@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from rhoai_mcp.domains.prompts.prompts import register_prompts
 
 

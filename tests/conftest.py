@@ -1,10 +1,9 @@
 """Pytest configuration and fixtures for RHOAI MCP tests."""
 
+import pytest
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from rhoai_mcp.config import AuthMode, RHOAIConfig
+from rhoai_mcp.config import RHOAIConfig, AuthMode
 
 
 @pytest.fixture

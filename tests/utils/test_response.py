@@ -1,7 +1,7 @@
 """Tests for response formatting utilities."""
 
-from datetime import datetime
 from unittest.mock import MagicMock
+from datetime import datetime
 
 import pytest
 

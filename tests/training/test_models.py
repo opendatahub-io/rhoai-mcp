@@ -10,10 +10,10 @@ from rhoai_mcp.domains.training.models import (
     GPUInfo,
     NodeResources,
     PeftMethod,
-    TrainingProgress,
-    TrainingState,
     TrainJob,
     TrainJobStatus,
+    TrainingProgress,
+    TrainingState,
 )
 
 

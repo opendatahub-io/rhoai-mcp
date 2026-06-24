@@ -7,6 +7,7 @@ import pytest
 
 import rhoai_mcp.domains.model_registry.tools as tools_module
 from rhoai_mcp.domains.model_registry.catalog_models import (
+    CatalogBenchmarkContent,
     CatalogModel,
 )
 from rhoai_mcp.domains.model_registry.models import (

@@ -429,19 +429,33 @@ class ModelRuntimesPlugin(BasePlugin):
         return MODEL_RUNTIMES_PERMISSIONS
 
     @hookimpl
-    async def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
-        """Check if CUDA compatibility ConfigMap exists and is loadable."""
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        """Check if CUDA compatibility ConfigMap exists and has valid data."""
+        import json
+
         from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
 
         from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
+        from rhoai_mcp.domains.model_runtimes.models import CudaCompatibilityMatrix
 
         try:
             client = CudaCompatibilityClient(server.k8s)
             configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
 
-            # Load and validate the matrix to catch missing-key/parse failures
-            await client.load_matrix()
-            return True, f"CUDA compatibility ConfigMap '{configmap_name}' loaded successfully"
+            # Read and validate the ConfigMap data
+            configmap = server.k8s.core_v1.read_namespaced_config_map(
+                name=configmap_name, namespace=client.namespace
+            )
+
+            # Verify the data key exists and can be parsed
+            if not configmap.data or CudaCompatibilityClient.CONFIGMAP_DATA_KEY not in configmap.data:
+                return False, f"ConfigMap '{configmap_name}' missing required data key"
+
+            json_data = configmap.data[CudaCompatibilityClient.CONFIGMAP_DATA_KEY]
+            data = json.loads(json_data)
+            CudaCompatibilityMatrix.model_validate(data)
+
+            return True, f"CUDA compatibility ConfigMap '{configmap_name}' valid"
         except ApiException as e:
             configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
             namespace = client.namespace

@@ -5,7 +5,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
-from packaging.version import Version, parse
+from packaging.version import parse
 
 from rhoai_mcp.domains.model_runtimes.models import CudaCompatibilityMatrix
 

@@ -448,7 +448,10 @@ class ModelRuntimesPlugin(BasePlugin):
             )
 
             # Verify the data key exists and can be parsed
-            if not configmap.data or CudaCompatibilityClient.CONFIGMAP_DATA_KEY not in configmap.data:
+            if (
+                not configmap.data
+                or CudaCompatibilityClient.CONFIGMAP_DATA_KEY not in configmap.data
+            ):
                 return False, f"ConfigMap '{configmap_name}' missing required data key"
 
             json_data = configmap.data[CudaCompatibilityClient.CONFIGMAP_DATA_KEY]

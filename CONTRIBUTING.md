@@ -151,65 +151,19 @@ domains/prompts/
 └── deployment_prompts.py       # Model deployment prompts
 ```
 
-### Adding a New Domain
+## Adding Plugins
 
-1. Create a new directory under `src/rhoai_mcp/domains/`:
-   ```text
-   domains/my_domain/
-   ├── __init__.py
-   ├── client.py
-   ├── models.py
-   ├── tools.py
-   ├── resources.py  # Optional: MCP resources
-   └── prompts.py    # Optional: if domain has workflow prompts
-   ```
+RHOAI MCP uses a pluggy-based plugin system. There are two types of plugins:
 
-2. Implement the domain client:
-   ```python
-   from rhoai_mcp.clients.base import BaseClient
+- **Domain plugins** wrap a single Kubernetes resource type and expose CRUD operations as MCP tools.
+- **Composite plugins** orchestrate multiple domains into cross-cutting or token-efficient tools.
 
-   class MyDomainClient(BaseClient):
-       def list_resources(self, namespace: str) -> list[MyResource]:
-           # Implement K8s API calls
-           pass
-   ```
+See the full contributor guides:
 
-3. Register the domain in `domains/registry.py`:
-   ```python
-   from rhoai_mcp.hooks import hookimpl
-   from rhoai_mcp.plugin import BasePlugin, PluginMetadata
+- **[Adding a Domain Plugin](docs/contributing/adding-a-domain.md)** — step-by-step guide with templates and a working example
+- **[Adding a Composite Plugin](docs/contributing/adding-a-composite.md)** — guide for cross-domain orchestration tools
 
-   class MyDomainPlugin(BasePlugin):
-       def __init__(self) -> None:
-           super().__init__(
-               PluginMetadata(
-                   name="my_domain",
-                   version="1.0.0",
-                   description="My domain description",
-                   maintainer="team@example.com",
-                   requires_crds=[],
-               )
-           )
-
-       @hookimpl
-       def rhoai_register_tools(self, mcp, server) -> None:
-           from rhoai_mcp.domains.my_domain.tools import register_tools
-           register_tools(mcp, server)
-
-       # Optional: add prompts
-       @hookimpl
-       def rhoai_register_prompts(self, mcp, server) -> None:
-           from rhoai_mcp.domains.my_domain.prompts import register_prompts
-           register_prompts(mcp, server)
-   ```
-
-4. Add to `get_core_plugins()` list in `registry.py`
-
-5. Add tests in `tests/domains/my_domain/`
-
-6. Update plugin count in test files:
-   - `tests/test_plugin_manager.py`
-   - `tests/integration/test_plugin_discovery.py`
+**Quick start:** Copy templates from `docs/contributing/templates/domain/` (or `composite/`), replace `{{PLACEHOLDERS}}`, and follow the guide. If you use Claude Code, run `/scaffold-plugin` to generate the boilerplate interactively.
 
 ## Container Build
 

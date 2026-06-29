@@ -32,6 +32,10 @@ An MCP (Model Context Protocol) server that enables AI agents to interact with R
 | **Container Base** | Red Hat UBI 9 | Production container image |
 | **Package Manager** | uv | Fast Python dependency management |
 
+## Extending
+
+Want to add your team's capabilities to rhoai-mcp? See the [contributor guide](CONTRIBUTING.md#adding-plugins) for templates, documentation, and a working example domain.
+
 ## Installation
 
 ### Using uv (recommended)

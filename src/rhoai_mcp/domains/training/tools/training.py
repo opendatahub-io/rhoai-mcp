@@ -78,7 +78,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             import hashlib
             import time
 
-            suffix = hashlib.md5(f"{model_id}-{time.time()}".encode()).hexdigest()[:8]
+            suffix = hashlib.sha256(f"{model_id}-{time.time()}".encode()).hexdigest()[:8]
             job_name = f"train-{suffix}"
 
         # Build preview
@@ -179,7 +179,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             import hashlib
             import time
 
-            suffix = hashlib.md5(f"{image}-{time.time()}".encode()).hexdigest()[:8]
+            suffix = hashlib.sha256(f"{image}-{time.time()}".encode()).hexdigest()[:8]
             job_name = f"container-train-{suffix}"
 
         preview = {

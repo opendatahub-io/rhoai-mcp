@@ -361,7 +361,7 @@ def _action_create(
         import hashlib
         import time
 
-        suffix = hashlib.md5(f"{model_id}-{time.time()}".encode()).hexdigest()[:8]
+        suffix = hashlib.sha256(f"{model_id}-{time.time()}".encode()).hexdigest()[:8]
         job_name = f"train-{suffix}"
 
     # Build preview

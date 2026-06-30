@@ -442,32 +442,36 @@ class ModelRuntimesPlugin(BasePlugin):
             client = CudaCompatibilityClient(server.k8s)
             configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
 
-            # Read and validate the ConfigMap data
-            configmap = server.k8s.core_v1.read_namespaced_config_map(
-                name=configmap_name, namespace=client.namespace
-            )
+            # Try to find ConfigMap in platform namespaces
+            for namespace in client.get_namespaces_to_try():
+                try:
+                    configmap = server.k8s.core_v1.read_namespaced_config_map(
+                        name=configmap_name, namespace=namespace
+                    )
 
-            # Verify the data key exists and can be parsed
-            if (
-                not configmap.data
-                or CudaCompatibilityClient.CONFIGMAP_DATA_KEY not in configmap.data
-            ):
-                return False, f"ConfigMap '{configmap_name}' missing required data key"
+                    # Verify the data key exists and can be parsed
+                    if (
+                        not configmap.data
+                        or CudaCompatibilityClient.CONFIGMAP_DATA_KEY not in configmap.data
+                    ):
+                        return False, f"ConfigMap '{configmap_name}' missing required data key"
 
-            json_data = configmap.data[CudaCompatibilityClient.CONFIGMAP_DATA_KEY]
-            data = json.loads(json_data)
-            CudaCompatibilityMatrix.model_validate(data)
+                    json_data = configmap.data[CudaCompatibilityClient.CONFIGMAP_DATA_KEY]
+                    data = json.loads(json_data)
+                    CudaCompatibilityMatrix.model_validate(data)
 
-            return True, f"CUDA compatibility ConfigMap '{configmap_name}' valid"
-        except ApiException as e:
-            configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
-            namespace = client.namespace
-            if e.status == 404:
-                return (
-                    False,
-                    f"ConfigMap '{configmap_name}' not found in namespace '{namespace}'",
-                )
-            return False, f"Cannot access ConfigMap: {e.reason}"
+                    return (
+                        True,
+                        f"CUDA compatibility ConfigMap '{configmap_name}' valid in {namespace}",
+                    )
+                except ApiException as e:
+                    if e.status == 404:
+                        continue  # Try next namespace
+                    return False, f"Cannot access ConfigMap: {e.reason}"
+
+            # If we get here, not found in any namespace
+            tried = ", ".join(client.get_namespaces_to_try())
+            return False, f"ConfigMap '{configmap_name}' not found in namespaces: {tried}"
         except Exception as e:
             return False, f"Model Runtimes health check failed: {str(e)}"
 

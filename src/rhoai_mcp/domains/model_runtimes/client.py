@@ -21,19 +21,24 @@ class CudaCompatibilityClient:
     CONFIGMAP_NAME = "cuda-compatibility-matrix"
     CONFIGMAP_DATA_KEY = "cuda_compat.json"
 
+    # Platform namespaces to search (RHOAI first, then ODH)
+    PLATFORM_NAMESPACES = ["redhat-ods-applications", "opendatahub"]
+
     def __init__(self, k8s_client: "K8sClient", namespace: str | None = None) -> None:
         """Initialize the CUDA compatibility client.
 
         Args:
             k8s_client: Kubernetes client for ConfigMap access
-            namespace: Namespace where the ConfigMap is located (defaults to redhat-ods-applications)
+            namespace: Namespace where the ConfigMap is located (auto-detected if not specified)
         """
         self.k8s = k8s_client
-        self.namespace = namespace or "redhat-ods-applications"
-        self._matrix: CudaCompatibilityMatrix | None = None
+        self._explicit_namespace = namespace
 
     async def load_matrix(self) -> CudaCompatibilityMatrix:
         """Load CUDA compatibility matrix from ConfigMap.
+
+        Tries to find the ConfigMap in platform namespaces (RHOAI, then ODH)
+        unless a specific namespace was provided.
 
         Returns:
             CudaCompatibilityMatrix: The loaded compatibility matrix
@@ -41,31 +46,51 @@ class CudaCompatibilityClient:
         Raises:
             ValueError: If the ConfigMap is not found or data is invalid
         """
-        if self._matrix is not None:
-            return self._matrix
+        # If explicit namespace provided, use it
+        if self._explicit_namespace:
+            namespaces = [self._explicit_namespace]
+        else:
+            # Auto-detect: try RHOAI first, then ODH
+            namespaces = self.PLATFORM_NAMESPACES
 
-        try:
-            configmap = self.k8s.core_v1.read_namespaced_config_map(
-                name=self.CONFIGMAP_NAME, namespace=self.namespace
-            )
-
-            if not configmap.data or self.CONFIGMAP_DATA_KEY not in configmap.data:
-                raise ValueError(
-                    f"ConfigMap {self.CONFIGMAP_NAME} exists but missing key "
-                    f"{self.CONFIGMAP_DATA_KEY}"
+        last_error = None
+        for namespace in namespaces:
+            try:
+                configmap = self.k8s.core_v1.read_namespaced_config_map(
+                    name=self.CONFIGMAP_NAME, namespace=namespace
                 )
 
-            json_data = configmap.data[self.CONFIGMAP_DATA_KEY]
-            data = json.loads(json_data)
-            self._matrix = CudaCompatibilityMatrix.model_validate(data)
-            return self._matrix
+                if not configmap.data or self.CONFIGMAP_DATA_KEY not in configmap.data:
+                    raise ValueError(
+                        f"ConfigMap {self.CONFIGMAP_NAME} exists but missing key "
+                        f"{self.CONFIGMAP_DATA_KEY}"
+                    )
 
-        except ApiException as e:
-            if e.status == 404:
-                raise ValueError(
-                    f"ConfigMap {self.CONFIGMAP_NAME} not found in namespace {self.namespace}"
-                ) from e
-            raise
+                json_data = configmap.data[self.CONFIGMAP_DATA_KEY]
+                data = json.loads(json_data)
+                return CudaCompatibilityMatrix.model_validate(data)
+
+            except ApiException as e:
+                if e.status == 404:
+                    last_error = e
+                    continue  # Try next namespace
+                raise  # Other errors should propagate immediately
+
+        # If we get here, ConfigMap not found in any namespace
+        tried_namespaces = ", ".join(namespaces)
+        raise ValueError(
+            f"ConfigMap {self.CONFIGMAP_NAME} not found in namespaces: {tried_namespaces}"
+        ) from last_error
+
+    def get_namespaces_to_try(self) -> list[str]:
+        """Get list of namespaces that will be searched for the ConfigMap.
+
+        Returns:
+            List of namespace names to search
+        """
+        if self._explicit_namespace:
+            return [self._explicit_namespace]
+        return list(self.PLATFORM_NAMESPACES)
 
     async def get_cuda_for_runtime(self, image: str) -> list[str]:
         """Get CUDA versions for a given RHOAI runtime image.

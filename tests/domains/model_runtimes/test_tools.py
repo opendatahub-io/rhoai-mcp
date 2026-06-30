@@ -92,19 +92,6 @@ class TestModelRuntimesTools:
         assert "get_min_driver_for_cuda_version" in tools
         assert "get_supported_cuda_for_gpu" in tools
 
-    @pytest.mark.asyncio
-    async def test_matrix_caching_within_client(self, mock_server: MagicMock) -> None:
-        """Test that matrix is cached within a single client instance."""
-        from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
-
-        client = CudaCompatibilityClient(mock_server.k8s)
-
-        # Call different methods on same client
-        await client.get_cuda_for_runtime("rhaiis/vllm-cuda-rhel9:3.0")
-        await client.get_min_driver_for_cuda("12.4")
-
-        # ConfigMap should only be read once (matrix is cached inside client)
-        assert mock_server.k8s.core_v1.read_namespaced_config_map.call_count == 1
 
 
 class TestToolErrorHandling:

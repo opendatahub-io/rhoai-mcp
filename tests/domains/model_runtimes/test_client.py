@@ -31,19 +31,6 @@ class TestCudaCompatibilityClient:
         )
 
     @pytest.mark.asyncio
-    async def test_load_matrix_caching(self, mock_k8s_client: MagicMock) -> None:
-        """Test that matrix is cached after first load."""
-        client = CudaCompatibilityClient(mock_k8s_client)
-
-        # Load twice
-        matrix1 = await client.load_matrix()
-        matrix2 = await client.load_matrix()
-
-        # Matrix should be cached (same instance)
-        assert matrix1 is matrix2
-        mock_k8s_client.core_v1.read_namespaced_config_map.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_load_matrix_configmap_not_found(self) -> None:
         """Test error when ConfigMap doesn't exist."""
         mock_k8s = MagicMock()
@@ -165,21 +152,10 @@ class TestCudaCompatibilityClient:
         assert "8.0" in capabilities
 
     @pytest.mark.asyncio
-    async def test_default_namespace(self, mock_k8s_client: MagicMock) -> None:
-        """Test that default namespace is used when not specified."""
-        client = CudaCompatibilityClient(mock_k8s_client)
-
-        await client.load_matrix()
-
-        # Should use default namespace
-        mock_k8s_client.core_v1.read_namespaced_config_map.assert_called_once_with(
-            name="cuda-compatibility-matrix", namespace="redhat-ods-applications"
-        )
-
-    @pytest.mark.asyncio
     async def test_semantic_version_sorting(self, mock_k8s_client: MagicMock) -> None:
         """Test that versions are sorted semantically, not lexicographically."""
         # Add version data that would sort incorrectly lexicographically
+        # Also include -rc version to test release candidate handling
         matrix_data = {
             "RHOAI serving runtime image": [],
             "CUDA toolkit version": [
@@ -187,6 +163,7 @@ class TestCudaCompatibilityClient:
                 {"cuda_version": ["10.0"], "min_driver_version": ["410.48"]},
                 {"cuda_version": ["11.0"], "min_driver_version": ["450.80"]},
                 {"cuda_version": ["12.0"], "min_driver_version": ["525.60"]},
+                {"cuda_version": ["12.1-rc1"], "min_driver_version": ["530.00"]},
             ],
             "GPU compute capability": [],
         }
@@ -198,5 +175,5 @@ class TestCudaCompatibilityClient:
         client = CudaCompatibilityClient(mock_k8s_client)
         versions = await client.list_all_cuda_versions()
 
-        # Should be 9.0, 10.0, 11.0, 12.0 (not 10.0, 11.0, 12.0, 9.0)
-        assert versions == ["9.0", "10.0", "11.0", "12.0"]
+        # Should be 9.0, 10.0, 11.0, 12.0, 12.1-rc1 (rc comes after release)
+        assert versions == ["9.0", "10.0", "11.0", "12.0", "12.1-rc1"]

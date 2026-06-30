@@ -397,6 +397,85 @@ class QuickstartsPlugin(BasePlugin):
         return True, "Quickstarts ready"
 
 
+class ModelRuntimesPlugin(BasePlugin):
+    """Plugin for Model Runtimes CUDA compatibility detection.
+
+    Provides tools to query CUDA compatibility matrix for runtime version
+    compatibility detection between serving runtimes, CUDA drivers, and
+    hardware capabilities (GPUs).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="model_runtimes",
+                version="0.1.0",
+                description="CUDA compatibility detection for model serving runtimes",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.model_runtimes.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        from rhoai_mcp.domains.permissions import MODEL_RUNTIMES_PERMISSIONS
+
+        return MODEL_RUNTIMES_PERMISSIONS
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        """Check if CUDA compatibility ConfigMap exists and has valid data."""
+        import json
+
+        from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
+
+        from rhoai_mcp.domains.model_runtimes.client import CudaCompatibilityClient
+        from rhoai_mcp.domains.model_runtimes.models import CudaCompatibilityMatrix
+
+        try:
+            client = CudaCompatibilityClient(server.k8s)
+            configmap_name = CudaCompatibilityClient.CONFIGMAP_NAME
+
+            # Try to find ConfigMap in platform namespaces
+            for namespace in client.get_namespaces_to_try():
+                try:
+                    configmap = server.k8s.core_v1.read_namespaced_config_map(
+                        name=configmap_name, namespace=namespace
+                    )
+
+                    # Verify the data key exists and can be parsed
+                    if (
+                        not configmap.data
+                        or CudaCompatibilityClient.CONFIGMAP_DATA_KEY not in configmap.data
+                    ):
+                        return False, f"ConfigMap '{configmap_name}' missing required data key"
+
+                    json_data = configmap.data[CudaCompatibilityClient.CONFIGMAP_DATA_KEY]
+                    data = json.loads(json_data)
+                    CudaCompatibilityMatrix.model_validate(data)
+
+                    return (
+                        True,
+                        f"CUDA compatibility ConfigMap '{configmap_name}' valid in {namespace}",
+                    )
+                except ApiException as e:
+                    if e.status == 404:
+                        continue  # Try next namespace
+                    return False, f"Cannot access ConfigMap: {e.reason}"
+
+            # If we get here, not found in any namespace
+            tried = ", ".join(client.get_namespaces_to_try())
+            return False, f"ConfigMap '{configmap_name}' not found in namespaces: {tried}"
+        except Exception as e:
+            return False, f"Model Runtimes health check failed: {str(e)}"
+
+
 def get_core_plugins() -> list[BasePlugin]:
     """Return all core domain plugin instances.
 
@@ -417,4 +496,5 @@ def get_core_plugins() -> list[BasePlugin]:
         PromptsPlugin(),
         ModelRegistryPlugin(),
         QuickstartsPlugin(),
+        ModelRuntimesPlugin(),
     ]

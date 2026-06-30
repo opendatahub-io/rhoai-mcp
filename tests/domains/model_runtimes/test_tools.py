@@ -109,7 +109,7 @@ class TestToolErrorHandling:
 
         tools = _register_tools(mock_server)
 
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(ValueError, match="unavailable"):
             await tools["get_cuda_version_for_runtime"]("rhaiis/vllm-cuda-rhel9:3.0")
 
     @pytest.mark.asyncio
@@ -122,7 +122,7 @@ class TestToolErrorHandling:
 
         tools = _register_tools(mock_server)
 
-        with pytest.raises(json.JSONDecodeError):
+        with pytest.raises(ValueError, match="invalid"):
             await tools["get_cuda_version_for_runtime"]("rhaiis/vllm-cuda-rhel9:3.0")
 
 

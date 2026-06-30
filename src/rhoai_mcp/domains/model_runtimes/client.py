@@ -1,11 +1,13 @@
 """ConfigMap loader for CUDA compatibility matrix."""
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING
 
 from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
-from packaging.version import parse
+from packaging.version import InvalidVersion, parse
+from pydantic import ValidationError
 
 from rhoai_mcp.domains.model_runtimes.models import CudaCompatibilityMatrix
 
@@ -56,19 +58,33 @@ class CudaCompatibilityClient:
         last_error = None
         for namespace in namespaces:
             try:
-                configmap = self.k8s.core_v1.read_namespaced_config_map(
-                    name=self.CONFIGMAP_NAME, namespace=namespace
+                # Run blocking K8s call off the event loop
+                configmap = await asyncio.to_thread(
+                    self.k8s.core_v1.read_namespaced_config_map,
+                    name=self.CONFIGMAP_NAME,
+                    namespace=namespace,
                 )
 
                 if not configmap.data or self.CONFIGMAP_DATA_KEY not in configmap.data:
-                    raise ValueError(
-                        f"ConfigMap {self.CONFIGMAP_NAME} exists but missing key "
-                        f"{self.CONFIGMAP_DATA_KEY}"
+                    logger.warning(
+                        "ConfigMap %s in namespace %s missing data key %s",
+                        self.CONFIGMAP_NAME,
+                        namespace,
+                        self.CONFIGMAP_DATA_KEY,
                     )
+                    raise ValueError("CUDA compatibility matrix data is unavailable")
 
                 json_data = configmap.data[self.CONFIGMAP_DATA_KEY]
-                data = json.loads(json_data)
-                return CudaCompatibilityMatrix.model_validate(data)
+                try:
+                    data = json.loads(json_data)
+                    return CudaCompatibilityMatrix.model_validate(data)
+                except (json.JSONDecodeError, ValidationError) as e:
+                    logger.warning(
+                        "Invalid CUDA compatibility data in namespace %s",
+                        namespace,
+                        exc_info=e,
+                    )
+                    raise ValueError("CUDA compatibility matrix data is invalid") from e
 
             except ApiException as e:
                 if e.status == 404:
@@ -77,10 +93,8 @@ class CudaCompatibilityClient:
                 raise  # Other errors should propagate immediately
 
         # If we get here, ConfigMap not found in any namespace
-        tried_namespaces = ", ".join(namespaces)
-        raise ValueError(
-            f"ConfigMap {self.CONFIGMAP_NAME} not found in namespaces: {tried_namespaces}"
-        ) from last_error
+        logger.error("CUDA compatibility ConfigMap not found in any namespace")
+        raise ValueError("CUDA compatibility matrix is unavailable") from last_error
 
     def get_namespaces_to_try(self) -> list[str]:
         """Get list of namespaces that will be searched for the ConfigMap.
@@ -177,8 +191,15 @@ class CudaCompatibilityClient:
         for mapping in matrix.cuda_drivers:
             versions.update(mapping.cuda_version)
 
-        # Sort by semantic version
-        return sorted(versions, key=parse)
+        # Sort by semantic version, with fallback for unparsable versions
+        def version_key(v: str) -> tuple:
+            try:
+                return (0, parse(v))
+            except InvalidVersion:
+                logger.warning("Skipping unparsable CUDA version: %s", v)
+                return (1, v)  # Invalid versions sort last
+
+        return sorted(versions, key=version_key)
 
     async def list_all_compute_capabilities(self) -> list[str]:
         """Get list of all GPU compute capabilities in the matrix.

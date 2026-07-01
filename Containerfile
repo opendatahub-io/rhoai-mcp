@@ -7,11 +7,10 @@
 # =============================================================================
 # Stage 1: Builder - Install dependencies with uv
 # =============================================================================
-ARG BUILD_PLATFORM=linux/amd64
-FROM --platform=${BUILD_PLATFORM} registry.access.redhat.com/ubi9/python-312 AS builder
 
-# Copy uv from official image for fast, reproducible builds
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ARG BASE_IMAGE=quay.io/opendatahub/odh-midstream-python-base-3-12@sha256:e50b08950097ed95f137e6899696911422166ef539153bb08c15ee36b05a54f0
+
+FROM --platform=${BUILDPLATFORM} ${BASE_IMAGE} AS builder
 
 # Set working directory (UBI default is /opt/app-root/src)
 WORKDIR /opt/app-root/src
@@ -28,7 +27,7 @@ RUN uv sync --frozen --no-dev
 # =============================================================================
 # Stage 2: Runtime - Minimal production image
 # =============================================================================
-FROM --platform=${BUILD_PLATFORM} registry.access.redhat.com/ubi9/python-312 AS runtime
+FROM --platform=${TARGETPLATFORM} ${BASE_IMAGE} AS runtime
 
 # Labels for container metadata
 LABEL org.opencontainers.image.title="RHOAI MCP Server"
@@ -55,10 +54,6 @@ ARG OC_VERSION=stable-4.18
 RUN curl -fsSLo /tmp/oc.tgz "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/openshift-client-linux.tar.gz" \
     && tar -xzf /tmp/oc.tgz -C /usr/local/bin oc kubectl \
     && rm -f /tmp/oc.tgz
-USER 1001
-
-# Set working directory (UBI default is /opt/app-root/src)
-WORKDIR /opt/app-root/src
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/app-root/src/.venv /opt/app-root/src/.venv
@@ -82,14 +77,6 @@ ENV RHOAI_MCP_LOG_LEVEL="INFO"
 
 # Expose port for HTTP transports (SSE, streamable-http)
 EXPOSE 8000
-
-# UBI runs as non-root by default (UID 1001)
-USER 1001
-
-# Health check for HTTP transports
-# Note: Only works with SSE/streamable-http, not stdio
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8000/health', timeout=5)" || exit 0
 
 # Default entrypoint runs the MCP server
 ENTRYPOINT ["rhoai-mcp"]

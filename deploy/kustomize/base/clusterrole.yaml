@@ -80,12 +80,6 @@ rules:
       - servingruntimes
     verbs: ["get", "list", "watch", "create"]
 
-  # Deployments (create for quickstart deployment)
-  - apiGroups: ["apps"]
-    resources:
-      - deployments
-    verbs: ["create"]
-
   # Storage Classes (list for NFS storage discovery)
   - apiGroups: ["storage.k8s.io"]
     resources:

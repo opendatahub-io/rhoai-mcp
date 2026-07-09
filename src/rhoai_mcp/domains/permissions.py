@@ -134,14 +134,6 @@ STORAGE_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
-QUICKSTARTS_PERMISSIONS: dict[str, list[dict[str, str]]] = {
-    # list_available_quickstarts and get_quickstart_readme are ungoverned
-    # (read from built-in registry / GitHub, no K8s API calls).
-    "deploy_quickstart": [
-        {"apiGroup": "apps", "resource": "deployments", "verb": "create"},
-    ],
-}
-
 TRAINING_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     # discovery tools
     "list_training_jobs": [

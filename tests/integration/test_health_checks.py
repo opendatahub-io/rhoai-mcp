@@ -14,7 +14,6 @@ ALL_PLUGIN_NAMES = {
     "training",
     "prompts",
     "model_registry",
-    "quickstarts",
     # Composite plugins (4)
     "cluster-composites",
     "training-composites",
@@ -28,7 +27,6 @@ ALWAYS_HEALTHY_PLUGINS = {
     "connections",
     "storage",
     "prompts",
-    "quickstarts",
 }
 
 

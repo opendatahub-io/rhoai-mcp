@@ -7,6 +7,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 jobs:
   build-for-pypi:
     name: Build distribution for PyPI 📦

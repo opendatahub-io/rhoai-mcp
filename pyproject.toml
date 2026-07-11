@@ -1,6 +1,6 @@
 [project]
 name = "rhoai-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for Red Hat OpenShift AI"
 readme = "README.md"
 license = { text = "MIT" }
@@ -37,9 +37,9 @@ dependencies = [
 rhoai-mcp = "rhoai_mcp.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/admiller/rhoai-mcp-prototype"
-Repository = "https://github.com/admiller/rhoai-mcp-prototype"
-Issues = "https://github.com/admiller/rhoai-mcp-prototype/issues"
+Homepage = "https://github.com/opendatahub-io/rhoai-mcp"
+Repository = "https://github.com/opendatahub-io/rhoai-mcp"
+Issues = "https://github.com/opendatahub-io/rhoai-mcp/issues"
 
 [build-system]
 requires = ["hatchling"]

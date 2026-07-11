@@ -54,8 +54,8 @@ rhoai-mcp/
 
 ```bash
 # Clone the repository
-git clone https://github.com/admiller/rhoai-mcp-prototype.git
-cd rhoai-mcp-prototype
+git clone https://github.com/opendatahub-io/rhoai-mcp.git
+cd rhoai-mcp
 
 # Install in development mode
 make dev

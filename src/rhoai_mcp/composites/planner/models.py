@@ -75,6 +75,7 @@ class ModelRecommendation(BaseModel):
 
     model_id: str | None = Field(None, description="Model identifier")
     model_name: str | None = Field(None, description="Human-readable model name")
+    model_uri: str | None = Field(None, description="Model artifact URI (e.g., OCI registry URI)")
     gpu_config: GPUConfig | None = Field(None, description="GPU configuration")
     predicted_ttft_p95_ms: int | None = Field(None, description="Predicted TTFT p95 (ms)")
     predicted_itl_p95_ms: int | None = Field(None, description="Predicted ITL p95 (ms)")

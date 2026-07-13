@@ -193,10 +193,9 @@ class TestExtractOciRegistry:
 class TestResolveCatalogStorageUri:
     """Test _resolve_catalog_storage_uri performs discovery when cache is empty."""
 
-    async def test_discovers_and_resolves_when_cache_empty(self) -> None:
-        """Should run discovery when cache is not populated."""
-        from rhoai_mcp.domains.inference.tools import _resolve_catalog_storage_uri
-
+    @pytest.fixture
+    def catalog_config(self) -> MagicMock:
+        """Create a mock config for catalog tests."""
         config = MagicMock()
         config.model_registry_enabled = True
         config.model_registry_url = "http://registry:8080"
@@ -204,69 +203,136 @@ class TestResolveCatalogStorageUri:
         config.model_registry_skip_tls_verify = False
         config.model_registry_token = None
         config.model_registry_auth_mode = "none"
+        return config
 
-        k8s = MagicMock()
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self) -> Any:
+        """Clear and restore the module-level cache around each test."""
+        import rhoai_mcp.domains.model_registry.tools as mr_tools
 
-        artifact = CatalogModelArtifact(
-            uri="oci://registry.redhat.io/rhoai/granite-8b:latest",
-            format="safetensors",
+        orig_api = mr_tools._cached_api_type
+        orig_url = mr_tools._cached_discovery_url
+        orig_auth = mr_tools._cached_requires_auth
+        mr_tools._cached_api_type = None
+        mr_tools._cached_discovery_url = None
+        mr_tools._cached_requires_auth = False
+        yield
+        mr_tools._cached_api_type = orig_api
+        mr_tools._cached_discovery_url = orig_url
+        mr_tools._cached_requires_auth = orig_auth
+
+    async def _resolve_with_mock_catalog(
+        self,
+        config: MagicMock,
+        model_id: str,
+        catalog_models: list[CatalogModel],
+        artifact_uri: str | None = None,
+    ) -> str | None:
+        """Run _resolve_catalog_storage_uri with mocked discovery and catalog."""
+        from rhoai_mcp.domains.inference.tools import _resolve_catalog_storage_uri
+
+        mock_discovery_result = MagicMock()
+        mock_discovery_result.url = "https://catalog.example.com"
+        mock_discovery_result.requires_auth = False
+        mock_discovery_result.api_type = "model_catalog"
+
+        artifacts = (
+            [CatalogModelArtifact(uri=artifact_uri, format="safetensors")] if artifact_uri else []
         )
+
+        with (
+            patch(
+                "rhoai_mcp.domains.model_registry.discovery.ModelRegistryDiscovery"
+            ) as mock_discovery_class,
+            patch(
+                "rhoai_mcp.domains.model_registry.catalog_client.ModelCatalogClient"
+            ) as mock_client_class,
+        ):
+            mock_discovery = MagicMock()
+            mock_discovery.discover_with_port_forward = AsyncMock(
+                return_value=mock_discovery_result
+            )
+            mock_discovery_class.return_value = mock_discovery
+
+            mock_client = AsyncMock()
+            mock_client.list_models = AsyncMock(return_value=catalog_models)
+            mock_client.get_model_artifacts = AsyncMock(return_value=artifacts)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            return await _resolve_catalog_storage_uri(config, MagicMock(), model_id)
+
+    async def test_discovers_and_resolves_when_cache_empty(self, catalog_config: MagicMock) -> None:
+        """Bare name should resolve against prefixed catalog name via suffix match."""
+        import rhoai_mcp.domains.model_registry.tools as mr_tools
+
         catalog_model = CatalogModel(
             name="ibm-granite/granite-3.1-8b-instruct",
             source_id="rhoai",
             source_label="Red Hat AI validated",
-            artifacts=[artifact],
         )
 
-        # Clear the cache to simulate first call
-        import rhoai_mcp.domains.model_registry.tools as mr_tools
+        result = await self._resolve_with_mock_catalog(
+            catalog_config,
+            "granite-3.1-8b-instruct",
+            [catalog_model],
+            artifact_uri="oci://registry.redhat.io/rhoai/granite-8b:latest",
+        )
 
-        original_api_type = mr_tools._cached_api_type
-        original_url = mr_tools._cached_discovery_url
-        original_auth = mr_tools._cached_requires_auth
-        mr_tools._cached_api_type = None
-        mr_tools._cached_discovery_url = None
-        mr_tools._cached_requires_auth = False
+        assert result == "oci://registry.redhat.io/rhoai/granite-8b:latest"
+        assert mr_tools._cached_api_type == "model_catalog"
+        assert mr_tools._cached_discovery_url == "https://catalog.example.com"
 
-        try:
-            mock_discovery_result = MagicMock()
-            mock_discovery_result.url = "https://catalog.example.com"
-            mock_discovery_result.requires_auth = False
-            mock_discovery_result.api_type = "model_catalog"
+    async def test_resolves_with_suffix_match(self, catalog_config: MagicMock) -> None:
+        """Bare name should match a prefixed catalog entry via suffix."""
+        catalog_model = CatalogModel(
+            name="RedHatAI/gpt-oss-20b",
+            source_id="rhoai",
+            source_label="Red Hat AI validated",
+        )
 
-            with (
-                patch(
-                    "rhoai_mcp.domains.model_registry.discovery.ModelRegistryDiscovery"
-                ) as mock_discovery_class,
-                patch(
-                    "rhoai_mcp.domains.model_registry.catalog_client.ModelCatalogClient"
-                ) as mock_client_class,
-            ):
-                mock_discovery = MagicMock()
-                mock_discovery.discover_with_port_forward = AsyncMock(
-                    return_value=mock_discovery_result
-                )
-                mock_discovery_class.return_value = mock_discovery
+        result = await self._resolve_with_mock_catalog(
+            catalog_config,
+            "gpt-oss-20b",
+            [catalog_model],
+            artifact_uri="oci://registry.redhat.io/rhoai/gpt-oss-20b:latest",
+        )
 
-                mock_client = AsyncMock()
-                mock_client.list_models = AsyncMock(return_value=[catalog_model])
-                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_client.__aexit__ = AsyncMock(return_value=None)
-                mock_client_class.return_value = mock_client
+        assert result == "oci://registry.redhat.io/rhoai/gpt-oss-20b:latest"
 
-                result = await _resolve_catalog_storage_uri(
-                    config, k8s, "ibm-granite/granite-3.1-8b-instruct"
-                )
+    async def test_resolves_with_exact_match(self, catalog_config: MagicMock) -> None:
+        """Full prefixed name should still match via exact match."""
+        catalog_model = CatalogModel(
+            name="ibm-granite/granite-3.1-8b-instruct",
+            source_id="rhoai",
+            source_label="Red Hat AI validated",
+        )
 
-            assert result == "oci://registry.redhat.io/rhoai/granite-8b:latest"
-            # Cache should now be populated
-            assert mr_tools._cached_api_type == "model_catalog"
-            assert mr_tools._cached_discovery_url == "https://catalog.example.com"
-        finally:
-            # Restore cache
-            mr_tools._cached_api_type = original_api_type
-            mr_tools._cached_discovery_url = original_url
-            mr_tools._cached_requires_auth = original_auth
+        result = await self._resolve_with_mock_catalog(
+            catalog_config,
+            "ibm-granite/granite-3.1-8b-instruct",
+            [catalog_model],
+            artifact_uri="oci://registry.redhat.io/rhoai/granite-8b:latest",
+        )
+
+        assert result == "oci://registry.redhat.io/rhoai/granite-8b:latest"
+
+    async def test_no_match_returns_none(self, catalog_config: MagicMock) -> None:
+        """Unrecognized model name should return None."""
+        catalog_model = CatalogModel(
+            name="ibm-granite/granite-3.1-8b-instruct",
+            source_id="rhoai",
+            source_label="Red Hat AI validated",
+        )
+
+        result = await self._resolve_with_mock_catalog(
+            catalog_config,
+            "completely-unknown-model",
+            [catalog_model],
+        )
+
+        assert result is None
 
     async def test_returns_none_when_registry_disabled(self) -> None:
         """Should return None immediately when model registry is disabled."""

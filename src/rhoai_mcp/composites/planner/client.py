@@ -22,6 +22,7 @@ def _parse_recommendation(raw: dict[str, Any]) -> ModelRecommendation:
     return ModelRecommendation(
         model_id=raw.get("model_id"),
         model_name=raw.get("model_name"),
+        model_uri=raw.get("model_uri"),
         gpu_config=raw.get("gpu_config"),
         predicted_ttft_p95_ms=raw.get("predicted_ttft_p95_ms"),
         predicted_itl_p95_ms=raw.get("predicted_itl_p95_ms"),

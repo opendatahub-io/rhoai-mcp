@@ -45,7 +45,7 @@ class TestToolCategories:
 
     def test_categories_defined(self) -> None:
         """All expected categories are defined."""
-        expected = ["discovery", "training", "inference", "workbenches", "diagnostics", "resources", "storage"]
+        expected = ["discovery", "training", "inference", "workbenches", "diagnostics", "resources", "storage", "model_catalog"]
         for cat in expected:
             assert cat in TOOL_CATEGORIES
 
@@ -135,6 +135,31 @@ class TestSuggestTools:
 
         # Check that namespace from context is used
         assert result["example_calls"][0]["args"]["namespace"] == "my-project"
+
+    def test_suggest_model_catalog_intent(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """Model catalog intent returns model_catalog workflow."""
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("browse the model catalog", None)
+
+        assert result["category"] == "model_catalog"
+        assert "list_registered_models" in result["workflow"]
+
+    def test_suggest_available_models_intent(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """Available models intent returns model_catalog workflow."""
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("what models are available in the catalog", None)
+
+        assert result["category"] == "model_catalog"
+        assert "list_registered_models" in result["workflow"]
+        assert "list_catalog_sources" in result["workflow"]
 
     def test_suggest_unknown_intent_defaults_to_discovery(
         self, mock_mcp: MagicMock, mock_server: MagicMock

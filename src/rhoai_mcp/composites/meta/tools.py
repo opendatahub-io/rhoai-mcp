@@ -86,6 +86,19 @@ TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
             "create_s3_data_connection",
         ],
     },
+    "model_catalog": {
+        "description": "Red Hat AI Model Catalog browsing",
+        "tools": [
+            "list_registered_models",
+            "list_catalog_sources",
+            "get_catalog_model_artifacts",
+        ],
+        "typical_workflow": [
+            "list_catalog_sources",
+            "list_registered_models",
+            "get_catalog_model_artifacts",
+        ],
+    },
 }
 
 
@@ -131,6 +144,15 @@ INTENT_PATTERNS = [
         "category": "storage",
         "workflow": ["list_storage", "list_data_connections"],
         "explanation": "Use list_storage() for PVCs, list_data_connections() for S3 connections.",
+    },
+    {
+        "patterns": ["catalog", "model card", "validated model"],
+        "category": "model_catalog",
+        "workflow": ["list_registered_models", "list_catalog_sources"],
+        "explanation": "Use list_registered_models() to browse models in the Red Hat AI "
+        "Model Catalog. Use list_catalog_sources() to see available sources "
+        "(e.g., 'Red Hat AI validated'), and get_catalog_model_artifacts() "
+        "for download/deployment URIs.",
     },
 ]
 
@@ -279,7 +301,11 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                         },
                     }
                 )
-            elif tool == "explore_cluster":
+            elif tool in (
+                "explore_cluster",
+                "list_registered_models",
+                "list_catalog_sources",
+            ):
                 example_calls.append(
                     {
                         "tool": tool,

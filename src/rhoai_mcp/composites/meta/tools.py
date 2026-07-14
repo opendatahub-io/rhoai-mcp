@@ -146,7 +146,13 @@ INTENT_PATTERNS = [
         "explanation": "Use list_storage() for PVCs, list_data_connections() for S3 connections.",
     },
     {
-        "patterns": ["catalog", "model card", "validated model"],
+        "patterns": [
+            "catalog",
+            "model card",
+            "validated model",
+            "available models",
+            "models are available",
+        ],
         "category": "model_catalog",
         "workflow": ["list_registered_models", "list_catalog_sources"],
         "explanation": "Use list_registered_models() to browse models in the Red Hat AI "

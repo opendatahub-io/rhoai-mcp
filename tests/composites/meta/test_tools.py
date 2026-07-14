@@ -161,6 +161,17 @@ class TestSuggestTools:
         assert "list_registered_models" in result["workflow"]
         assert "list_catalog_sources" in result["workflow"]
 
+    def test_suggest_available_models_without_catalog_keyword(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """'what models are available' (no 'catalog') routes to model_catalog."""
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("what models are available", None)
+
+        assert result["category"] == "model_catalog"
+
     def test_suggest_unknown_intent_defaults_to_discovery(
         self, mock_mcp: MagicMock, mock_server: MagicMock
     ) -> None:

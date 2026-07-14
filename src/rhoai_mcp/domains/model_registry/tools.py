@@ -175,15 +175,12 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         verbosity: str = "standard",
         source_label: str | None = None,
     ) -> dict[str, Any]:
-        """List registered models in the Model Registry with pagination.
+        """Browse available models in the Model Catalog or Model Registry with pagination.
 
-        The Model Registry stores metadata about ML models, including versions,
-        artifacts, and custom properties. Use this to discover available models
-        before deployment.
-
-        This tool automatically detects whether the cluster has a standard
-        Kubeflow Model Registry or Red Hat AI Model Catalog and uses the
-        appropriate API.
+        Lists models from the Red Hat AI Model Catalog (curated, validated
+        models organized by source) or a standard Kubeflow Model Registry,
+        depending on what the cluster provides. The API type is detected
+        automatically.
 
         Args:
             limit: Maximum number of items to return (None for all).
@@ -194,7 +191,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 e.g., "Red Hat AI validated".
 
         Returns:
-            Paginated list of registered models with metadata.
+            Paginated list of models with metadata. The response includes
+            an api_type field indicating whether the data came from
+            "model_catalog" or "model_registry".
         """
         if not server.config.model_registry_enabled:
             return {"error": "Model Registry is disabled"}

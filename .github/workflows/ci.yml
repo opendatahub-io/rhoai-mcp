@@ -101,6 +101,7 @@ jobs:
 
   ci-status:
     name: CI Status
+    permissions: {}
     if: always()
     needs: [lint, typecheck, test]
     runs-on: ubuntu-latest

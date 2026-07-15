@@ -27,7 +27,7 @@ kubectl kustomize deploy/kustomize/overlays/openshift-oidc | oc apply -f -
 # 2. Create the ghcr.io pull secret (requires ghcr.io credentials in ~/.docker/config.json)
 ./deploy/kustomize/overlays/openshift-oidc/create-pull-secret.sh
 
-# 3. (Optional) Apply the NetworkPolicy to allow traffic to model-catalog
+# 3. (Optional) Apply the NetworkPolicy to allow traffic to the Model Catalog
 oc apply -f deploy/kustomize/overlays/openshift/networkpolicy.yaml
 
 # 4. Pod starts once the secret is available and the image pulls successfully
@@ -85,7 +85,7 @@ Should return `200` and begin an SSE stream.
 
 ### 5. Tool execution and RBAC
 
-Use, for example, the `fastmcp` CLI to list available tools and call them with the intented bearer token:
+Use, for example, the `fastmcp` CLI to list available tools and call them with the intended bearer token:
 
 ```bash
 ROUTE=$(oc get route rhoai-mcp -n rhoai-mcp -o jsonpath='{.spec.host}')

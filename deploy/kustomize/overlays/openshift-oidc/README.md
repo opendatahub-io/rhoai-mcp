@@ -21,22 +21,17 @@ All resource-level access is enforced by Kubernetes against the **impersonated u
 ## Deployment
 
 ```bash
-# 1. Apply the overlay (pod will be in ImagePullBackOff until the pull secret exists)
+# 1. Apply the overlay
 kubectl kustomize deploy/kustomize/overlays/openshift-oidc | oc apply -f -
 
-# 2. Create the ghcr.io pull secret (requires ghcr.io credentials in ~/.docker/config.json)
-./deploy/kustomize/overlays/openshift-oidc/create-pull-secret.sh
-
-# 3. (Optional) Apply the NetworkPolicy to allow traffic to the Model Catalog
+# 2. (Optional) Apply the NetworkPolicy to allow traffic to the Model Catalog
 oc apply -f deploy/kustomize/overlays/openshift/networkpolicy.yaml
 
-# 4. Pod starts once the secret is available and the image pulls successfully
+# 3. Wait for the pod to start
 oc get pods -n rhoai-mcp -w
 ```
 
 > **Note:** The NetworkPolicy targets the `rhoai-model-registries` namespace and must be applied separately because it lives outside this MCP app namespace.
-
-The `create-pull-secret.sh` script extracts the `ghcr.io` entry from `~/.docker/config.json` and creates the `ghcr-pull-secret` in the target namespace. It accepts an optional namespace argument (defaults to `rhoai-mcp`).
 
 ## Configuration
 

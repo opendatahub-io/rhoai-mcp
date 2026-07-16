@@ -1,0 +1,22 @@
+- op: replace
+  path: /rules
+  value:
+    # Impersonate authenticated users for K8s API calls
+    - apiGroups: [""]
+      resources: ["users", "groups", "serviceaccounts"]
+      verbs: ["impersonate"]
+
+    # Validate opaque bearer tokens via TokenReview API
+    - apiGroups: ["authentication.k8s.io"]
+      resources: ["tokenreviews"]
+      verbs: ["create"]
+
+    # RBAC-filter MCP tools per user via SubjectAccessReview
+    - apiGroups: ["authorization.k8s.io"]
+      resources: ["subjectaccessreviews"]
+      verbs: ["create"]
+
+    # Fetch OCP group memberships for authenticated users
+    - apiGroups: ["user.openshift.io"]
+      resources: ["users"]
+      verbs: ["get"]

@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# OIDC overlay for OpenShift deployments with multi-user authentication.
+#
+# Replaces the SA-as-actor ClusterRole with impersonation-only permissions:
+# the SA validates tokens and impersonates users; K8s evaluates resource RBAC
+# against the impersonated user's identity, not the SA's.
+
+resources:
+  - ../openshift
+
+patches:
+  - target:
+      kind: ClusterRole
+      name: rhoai-mcp
+    path: clusterrole-patch.yaml
+  - target:
+      kind: ConfigMap
+      name: rhoai-mcp-config
+    path: config-patch.yaml

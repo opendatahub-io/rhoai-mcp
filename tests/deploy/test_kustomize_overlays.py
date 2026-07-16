@@ -52,41 +52,31 @@ class TestOpenshiftOidcOverlay:
         cr = _find_resource(docs, "ClusterRole", "rhoai-mcp")
         assert cr is not None, "ClusterRole 'rhoai-mcp' not found in rendered output"
 
+        # Exact allow-list (4 total): only impersonation + token/access review rules
+        expected = {
+            "": (
+                {"users", "groups", "serviceaccounts"},
+                {"impersonate"},
+            ),
+            "authentication.k8s.io": (
+                {"tokenreviews"},
+                {"create"},
+            ),
+            "authorization.k8s.io": (
+                {"subjectaccessreviews"},
+                {"create"},
+            ),
+            "user.openshift.io": (
+                {"users"},
+                {"get"},
+            ),
+        }
+
         rules = cr.get("rules", [])
-        assert len(rules) == 4
+        assert len(rules) == len(expected)
 
-        api_groups = {r["apiGroups"][0] for r in rules}
-        assert api_groups == {
-            "",
-            "authentication.k8s.io",
-            "authorization.k8s.io",
-            "user.openshift.io",
-        }
-
-    def test_clusterrole_has_impersonate(self, docs: list[dict]) -> None:
-        cr = _find_resource(docs, "ClusterRole", "rhoai-mcp")
-        assert cr is not None
-        impersonate_rules = [r for r in cr["rules"] if "impersonate" in r.get("verbs", [])]
-        assert len(impersonate_rules) == 1
-        assert set(impersonate_rules[0]["resources"]) == {"users", "groups", "serviceaccounts"}
-
-    def test_clusterrole_has_no_resource_level_rules(self, docs: list[dict]) -> None:
-        cr = _find_resource(docs, "ClusterRole", "rhoai-mcp")
-        assert cr is not None
-        forbidden_resources = {
-            "pods",
-            "secrets",
-            "persistentvolumeclaims",
-            "namespaces",
-            "notebooks",
-            "inferenceservices",
-            "trainjobs",
-            "datasciencepipelinesapplications",
-        }
-        for rule in cr["rules"]:
-            assert not forbidden_resources.intersection(rule.get("resources", [])), (
-                f"ClusterRole contains resource-level rule: {rule}"
-            )
+        actual = {r["apiGroups"][0]: (set(r["resources"]), set(r["verbs"])) for r in rules}
+        assert actual == expected
 
     def test_configmap_has_oidc_enabled(self, docs: list[dict]) -> None:
         cm = _find_resource(docs, "ConfigMap", "rhoai-mcp-config")

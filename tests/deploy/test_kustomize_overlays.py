@@ -74,6 +74,7 @@ class TestOpenshiftOidcOverlay:
 
         rules = cr.get("rules", [])
         assert len(rules) == len(expected)
+        assert all(len(r["apiGroups"]) == 1 for r in rules), "multi-group rules not expected"
 
         actual = {r["apiGroups"][0]: (set(r["resources"]), set(r["verbs"])) for r in rules}
         assert actual == expected

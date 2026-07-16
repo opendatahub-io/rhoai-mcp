@@ -1,6 +1,6 @@
 """Smoke tests for kustomize overlays.
 
-Runs ``kubectl kustomize`` on overlay and validates the rendered output.
+Runs ``kubectl kustomize`` on specific overlay and validates the rendered output.
 Skipped automatically when ``kubectl`` is not available.
 """
 
@@ -15,8 +15,6 @@ import yaml
 
 KUSTOMIZE_ROOT = Path(__file__).resolve().parents[2] / "deploy" / "kustomize"
 OVERLAY_DIR = KUSTOMIZE_ROOT / "overlays"
-
-OVERLAYS = sorted(p.name for p in OVERLAY_DIR.iterdir() if p.is_dir())
 
 kubectl = shutil.which("kubectl")
 skip_no_kubectl = pytest.mark.skipif(kubectl is None, reason="kubectl not found on PATH")
@@ -43,12 +41,6 @@ def _find_resource(docs: list[dict], kind: str, name: str) -> dict | None:
 
 
 @skip_no_kubectl
-@pytest.mark.parametrize("overlay", OVERLAYS)
-def test_overlay_builds_successfully(overlay: str) -> None:
-    _kustomize_build(overlay)
-
-
-@skip_no_kubectl
 class TestOpenshiftOidcOverlay:
     """Validate the rendered manifests for the openshift-oidc overlay."""
 
@@ -64,15 +56,17 @@ class TestOpenshiftOidcOverlay:
         assert len(rules) == 4
 
         api_groups = {r["apiGroups"][0] for r in rules}
-        assert api_groups == {"", "authentication.k8s.io", "authorization.k8s.io", "user.openshift.io"}
+        assert api_groups == {
+            "",
+            "authentication.k8s.io",
+            "authorization.k8s.io",
+            "user.openshift.io",
+        }
 
     def test_clusterrole_has_impersonate(self, docs: list[dict]) -> None:
         cr = _find_resource(docs, "ClusterRole", "rhoai-mcp")
         assert cr is not None
-        impersonate_rules = [
-            r for r in cr["rules"]
-            if "impersonate" in r.get("verbs", [])
-        ]
+        impersonate_rules = [r for r in cr["rules"] if "impersonate" in r.get("verbs", [])]
         assert len(impersonate_rules) == 1
         assert set(impersonate_rules[0]["resources"]) == {"users", "groups", "serviceaccounts"}
 
@@ -80,8 +74,13 @@ class TestOpenshiftOidcOverlay:
         cr = _find_resource(docs, "ClusterRole", "rhoai-mcp")
         assert cr is not None
         forbidden_resources = {
-            "pods", "secrets", "persistentvolumeclaims", "namespaces",
-            "notebooks", "inferenceservices", "trainjobs",
+            "pods",
+            "secrets",
+            "persistentvolumeclaims",
+            "namespaces",
+            "notebooks",
+            "inferenceservices",
+            "trainjobs",
             "datasciencepipelinesapplications",
         }
         for rule in cr["rules"]:

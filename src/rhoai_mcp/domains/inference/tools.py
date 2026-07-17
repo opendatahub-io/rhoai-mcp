@@ -90,7 +90,7 @@ async def _resolve_catalog_storage_uri(
         discovery_result = _create_cached_catalog_discovery(url)
 
         async with ModelCatalogClient(config, discovery_result) as client:
-            models = await client.list_models(page_size=500)
+            models = await client.list_models()
             for model in models:
                 if model.name == model_id and model.artifacts:
                     return model.artifacts[0].uri

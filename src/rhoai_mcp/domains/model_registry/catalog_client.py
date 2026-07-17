@@ -118,14 +118,53 @@ class ModelCatalogClient:
         page_size: int = 50,
         source_label: str | None = None,
     ) -> list[CatalogModel]:
-        """List models in the catalog.
+        """List all models in the catalog.
+
+        Automatically paginates through all pages using the API's
+        nextPageToken mechanism.
 
         Args:
-            page_size: Maximum number of models to return.
+            page_size: Number of models to fetch per API page.
             source_label: Optional source label filter (e.g., 'Red Hat AI validated').
 
         Returns:
-            List of catalog models.
+            List of all catalog models matching the filter.
+
+        Raises:
+            ModelRegistryError: If the API request fails.
+            ModelRegistryConnectionError: If connection fails.
+        """
+        all_models: list[CatalogModel] = []
+        next_page_token: str | None = None
+
+        while True:
+            models, next_page_token = await self._list_models_page(
+                page_size=page_size,
+                page_token=next_page_token,
+                source_label=source_label,
+            )
+            all_models.extend(models)
+            if not next_page_token:
+                break
+
+        return all_models
+
+    async def _list_models_page(
+        self,
+        page_size: int = 50,
+        page_token: str | None = None,
+        source_label: str | None = None,
+    ) -> tuple[list[CatalogModel], str | None]:
+        """Fetch a single page of models from the catalog API.
+
+        Args:
+            page_size: Number of models to request per page.
+            page_token: Token for the next page (from previous response).
+            source_label: Optional source label filter.
+
+        Returns:
+            Tuple of (models, next_page_token). next_page_token is None
+            on the last page.
 
         Raises:
             ModelRegistryError: If the API request fails.
@@ -133,6 +172,8 @@ class ModelCatalogClient:
         """
         client = await self._get_client()
         params: dict[str, str | int] = {"pageSize": page_size}
+        if page_token:
+            params["nextPageToken"] = page_token
         if source_label:
             params["sourceLabel"] = source_label
 
@@ -147,7 +188,9 @@ class ModelCatalogClient:
             models = []
             for item in data.get("models", data.get("items", [])):
                 models.append(self._parse_catalog_model(item))
-            return models
+
+            next_token = data.get("nextPageToken") or None
+            return models, next_token
 
         except httpx.ConnectError as e:
             raise ModelRegistryConnectionError(

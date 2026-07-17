@@ -177,6 +177,159 @@ class TestModelCatalogClient:
         assert len(models) == 1
 
     @pytest.mark.asyncio
+    async def test_list_models_paginates_through_all_pages(
+        self,
+        client: ModelCatalogClient,
+        sample_catalog_model: dict[str, Any],
+    ) -> None:
+        """Test that list_models follows nextPageToken to fetch all pages."""
+        model_page2 = {**sample_catalog_model, "name": "llama-3-8b-instruct"}
+
+        response_page1 = MagicMock()
+        response_page1.status_code = 200
+        response_page1.json.return_value = {
+            "items": [sample_catalog_model],
+            "nextPageToken": "page2token",
+        }
+        response_page1.raise_for_status = MagicMock()
+
+        response_page2 = MagicMock()
+        response_page2.status_code = 200
+        response_page2.json.return_value = {"items": [model_page2]}
+        response_page2.raise_for_status = MagicMock()
+
+        with patch.object(client, "_get_client") as mock_get_client:
+            mock_http = AsyncMock()
+            mock_http.get = AsyncMock(side_effect=[response_page1, response_page2])
+            mock_get_client.return_value = mock_http
+
+            models = await client.list_models()
+
+        assert len(models) == 2
+        assert models[0].name == "granite-3b-code-instruct"
+        assert models[1].name == "llama-3-8b-instruct"
+        assert mock_http.get.call_count == 2
+
+        second_call_params = mock_http.get.call_args_list[1][1]["params"]
+        assert second_call_params["nextPageToken"] == "page2token"
+
+    @pytest.mark.asyncio
+    async def test_list_models_single_page_no_token(
+        self,
+        client: ModelCatalogClient,
+        sample_catalog_model: dict[str, Any],
+    ) -> None:
+        """Test that list_models stops after one page when no nextPageToken."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"items": [sample_catalog_model]}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(client, "_get_client") as mock_get_client:
+            mock_http = AsyncMock()
+            mock_http.get = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_http
+
+            models = await client.list_models()
+
+        assert len(models) == 1
+        mock_http.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_list_models_preserves_source_label_across_pages(
+        self,
+        client: ModelCatalogClient,
+        sample_catalog_model: dict[str, Any],
+    ) -> None:
+        """Test that source_label filter is sent on every page request."""
+        model_page2 = {**sample_catalog_model, "name": "llama-3-8b-instruct"}
+
+        response_page1 = MagicMock()
+        response_page1.status_code = 200
+        response_page1.json.return_value = {
+            "items": [sample_catalog_model],
+            "nextPageToken": "tok2",
+        }
+        response_page1.raise_for_status = MagicMock()
+
+        response_page2 = MagicMock()
+        response_page2.status_code = 200
+        response_page2.json.return_value = {"items": [model_page2]}
+        response_page2.raise_for_status = MagicMock()
+
+        with patch.object(client, "_get_client") as mock_get_client:
+            mock_http = AsyncMock()
+            mock_http.get = AsyncMock(side_effect=[response_page1, response_page2])
+            mock_get_client.return_value = mock_http
+
+            models = await client.list_models(source_label="Red Hat AI validated")
+
+        assert len(models) == 2
+        for call in mock_http.get.call_args_list:
+            assert call[1]["params"]["sourceLabel"] == "Red Hat AI validated"
+
+    @pytest.mark.asyncio
+    async def test_list_models_page_size_is_per_page_not_cap(
+        self,
+        client: ModelCatalogClient,
+    ) -> None:
+        """Test that page_size controls per-page fetch, not total result cap."""
+        def make_model(name: str) -> dict[str, Any]:
+            return {"name": name, "description": "test", "provider": "Test"}
+
+        responses = []
+        for i, (models_data, token) in enumerate([
+            ([make_model("m1"), make_model("m2")], "tok2"),
+            ([make_model("m3"), make_model("m4")], "tok3"),
+            ([make_model("m5")], None),
+        ]):
+            resp = MagicMock()
+            resp.status_code = 200
+            payload: dict[str, Any] = {"items": models_data}
+            if token:
+                payload["nextPageToken"] = token
+            resp.json.return_value = payload
+            resp.raise_for_status = MagicMock()
+            responses.append(resp)
+
+        with patch.object(client, "_get_client") as mock_get_client:
+            mock_http = AsyncMock()
+            mock_http.get = AsyncMock(side_effect=responses)
+            mock_get_client.return_value = mock_http
+
+            models = await client.list_models(page_size=2)
+
+        assert len(models) == 5
+        assert mock_http.get.call_count == 3
+        for call in mock_http.get.call_args_list:
+            assert call[1]["params"]["pageSize"] == 2
+
+    @pytest.mark.asyncio
+    async def test_list_models_handles_empty_next_page_token(
+        self,
+        client: ModelCatalogClient,
+        sample_catalog_model: dict[str, Any],
+    ) -> None:
+        """Test that an empty string nextPageToken is treated as end of pages."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "items": [sample_catalog_model],
+            "nextPageToken": "",
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(client, "_get_client") as mock_get_client:
+            mock_http = AsyncMock()
+            mock_http.get = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_http
+
+            models = await client.list_models()
+
+        assert len(models) == 1
+        mock_http.get.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_get_sources(
         self,
         client: ModelCatalogClient,

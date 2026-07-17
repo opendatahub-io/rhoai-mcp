@@ -148,9 +148,7 @@ class ModelCatalogClient:
             if not next_page_token:
                 break
             if next_page_token in seen_tokens:
-                raise ModelRegistryError(
-                    "Model Catalog returned a repeated nextPageToken"
-                )
+                raise ModelRegistryError("Model Catalog returned a repeated nextPageToken")
             seen_tokens.add(next_page_token)
 
         return all_models

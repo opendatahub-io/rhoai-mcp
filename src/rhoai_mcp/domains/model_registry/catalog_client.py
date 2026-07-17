@@ -136,6 +136,7 @@ class ModelCatalogClient:
         """
         all_models: list[CatalogModel] = []
         next_page_token: str | None = None
+        seen_tokens: set[str] = set()
 
         while True:
             models, next_page_token = await self._list_models_page(
@@ -146,6 +147,11 @@ class ModelCatalogClient:
             all_models.extend(models)
             if not next_page_token:
                 break
+            if next_page_token in seen_tokens:
+                raise ModelRegistryError(
+                    "Model Catalog returned a repeated nextPageToken"
+                )
+            seen_tokens.add(next_page_token)
 
         return all_models
 

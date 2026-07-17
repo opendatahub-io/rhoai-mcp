@@ -330,6 +330,29 @@ class TestModelCatalogClient:
         mock_http.get.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_list_models_raises_on_repeated_page_token(
+        self,
+        client: ModelCatalogClient,
+        sample_catalog_model: dict[str, Any],
+    ) -> None:
+        """Test that pagination raises when the API returns a repeated nextPageToken."""
+        endless_response = MagicMock()
+        endless_response.status_code = 200
+        endless_response.json.return_value = {
+            "items": [sample_catalog_model],
+            "nextPageToken": "always-more",
+        }
+        endless_response.raise_for_status = MagicMock()
+
+        with patch.object(client, "_get_client") as mock_get_client:
+            mock_http = AsyncMock()
+            mock_http.get = AsyncMock(return_value=endless_response)
+            mock_get_client.return_value = mock_http
+
+            with pytest.raises(ModelRegistryError, match="repeated nextPageToken"):
+                await client.list_models()
+
+    @pytest.mark.asyncio
     async def test_get_sources(
         self,
         client: ModelCatalogClient,

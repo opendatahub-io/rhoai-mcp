@@ -346,11 +346,18 @@ class TestModelCatalogClient:
 
         with patch.object(client, "_get_client") as mock_get_client:
             mock_http = AsyncMock()
-            mock_http.get = AsyncMock(return_value=endless_response)
+            mock_http.get = AsyncMock(
+                side_effect=[
+                    endless_response,
+                    endless_response,
+                    AssertionError("pagination did not stop"),
+                ]
+            )
             mock_get_client.return_value = mock_http
 
             with pytest.raises(ModelRegistryError, match="repeated nextPageToken"):
                 await client.list_models()
+            assert mock_http.get.await_count == 2
 
     @pytest.mark.asyncio
     async def test_get_sources(

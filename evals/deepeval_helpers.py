@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 async def fetch_tool_schemas(
-    rhoai_mcp_url: str, transport: str = "streamable-http"
+    rhoai_mcp_url: str, transport: str = "sse"
 ) -> list[Tool]:
     """Fetch tool schemas from a running rhoai-mcp server.
 

@@ -59,6 +59,10 @@ class EvalConfig(BaseSettings):
         default="http://localhost:8000",
         description="rhoai-mcp server endpoint for tool schema discovery",
     )
+    rhoai_mcp_transport: str = Field(
+        default="sse",
+        description="MCP transport: 'streamable-http' or 'sse'",
+    )
 
     # Judge LLM settings (for DeepEval metrics)
     eval_model: str = Field(

@@ -14,10 +14,11 @@ services:
     build:
       context: .
       dockerfile: Containerfile
-    command: ["--transport", "sse", "--mock-cluster"]
+    command: ["--mock-cluster"]
     environment:
       RHOAI_MCP_HOST: "0.0.0.0"
       RHOAI_MCP_PORT: "8000"
+      RHOAI_MCP_TRANSPORT: "sse"
       RHOAI_MCP_LOG_LEVEL: INFO
     ports:
       - "8000:8000"

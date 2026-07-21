@@ -19,3 +19,7 @@ patches:
       kind: ConfigMap
       name: rhoai-mcp-config
     path: config-patch.yaml
+  - target:
+      kind: Route
+      name: rhoai-mcp
+    path: route-patch.yaml

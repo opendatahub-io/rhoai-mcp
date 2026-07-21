@@ -1,0 +1,4 @@
+- op: add
+  path: /metadata/annotations
+  value:
+    haproxy.router.openshift.io/timeout: "300s"

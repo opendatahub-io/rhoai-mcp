@@ -70,7 +70,9 @@ def tool_schemas(eval_config: EvalConfig) -> list[Any]:
     """Fetch tool schemas from the rhoai-mcp server."""
     from evals.deepeval_helpers import fetch_tool_schemas
 
-    return asyncio.run(fetch_tool_schemas(eval_config.rhoai_mcp_url))
+    return asyncio.run(
+        fetch_tool_schemas(eval_config.rhoai_mcp_url, eval_config.rhoai_mcp_transport)
+    )
 
 
 @pytest.fixture(scope="session")

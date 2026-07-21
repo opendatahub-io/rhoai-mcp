@@ -64,7 +64,7 @@ Should return a JSON document with `resource`, `authorization_servers`, etc.
 ### 3. Unauthenticated requests are rejected
 
 ```bash
-curl -k -i https://$ROUTE/sse
+curl -k -i -X POST https://$ROUTE/mcp
 ```
 
 Should return `401` with a `WWW-Authenticate: Bearer` header.
@@ -73,10 +73,14 @@ Should return `401` with a `WWW-Authenticate: Bearer` header.
 
 ```bash
 TOKEN=$(oc whoami -t)
-curl -k -i -H "Authorization: Bearer $TOKEN" https://$ROUTE/sse
+curl -k -i -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}' \
+  https://$ROUTE/mcp
 ```
 
-Should return `200` and begin an SSE stream.
+Should return `200` with a JSON-RPC response containing server capabilities and an `mcp-session-id` header.
 
 ### 5. Tool execution and RBAC
 
@@ -86,15 +90,15 @@ Use, for example, the `fastmcp` CLI to list available tools and call them with t
 ROUTE=$(oc get route rhoai-mcp -n rhoai-mcp -o jsonpath='{.spec.host}')
 TOKEN=$(oc whoami -t)
 
-# List all tools (saw 88 tools)
-uvx fastmcp list "https://${ROUTE}/sse" --transport sse --auth "$TOKEN"
+# List all tools
+uvx fastmcp list "https://${ROUTE}/mcp" --transport http --auth "$TOKEN"
 
 # Call a tool
-uvx fastmcp call "https://${ROUTE}/sse" --transport sse --auth "$TOKEN" \
+uvx fastmcp call "https://${ROUTE}/mcp" --transport http --auth "$TOKEN" \
   --target list_data_science_projects --json
 
 # Cluster overview
-uvx fastmcp call "https://${ROUTE}/sse" --transport sse --auth "$TOKEN" \
+uvx fastmcp call "https://${ROUTE}/mcp" --transport http --auth "$TOKEN" \
   --target cluster_summary --json
 ```
 

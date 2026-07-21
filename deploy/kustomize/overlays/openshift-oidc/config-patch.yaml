@@ -4,3 +4,6 @@
 - op: add
   path: /data/RHOAI_MCP_OIDC_TOKEN_MODE
   value: "token-review"
+- op: replace
+  path: /data/RHOAI_MCP_TRANSPORT
+  value: "streamable-http"

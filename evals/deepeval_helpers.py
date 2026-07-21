@@ -41,7 +41,7 @@ async def fetch_tool_schemas(
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 result = await session.list_tools()
-    else:
+    elif transport == "streamable-http":
         from mcp.client.streamable_http import streamablehttp_client
 
         url = f"{rhoai_mcp_url.rstrip('/')}/mcp"
@@ -49,6 +49,10 @@ async def fetch_tool_schemas(
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 result = await session.list_tools()
+    else:
+        raise ValueError(
+            f"Unsupported transport {transport!r}: must be 'sse' or 'streamable-http'"
+        )
 
     logger.info(f"Fetched {len(result.tools)} tool schemas from {rhoai_mcp_url}")
     return list(result.tools)

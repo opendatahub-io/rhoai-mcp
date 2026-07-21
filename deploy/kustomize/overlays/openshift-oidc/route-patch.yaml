@@ -1,4 +1,6 @@
-- op: add
-  path: /metadata/annotations
-  value:
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: rhoai-mcp
+  annotations:
     haproxy.router.openshift.io/timeout: "300s"

@@ -578,7 +578,7 @@ Result:
 
 ```bash
 # Install dev dependencies
-uv sync --extra dev
+uv sync --group dev
 
 # Run tests
 uv run pytest

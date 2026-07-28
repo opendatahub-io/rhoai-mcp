@@ -87,7 +87,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"src/rhoai_mcp/mock_k8s/mock_client.py" = ["ARG002", "SIM102"]
+"src/rhoai_mcp/mocks/mock_k8s/mock_client.py" = ["ARG002", "SIM102"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["rhoai_mcp"]

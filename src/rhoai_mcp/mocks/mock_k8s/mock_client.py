@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 from rhoai_mcp.clients.base import CRDDefinition, K8sClient
 from rhoai_mcp.config import RHOAIConfig
-from rhoai_mcp.mock_k8s.cluster_state import ClusterState, MockMetadata, MockResource
+from rhoai_mcp.mocks.mock_k8s.cluster_state import ClusterState, MockMetadata, MockResource
 from rhoai_mcp.utils.errors import NotFoundError
 
 logger = logging.getLogger(__name__)

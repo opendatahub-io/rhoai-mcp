@@ -14,7 +14,7 @@ from rhoai_mcp.clients.base import CRDDefinition, K8sClient
 from rhoai_mcp.config import RHOAIConfig
 from rhoai_mcp.utils.errors import NotFoundError
 
-from rhoai_mcp.mock_k8s.cluster_state import ClusterState, MockResource
+from rhoai_mcp.mocks.mock_k8s.cluster_state import ClusterState, MockResource
 
 logger = logging.getLogger(__name__)
 

@@ -158,7 +158,7 @@ class RHOAIServer:
             return  # Already initialized and connected
 
         if self._config.mock_cluster:
-            from rhoai_mcp.mock_k8s import MockK8sClient, create_default_cluster_state
+            from rhoai_mcp.mocks.mock_k8s import MockK8sClient, create_default_cluster_state
 
             state = create_default_cluster_state()
             mock_client = MockK8sClient(config_obj=self._config, state=state)

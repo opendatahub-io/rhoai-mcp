@@ -305,9 +305,7 @@ class InferenceClient:
                         runtime_body["metadata"] = {}
                     runtime_body["metadata"]["namespace"] = target_namespace
                     runtime_body["metadata"].setdefault("labels", {})
-                    runtime_body["metadata"]["labels"].update(
-                        RHOAILabels.managed_by_mcp_labels()
-                    )
+                    runtime_body["metadata"]["labels"].update(RHOAILabels.managed_by_mcp_labels())
 
                     # Ensure apiVersion is set
                     if "apiVersion" not in runtime_body:

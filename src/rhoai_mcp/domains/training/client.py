@@ -222,7 +222,7 @@ class TrainingClient:
         body = {
             "apiVersion": TrainingCRDs.CLUSTER_TRAINING_RUNTIME.api_version,
             "kind": TrainingCRDs.CLUSTER_TRAINING_RUNTIME.kind,
-            "metadata": {"name": name},
+            "metadata": {"name": name, "labels": RHOAILabels.managed_by_mcp_labels()},
             "spec": spec,
         }
         resource = self._k8s.create(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, body=body)

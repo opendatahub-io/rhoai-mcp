@@ -23,6 +23,10 @@ class RHOAILabels:
     APP_KUBERNETES_PART_OF = "app.kubernetes.io/part-of"
     APP_KUBERNETES_CREATED_BY = "app.kubernetes.io/created-by"
 
+    # Managed-by labels
+    APP_KUBERNETES_MANAGED_BY = "app.kubernetes.io/managed-by"
+    MANAGED_BY_VALUE = "rhoai-mcp"
+
     # KServe labels
     KSERVE_INFERENCE_SERVICE = "serving.kserve.io/inferenceservice"
 
@@ -62,6 +66,18 @@ class RHOAILabels:
     def data_connection_labels(cls) -> dict[str, str]:
         """Create labels for data connection secrets."""
         return {cls.DASHBOARD: "true"}
+
+    @classmethod
+    def managed_by_mcp_labels(cls) -> dict[str, str]:
+        """Return the managed-by label pair for resources created by this MCP server."""
+        return {cls.APP_KUBERNETES_MANAGED_BY: cls.MANAGED_BY_VALUE}
+
+    @classmethod
+    def is_managed_by_mcp(cls, labels: dict[str, Any] | None) -> bool:
+        """Check if a resource was created by this MCP server."""
+        if not labels:
+            return False
+        return labels.get(cls.APP_KUBERNETES_MANAGED_BY) == cls.MANAGED_BY_VALUE
 
     @classmethod
     def filter_selector(cls, **labels: str) -> str:

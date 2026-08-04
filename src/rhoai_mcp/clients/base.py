@@ -15,7 +15,14 @@ from kubernetes.dynamic import DynamicClient  # type: ignore[import-untyped]
 from kubernetes.dynamic.resource import Resource, ResourceInstance  # type: ignore[import-untyped]
 
 from rhoai_mcp.config import AuthMode, RHOAIConfig, get_config
-from rhoai_mcp.utils.errors import AuthenticationError, NotFoundError, RHOAIError
+from rhoai_mcp.utils.errors import (
+    AuthenticationError,
+    NotFoundError,
+    NotManagedByMCPError,
+    ReadOnlyError,
+    RHOAIError,
+)
+from rhoai_mcp.utils.labels import RHOAILabels
 
 logger = logging.getLogger(__name__)
 
@@ -345,6 +352,14 @@ class K8sClient:
         namespace: str | None = None,
     ) -> None:
         """Delete a resource."""
+        if self._config.read_only_mode:
+            raise ReadOnlyError()
+
+        existing = self.get(crd, name, namespace)
+        labels = dict(existing.metadata.labels or {})
+        if not RHOAILabels.is_managed_by_mcp(labels) and not self._config.enable_dangerous_operations:
+            raise NotManagedByMCPError(crd.kind, name, namespace)
+
         resource = self.get_resource(crd)
         try:
             if namespace:
@@ -453,6 +468,14 @@ class K8sClient:
 
     def delete_namespace(self, name: str) -> None:
         """Delete a namespace."""
+        if self._config.read_only_mode:
+            raise ReadOnlyError()
+
+        existing = self.get_namespace(name)
+        labels = dict(existing.metadata.labels or {})
+        if not RHOAILabels.is_managed_by_mcp(labels) and not self._config.enable_dangerous_operations:
+            raise NotManagedByMCPError("Namespace", name)
+
         try:
             self.core_v1.delete_namespace(name=name)
         except ApiException as e:
@@ -539,6 +562,14 @@ class K8sClient:
 
     def delete_secret(self, name: str, namespace: str) -> None:
         """Delete a secret."""
+        if self._config.read_only_mode:
+            raise ReadOnlyError()
+
+        existing = self.get_secret(name, namespace)
+        labels = dict(existing.metadata.labels or {})
+        if not RHOAILabels.is_managed_by_mcp(labels) and not self._config.enable_dangerous_operations:
+            raise NotManagedByMCPError("Secret", name, namespace)
+
         try:
             self.core_v1.delete_namespaced_secret(name=name, namespace=namespace)
         except ApiException as e:
@@ -610,6 +641,14 @@ class K8sClient:
 
     def delete_pvc(self, name: str, namespace: str) -> None:
         """Delete a PersistentVolumeClaim."""
+        if self._config.read_only_mode:
+            raise ReadOnlyError()
+
+        existing = self.get_pvc(name, namespace)
+        labels = dict(existing.metadata.labels or {})
+        if not RHOAILabels.is_managed_by_mcp(labels) and not self._config.enable_dangerous_operations:
+            raise NotManagedByMCPError("PersistentVolumeClaim", name, namespace)
+
         try:
             self.core_v1.delete_namespaced_persistent_volume_claim(name=name, namespace=namespace)
         except ApiException as e:

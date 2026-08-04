@@ -8,6 +8,7 @@ from rhoai_mcp.domains.inference.models import (
     InferenceService,
     InferenceServiceCreate,
 )
+from rhoai_mcp.utils.labels import RHOAILabels
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
@@ -525,6 +526,7 @@ class InferenceClient:
             "metadata": {
                 "name": request.name,
                 "namespace": request.namespace,
+                "labels": RHOAILabels.managed_by_mcp_labels(),
                 "annotations": annotations if annotations else None,
             },
             "spec": {

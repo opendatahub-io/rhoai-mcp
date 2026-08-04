@@ -43,7 +43,7 @@ class StorageClient:
     def create_storage(self, request: StorageCreate) -> Storage:
         """Create a new PVC."""
         # Build labels
-        labels = RHOAILabels.dashboard_project_labels()
+        labels = {**RHOAILabels.dashboard_project_labels(), **RHOAILabels.managed_by_mcp_labels()}
 
         # Build annotations
         annotations: dict[str, str] = {}

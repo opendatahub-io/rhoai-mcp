@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.crds import TrainingCRDs
+from rhoai_mcp.utils.labels import RHOAILabels
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
@@ -127,6 +128,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 "name": name,
                 "labels": {
                     "training.kubeflow.org/framework": framework,
+                    **RHOAILabels.managed_by_mcp_labels(),
                 },
             },
             "spec": spec,
@@ -189,7 +191,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 "name": name,
                 "labels": {
                     "training.kubeflow.org/framework": framework,
-                    "app.kubernetes.io/managed-by": "rhoai-mcp",
+                    **RHOAILabels.managed_by_mcp_labels(),
                 },
             },
             "spec": spec,

@@ -357,7 +357,10 @@ class K8sClient:
 
         existing = self.get(crd, name, namespace)
         labels = dict(existing.metadata.labels or {})
-        if not RHOAILabels.is_managed_by_mcp(labels) and not self._config.enable_dangerous_operations:
+        if (
+            not RHOAILabels.is_managed_by_mcp(labels)
+            and not self._config.enable_dangerous_operations
+        ):
             raise NotManagedByMCPError(crd.kind, name, namespace)
 
         resource = self.get_resource(crd)
@@ -473,7 +476,10 @@ class K8sClient:
 
         existing = self.get_namespace(name)
         labels = dict(existing.metadata.labels or {})
-        if not RHOAILabels.is_managed_by_mcp(labels) and not self._config.enable_dangerous_operations:
+        if (
+            not RHOAILabels.is_managed_by_mcp(labels)
+            and not self._config.enable_dangerous_operations
+        ):
             raise NotManagedByMCPError("Namespace", name)
 
         try:
@@ -567,7 +573,10 @@ class K8sClient:
 
         existing = self.get_secret(name, namespace)
         labels = dict(existing.metadata.labels or {})
-        if not RHOAILabels.is_managed_by_mcp(labels) and not self._config.enable_dangerous_operations:
+        if (
+            not RHOAILabels.is_managed_by_mcp(labels)
+            and not self._config.enable_dangerous_operations
+        ):
             raise NotManagedByMCPError("Secret", name, namespace)
 
         try:
@@ -646,7 +655,10 @@ class K8sClient:
 
         existing = self.get_pvc(name, namespace)
         labels = dict(existing.metadata.labels or {})
-        if not RHOAILabels.is_managed_by_mcp(labels) and not self._config.enable_dangerous_operations:
+        if (
+            not RHOAILabels.is_managed_by_mcp(labels)
+            and not self._config.enable_dangerous_operations
+        ):
             raise NotManagedByMCPError("PersistentVolumeClaim", name, namespace)
 
         try:

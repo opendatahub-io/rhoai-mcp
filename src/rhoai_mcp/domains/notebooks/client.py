@@ -310,7 +310,10 @@ class NotebookClient:
         annotations[RHOAIAnnotations.LAST_SIZE_SELECTION] = request.size
 
         # Build labels
-        labels = {**RHOAILabels.notebook_labels(request.name), **RHOAILabels.managed_by_mcp_labels()}
+        labels = {
+            **RHOAILabels.notebook_labels(request.name),
+            **RHOAILabels.managed_by_mcp_labels(),
+        }
 
         # Build resource requirements
         resources: dict[str, dict[str, str]] = {

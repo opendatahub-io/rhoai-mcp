@@ -155,7 +155,10 @@ class TestCreateStorage:
             size="20Gi",
             access_modes=["ReadWriteOnce"],
             storage_class="gp3",
-            labels={"opendatahub.io/dashboard": "true"},
+            labels={
+                "opendatahub.io/dashboard": "true",
+                "app.kubernetes.io/managed-by": "rhoai-mcp",
+            },
             annotations=None,
         )
         assert storage.metadata.name == "test-storage"

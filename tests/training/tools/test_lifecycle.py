@@ -25,6 +25,7 @@ class TestLifecycleTools:
         server.k8s = MagicMock()
         server.k8s.core_v1 = MagicMock()
         server.config.is_operation_allowed.return_value = (True, None)
+        server.config.read_only_mode = False
         return server
 
     def test_register_tools_registers_all_lifecycle_tools(

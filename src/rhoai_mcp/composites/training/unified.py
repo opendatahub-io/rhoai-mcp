@@ -18,7 +18,7 @@ from rhoai_mcp.domains.training.models import (
     PeftMethod,
     TrainJobStatus,
 )
-from rhoai_mcp.utils.errors import NotFoundError, RHOAIError
+from rhoai_mcp.utils.errors import NotFoundError, NotManagedByMCPError, RHOAIError
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
@@ -455,9 +455,8 @@ def _action_delete(
     if namespace is None or name is None:
         return {"error": "namespace and name are required for delete action"}
 
-    allowed, reason = server.config.is_operation_allowed("delete")
-    if not allowed:
-        return {"error": reason}
+    if server.config.read_only_mode:
+        return {"error": "Read-only mode is enabled"}
 
     if not confirm:
         return {
@@ -467,7 +466,10 @@ def _action_delete(
         }
 
     client = TrainingClient(server.k8s)
-    client.delete_training_job(namespace, name)
+    try:
+        client.delete_training_job(namespace, name)
+    except NotManagedByMCPError as e:
+        return {"error": str(e)}
 
     return {
         "action": "delete",

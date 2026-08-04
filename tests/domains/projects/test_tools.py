@@ -7,6 +7,7 @@ import pytest
 
 from rhoai_mcp.domains.projects.models import DataScienceProject
 from rhoai_mcp.models.common import ResourceMetadata, ResourceStatus
+from rhoai_mcp.utils.errors import NotManagedByMCPError
 
 
 def _register_tools(mock_server: MagicMock) -> dict[str, Any]:
@@ -33,6 +34,7 @@ def mock_server() -> MagicMock:
     """Create a mock server with config defaults."""
     server = MagicMock()
     server.config.is_operation_allowed.return_value = (True, None)
+    server.config.read_only_mode = False
     server.config.max_list_limit = 100
     server.config.default_list_limit = None
     return server
@@ -163,35 +165,31 @@ class TestCreateDataScienceProject:
 class TestDeleteDataScienceProject:
     """Tests for delete_data_science_project tool."""
 
+    def test_delete_project_read_only_blocked(self, mock_server: MagicMock) -> None:
+        """Should return error when read-only mode is enabled."""
+        mock_server.config.read_only_mode = True
+
+        tools = _register_tools(mock_server)
+        result = tools["delete_data_science_project"](name="some-project", confirm=True)
+
+        assert "error" in result
+        assert "Read-only mode is enabled" in result["error"]
+
     @patch("rhoai_mcp.domains.projects.tools.ProjectClient")
-    def test_delete_project_read_only_blocked(
+    def test_delete_project_not_managed_blocked(
         self, mock_client_cls: MagicMock, mock_server: MagicMock
     ) -> None:
-        """Should return error and not instantiate client when delete is not allowed."""
-        mock_server.config.is_operation_allowed.return_value = (
-            False,
-            "Read-only mode",
+        """Should return error when resource is not managed by MCP."""
+        mock_client = mock_client_cls.return_value
+        mock_client.delete_project.side_effect = NotManagedByMCPError(
+            "Namespace", "some-project"
         )
 
         tools = _register_tools(mock_server)
         result = tools["delete_data_science_project"](name="some-project", confirm=True)
 
         assert "error" in result
-        assert result["error"] == "Read-only mode"
-        mock_client_cls.assert_not_called()
-
-    def test_delete_project_dangerous_ops_disabled(self, mock_server: MagicMock) -> None:
-        """Should return error when delete is blocked by dangerous ops setting."""
-        mock_server.config.is_operation_allowed.return_value = (
-            False,
-            "Dangerous operations are disabled",
-        )
-
-        tools = _register_tools(mock_server)
-        result = tools["delete_data_science_project"](name="some-project", confirm=True)
-
-        assert "error" in result
-        assert "Dangerous operations" in result["error"]
+        assert "not created by this MCP server" in result["error"]
 
     def test_delete_project_no_confirm(self, mock_server: MagicMock) -> None:
         """Should return error when confirm is False."""

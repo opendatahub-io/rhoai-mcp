@@ -294,7 +294,10 @@ class NotebookClient:
                 name=name,
                 namespace=namespace,
                 size=size,
-                labels=RHOAILabels.dashboard_project_labels(),
+                labels={
+                    **RHOAILabels.dashboard_project_labels(),
+                    **RHOAILabels.managed_by_mcp_labels(),
+                },
             )
 
     def _build_notebook_cr(self, request: WorkbenchCreate) -> dict[str, Any]:

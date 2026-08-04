@@ -295,6 +295,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 For write operations, guard creates with `server.config.is_operation_allowed("create")`. For deletes, check `read_only_mode` directly and catch `NotManagedByMCPError` from the K8sClient (the client enforces the managed-by label guard):
 
 ```python
+    from rhoai_mcp.utils.errors import NotManagedByMCPError
+
     @mcp.tool()
     def create_widget(name: str, namespace: str) -> dict[str, Any]:
         """Create a widget."""

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from mcp.server.fastmcp import FastMCP
 
 from rhoai_mcp.domains.{{DOMAIN_NAME}}.client import {{DOMAIN_CLASS}}Client
+from rhoai_mcp.utils.errors import NotManagedByMCPError
 from rhoai_mcp.utils.response import PaginatedResponse, paginate
 
 if TYPE_CHECKING:

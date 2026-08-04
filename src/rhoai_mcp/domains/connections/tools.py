@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 
 from rhoai_mcp.domains.connections.client import ConnectionClient
 from rhoai_mcp.domains.connections.models import S3DataConnectionCreate
+from rhoai_mcp.utils.errors import NotManagedByMCPError
 from rhoai_mcp.utils.response import (
     PaginatedResponse,
     ResponseBuilder,
@@ -169,10 +170,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         Returns:
             Confirmation of deletion.
         """
-        # Check if operation is allowed
-        allowed, reason = server.config.is_operation_allowed("delete")
-        if not allowed:
-            return {"error": reason}
+        if server.config.read_only_mode:
+            return {"error": "Read-only mode is enabled"}
 
         if not confirm:
             return {
@@ -184,7 +183,10 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             }
 
         client = ConnectionClient(server.k8s)
-        client.delete_data_connection(name, namespace)
+        try:
+            client.delete_data_connection(name, namespace)
+        except NotManagedByMCPError as e:
+            return {"error": str(e)}
 
         return {
             "name": name,

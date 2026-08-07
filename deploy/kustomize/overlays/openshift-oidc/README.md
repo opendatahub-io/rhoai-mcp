@@ -42,7 +42,7 @@ The overlay enables OIDC with `token-review` mode via ConfigMap patches:
 | `RHOAI_MCP_OIDC_TOKEN_MODE` | `token-review` | Validates tokens via K8s TokenReview API (suited for OpenShift opaque tokens) |
 | `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY` | `user-token` | Forwards the caller's bearer token to the K8s API (default). Set to `impersonation` to use SA credentials with Impersonate-* headers instead. |
 
-> **Note:** The default `user-token` strategy works with OpenShift opaque OAuth tokens validated via `token-review` mode. For environments using JWT tokens from an external IdP that the Kubernetes API does not trust, switch to `impersonation` strategy and add the impersonation ClusterRole rule manually.
+> **Note:** The default `user-token` strategy works with OpenShift opaque OAuth tokens validated via `token-review` mode. For environments using JWT tokens from an external IdP, the `user-token` strategy is not supported — the server rejects the `user-token` + `jwt` combination at startup. Switch to `impersonation` strategy and add the impersonation ClusterRole rule manually.
 
 Other OIDC settings (`oidc_audience`, `oidc_username_claim`, `oidc_groups_claim`, etc.) use sensible defaults and can be overridden via environment variables or a downstream overlay.
 

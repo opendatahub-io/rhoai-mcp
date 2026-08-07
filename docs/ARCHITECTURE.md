@@ -99,7 +99,7 @@ Set via `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY`.
 
 **User-Token strategy** (default): The middleware validates the token (via TokenReview or JWKS), then stores it in `UserContext`. When a tool handler accesses `server.k8s`, the server creates a K8s client authenticated with the user's own token. The SA only needs permissions for `tokenreviews`, `subjectaccessreviews`, and `users.user.openshift.io` — no impersonation privileges required.
 
-**Impersonation strategy**: The middleware validates the token, extracts the user's identity (username, groups), and discards the token. When a tool handler accesses `server.k8s`, the server creates a K8s client using the SA's credentials with `Impersonate-User` and `Impersonate-Group` headers. This requires the SA to have the `impersonate` verb on `users`, `groups`, and `serviceaccounts`.
+**Impersonation strategy**: The middleware validates the token, extracts the user's identity (username, groups), and stores them in `UserContext`. The token is retained in `UserContext` (wrapped in `SecretStr`) but is not used for Kubernetes API authentication. When a tool handler accesses `server.k8s`, the server creates a K8s client using the SA's credentials with `Impersonate-User` and `Impersonate-Group` headers. This requires the SA to have the `impersonate` verb on `users`, `groups`, and `serviceaccounts`.
 
 ### MCP Spec Compliance
 
@@ -107,7 +107,7 @@ The MCP authorization specification (2025-06-18) prohibits token pass-through as
 
 The `user-token` strategy does not violate the spec's intent because the `openshift-oidc` deployment uses **opaque OpenShift OAuth tokens** (validated via `token-review` mode), not audience-bound JWTs. These tokens are natively issued for the OpenShift cluster — the K8s API server is the token's native audience, not an unrelated third-party service. There is no confused-deputy risk: the MCP server is part of the cluster's infrastructure forwarding a K8s credential to the K8s API.
 
-For **JWT mode** with audience-bound tokens, user-token pass-through **would** be a spec violation (unless the K8s API is explicitly configured to trust the JWT issuer). The config validation enforces this: `oidc_kube_auth_strategy=user-token` combined with `oidc_token_mode=jwt` raises a `ValueError`, requiring the `impersonation` strategy instead.
+For **JWT mode** with audience-bound tokens, user-token pass-through is a spec violation. The config validation enforces this unconditionally: `oidc_kube_auth_strategy=user-token` combined with `oidc_token_mode=jwt` raises a `ValueError` at startup, requiring the `impersonation` strategy instead.
 
 ### Per-Message Token Extraction
 

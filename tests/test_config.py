@@ -7,6 +7,7 @@ import pytest
 from rhoai_mcp.config import (
     AuthMode,
     LogLevel,
+    OIDCKubeAuthStrategy,
     OIDCTokenMode,
     RHOAIConfig,
     TransportMode,
@@ -266,6 +267,7 @@ class TestOIDCConfig:
         config = RHOAIConfig(
             oidc_enabled=True,
             oidc_issuer_url="https://keycloak.example.com/auth/realms/rhoai",
+            oidc_kube_auth_strategy="impersonation",
             transport=TransportMode.SSE,
         )
         # Should not raise
@@ -336,3 +338,44 @@ class TestOIDCConfig:
         )
         with pytest.raises(ValueError, match="not supported.*stdio"):
             config.validate_oidc_config()
+
+
+class TestOIDCKubeAuthStrategy:
+    """Tests for OIDCKubeAuthStrategy configuration."""
+
+    def test_default_is_user_token(self) -> None:
+        """Default oidc_kube_auth_strategy is user-token."""
+        config = RHOAIConfig()
+        assert config.oidc_kube_auth_strategy == OIDCKubeAuthStrategy.USER_TOKEN
+
+    def test_accepts_user_token(self) -> None:
+        """oidc_kube_auth_strategy accepts 'user-token' string."""
+        config = RHOAIConfig(oidc_kube_auth_strategy="user-token")
+        assert config.oidc_kube_auth_strategy == OIDCKubeAuthStrategy.USER_TOKEN
+
+    def test_accepts_impersonation(self) -> None:
+        """oidc_kube_auth_strategy accepts 'impersonation' string."""
+        config = RHOAIConfig(oidc_kube_auth_strategy="impersonation")
+        assert config.oidc_kube_auth_strategy == OIDCKubeAuthStrategy.IMPERSONATION
+
+    def test_jwt_plus_user_token_raises(self) -> None:
+        """Validation fails for jwt token mode with user-token strategy."""
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_issuer_url="https://idp.example.com",
+            oidc_token_mode="jwt",
+            oidc_kube_auth_strategy="user-token",
+            transport=TransportMode.SSE,
+        )
+        with pytest.raises(ValueError, match="not compatible with"):
+            config.validate_oidc_config()
+
+    def test_token_review_plus_user_token_passes(self) -> None:
+        """Validation passes for token-review mode with user-token strategy."""
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_token_mode="token-review",
+            oidc_kube_auth_strategy="user-token",
+            transport=TransportMode.SSE,
+        )
+        config.validate_oidc_config()  # Should not raise

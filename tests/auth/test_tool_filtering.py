@@ -121,6 +121,7 @@ class TestToolFilteringEnforcement:
         config = RHOAIConfig(
             oidc_enabled=True,
             oidc_issuer_url="https://idp.example.com",
+            oidc_kube_auth_strategy="impersonation",
             mock_cluster=True,
             transport=TransportMode.SSE,
         )

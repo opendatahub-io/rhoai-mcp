@@ -39,3 +39,48 @@ class TestUserContext:
         assert UserContext.current().username == "alice"
         UserContext.reset_current(token1)
         assert UserContext.current() is None
+
+    def test_token_field_default_is_none(self):
+        ctx = UserContext(username="alice")
+        assert ctx.token is None
+
+    def test_token_field_with_secret_str(self):
+        from pydantic import SecretStr
+        ctx = UserContext(username="alice", token=SecretStr("my-secret-token"))
+        assert ctx.token is not None
+        assert ctx.token.get_secret_value() == "my-secret-token"
+
+    def test_token_repr_does_not_leak_value(self):
+        from pydantic import SecretStr
+        ctx = UserContext(username="alice", token=SecretStr("my-secret-token"))
+        assert "my-secret-token" not in repr(ctx)
+
+    def test_token_str_does_not_leak_value(self):
+        from pydantic import SecretStr
+        ctx = UserContext(username="alice", token=SecretStr("my-secret-token"))
+        assert "my-secret-token" not in str(ctx.token)
+
+    async def test_cross_request_token_isolation(self):
+        """Verify contextvars provides per-task isolation for tokens."""
+        import asyncio
+
+        from pydantic import SecretStr
+
+        results = {}
+
+        async def task(name: str, token_value: str):
+            ctx = UserContext(username=name, token=SecretStr(token_value))
+            reset = UserContext.set_current(ctx)
+            try:
+                await asyncio.sleep(0.01)  # Yield to other tasks
+                current = UserContext.current()
+                results[name] = current.token.get_secret_value()
+            finally:
+                UserContext.reset_current(reset)
+
+        await asyncio.gather(
+            task("alice", "alice-token"),
+            task("bob", "bob-token"),
+        )
+        assert results["alice"] == "alice-token"
+        assert results["bob"] == "bob-token"

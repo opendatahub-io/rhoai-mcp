@@ -52,12 +52,8 @@ class TestOpenshiftOidcOverlay:
         cr = _find_resource(docs, "ClusterRole", "rhoai-mcp")
         assert cr is not None, "ClusterRole 'rhoai-mcp' not found in rendered output"
 
-        # Exact allow-list (4 total): only impersonation + token/access review rules
+        # Exact allow-list (3 total): only auth rules remain
         expected = {
-            "": (
-                {"users", "groups", "serviceaccounts"},
-                {"impersonate"},
-            ),
             "authentication.k8s.io": (
                 {"tokenreviews"},
                 {"create"},
@@ -78,6 +74,12 @@ class TestOpenshiftOidcOverlay:
 
         actual = {r["apiGroups"][0]: (set(r["resources"]), set(r["verbs"])) for r in rules}
         assert actual == expected
+
+    def test_configmap_has_auth_strategy(self, docs: list[dict]) -> None:
+        cm = _find_resource(docs, "ConfigMap", "rhoai-mcp-config")
+        assert cm is not None
+        data = cm.get("data", {})
+        assert data.get("RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY") == "user-token"
 
     def test_configmap_has_oidc_enabled(self, docs: list[dict]) -> None:
         cm = _find_resource(docs, "ConfigMap", "rhoai-mcp-config")

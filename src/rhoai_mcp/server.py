@@ -10,6 +10,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import SecretStr
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -21,6 +22,47 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+def _get_per_message_token(session_token: SecretStr | None) -> SecretStr | None:
+    """Extract the Bearer token from the current MCP per-message request context."""
+    try:
+        from mcp.server.lowlevel.server import request_ctx
+
+        req_context = request_ctx.get()
+        if req_context is None:
+            return None
+        req = req_context.request
+        if req is None:
+            return None
+    except ImportError:
+        logger.warning(
+            "mcp.server.lowlevel.server.request_ctx not available "
+            "(MCP SDK 2.x?). Per-message token extraction disabled — "
+            "using session-level token. Mid-session token refresh inactive."
+        )
+        return None
+    except LookupError:
+        return None
+
+    auth_header = ""
+    if hasattr(req, "headers"):
+        auth_header = req.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+
+    per_message_token = SecretStr(auth_header[7:])
+
+    if (
+        session_token is not None
+        and per_message_token.get_secret_value() != session_token.get_secret_value()
+    ):
+        logger.warning(
+            "Bearer token changed mid-session — using per-message token. "
+            "This may indicate token refresh mid session."
+        )
+
+    return per_message_token
 
 
 class RHOAIServer:
@@ -41,8 +83,9 @@ class RHOAIServer:
     def k8s(self) -> K8sClient:
         """Get the Kubernetes client.
 
-        When OIDC is enabled, returns an impersonating client for the
-        current user. Otherwise returns the shared SA client.
+        When OIDC is enabled, returns a client authenticated as the current
+        user (via user-token or impersonation strategy). Otherwise returns
+        the shared SA client.
 
         Raises:
             RuntimeError: If server is not running.
@@ -52,6 +95,7 @@ class RHOAIServer:
 
         if self._config.oidc_enabled:
             from rhoai_mcp.auth.user_context import UserContext
+            from rhoai_mcp.config import OIDCKubeAuthStrategy
 
             ctx = UserContext.current()
             if ctx is None:
@@ -59,7 +103,17 @@ class RHOAIServer:
                     "OIDC is enabled but no UserContext is set. "
                     "Refusing to fall back to service-account client."
                 )
-            return self._k8s_client.create_impersonating_client(ctx.username, ctx.groups)
+
+            if self._config.oidc_kube_auth_strategy == OIDCKubeAuthStrategy.USER_TOKEN:
+                token = _get_per_message_token(ctx.token) or ctx.token
+                if not token:
+                    raise RuntimeError(
+                        "OIDC user-token strategy is active but no token is available "
+                        "(neither per-message request_ctx nor UserContext.token)."
+                    )
+                return self._k8s_client.create_user_token_client(token)
+            else:
+                return self._k8s_client.create_impersonating_client(ctx.username, ctx.groups)
 
         return self._k8s_client
 

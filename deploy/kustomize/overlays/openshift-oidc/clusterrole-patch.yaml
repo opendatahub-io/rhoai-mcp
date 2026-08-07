@@ -1,11 +1,6 @@
 - op: replace
   path: /rules
   value:
-    # Impersonate authenticated users for K8s API calls
-    - apiGroups: [""]
-      resources: ["users", "groups", "serviceaccounts"]
-      verbs: ["impersonate"]
-
     # Validate opaque bearer tokens via TokenReview API
     - apiGroups: ["authentication.k8s.io"]
       resources: ["tokenreviews"]

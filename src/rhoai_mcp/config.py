@@ -58,6 +58,13 @@ class OIDCTokenMode(str, Enum):
     TOKEN_REVIEW = "token-review"
 
 
+class OIDCKubeAuthStrategy(str, Enum):
+    """How the MCP server authenticates to K8s API when OIDC is enabled."""
+
+    USER_TOKEN = "user-token"
+    IMPERSONATION = "impersonation"
+
+
 class RHOAIConfig(BaseSettings):
     """Configuration for RHOAI MCP server.
 
@@ -274,6 +281,12 @@ class RHOAIConfig(BaseSettings):
         description="External URL of this MCP server for Protected Resource Metadata "
         "(e.g. the OpenShift Route URL). Defaults to https://{host}:{port}.",
     )
+    oidc_kube_auth_strategy: OIDCKubeAuthStrategy = Field(
+        default=OIDCKubeAuthStrategy.USER_TOKEN,
+        description="How to authenticate K8s API calls in OIDC mode: "
+        "'user-token' forwards the caller's bearer token directly, "
+        "'impersonation' uses SA credentials with Impersonate-* headers.",
+    )
 
     @field_validator("enabled_plugins", mode="before")
     @classmethod
@@ -356,6 +369,16 @@ class RHOAIConfig(BaseSettings):
         if self.oidc_token_mode == OIDCTokenMode.JWT and not self.oidc_issuer_url:
             raise ValueError(
                 "oidc_issuer_url is required when oidc_enabled is true and token_mode is jwt"
+            )
+
+        if (
+            self.oidc_kube_auth_strategy == OIDCKubeAuthStrategy.USER_TOKEN
+            and self.oidc_token_mode == OIDCTokenMode.JWT
+        ):
+            raise ValueError(
+                "oidc_kube_auth_strategy 'user-token' is not compatible with "
+                "oidc_token_mode 'jwt'. JWT tokens are audience-bound and cannot "
+                "be forwarded to the Kubernetes API. Use 'impersonation' strategy instead."
             )
 
     def is_operation_allowed(self, operation: str) -> tuple[bool, str | None]:

@@ -7,3 +7,6 @@
 - op: add
   path: /data/RHOAI_MCP_TRANSPORT
   value: "streamable-http"
+- op: add
+  path: /data/RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY
+  value: "user-token"

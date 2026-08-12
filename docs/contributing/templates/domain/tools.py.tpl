@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from mcp.server.fastmcp import FastMCP
 
 from rhoai_mcp.domains.{{DOMAIN_NAME}}.client import {{DOMAIN_CLASS}}Client
+from rhoai_mcp.utils.errors import NotManagedByMCPError
 from rhoai_mcp.utils.response import PaginatedResponse, paginate
 
 if TYPE_CHECKING:
@@ -76,7 +77,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         }
 
     # --- Optional: write operations ---
-    # Uncomment and implement as needed. Always check is_operation_allowed().
+    # Uncomment and implement as needed.
+    # - Create: guard with is_operation_allowed("create").
+    # - Delete: guard with read_only_mode check, catch NotManagedByMCPError from K8sClient.
     #
     # @mcp.tool()
     # def create_{{RESOURCE_NAME}}(name: str, namespace: str, ...) -> dict[str, Any]:
@@ -89,9 +92,13 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     # @mcp.tool()
     # def delete_{{RESOURCE_NAME}}(name: str, namespace: str, confirm: bool = False) -> dict[str, Any]:
     #     """Delete a {{RESOURCE_NAME}}."""
-    #     allowed, reason = server.config.is_operation_allowed("delete")
-    #     if not allowed:
-    #         return {"error": reason}
+    #     if server.config.read_only_mode:
+    #         return {"error": "Read-only mode is enabled"}
     #     if not confirm:
     #         return {"error": "Deletion not confirmed", "message": "Set confirm=True to delete."}
+    #     client = {{DOMAIN_CLASS}}Client(server.k8s)
+    #     try:
+    #         client.delete_{{RESOURCE_NAME}}(name, namespace)
+    #     except NotManagedByMCPError as e:
+    #         return {"error": str(e)}
     #     ...

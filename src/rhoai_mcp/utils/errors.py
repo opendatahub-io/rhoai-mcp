@@ -61,6 +61,26 @@ class OperationNotAllowedError(RHOAIError):
         super().__init__(message, {"operation": operation, "reason": reason})
 
 
+class ReadOnlyError(OperationNotAllowedError):
+    """Raised when a mutation is attempted in read-only mode."""
+
+    def __init__(self) -> None:
+        super().__init__("mutation", reason="read-only mode is enabled")
+
+
+class NotManagedByMCPError(OperationNotAllowedError):
+    """Raised when deleting a resource not managed by this MCP server."""
+
+    def __init__(self, kind: str, name: str, namespace: str | None = None) -> None:
+        location = f" in namespace '{namespace}'" if namespace else ""
+        super().__init__(
+            "delete",
+            reason=f"{kind} '{name}'{location} was not created by this MCP server "
+            "and dangerous operations are disabled",
+        )
+        self.details.update({"kind": kind, "name": name, "namespace": namespace})
+
+
 class ResourceExistsError(RHOAIError):
     """Resource already exists."""
 

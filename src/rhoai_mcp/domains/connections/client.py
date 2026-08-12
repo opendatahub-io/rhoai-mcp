@@ -52,7 +52,7 @@ class ConnectionClient:
     def create_s3_data_connection(self, request: S3DataConnectionCreate) -> DataConnection:
         """Create an S3 data connection."""
         # Build labels
-        labels = RHOAILabels.data_connection_labels()
+        labels = {**RHOAILabels.data_connection_labels(), **RHOAILabels.managed_by_mcp_labels()}
 
         # Build annotations
         annotations = RHOAIAnnotations.data_connection_annotations("s3")

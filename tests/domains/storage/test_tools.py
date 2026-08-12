@@ -30,6 +30,7 @@ def mock_server() -> MagicMock:
     """Create a mock server with default config."""
     server = MagicMock()
     server.config.is_operation_allowed.return_value = (True, None)
+    server.config.read_only_mode = False
     server.config.max_list_limit = 100
     server.config.default_list_limit = None
     return server
@@ -162,28 +163,29 @@ class TestDeleteStorageTool:
         self, mock_client_cls: MagicMock, mock_server: MagicMock
     ) -> None:
         """delete_storage returns error and does not instantiate client."""
-        mock_server.config.is_operation_allowed.return_value = (
-            False,
-            "Read-only mode enabled",
-        )
+        mock_server.config.read_only_mode = True
 
         tools = _register_tools(mock_server)
         result = tools["delete_storage"](name="my-pvc", namespace="test-project", confirm=True)
 
-        assert result == {"error": "Read-only mode enabled"}
+        assert result == {"error": "Read-only mode is enabled"}
         mock_client_cls.assert_not_called()
 
-    def test_delete_storage_dangerous_ops_disabled(self, mock_server: MagicMock) -> None:
-        """delete_storage returns error when dangerous ops are disabled."""
-        mock_server.config.is_operation_allowed.return_value = (
-            False,
-            "Dangerous operations are disabled",
-        )
+    @patch("rhoai_mcp.domains.storage.tools.StorageClient")
+    def test_delete_storage_not_managed_by_mcp(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """delete_storage returns error when PVC is not managed by MCP."""
+        from rhoai_mcp.utils.errors import NotManagedByMCPError
+
+        mock_client = MagicMock()
+        mock_client.delete_storage.side_effect = NotManagedByMCPError("PersistentVolumeClaim", "my-pvc", "test-project")
+        mock_client_cls.return_value = mock_client
 
         tools = _register_tools(mock_server)
         result = tools["delete_storage"](name="my-pvc", namespace="test-project", confirm=True)
 
-        assert result == {"error": "Dangerous operations are disabled"}
+        assert "error" in result
 
     def test_delete_storage_no_confirm(self, mock_server: MagicMock) -> None:
         """delete_storage requires confirm=True."""

@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.models import TrainJobStatus
+from rhoai_mcp.utils.errors import NotManagedByMCPError
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
@@ -93,10 +94,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         Returns:
             Confirmation of deletion.
         """
-        # Check if operation is allowed
-        allowed, reason = server.config.is_operation_allowed("delete")
-        if not allowed:
-            return {"error": reason}
+        if server.config.read_only_mode:
+            return {"error": "Read-only mode is enabled"}
 
         if not confirm:
             return {
@@ -108,7 +107,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             }
 
         client = TrainingClient(server.k8s)
-        client.delete_training_job(namespace, name)
+        try:
+            client.delete_training_job(namespace, name)
+        except NotManagedByMCPError as e:
+            return {"error": str(e)}
 
         return {
             "success": True,

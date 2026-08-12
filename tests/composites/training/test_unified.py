@@ -37,6 +37,7 @@ def mock_server(mock_k8s_client: MagicMock) -> MagicMock:
     server = MagicMock()
     server.k8s = mock_k8s_client
     server.config.is_operation_allowed.return_value = (True, None)
+    server.config.read_only_mode = False
     return server
 
 

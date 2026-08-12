@@ -15,6 +15,7 @@ from rhoai_mcp.composites.cluster.models import (
     ResourceNameList,
     ResourceStatus,
 )
+from rhoai_mcp.utils.errors import NotManagedByMCPError
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
@@ -537,9 +538,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
         # Check delete confirmation
         if action == "delete":
-            allowed, reason = server.config.is_operation_allowed("delete")
-            if not allowed:
-                return {"error": reason}
+            if server.config.read_only_mode:
+                return {"error": "Read-only mode is enabled"}
             if not confirm:
                 return {
                     "error": "Deletion not confirmed",
@@ -872,7 +872,10 @@ def _manage_workbench(server: "RHOAIServer", action: str, name: str, namespace: 
         wb = client.stop_workbench(name, namespace)
         return {"success": True, "action": "stopped", "name": name, "status": wb.status.value}
     elif action == "delete":
-        client.delete_workbench(name, namespace)
+        try:
+            client.delete_workbench(name, namespace)
+        except NotManagedByMCPError as e:
+            return {"error": str(e)}
         return {"success": True, "action": "deleted", "name": name}
     else:
         return {"error": f"Action '{action}' not supported for workbenches"}
@@ -885,7 +888,10 @@ def _manage_model(server: "RHOAIServer", action: str, name: str, namespace: str)
     client = InferenceClient(server.k8s)
 
     if action == "delete":
-        client.delete_inference_service(name, namespace)
+        try:
+            client.delete_inference_service(name, namespace)
+        except NotManagedByMCPError as e:
+            return {"error": str(e)}
         return {"success": True, "action": "deleted", "name": name}
     else:
         return {"error": f"Action '{action}' not supported for models (only delete)"}
@@ -904,7 +910,10 @@ def _manage_training_job(server: "RHOAIServer", action: str, name: str, namespac
         client.resume_training_job(namespace, name)
         return {"success": True, "action": "resumed", "name": name}
     elif action == "delete":
-        client.delete_training_job(namespace, name)
+        try:
+            client.delete_training_job(namespace, name)
+        except NotManagedByMCPError as e:
+            return {"error": str(e)}
         return {"success": True, "action": "deleted", "name": name}
     else:
         return {"error": f"Action '{action}' not supported for training jobs"}

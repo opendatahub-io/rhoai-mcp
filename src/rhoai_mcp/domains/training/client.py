@@ -13,6 +13,7 @@ from rhoai_mcp.domains.training.models import (
     TrainingRuntime,
     TrainJob,
 )
+from rhoai_mcp.utils.labels import RHOAILabels
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
@@ -221,7 +222,7 @@ class TrainingClient:
         body = {
             "apiVersion": TrainingCRDs.CLUSTER_TRAINING_RUNTIME.api_version,
             "kind": TrainingCRDs.CLUSTER_TRAINING_RUNTIME.kind,
-            "metadata": {"name": name},
+            "metadata": {"name": name, "labels": RHOAILabels.managed_by_mcp_labels()},
             "spec": spec,
         }
         resource = self._k8s.create(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, body=body)
@@ -502,6 +503,7 @@ class TrainingClient:
             "metadata": {
                 "name": name,
                 "namespace": namespace,
+                "labels": RHOAILabels.managed_by_mcp_labels(),
             },
             "spec": spec,
         }

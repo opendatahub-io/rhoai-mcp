@@ -102,6 +102,30 @@ class TestOIDCAuthMiddleware:
         # Should NOT leak internal error details
         assert "network timeout" not in resp.json().get("detail", "")
 
+    def test_middleware_stores_token_as_secret_str(self, mock_validator):
+        """Verify middleware passes the raw bearer token to UserContext as SecretStr."""
+        from pydantic import SecretStr
+
+        captured_token = {}
+
+        async def capture_handler(_request):
+            ctx = UserContext.current()
+            if ctx and ctx.token:
+                captured_token["value"] = ctx.token.get_secret_value()
+                captured_token["is_secret"] = isinstance(ctx.token, SecretStr)
+            return JSONResponse({"ok": True})
+
+        app = Starlette(routes=[Route("/test", capture_handler)])
+        app.add_middleware(
+            OIDCAuthMiddleware,
+            validator=mock_validator,
+            exclude_paths=[],
+        )
+        client = TestClient(app)
+        client.get("/test", headers={"Authorization": "Bearer my-raw-token"})
+        assert captured_token["value"] == "my-raw-token"
+        assert captured_token["is_secret"] is True
+
     def test_user_context_reset_after_request(self, mock_validator):
         app = make_app(mock_validator)
         client = TestClient(app)

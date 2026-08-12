@@ -84,6 +84,39 @@ Composite plugins follow the same pattern and are registered in `composites/regi
 | `rhoai_get_crd_definitions` | Return CRD definitions |
 | `rhoai_health_check` | Check plugin health |
 
+## Authentication
+
+### OIDC Auth Strategies
+
+When OIDC is enabled (`RHOAI_MCP_OIDC_ENABLED=true`), the server validates each request's Bearer token and then uses one of two strategies to authenticate Kubernetes API calls on behalf of the user:
+
+| Strategy | Config Value | How It Works | When to Use |
+|----------|-------------|--------------|-------------|
+| **User-Token** | `user-token` (default) | Forwards the caller's bearer token directly to the K8s API | OpenShift with opaque OAuth tokens (`token-review` mode) |
+| **Impersonation** | `impersonation` | Uses the SA's credentials with `Impersonate-User`/`Impersonate-Group` headers | External IdP JWTs that K8s doesn't natively trust |
+
+Set via `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY`.
+
+**User-Token strategy** (default): The middleware validates the token (via TokenReview or JWKS), then stores it in `UserContext`. When a tool handler accesses `server.k8s`, the server creates a K8s client authenticated with the user's own token. The SA only needs permissions for `tokenreviews`, `subjectaccessreviews`, and `users.user.openshift.io` — no impersonation privileges required.
+
+**Impersonation strategy**: The middleware validates the token, extracts the user's identity (username, groups), and stores them in `UserContext`. The token is retained in `UserContext` (wrapped in `SecretStr`) but is not used for Kubernetes API authentication. When a tool handler accesses `server.k8s`, the server creates a K8s client using the SA's credentials with `Impersonate-User` and `Impersonate-Group` headers. This requires the SA to have the `impersonate` verb on `users`, `groups`, and `serviceaccounts`.
+
+### MCP Spec Compliance
+
+The MCP authorization specification (2025-06-18) prohibits token pass-through as an anti-pattern, citing confused-deputy risks where an MCP server forwards an audience-bound token to an unrelated upstream API.
+
+The `user-token` strategy does not violate the spec's intent because the `openshift-oidc` deployment uses **opaque OpenShift OAuth tokens** (validated via `token-review` mode), not audience-bound JWTs. These tokens are natively issued for the OpenShift cluster — the K8s API server is the token's native audience, not an unrelated third-party service. There is no confused-deputy risk: the MCP server is part of the cluster's infrastructure forwarding a K8s credential to the K8s API.
+
+For **JWT mode** with audience-bound tokens, user-token pass-through is a spec violation. The config validation enforces this unconditionally: `oidc_kube_auth_strategy=user-token` combined with `oidc_token_mode=jwt` raises a `ValueError` at startup, requiring the `impersonation` strategy instead.
+
+### Per-Message Token Extraction
+
+For HTTP transports (SSE, streamable-http), the server prefers the token from the per-message `request_ctx` (the MCP library's per-handler ContextVar carrying the POST's Starlette Request) over the session-level `UserContext.token`. This handles token refresh mid-session: if the client obtains a new token and sends it on subsequent POSTs, the new token is used automatically without tearing down the connection.
+
+### RBAC Filtering
+
+Regardless of the auth strategy, the `RBACChecker` uses the SA's own credentials to issue `SubjectAccessReview` calls. This determines which MCP tools the user is allowed to see and call. The SA needs `create subjectaccessreviews` permission for this — no impersonation required.
+
 ## Composite Workflow Tools
 
 These high-level tools combine multiple operations to reduce tool call round-trips for AI agents.

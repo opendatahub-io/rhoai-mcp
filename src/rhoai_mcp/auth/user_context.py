@@ -3,6 +3,8 @@
 import contextvars
 from dataclasses import dataclass, field
 
+from pydantic import SecretStr
+
 _current_user: contextvars.ContextVar["UserContext | None"] = contextvars.ContextVar(
     "rhoai_current_user", default=None
 )
@@ -15,6 +17,7 @@ class UserContext:
     username: str
     groups: list[str] = field(default_factory=list)
     uid: str | None = None
+    token: SecretStr | None = None
 
     @classmethod
     def current(cls) -> "UserContext | None":

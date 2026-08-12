@@ -11,6 +11,8 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+from pydantic import SecretStr
+
 from rhoai_mcp.auth.user_context import UserContext
 
 if TYPE_CHECKING:
@@ -85,6 +87,7 @@ class OIDCAuthMiddleware:
             username=identity.username,
             groups=identity.groups,
             uid=identity.uid,
+            token=SecretStr(token),
         )
         reset_token = UserContext.set_current(ctx)
         try:

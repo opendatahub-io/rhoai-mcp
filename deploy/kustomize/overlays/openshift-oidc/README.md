@@ -11,12 +11,11 @@ This overlay **replaces** the base ClusterRole entirely. Instead of granting the
 
 | Permission | Purpose |
 |---|---|
-| `impersonate` users, groups, serviceaccounts | Execute K8s API calls as the authenticated user |
 | `create` tokenreviews | Validate opaque bearer tokens via the K8s TokenReview API |
 | `create` subjectaccessreviews | Filter MCP tools based on user RBAC |
 | `get` users (user.openshift.io) | Fetch OCP group memberships for authenticated users |
 
-All resource-level access is enforced by Kubernetes against the **impersonated user's** identity, not the ServiceAccount's.
+All resource-level access is enforced by the Kubernetes API against the **user's own bearer token**. The ServiceAccount only needs permissions for token validation and RBAC filtering — it never accesses user resources directly.
 
 ## Deployment
 
@@ -41,6 +40,9 @@ The overlay enables OIDC with `token-review` mode via ConfigMap patches:
 |---|---|---|
 | `RHOAI_MCP_OIDC_ENABLED` | `true` | Enables OIDC authentication |
 | `RHOAI_MCP_OIDC_TOKEN_MODE` | `token-review` | Validates tokens via K8s TokenReview API (suited for OpenShift opaque tokens) |
+| `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY` | `user-token` | Forwards the caller's bearer token to the K8s API (default). Set to `impersonation` to use SA credentials with Impersonate-* headers instead. |
+
+> **Note:** The default `user-token` strategy works with OpenShift opaque OAuth tokens validated via `token-review` mode. For environments using JWT tokens from an external IdP, the `user-token` strategy is not supported — the server rejects the `user-token` + `jwt` combination at startup. Switch to `impersonation` strategy and add the impersonation ClusterRole rule manually.
 
 Other OIDC settings (`oidc_audience`, `oidc_username_claim`, `oidc_groups_claim`, etc.) use sensible defaults and can be overridden via environment variables or a downstream overlay.
 

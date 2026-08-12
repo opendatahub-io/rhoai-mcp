@@ -104,6 +104,17 @@ RHOAI_MCP_LOG_LEVEL=DEBUG uv run rhoai-mcp
 
 Each domain module uses its own named logger, so the `%(name)s` field in the log output identifies which module produced each message. Look for patterns in timing, specific namespaces, or resource types that correlate with the failures.
 
+### User-token mode (OIDC)
+
+When `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY=user-token` (the default for the `openshift-oidc` overlay), the MCP server forwards the caller's bearer token directly to the Kubernetes API. This means K8s API errors reflect the user's own credentials, not the ServiceAccount's.
+
+**Symptoms:** Tool calls return 401 Unauthorized from the Kubernetes API, even though the MCP server accepted the token.
+
+**Check:**
+1. **Token expired** — The user's OpenShift token may have expired. Ask them to re-authenticate with `oc login`. The K8s API returns 401 directly in this case — the MCP server does not intercept it.
+2. **Misconfigured auth strategy** — The `user-token` strategy only works with opaque tokens (`token-review` mode). If you see this error at startup: `"oidc_kube_auth_strategy 'user-token' is not compatible with oidc_token_mode 'jwt'"`, fix the configuration by switching to `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY=impersonation` and adding the impersonation ClusterRole binding for the ServiceAccount (see the `openshift-oidc` overlay README for details).
+3. **Token refresh mid-session (SSE transport)** — If the user refreshes their token during a long-lived SSE session, the server logs a warning: `"Bearer token changed mid-session"`. This is informational — the server uses the per-message token from each POST request, so the refreshed token is picked up automatically.
+
 ## Health Check Endpoint
 
 When running with HTTP transport (`sse` or `streamable-http`), the server exposes a health endpoint:

@@ -13,6 +13,7 @@ from kubernetes import client, config  # type: ignore[import-untyped]
 from kubernetes.client import ApiException  # type: ignore[import-untyped]
 from kubernetes.dynamic import DynamicClient  # type: ignore[import-untyped]
 from kubernetes.dynamic.resource import Resource, ResourceInstance  # type: ignore[import-untyped]
+from pydantic import SecretStr
 
 from rhoai_mcp.config import AuthMode, RHOAIConfig, get_config
 from rhoai_mcp.utils.errors import (
@@ -243,6 +244,25 @@ class K8sClient:
         imp_client._dynamic_client = DynamicClient(new_api_client)
         imp_client._core_v1 = client.CoreV1Api(new_api_client)
         return imp_client
+
+    def create_user_token_client(self, token: SecretStr) -> K8sClient:
+        """Create a new K8sClient that authenticates with the given bearer token."""
+        if not self._api_client:
+            raise RuntimeError("Cannot create user-token client: client not connected")
+
+        configuration = client.Configuration()
+        configuration.host = self._api_client.configuration.host
+        configuration.ssl_ca_cert = self._api_client.configuration.ssl_ca_cert
+        configuration.api_key = {"authorization": f"Bearer {token.get_secret_value()}"}
+        configuration.verify_ssl = self._api_client.configuration.verify_ssl
+
+        new_api_client = client.ApiClient(configuration)
+
+        user_client = K8sClient(self._config)
+        user_client._api_client = new_api_client
+        user_client._dynamic_client = DynamicClient(new_api_client)
+        user_client._core_v1 = client.CoreV1Api(new_api_client)
+        return user_client
 
     @property
     def dynamic(self) -> DynamicClient:

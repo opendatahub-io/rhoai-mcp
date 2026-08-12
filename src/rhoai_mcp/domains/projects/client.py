@@ -55,7 +55,7 @@ class ProjectClient:
     def create_project(self, request: ProjectCreate) -> DataScienceProject:
         """Create a new Data Science Project."""
         # Build labels
-        labels = RHOAILabels.dashboard_project_labels()
+        labels = {**RHOAILabels.dashboard_project_labels(), **RHOAILabels.managed_by_mcp_labels()}
         if request.enable_modelmesh:
             labels.update(RHOAILabels.model_serving_labels(single_model=False))
         else:

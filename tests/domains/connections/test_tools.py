@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from rhoai_mcp.utils.errors import NotManagedByMCPError
+
 
 def _register_tools(mock_server: MagicMock) -> dict[str, Any]:
     """Register connection tools and return captured tool functions."""
@@ -30,6 +32,7 @@ def mock_server() -> MagicMock:
     """Mock RHOAIServer with default config."""
     server = MagicMock()
     server.config.is_operation_allowed.return_value = (True, None)
+    server.config.read_only_mode = False
     server.config.max_list_limit = 100
     server.config.default_list_limit = None
     return server
@@ -205,11 +208,8 @@ class TestDeleteDataConnectionTool:
         mock_client_cls: MagicMock,
         mock_server: MagicMock,
     ) -> None:
-        """Delete is blocked when config disallows the operation."""
-        mock_server.config.is_operation_allowed.return_value = (
-            False,
-            "Read-only mode is enabled",
-        )
+        """Delete is blocked when read-only mode is enabled."""
+        mock_server.config.read_only_mode = True
 
         tools = _register_tools(mock_server)
         result = tools["delete_data_connection"](name="conn", namespace="ns", confirm=True)
@@ -217,20 +217,23 @@ class TestDeleteDataConnectionTool:
         assert result["error"] == "Read-only mode is enabled"
         mock_client_cls.assert_not_called()
 
-    def test_delete_data_connection_dangerous_ops_disabled(
+    @patch("rhoai_mcp.domains.connections.tools.ConnectionClient")
+    def test_delete_data_connection_not_managed_by_mcp(
         self,
+        mock_client_cls: MagicMock,
         mock_server: MagicMock,
     ) -> None:
-        """Delete is blocked when dangerous operations are disabled."""
-        mock_server.config.is_operation_allowed.return_value = (
-            False,
-            "Dangerous operations are disabled",
+        """Delete returns error when resource is not managed by MCP."""
+        mock_client = mock_client_cls.return_value
+        mock_client.delete_data_connection.side_effect = NotManagedByMCPError(
+            "Secret", "conn", "ns"
         )
 
         tools = _register_tools(mock_server)
         result = tools["delete_data_connection"](name="conn", namespace="ns", confirm=True)
 
-        assert result["error"] == "Dangerous operations are disabled"
+        assert "error" in result
+        assert "conn" in result["error"]
 
     def test_delete_data_connection_no_confirm(
         self,

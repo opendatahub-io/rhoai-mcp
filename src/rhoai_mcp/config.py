@@ -384,6 +384,12 @@ class RHOAIConfig(BaseSettings):
     def is_operation_allowed(self, operation: str) -> tuple[bool, str | None]:
         """Check if an operation is allowed based on safety settings.
 
+        This method checks static configuration flags only. It is not
+        resource-aware — it cannot distinguish MCP-managed resources from
+        external ones. K8s delete tools should check ``read_only_mode``
+        directly and let ``K8sClient`` enforce the managed-by ownership
+        guard instead of calling this method.
+
         Returns:
             Tuple of (allowed, reason_if_not_allowed)
         """

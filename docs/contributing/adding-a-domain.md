@@ -219,7 +219,7 @@ This is where MCP tools are registered. Key patterns:
 - **`@mcp.tool()` decorator**: Registers each function as an MCP tool. The docstring is shown to AI agents, so write it carefully.
 - **Pagination**: Use `paginate()` and `PaginatedResponse.build()` from `rhoai_mcp.utils.response`.
 - **Verbosity**: Use `Verbosity.from_str()` to support `minimal`/`standard`/`full` detail levels.
-- **Operation guards**: Call `server.config.is_operation_allowed("create")` before write operations.
+- **Operation guards**: Call `server.config.is_operation_allowed("create")` before create operations. For deletes, check `server.config.read_only_mode` and catch `NotManagedByMCPError` from the client.
 
 ```python
 """MCP Tools for Widget operations."""
@@ -292,9 +292,11 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         }
 ```
 
-For write operations (create, delete), always guard with `server.config.is_operation_allowed()`:
+For write operations, guard creates with `server.config.is_operation_allowed("create")`. For deletes, check `read_only_mode` directly and catch `NotManagedByMCPError` from the K8sClient (the client enforces the managed-by label guard):
 
 ```python
+    from rhoai_mcp.utils.errors import NotManagedByMCPError
+
     @mcp.tool()
     def create_widget(name: str, namespace: str) -> dict[str, Any]:
         """Create a widget."""
@@ -306,12 +308,16 @@ For write operations (create, delete), always guard with `server.config.is_opera
     @mcp.tool()
     def delete_widget(name: str, namespace: str, confirm: bool = False) -> dict[str, Any]:
         """Delete a widget."""
-        allowed, reason = server.config.is_operation_allowed("delete")
-        if not allowed:
-            return {"error": reason}
+        if server.config.read_only_mode:
+            return {"error": "Read-only mode is enabled"}
         if not confirm:
             return {"error": "Deletion not confirmed", "message": "Set confirm=True."}
-        # ... delete logic ...
+        client = MyFeatureClient(server.k8s)
+        try:
+            client.delete_widget(name, namespace)
+        except NotManagedByMCPError as e:
+            return {"error": str(e)}
+        # ... success response ...
 ```
 
 See: [`_example/tools.py`](../../src/rhoai_mcp/domains/_example/tools.py), [`storage/tools.py`](../../src/rhoai_mcp/domains/storage/tools.py)

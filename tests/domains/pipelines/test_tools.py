@@ -30,6 +30,7 @@ def mock_server() -> MagicMock:
     """Create a mock server with default allowed operations."""
     server = MagicMock()
     server.config.is_operation_allowed.return_value = (True, None)
+    server.config.read_only_mode = False
     return server
 
 
@@ -153,40 +154,44 @@ class TestCreatePipelineServerTool:
 class TestDeletePipelineServerTool:
     """Test delete_pipeline_server tool."""
 
-    @patch("rhoai_mcp.domains.pipelines.tools.PipelineClient")
     def test_delete_pipeline_server_read_only_blocked(
+        self,
+        mock_server: MagicMock,
+    ) -> None:
+        """Delete is blocked when read-only mode is active."""
+        mock_server.config.read_only_mode = True
+
+        tools = _register_tools(mock_server)
+        result = tools["delete_pipeline_server"](namespace="my-project", confirm=True)
+
+        assert "error" in result
+        assert "Read-only mode is enabled" in result["error"]
+
+    @patch("rhoai_mcp.domains.pipelines.tools.PipelineClient")
+    def test_delete_pipeline_server_not_managed_by_mcp(
         self,
         mock_client_cls: MagicMock,
         mock_server: MagicMock,
     ) -> None:
-        """Delete is blocked when read-only mode is active."""
-        mock_server.config.is_operation_allowed.return_value = (
-            False,
-            "Operation 'delete' is not allowed in read-only mode",
+        """Delete returns error when resource was not created by MCP."""
+        from rhoai_mcp.utils.errors import NotManagedByMCPError
+
+        mock_client = mock_client_cls.return_value
+        mock_client.get_pipeline_server.return_value = {
+            "name": "dspa",
+            "status": "Ready",
+        }
+        mock_client.delete_pipeline_server.side_effect = NotManagedByMCPError(
+            kind="DataSciencePipelinesApplication",
+            name="dspa",
+            namespace="my-project",
         )
 
         tools = _register_tools(mock_server)
         result = tools["delete_pipeline_server"](namespace="my-project", confirm=True)
 
         assert "error" in result
-        assert "read-only" in result["error"]
-        mock_client_cls.assert_not_called()
-
-    def test_delete_pipeline_server_dangerous_ops_disabled(
-        self,
-        mock_server: MagicMock,
-    ) -> None:
-        """Delete is blocked when dangerous operations are disabled."""
-        mock_server.config.is_operation_allowed.return_value = (
-            False,
-            "Dangerous operations are disabled",
-        )
-
-        tools = _register_tools(mock_server)
-        result = tools["delete_pipeline_server"](namespace="my-project", confirm=True)
-
-        assert "error" in result
-        assert "Dangerous" in result["error"]
+        assert "not created by this MCP server" in result["error"]
 
     def test_delete_pipeline_server_no_confirm(
         self,

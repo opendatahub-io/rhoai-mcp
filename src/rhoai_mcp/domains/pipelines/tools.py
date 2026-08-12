@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 
 from rhoai_mcp.domains.pipelines.client import PipelineClient
 from rhoai_mcp.domains.pipelines.models import PipelineServerCreate
+from rhoai_mcp.utils.errors import NotManagedByMCPError
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
@@ -108,10 +109,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         Returns:
             Confirmation of deletion.
         """
-        # Check if operation is allowed
-        allowed, reason = server.config.is_operation_allowed("delete")
-        if not allowed:
-            return {"error": reason}
+        if server.config.read_only_mode:
+            return {"error": "Read-only mode is enabled"}
 
         if not confirm:
             return {
@@ -130,7 +129,10 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 "error": f"No pipeline server exists in namespace '{namespace}'",
             }
 
-        client.delete_pipeline_server(existing["name"], namespace)
+        try:
+            client.delete_pipeline_server(existing["name"], namespace)
+        except NotManagedByMCPError as e:
+            return {"error": str(e)}
 
         return {
             "namespace": namespace,

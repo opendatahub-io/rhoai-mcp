@@ -8,6 +8,7 @@ from rhoai_mcp.domains.inference.models import (
     InferenceService,
     InferenceServiceCreate,
 )
+from rhoai_mcp.utils.labels import RHOAILabels
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
@@ -303,6 +304,8 @@ class InferenceClient:
                     if "metadata" not in runtime_body:
                         runtime_body["metadata"] = {}
                     runtime_body["metadata"]["namespace"] = target_namespace
+                    runtime_body["metadata"].setdefault("labels", {})
+                    runtime_body["metadata"]["labels"].update(RHOAILabels.managed_by_mcp_labels())
 
                     # Ensure apiVersion is set
                     if "apiVersion" not in runtime_body:
@@ -525,6 +528,7 @@ class InferenceClient:
             "metadata": {
                 "name": request.name,
                 "namespace": request.namespace,
+                "labels": RHOAILabels.managed_by_mcp_labels(),
                 "annotations": annotations if annotations else None,
             },
             "spec": {

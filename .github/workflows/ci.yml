@@ -131,10 +131,10 @@ jobs:
     steps:
       - name: Check CI status
         run: |
-          if [ "${{ needs.lint.result }}" = "failure" ] || \
-             [ "${{ needs.typecheck.result }}" = "failure" ] || \
-             [ "${{ needs.test.result }}" = "failure" ] || \
-             [ "${{ needs.check-requirements-cpu.result }}" = "failure" ]; then
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.typecheck.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.check-requirements-cpu.result }}" != "success" ]; then
             echo "CI failed"
             exit 1
           fi

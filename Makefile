@@ -179,17 +179,21 @@ eval-trend: ## Show eval score trends over time
 # =============================================================================
 
 generate-requirements-cpu: ## Generate requirements-cpu.txt from pyproject.toml (includes build-system deps)
-	# Extract [build-system].requires from pyproject.toml and pipe as extra input to uv pip compile
+	# Extract [build-system].requires from pyproject.toml to a temp file, then compile together.
+	# Two-step avoids silent failures (no pipefail) and uv parsing a stale output file.
 	uv run --no-project --python ">=3.11" python -c \
 		"import tomllib, pathlib; print('\n'.join(tomllib.load(pathlib.Path('pyproject.toml').open('rb'))['build-system']['requires']))" \
-		| uv pip compile pyproject.toml - \
-		--index-url $(PYPI_INDEX_URL) \
+		> requirements-build.tmp
+	uv pip compile pyproject.toml requirements-build.tmp \
+		--index-url "$(PYPI_INDEX_URL)" \
 		--python-platform linux \
 		--python-version 3.12 \
 		--index-strategy first-index \
 		--emit-index-annotation \
 		--emit-index-url \
-		-o requirements-cpu.txt
+		-o requirements-cpu.txt.tmp
+	mv requirements-cpu.txt.tmp requirements-cpu.txt
+	rm -f requirements-build.tmp
 
 # =============================================================================
 # Build

@@ -21,6 +21,9 @@ LOG_LEVEL ?= INFO
 # Build platform (force linux/amd64 for consistent builds across host architectures)
 PLATFORM ?= linux/amd64
 
+# PyPI index URL for requirements generation (Red Hat internal index)
+PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6-EA1/cpu-ubi9-test/simple/
+
 # Guard: ensure a container runtime was found
 ifeq ($(CONTAINER_RUNTIME),)
     $(error No container runtime found. Install podman or docker.)
@@ -41,6 +44,7 @@ endif
 
 .PHONY: help build build-no-cache run run-http run-stdio run-dev run-token stop logs shell clean info
 .PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
+.PHONY: generate-requirements-cpu
 
 # =============================================================================
 # Help
@@ -169,6 +173,27 @@ eval-compare: ## Compare eval scores across providers/models
 
 eval-trend: ## Show eval score trends over time
 	uv run --group eval python -m evals.reporting.cli trend
+
+# =============================================================================
+# Requirements
+# =============================================================================
+
+generate-requirements-cpu: ## Generate requirements-cpu.txt from pyproject.toml (includes build-system deps)
+	# Extract [build-system].requires from pyproject.toml to a temp file, then compile together.
+	# Two-step avoids silent failures (no pipefail) and uv parsing a stale output file.
+	uv run --no-project --python ">=3.11" python -c \
+		"import tomllib, pathlib; print('\n'.join(tomllib.load(pathlib.Path('pyproject.toml').open('rb'))['build-system']['requires']))" \
+		> requirements-build.tmp
+	uv pip compile pyproject.toml requirements-build.tmp \
+		--index-url "$(PYPI_INDEX_URL)" \
+		--python-platform linux \
+		--python-version 3.12 \
+		--index-strategy first-index \
+		--emit-index-annotation \
+		--emit-index-url \
+		-o requirements-cpu.txt.tmp
+	mv requirements-cpu.txt.tmp requirements-cpu.txt
+	rm -f requirements-build.tmp
 
 # =============================================================================
 # Build

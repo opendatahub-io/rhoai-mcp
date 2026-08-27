@@ -808,6 +808,53 @@ class TestPlannerClientGenerateConfig:
         assert "inferenceservice" in result.configs
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_generate_config_applies_workload_overrides(self, mock_httpx: MagicMock) -> None:
+        """Caller's prompt_tokens/output_tokens/expected_qps override the specification."""
+        mock_client = MagicMock()
+
+        spec = sample_specification()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = spec
+        spec_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        deploy_resp = MagicMock()
+        deploy_resp.status_code = 200
+        deploy_resp.json.return_value = SAMPLE_DEPLOYMENT_BUNDLE
+        deploy_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [spec_resp, ranked_resp, deploy_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        client.generate_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=1024,
+            output_tokens=512,
+            expected_qps=25.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        # The second POST is generate-recommendations; its payload should
+        # contain the overridden workload profile values
+        recommend_call = mock_client.post.call_args_list[1]
+        sent_spec = recommend_call.kwargs.get("json", recommend_call[1].get("json", {}))
+        workload = sent_spec["specification"]["workload_profile"]
+        assert workload["prompt_tokens"] == 1024
+        assert workload["output_tokens"] == 512
+        assert workload["expected_qps"] == 25.0
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_cost(self, mock_httpx: MagicMock) -> None:
         """category='cost' maps to 'lowest_cost' ranking list."""
         mock_client = MagicMock()

@@ -133,6 +133,17 @@ class TestConfigurationScores:
         assert scores.quality_score == 85.5
         assert scores.slo_status == "compliant"
 
+    def test_slo_status_validates_literal(self) -> None:
+        """slo_status rejects values outside the allowed set."""
+        with pytest.raises(ValidationError):
+            ConfigurationScores(
+                quality_score=85.5,
+                price_score=70,
+                latency_score=90,
+                balanced_score=80.0,
+                slo_status="invalid_status",
+            )
+
 
 class TestRecommendationResult:
     """Tests for RecommendationResult model."""

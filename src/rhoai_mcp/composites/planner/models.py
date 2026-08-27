@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+SloStatusType = Literal["compliant", "near_miss", "exceeds"]
+
 UseCaseType = Literal[
     "chatbot_conversational",
     "code_completion",
@@ -147,7 +149,7 @@ class ConfigurationScores(BaseModel):
     price_score: float = Field(..., ge=0, le=100, description="Cost efficiency score")
     latency_score: float = Field(..., ge=0, le=100, description="SLO headroom score")
     balanced_score: float = Field(..., ge=0, le=100, description="Weighted composite score")
-    slo_status: str = Field(..., description="SLO compliance: compliant|near_miss|exceeds")
+    slo_status: SloStatusType = Field(..., description="SLO compliance status")
 
 
 class ModelRecommendation(BaseModel):

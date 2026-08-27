@@ -368,6 +368,18 @@ class PlannerClient:
         slo_targets["itl_target_ms"] = itl_target_ms
         slo_targets["e2e_target_ms"] = e2e_target_ms
 
+        # Apply explicit workload profile overrides
+        try:
+            workload = spec_data["workload_profile"]
+        except KeyError as e:
+            raise PlannerAPIError(
+                status_code=502,
+                detail=f"Planner specification response missing expected field: {e}",
+            ) from e
+        workload["prompt_tokens"] = prompt_tokens
+        workload["output_tokens"] = output_tokens
+        workload["expected_qps"] = expected_qps
+
         # Step 3: Get ranked recommendations
         ranked = self.generate_recommendations(
             specification=spec_data,

@@ -223,8 +223,8 @@ class TestRecommendModelTool:
         )
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
-    def test_with_optimization_profile(self, mock_client_class: MagicMock) -> None:
-        """Optimization profile is resolved to weights dict."""
+    def test_valid_optimization_profile_accepted(self, mock_client_class: MagicMock) -> None:
+        """A valid optimization_profile passes validation and the client is called."""
         mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
@@ -965,8 +965,8 @@ class TestDeploymentConfigTool:
         mock_client_class.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
-    def test_optimization_profile_resolved_to_weights(self, mock_client_class: MagicMock) -> None:
-        """optimization_profile is validated before calling client."""
+    def test_valid_optimization_profile_accepted(self, mock_client_class: MagicMock) -> None:
+        """A valid optimization_profile passes validation and the client is called."""
         mock_client_class.return_value.generate_config.return_value = SAMPLE_CONFIG_RESULT
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())

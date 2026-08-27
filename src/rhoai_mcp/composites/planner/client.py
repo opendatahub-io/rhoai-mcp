@@ -206,27 +206,34 @@ class PlannerClient:
             and user_count_override is not None
             and gpu_types_override is not None
         ):
-            use_case = use_case_override
-            user_count = user_count_override
-            gpu_types: list[str] = gpu_types_override
+            intent_for_spec = DeploymentIntent(
+                use_case=use_case_override,
+                user_count=user_count_override,
+                preferred_gpu_types=gpu_types_override,
+            )
         else:
             intent = self.extract_intent(text)
-            use_case = use_case_override if use_case_override is not None else intent.use_case
-            user_count = (
-                user_count_override if user_count_override is not None else intent.user_count
+            intent_for_spec = DeploymentIntent(
+                use_case=(
+                    use_case_override if use_case_override is not None else intent.use_case
+                ),
+                user_count=(
+                    user_count_override if user_count_override is not None else intent.user_count
+                ),
+                preferred_gpu_types=(
+                    gpu_types_override
+                    if gpu_types_override is not None
+                    else [
+                        g if isinstance(g, str) else g.gpu_type
+                        for g in intent.preferred_gpu_types
+                    ]
+                ),
+                preferred_models=intent.preferred_models,
+                domain_specialization=intent.domain_specialization,
+                quality_priority=intent.quality_priority,
+                cost_priority=intent.cost_priority,
+                latency_priority=intent.latency_priority,
             )
-            gpu_types = (
-                gpu_types_override
-                if gpu_types_override is not None
-                else [g if isinstance(g, str) else g.gpu_type for g in intent.preferred_gpu_types]
-            )
-
-        # Step 2: Build DeploymentIntent for specification generation
-        intent_for_spec = DeploymentIntent(
-            use_case=use_case,
-            user_count=user_count,
-            preferred_gpu_types=gpu_types if gpu_types else [],
-        )
 
         # Step 3: Generate specification
         spec_data = self.generate_specification(intent_for_spec)
@@ -283,8 +290,8 @@ class PlannerClient:
         try:
             workload = spec_data["workload_profile"]
             spec_summary = {
-                "use_case": use_case,
-                "user_count": user_count,
+                "use_case": intent_for_spec.use_case,
+                "user_count": intent_for_spec.user_count,
                 "slo_targets": {
                     "ttft_target_ms": slo_targets["ttft_target_ms"],
                     "itl_target_ms": slo_targets["itl_target_ms"],
@@ -353,9 +360,16 @@ class PlannerClient:
         spec_data = self.generate_specification(intent)
 
         # Apply explicit SLO targets
-        spec_data["slo_targets"]["ttft_target_ms"] = ttft_target_ms
-        spec_data["slo_targets"]["itl_target_ms"] = itl_target_ms
-        spec_data["slo_targets"]["e2e_target_ms"] = e2e_target_ms
+        try:
+            slo_targets = spec_data["slo_targets"]
+        except KeyError as e:
+            raise PlannerAPIError(
+                status_code=502,
+                detail=f"Planner specification response missing expected field: {e}",
+            ) from e
+        slo_targets["ttft_target_ms"] = ttft_target_ms
+        slo_targets["itl_target_ms"] = itl_target_ms
+        slo_targets["e2e_target_ms"] = e2e_target_ms
 
         # Step 3: Get ranked recommendations
         ranked = self.generate_recommendations(

@@ -308,11 +308,14 @@ def test_recommendation_gpu_config_structure(chatbot_balanced_config: dict[str, 
     assert gpu["gpu_count"] >= 1
 
 
-def test_constraints_reduce_results(planner: PlannerClient, chatbot_spec: dict[str, Any]) -> None:
+def test_constraints_reduce_results(
+    planner: PlannerClient,
+    chatbot_spec: dict[str, Any],
+    chatbot_ranked: dict[str, Any],
+) -> None:
     """Tight constraints produce fewer or equal results compared to unconstrained."""
     constrained = planner.generate_recommendations(chatbot_spec, min_quality=95, max_cost=100.0)
-    unconstrained_count = planner.generate_recommendations(chatbot_spec)["configs_after_filters"]
-    assert constrained["configs_after_filters"] <= unconstrained_count
+    assert constrained["configs_after_filters"] <= chatbot_ranked["configs_after_filters"]
 
 
 # == generate-deployment =======================================================

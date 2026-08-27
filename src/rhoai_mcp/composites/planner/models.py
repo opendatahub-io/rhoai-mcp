@@ -143,10 +143,10 @@ class DeploymentConfiguration(BaseModel):
 class ConfigurationScores(BaseModel):
     """Multi-criteria scores for a recommendation (0-100 scale)."""
 
-    quality_score: float = Field(..., description="Model quality/capability score")
-    price_score: int = Field(..., description="Cost efficiency score")
-    latency_score: int = Field(..., description="SLO headroom score")
-    balanced_score: float = Field(..., description="Weighted composite score")
+    quality_score: float = Field(..., ge=0, le=100, description="Model quality/capability score")
+    price_score: float = Field(..., ge=0, le=100, description="Cost efficiency score")
+    latency_score: float = Field(..., ge=0, le=100, description="SLO headroom score")
+    balanced_score: float = Field(..., ge=0, le=100, description="Weighted composite score")
     slo_status: str = Field(..., description="SLO compliance: compliant|near_miss|exceeds")
 
 

@@ -1,5 +1,7 @@
 """Tests for Planner HTTP client."""
 
+import copy
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -96,7 +98,7 @@ SAMPLE_RECOMMENDATION = {
     "configuration": SAMPLE_CONFIGURATION,
 }
 
-SAMPLE_SPECIFICATION = {
+_SAMPLE_SPECIFICATION: dict[str, Any] = {
     "intent": SAMPLE_INTENT,
     "slo_targets": {
         "ttft_target_ms": 150,
@@ -116,6 +118,12 @@ SAMPLE_SPECIFICATION = {
     },
 }
 
+
+def sample_specification() -> dict[str, Any]:
+    """Return a fresh copy to prevent cross-test mutation."""
+    return copy.deepcopy(_SAMPLE_SPECIFICATION)
+
+
 SAMPLE_RANKED_RESPONSE = {
     "balanced": [SAMPLE_RECOMMENDATION],
     "best_quality": [SAMPLE_RECOMMENDATION],
@@ -123,7 +131,7 @@ SAMPLE_RANKED_RESPONSE = {
     "lowest_latency": [SAMPLE_RECOMMENDATION],
     "total_configs_evaluated": 2847,
     "configs_after_filters": 542,
-    "specification": SAMPLE_SPECIFICATION,
+    "specification": _SAMPLE_SPECIFICATION,
 }
 
 SAMPLE_DEPLOYMENT_BUNDLE = {
@@ -262,7 +270,7 @@ class TestPlannerClientGenerateSpecification:
         """Specification is generated from intent."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = SAMPLE_SPECIFICATION
+        mock_response.json.return_value = _SAMPLE_SPECIFICATION
         mock_response.raise_for_status = MagicMock()
         mock_client = MagicMock()
         mock_client.post.return_value = mock_response
@@ -296,7 +304,7 @@ class TestPlannerClientGenerateRecommendations:
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
         client = PlannerClient("http://localhost:8000")
-        result = client.generate_recommendations(SAMPLE_SPECIFICATION)
+        result = client.generate_recommendations(_SAMPLE_SPECIFICATION)
 
         assert len(result["balanced"]) == 1
         assert result["total_configs_evaluated"] == 2847
@@ -317,7 +325,7 @@ class TestPlannerClientGenerateRecommendations:
 
         client = PlannerClient("http://localhost:8000")
         client.generate_recommendations(
-            SAMPLE_SPECIFICATION,
+            _SAMPLE_SPECIFICATION,
             min_quality=70,
             max_cost=5000.0,
         )
@@ -340,7 +348,7 @@ class TestPlannerClientGenerateRecommendations:
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
         client = PlannerClient("http://localhost:8000")
-        client.generate_recommendations(SAMPLE_SPECIFICATION)
+        client.generate_recommendations(_SAMPLE_SPECIFICATION)
 
         call_args = mock_client.post.call_args
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
@@ -363,7 +371,7 @@ class TestPlannerClientRecommend:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -398,7 +406,7 @@ class TestPlannerClientRecommend:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -464,10 +472,7 @@ class TestPlannerClientRecommend:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        import copy
-
-        spec_with_defaults = copy.deepcopy(SAMPLE_SPECIFICATION)
-        spec_resp.json.return_value = spec_with_defaults
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -502,11 +507,9 @@ class TestPlannerClientRecommend:
         extract_resp.json.return_value = SAMPLE_INTENT
         extract_resp.raise_for_status = MagicMock()
 
-        import copy
-
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = copy.deepcopy(SAMPLE_SPECIFICATION)
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -542,7 +545,7 @@ class TestPlannerClientRecommend:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -581,7 +584,7 @@ class TestPlannerClientRecommendExtractionBypass:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -621,7 +624,7 @@ class TestPlannerClientRecommendExtractionBypass:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -768,7 +771,7 @@ class TestPlannerClientGenerateConfig:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -811,7 +814,7 @@ class TestPlannerClientGenerateConfig:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -851,7 +854,7 @@ class TestPlannerClientGenerateConfig:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -890,7 +893,7 @@ class TestPlannerClientGenerateConfig:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -929,7 +932,7 @@ class TestPlannerClientGenerateConfig:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         empty_ranked = {
@@ -972,7 +975,7 @@ class TestPlannerClientGenerateConfig:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -1014,7 +1017,7 @@ class TestPlannerClientGenerateConfig:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
@@ -1053,7 +1056,7 @@ class TestPlannerClientGenerateConfig:
 
         spec_resp = MagicMock()
         spec_resp.status_code = 200
-        spec_resp.json.return_value = SAMPLE_SPECIFICATION
+        spec_resp.json.return_value = sample_specification()
         spec_resp.raise_for_status = MagicMock()
 
         rec_no_name = {**SAMPLE_RECOMMENDATION, "model_name": None}

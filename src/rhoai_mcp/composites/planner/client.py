@@ -214,9 +214,7 @@ class PlannerClient:
         else:
             intent = self.extract_intent(text)
             intent_for_spec = DeploymentIntent(
-                use_case=(
-                    use_case_override if use_case_override is not None else intent.use_case
-                ),
+                use_case=(use_case_override if use_case_override is not None else intent.use_case),
                 user_count=(
                     user_count_override if user_count_override is not None else intent.user_count
                 ),
@@ -224,8 +222,7 @@ class PlannerClient:
                     gpu_types_override
                     if gpu_types_override is not None
                     else [
-                        g if isinstance(g, str) else g.gpu_type
-                        for g in intent.preferred_gpu_types
+                        g if isinstance(g, str) else g.gpu_type for g in intent.preferred_gpu_types
                     ]
                 ),
                 preferred_models=intent.preferred_models,

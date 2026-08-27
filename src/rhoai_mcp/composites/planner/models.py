@@ -191,9 +191,7 @@ class RecommendationResult(BaseModel):
     top_balanced: ModelRecommendation | None = Field(
         None, description="Top model for balanced score"
     )
-    top_quality: ModelRecommendation | None = Field(
-        None, description="Top model for best quality"
-    )
+    top_quality: ModelRecommendation | None = Field(None, description="Top model for best quality")
     total_configs_evaluated: int = Field(0, description="Total configs evaluated")
     configs_after_filters: int = Field(0, description="Configs after filtering")
 

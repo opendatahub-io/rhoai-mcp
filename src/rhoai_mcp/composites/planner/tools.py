@@ -38,10 +38,10 @@ VALID_PERCENTILES: set[str] = {"mean", "p90", "p95", "p99"}
 MAX_TEXT_CHARS = 4000
 
 OPTIMIZATION_PROFILES: dict[str, dict[str, int]] = {
-    "balanced": {"accuracy": 4, "price": 4, "latency": 1, "complexity": 1},
-    "optimize_latency": {"accuracy": 2, "price": 2, "latency": 8, "complexity": 1},
-    "optimize_cost": {"accuracy": 2, "price": 8, "latency": 1, "complexity": 1},
-    "optimize_accuracy": {"accuracy": 8, "price": 2, "latency": 1, "complexity": 1},
+    "balanced": {"quality": 4, "price": 4, "latency": 2},
+    "optimize_latency": {"quality": 2, "price": 2, "latency": 8},
+    "optimize_cost": {"quality": 2, "price": 8, "latency": 1},
+    "optimize_quality": {"quality": 8, "price": 2, "latency": 1},
 }
 
 VALID_CATEGORIES: set[str] = set(CATEGORY_MAP)
@@ -63,6 +63,8 @@ def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any
     compact["meets_slo"] = rec.meets_slo
     if slot == "top_balanced" and rec.scores:
         compact["score"] = rec.scores.balanced_score
+    if slot == "top_quality" and rec.scores:
+        compact["score"] = rec.scores.quality_score
     if rec.reasoning:
         compact["reasoning"] = rec.reasoning
     return compact
@@ -80,7 +82,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         ttft_max_ms: int | None = None,
         itl_max_ms: int | None = None,
         e2e_max_ms: int | None = None,
-        min_accuracy: int | None = None,
+        min_quality: int | None = None,
         max_cost_per_month: float | None = None,
         optimization_profile: str | None = None,
         percentile: str | None = None,
@@ -89,8 +91,9 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         Runs the full Planner recommendation flow: extracts intent from
         natural language, builds technical specifications, and returns
-        three named recommendations: top_performance (lowest latency),
-        top_cost (cheapest), and top_balanced (weighted composite).
+        four named recommendations: top_performance (lowest latency),
+        top_cost (cheapest), top_balanced (weighted composite), and
+        top_quality (highest quality score).
 
         Args:
             text: Natural language description of the use case
@@ -109,21 +112,21 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 Overrides the default SLO target for the use case.
             e2e_max_ms: Maximum end-to-end latency in milliseconds.
                 Overrides the default SLO target for the use case.
-            min_accuracy: Minimum model accuracy score (0-100).
+            min_quality: Minimum model quality score (0-100).
                 Filters out models below this quality threshold.
             max_cost_per_month: Maximum monthly cost in USD.
                 Filters out configurations exceeding this budget.
             optimization_profile: Scoring profile that controls how
                 recommendations are ranked. Valid values:
                 balanced (default), optimize_latency, optimize_cost,
-                optimize_accuracy.
+                optimize_quality.
             percentile: Percentile for SLO evaluation. Valid values:
                 mean, p90, p95 (default), p99.
 
         Returns:
-            Three top model recommendations (top_performance, top_cost,
-            top_balanced) with assembled specification, or error dict
-            if the request fails.
+            Four top model recommendations (top_performance, top_cost,
+            top_balanced, top_quality) with assembled specification,
+            or error dict if the request fails.
         """
         # Validate text input
         if not text or not text.strip():
@@ -157,9 +160,9 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             if value is not None and value <= 0:
                 return {"error": f"{field_name} must be > 0"}
 
-        # Validate min_accuracy
-        if min_accuracy is not None and not 0 <= min_accuracy <= 100:
-            return {"error": "min_accuracy must be between 0 and 100"}
+        # Validate min_quality
+        if min_quality is not None and not 0 <= min_quality <= 100:
+            return {"error": "min_quality must be between 0 and 100"}
 
         # Validate max_cost_per_month
         if max_cost_per_month is not None and max_cost_per_month < 0:
@@ -175,20 +178,19 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 }
 
         # Validate optimization_profile if provided
-        weights: dict[str, int] | None = None
-        if optimization_profile is not None:
-            if optimization_profile not in OPTIMIZATION_PROFILES:
-                valid = ", ".join(sorted(OPTIMIZATION_PROFILES))
-                return {
-                    "error": f"Invalid optimization_profile '{optimization_profile}'. "
-                    f"Valid values: {valid}",
-                }
-            weights = OPTIMIZATION_PROFILES[optimization_profile]
+        if optimization_profile is not None and optimization_profile not in OPTIMIZATION_PROFILES:
+            valid = ", ".join(sorted(OPTIMIZATION_PROFILES))
+            return {
+                "error": f"Invalid optimization_profile '{optimization_profile}'. "
+                f"Valid values: {valid}",
+            }
 
         client = PlannerClient(
             server.config.planner_url,
             timeout=float(server.config.planner_timeout),
         )
+
+        weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
         try:
             result = client.recommend(
@@ -199,10 +201,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 ttft_override_ms=ttft_max_ms,
                 itl_override_ms=itl_max_ms,
                 e2e_override_ms=e2e_max_ms,
-                min_accuracy=min_accuracy,
+                min_quality=min_quality,
                 max_cost=max_cost_per_month,
-                weights=weights,
-                percentile=percentile,
+                percentile_override=percentile,
+                priority_weights=weights,
             )
         except PlannerConnectionError as e:
             logger.warning("Planner connection error")
@@ -219,12 +221,13 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 "status_code": e.status_code,
             }
 
-        # Format recommendations as 3 named categories
+        # Format recommendations as 4 named categories
         recommendations: dict[str, Any] = {}
         for key, rec in [
             ("top_performance", result.top_performance),
             ("top_cost", result.top_cost),
             ("top_balanced", result.top_balanced),
+            ("top_quality", result.top_quality),
         ]:
             if rec is not None:
                 recommendations[key] = _format_recommendation(rec, slot=key)
@@ -253,7 +256,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         namespace: str = "default",
         optimization_profile: str | None = None,
         preferred_gpu_types: list[str] | None = None,
-        min_accuracy: int | None = None,
+        min_quality: int | None = None,
         max_cost_per_month: float | None = None,
         percentile: str | None = None,
     ) -> dict[str, Any]:
@@ -270,7 +273,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         Args:
             category: Which recommendation to deploy. Valid values:
-                balanced, cost, performance.
+                balanced, cost, performance, quality.
             use_case: Use case from recommend_model specification.
                 Valid values: chatbot_conversational, code_completion,
                 code_generation_detailed, translation, content_generation,
@@ -285,10 +288,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             e2e_target_ms: E2E target (ms) from recommend_model specification.
             namespace: Kubernetes namespace for the generated config.
             optimization_profile: Scoring profile for ranking. Valid values:
-                balanced, optimize_latency, optimize_cost, optimize_accuracy.
+                balanced, optimize_latency, optimize_cost, optimize_quality.
             preferred_gpu_types: GPU type filter.
                 Valid: L4, A100-40, A100-80, H100, H200, B200.
-            min_accuracy: Minimum accuracy score (0-100).
+            min_quality: Minimum quality score (0-100).
             max_cost_per_month: Maximum monthly cost in USD.
             percentile: Percentile for SLO evaluation.
                 Valid: mean, p90, p95, p99.
@@ -345,9 +348,9 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             valid = ", ".join(sorted(VALID_PERCENTILES))
             return {"error": f"Invalid percentile '{percentile}'. Valid values: {valid}"}
 
-        # Validate min_accuracy
-        if min_accuracy is not None and not 0 <= min_accuracy <= 100:
-            return {"error": "min_accuracy must be between 0 and 100"}
+        # Validate min_quality
+        if min_quality is not None and not 0 <= min_quality <= 100:
+            return {"error": "min_quality must be between 0 and 100"}
 
         # Validate max_cost_per_month
         if max_cost_per_month is not None and max_cost_per_month < 0:
@@ -363,15 +366,14 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 }
 
         # Resolve optimization_profile to weights
-        weights: dict[str, int] | None = None
-        if optimization_profile is not None:
-            if optimization_profile not in OPTIMIZATION_PROFILES:
-                valid = ", ".join(sorted(OPTIMIZATION_PROFILES))
-                return {
-                    "error": f"Invalid optimization_profile '{optimization_profile}'. "
-                    f"Valid values: {valid}",
-                }
-            weights = OPTIMIZATION_PROFILES[optimization_profile]
+        if optimization_profile is not None and optimization_profile not in OPTIMIZATION_PROFILES:
+            valid = ", ".join(sorted(OPTIMIZATION_PROFILES))
+            return {
+                "error": f"Invalid optimization_profile '{optimization_profile}'. "
+                f"Valid values: {valid}",
+            }
+
+        weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
         client = PlannerClient(
             server.config.planner_url,
@@ -391,10 +393,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 e2e_target_ms=e2e_target_ms,
                 namespace=namespace,
                 preferred_gpu_types=preferred_gpu_types,
-                min_accuracy=min_accuracy,
+                min_quality=min_quality,
                 max_cost=max_cost_per_month,
-                weights=weights,
                 percentile=percentile,
+                priority_weights=weights,
             )
         except PlannerConnectionError as e:
             logger.warning("Planner connection error")

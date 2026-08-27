@@ -1,5 +1,7 @@
 """Tests for Planner HTTP client."""
 
+import copy
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,15 +15,13 @@ from rhoai_mcp.composites.planner.models import DeploymentConfigResult
 
 SAMPLE_INTENT = {
     "use_case": "chatbot_conversational",
-    "experience_class": "conversational",
     "user_count": 1000,
     "domain_specialization": ["general"],
     "preferred_gpu_types": [],
-    "accuracy_priority": "medium",
+    "preferred_models": [],
+    "quality_priority": "medium",
     "cost_priority": "medium",
     "latency_priority": "medium",
-    "complexity_priority": "medium",
-    "additional_context": None,
 }
 
 SAMPLE_SLO_DEFAULTS = {
@@ -53,9 +53,27 @@ SAMPLE_EXPECTED_RPS = {
     "peak_rps": 20.0,
 }
 
+SAMPLE_CONFIGURATION = {
+    "model_id": "meta-llama/Llama-3.1-70B-Instruct",
+    "model_name": "Llama 3.1 70B",
+    "model_uri": None,
+    "gpu_config": {
+        "gpu_type": "NVIDIA-H100",
+        "gpu_count": 2,
+        "tensor_parallel": 2,
+        "replicas": 1,
+    },
+    "use_case": "chatbot_conversational",
+    "expected_qps": 10.0,
+    "prompt_tokens": 512,
+    "output_tokens": 256,
+    "e2e_target_ms": 2000,
+}
+
 SAMPLE_RECOMMENDATION = {
     "model_id": "meta-llama/Llama-3.1-70B-Instruct",
     "model_name": "Llama 3.1 70B",
+    "model_uri": None,
     "gpu_config": {
         "gpu_type": "NVIDIA-H100",
         "gpu_count": 2,
@@ -71,61 +89,61 @@ SAMPLE_RECOMMENDATION = {
     "meets_slo": True,
     "reasoning": "Selected Llama 3.1 70B for chatbot use case",
     "scores": {
-        "accuracy_score": 78,
+        "quality_score": 78,
         "price_score": 65,
         "latency_score": 95,
-        "complexity_score": 90,
         "balanced_score": 75.3,
         "slo_status": "compliant",
     },
+    "configuration": SAMPLE_CONFIGURATION,
+}
+
+_SAMPLE_SPECIFICATION: dict[str, Any] = {
     "intent": SAMPLE_INTENT,
-    "traffic_profile": {
+    "slo_targets": {
+        "ttft_target_ms": 150,
+        "itl_target_ms": 65,
+        "e2e_target_ms": 2000,
+        "percentile": "p95",
+    },
+    "workload_profile": {
         "prompt_tokens": 512,
         "output_tokens": 256,
         "expected_qps": 10.0,
     },
-    "slo_targets": {
-        "ttft_p95_target_ms": 150,
-        "itl_p95_target_ms": 65,
-        "e2e_p95_target_ms": 2000,
-        "percentile": "p95",
+    "priorities": {
+        "quality": {"priority": "medium", "weight": 4},
+        "cost": {"priority": "medium", "weight": 4},
+        "latency": {"priority": "medium", "weight": 4},
     },
 }
+
+
+def sample_specification() -> dict[str, Any]:
+    """Return a fresh copy to prevent cross-test mutation."""
+    return copy.deepcopy(_SAMPLE_SPECIFICATION)
+
 
 SAMPLE_RANKED_RESPONSE = {
     "balanced": [SAMPLE_RECOMMENDATION],
-    "best_accuracy": [SAMPLE_RECOMMENDATION],
+    "best_quality": [SAMPLE_RECOMMENDATION],
     "lowest_cost": [SAMPLE_RECOMMENDATION],
     "lowest_latency": [SAMPLE_RECOMMENDATION],
-    "simplest": [SAMPLE_RECOMMENDATION],
     "total_configs_evaluated": 2847,
     "configs_after_filters": 542,
-    "specification": {
-        "intent": SAMPLE_INTENT,
-        "traffic_profile": {
-            "prompt_tokens": 512,
-            "output_tokens": 256,
-            "expected_qps": 10.0,
-        },
-        "slo_targets": {
-            "ttft_p95_target_ms": 150,
-            "itl_p95_target_ms": 65,
-            "e2e_p95_target_ms": 2000,
-            "percentile": "p95",
-        },
-    },
+    "specification": _SAMPLE_SPECIFICATION,
 }
 
-SAMPLE_DEPLOY_RESPONSE = {
+SAMPLE_DEPLOYMENT_BUNDLE = {
     "deployment_id": "chatbot-llama-3-1-70b-20260322143022",
     "namespace": "default",
+    "stack": "vllm",
+    "configuration": SAMPLE_CONFIGURATION,
     "files": {
         "inferenceservice": "apiVersion: serving.kserve.io/v1beta1\nkind: InferenceService",
         "autoscaling": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler",
         "servicemonitor": "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor",
     },
-    "success": True,
-    "message": "Deployment files generated successfully",
 }
 
 
@@ -244,12 +262,38 @@ class TestPlannerClientGetDefaults:
         assert rps["expected_rps"] == 10.0
 
 
-class TestPlannerClientRecommend:
-    """Tests for the full recommendation flow."""
+class TestPlannerClientGenerateSpecification:
+    """Tests for generate_specification method."""
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
-    def test_get_recommendations(self, mock_httpx: MagicMock) -> None:
-        """Ranked recommendations are fetched and parsed."""
+    def test_generate_specification(self, mock_httpx: MagicMock) -> None:
+        """Specification is generated from intent."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _SAMPLE_SPECIFICATION
+        mock_response.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        from rhoai_mcp.composites.planner.models import DeploymentIntent
+
+        client = PlannerClient("http://localhost:8000")
+        intent = DeploymentIntent(use_case="chatbot_conversational", user_count=1000)
+        spec = client.generate_specification(intent)
+
+        assert spec["slo_targets"]["ttft_target_ms"] == 150
+        call_args = mock_client.post.call_args
+        assert "/api/v1/generate-specification" in call_args.args[0]
+
+
+class TestPlannerClientGenerateRecommendations:
+    """Tests for generate_recommendations method."""
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_generate_recommendations(self, mock_httpx: MagicMock) -> None:
+        """Ranked recommendations are generated from specification."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_RANKED_RESPONSE
@@ -260,55 +304,83 @@ class TestPlannerClientRecommend:
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
         client = PlannerClient("http://localhost:8000")
-        result = client.get_recommendations(
-            use_case="chatbot_conversational",
-            user_count=1000,
-            prompt_tokens=512,
-            output_tokens=256,
-            expected_qps=10.0,
-            ttft_target_ms=150,
-            itl_target_ms=65,
-            e2e_target_ms=2000,
-        )
+        result = client.generate_recommendations(_SAMPLE_SPECIFICATION)
 
         assert len(result["balanced"]) == 1
         assert result["total_configs_evaluated"] == 2847
+        call_args = mock_client.post.call_args
+        assert "/api/v1/generate-recommendations" in call_args.args[0]
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_generate_recommendations_with_constraints(self, mock_httpx: MagicMock) -> None:
+        """Constraint parameters are included in the POST payload."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_RANKED_RESPONSE
+        mock_response.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        client.generate_recommendations(
+            _SAMPLE_SPECIFICATION,
+            min_quality=70,
+            max_cost=5000.0,
+        )
+
+        call_args = mock_client.post.call_args
+        payload = call_args.kwargs.get("json") or call_args[1].get("json")
+        assert payload["min_quality"] == 70
+        assert payload["max_cost"] == 5000.0
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_generate_recommendations_without_constraints(self, mock_httpx: MagicMock) -> None:
+        """When no constraints are provided, they are omitted from payload."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_RANKED_RESPONSE
+        mock_response.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        client.generate_recommendations(_SAMPLE_SPECIFICATION)
+
+        call_args = mock_client.post.call_args
+        payload = call_args.kwargs.get("json") or call_args[1].get("json")
+        assert "min_quality" not in payload
+        assert "max_cost" not in payload
+
+
+class TestPlannerClientRecommend:
+    """Tests for the full recommendation flow."""
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_full_flow(self, mock_httpx: MagicMock) -> None:
-        """Full recommend() chains extract -> defaults -> recommendations."""
+        """Full recommend() chains extract -> generate-specification -> generate-recommendations."""
         mock_client = MagicMock()
 
-        # Setup responses for each API call in order
         extract_resp = MagicMock()
         extract_resp.status_code = 200
         extract_resp.json.return_value = SAMPLE_INTENT
         extract_resp.raise_for_status = MagicMock()
 
-        slo_resp = MagicMock()
-        slo_resp.status_code = 200
-        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
-        slo_resp.raise_for_status = MagicMock()
-
-        workload_resp = MagicMock()
-        workload_resp.status_code = 200
-        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
-        workload_resp.raise_for_status = MagicMock()
-
-        rps_resp = MagicMock()
-        rps_resp.status_code = 200
-        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
-        rps_resp.raise_for_status = MagicMock()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        # post is called twice: extract + ranked-recommend
-        mock_client.post.side_effect = [extract_resp, ranked_resp]
-        # get is called 3 times: slo-defaults, workload-profile, expected-rps
-        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+        # 3 POST calls: extract, generate-specification, generate-recommendations
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
 
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
@@ -319,57 +391,46 @@ class TestPlannerClientRecommend:
         assert result.top_balanced is not None
         assert result.top_balanced.model_id == "meta-llama/Llama-3.1-70B-Instruct"
         assert result.top_cost is not None
-        assert result.top_cost.model_id == "meta-llama/Llama-3.1-70B-Instruct"
         assert result.top_performance is not None
-        assert result.top_performance.model_id == "meta-llama/Llama-3.1-70B-Instruct"
+        assert result.top_quality is not None
         assert result.specification["use_case"] == "chatbot_conversational"
         assert result.total_configs_evaluated == 2847
+        # 3 POSTs, 0 GETs
+        assert mock_client.post.call_count == 3
+        assert mock_client.get.call_count == 0
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_with_overrides(self, mock_httpx: MagicMock) -> None:
-        """When both use_case and user_count overrides are provided, extraction is skipped."""
+        """When all overrides are provided, extraction is skipped."""
         mock_client = MagicMock()
 
-        slo_resp = MagicMock()
-        slo_resp.status_code = 200
-        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
-        slo_resp.raise_for_status = MagicMock()
-
-        workload_resp = MagicMock()
-        workload_resp.status_code = 200
-        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
-        workload_resp.raise_for_status = MagicMock()
-
-        rps_resp = MagicMock()
-        rps_resp.status_code = 200
-        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
-        rps_resp.raise_for_status = MagicMock()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        # Only one POST (ranked-recommend), extraction is skipped
-        mock_client.post.side_effect = [ranked_resp]
-        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+        # Only 2 POST calls: generate-specification, generate-recommendations
+        mock_client.post.side_effect = [spec_resp, ranked_resp]
 
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
         client = PlannerClient("http://localhost:8000")
-        client.recommend(
+        result = client.recommend(
             "I need a chatbot",
             use_case_override="code_completion",
             user_count_override=5000,
             gpu_types_override=["H100"],
         )
 
-        # Verify the overridden use_case was used for SLO defaults fetch
-        get_calls = mock_client.get.call_args_list
-        assert "code_completion" in get_calls[0].args[0]
-        # Extraction was skipped — only one POST call (ranked-recommend)
-        assert mock_client.post.call_count == 1
+        # Extraction skipped — only 2 POST calls
+        assert mock_client.post.call_count == 2
+        assert result.specification["use_case"] == "code_completion"
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_api_error(self, mock_httpx: MagicMock) -> None:
@@ -400,75 +461,8 @@ class TestPlannerClientRecommend:
             client.extract_intent("test")
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
-    def test_get_recommendations_with_constraints(self, mock_httpx: MagicMock) -> None:
-        """Constraint parameters are included in the POST payload."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = SAMPLE_RANKED_RESPONSE
-        mock_response.raise_for_status = MagicMock()
-        mock_client = MagicMock()
-        mock_client.post.return_value = mock_response
-        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
-        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
-
-        client = PlannerClient("http://localhost:8000")
-        client.get_recommendations(
-            use_case="chatbot_conversational",
-            user_count=1000,
-            prompt_tokens=512,
-            output_tokens=256,
-            expected_qps=10.0,
-            ttft_target_ms=100,
-            itl_target_ms=30,
-            e2e_target_ms=1500,
-            min_accuracy=70,
-            max_cost=5000.0,
-            weights={"accuracy": 2, "price": 2, "latency": 8, "complexity": 1},
-            percentile="p99",
-        )
-
-        # Verify the payload sent to the API
-        call_args = mock_client.post.call_args
-        payload = call_args.kwargs.get("json") or call_args[1].get("json")
-        assert payload["min_accuracy"] == 70
-        assert payload["max_cost"] == 5000.0
-        assert payload["weights"] == {"accuracy": 2, "price": 2, "latency": 8, "complexity": 1}
-        assert payload["percentile"] == "p99"
-
-    @patch("rhoai_mcp.composites.planner.client.httpx")
-    def test_get_recommendations_without_constraints(self, mock_httpx: MagicMock) -> None:
-        """When no constraints are provided, they are omitted from payload."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = SAMPLE_RANKED_RESPONSE
-        mock_response.raise_for_status = MagicMock()
-        mock_client = MagicMock()
-        mock_client.post.return_value = mock_response
-        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
-        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
-
-        client = PlannerClient("http://localhost:8000")
-        client.get_recommendations(
-            use_case="chatbot_conversational",
-            user_count=1000,
-            prompt_tokens=512,
-            output_tokens=256,
-            expected_qps=10.0,
-            ttft_target_ms=150,
-            itl_target_ms=65,
-            e2e_target_ms=2000,
-        )
-
-        call_args = mock_client.post.call_args
-        payload = call_args.kwargs.get("json") or call_args[1].get("json")
-        assert "min_accuracy" not in payload
-        assert "max_cost" not in payload
-        assert "weights" not in payload
-        assert payload["percentile"] == "p95"
-
-    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_with_slo_overrides(self, mock_httpx: MagicMock) -> None:
-        """SLO overrides replace fetched defaults in the recommendation payload."""
+        """SLO overrides replace generated specification values."""
         mock_client = MagicMock()
 
         extract_resp = MagicMock()
@@ -476,28 +470,17 @@ class TestPlannerClientRecommend:
         extract_resp.json.return_value = SAMPLE_INTENT
         extract_resp.raise_for_status = MagicMock()
 
-        slo_resp = MagicMock()
-        slo_resp.status_code = 200
-        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
-        slo_resp.raise_for_status = MagicMock()
-
-        workload_resp = MagicMock()
-        workload_resp.status_code = 200
-        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
-        workload_resp.raise_for_status = MagicMock()
-
-        rps_resp = MagicMock()
-        rps_resp.status_code = 200
-        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
-        rps_resp.raise_for_status = MagicMock()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [extract_resp, ranked_resp]
-        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
 
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
@@ -510,17 +493,9 @@ class TestPlannerClientRecommend:
             e2e_override_ms=1500,
         )
 
-        # The overridden values should appear in the specification
-        assert result.specification["slo_targets"]["ttft_ms"] == 100
-        assert result.specification["slo_targets"]["itl_ms"] == 30
-        assert result.specification["slo_targets"]["e2e_ms"] == 1500
-
-        # Verify the POST payload used overridden values
-        ranked_call = mock_client.post.call_args_list[1]
-        payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
-        assert payload["ttft_target_ms"] == 100
-        assert payload["itl_target_ms"] == 30
-        assert payload["e2e_target_ms"] == 1500
+        assert result.specification["slo_targets"]["ttft_target_ms"] == 100
+        assert result.specification["slo_targets"]["itl_target_ms"] == 30
+        assert result.specification["slo_targets"]["e2e_target_ms"] == 1500
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_with_partial_slo_overrides(self, mock_httpx: MagicMock) -> None:
@@ -532,28 +507,17 @@ class TestPlannerClientRecommend:
         extract_resp.json.return_value = SAMPLE_INTENT
         extract_resp.raise_for_status = MagicMock()
 
-        slo_resp = MagicMock()
-        slo_resp.status_code = 200
-        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
-        slo_resp.raise_for_status = MagicMock()
-
-        workload_resp = MagicMock()
-        workload_resp.status_code = 200
-        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
-        workload_resp.raise_for_status = MagicMock()
-
-        rps_resp = MagicMock()
-        rps_resp.status_code = 200
-        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
-        rps_resp.raise_for_status = MagicMock()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [extract_resp, ranked_resp]
-        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
 
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
@@ -561,17 +525,17 @@ class TestPlannerClientRecommend:
         client = PlannerClient("http://localhost:8000")
         result = client.recommend(
             "I need a chatbot",
-            ttft_override_ms=100,  # Override only TTFT
+            ttft_override_ms=100,
         )
 
-        # TTFT overridden, ITL and E2E use defaults from SAMPLE_SLO_DEFAULTS
-        assert result.specification["slo_targets"]["ttft_ms"] == 100
-        assert result.specification["slo_targets"]["itl_ms"] == 65  # default
-        assert result.specification["slo_targets"]["e2e_ms"] == 2000  # default
+        # TTFT overridden, ITL and E2E use generated specification defaults
+        assert result.specification["slo_targets"]["ttft_target_ms"] == 100
+        assert result.specification["slo_targets"]["itl_target_ms"] == 65
+        assert result.specification["slo_targets"]["e2e_target_ms"] == 2000
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_forwards_constraints(self, mock_httpx: MagicMock) -> None:
-        """min_accuracy, max_cost, weights, and percentile are forwarded."""
+        """min_quality and max_cost are forwarded to generate_recommendations."""
         mock_client = MagicMock()
 
         extract_resp = MagicMock()
@@ -579,28 +543,17 @@ class TestPlannerClientRecommend:
         extract_resp.json.return_value = SAMPLE_INTENT
         extract_resp.raise_for_status = MagicMock()
 
-        slo_resp = MagicMock()
-        slo_resp.status_code = 200
-        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
-        slo_resp.raise_for_status = MagicMock()
-
-        workload_resp = MagicMock()
-        workload_resp.status_code = 200
-        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
-        workload_resp.raise_for_status = MagicMock()
-
-        rps_resp = MagicMock()
-        rps_resp.status_code = 200
-        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
-        rps_resp.raise_for_status = MagicMock()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [extract_resp, ranked_resp]
-        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
 
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
@@ -608,19 +561,174 @@ class TestPlannerClientRecommend:
         client = PlannerClient("http://localhost:8000")
         client.recommend(
             "I need a chatbot",
-            min_accuracy=70,
+            min_quality=70,
             max_cost=5000.0,
-            weights={"accuracy": 8, "price": 2, "latency": 1, "complexity": 1},
-            percentile="p99",
         )
 
-        # Verify constraints were forwarded to the ranked-recommend POST
-        ranked_call = mock_client.post.call_args_list[1]
+        # Verify constraints were forwarded to the generate-recommendations POST
+        ranked_call = mock_client.post.call_args_list[2]
         payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
-        assert payload["min_accuracy"] == 70
+        assert payload["min_quality"] == 70
         assert payload["max_cost"] == 5000.0
-        assert payload["weights"] == {"accuracy": 8, "price": 2, "latency": 1, "complexity": 1}
-        assert payload["percentile"] == "p99"
+
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_recommend_forwards_percentile_override(self, mock_httpx: MagicMock) -> None:
+        """percentile_override is applied to the specification's slo_targets."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        client.recommend("I need a chatbot", percentile_override="p99")
+
+        ranked_call = mock_client.post.call_args_list[2]
+        payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
+        assert payload["specification"]["slo_targets"]["percentile"] == "p99"
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_recommend_forwards_priority_weights(self, mock_httpx: MagicMock) -> None:
+        """priority_weights override the specification's priorities."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        weights = {"quality": 8, "price": 2, "latency": 1}
+        client.recommend("I need a chatbot", priority_weights=weights)
+
+        ranked_call = mock_client.post.call_args_list[2]
+        payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
+        priorities = payload["specification"]["priorities"]
+        assert priorities["quality"]["weight"] == 8
+        assert priorities["cost"]["weight"] == 2
+        assert priorities["latency"]["weight"] == 1
+
+
+    @pytest.mark.parametrize("bad_priorities", [None, []])
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_recommend_invalid_priorities(
+        self, mock_httpx: MagicMock, bad_priorities: Any
+    ) -> None:
+        """Non-dict priorities raises PlannerAPIError(502)."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        spec = sample_specification()
+        spec["priorities"] = bad_priorities
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = spec
+        spec_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, spec_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError) as exc_info:
+            client.recommend(
+                "I need a chatbot",
+                priority_weights={"quality": 8, "price": 2, "latency": 1},
+            )
+        assert exc_info.value.status_code == 502
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_recommend_invalid_priority_entry(self, mock_httpx: MagicMock) -> None:
+        """Null priority entry raises PlannerAPIError(502)."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        spec = sample_specification()
+        spec["priorities"]["quality"] = None
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = spec
+        spec_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, spec_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError) as exc_info:
+            client.recommend(
+                "I need a chatbot",
+                priority_weights={"quality": 8, "price": 2, "latency": 1},
+            )
+        assert exc_info.value.status_code == 502
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_recommend_missing_priority_category(self, mock_httpx: MagicMock) -> None:
+        """Missing priority category in spec raises PlannerAPIError(502)."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        spec = sample_specification()
+        del spec["priorities"]["quality"]
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = spec
+        spec_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, spec_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError) as exc_info:
+            client.recommend(
+                "I need a chatbot",
+                priority_weights={"quality": 8, "price": 2, "latency": 1},
+            )
+        assert exc_info.value.status_code == 502
+        assert "priorities.quality" in exc_info.value.detail
 
 
 class TestPlannerClientRecommendExtractionBypass:
@@ -633,29 +741,18 @@ class TestPlannerClientRecommendExtractionBypass:
         """When all overrides are provided, extraction is skipped."""
         mock_client = MagicMock()
 
-        slo_resp = MagicMock()
-        slo_resp.status_code = 200
-        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
-        slo_resp.raise_for_status = MagicMock()
-
-        workload_resp = MagicMock()
-        workload_resp.status_code = 200
-        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
-        workload_resp.raise_for_status = MagicMock()
-
-        rps_resp = MagicMock()
-        rps_resp.status_code = 200
-        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
-        rps_resp.raise_for_status = MagicMock()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        # Only one POST call: ranked-recommend (no extract call)
-        mock_client.post.side_effect = [ranked_resp]
-        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+        # Only 2 POST calls: generate-specification, generate-recommendations
+        mock_client.post.side_effect = [spec_resp, ranked_resp]
 
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
@@ -668,10 +765,9 @@ class TestPlannerClientRecommendExtractionBypass:
             gpu_types_override=["A100"],
         )
 
-        # Only one POST call was made (ranked-recommend, not extract)
-        assert mock_client.post.call_count == 1
+        # Only two POST calls (generate-specification + generate-recommendations)
+        assert mock_client.post.call_count == 2
         assert result.specification["use_case"] == "chatbot_conversational"
-        assert result.specification["user_count"] == 1000
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_recommend_still_extracts_when_only_use_case_override(
@@ -685,28 +781,17 @@ class TestPlannerClientRecommendExtractionBypass:
         extract_resp.json.return_value = SAMPLE_INTENT
         extract_resp.raise_for_status = MagicMock()
 
-        slo_resp = MagicMock()
-        slo_resp.status_code = 200
-        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
-        slo_resp.raise_for_status = MagicMock()
-
-        workload_resp = MagicMock()
-        workload_resp.status_code = 200
-        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
-        workload_resp.raise_for_status = MagicMock()
-
-        rps_resp = MagicMock()
-        rps_resp.status_code = 200
-        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
-        rps_resp.raise_for_status = MagicMock()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [extract_resp, ranked_resp]
-        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
 
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
@@ -717,54 +802,9 @@ class TestPlannerClientRecommendExtractionBypass:
             use_case_override="code_completion",
         )
 
-        # Two POST calls: extract + ranked-recommend
-        assert mock_client.post.call_count == 2
-        # Use case override is applied
+        # Three POST calls: extract + generate-specification + generate-recommendations
+        assert mock_client.post.call_count == 3
         assert result.specification["use_case"] == "code_completion"
-
-    @patch("rhoai_mcp.composites.planner.client.httpx")
-    def test_recommend_skips_extraction_uses_gpu_override(self, mock_httpx: MagicMock) -> None:
-        """When extraction is skipped, gpu_types_override is used."""
-        mock_client = MagicMock()
-
-        slo_resp = MagicMock()
-        slo_resp.status_code = 200
-        slo_resp.json.return_value = SAMPLE_SLO_DEFAULTS
-        slo_resp.raise_for_status = MagicMock()
-
-        workload_resp = MagicMock()
-        workload_resp.status_code = 200
-        workload_resp.json.return_value = SAMPLE_WORKLOAD_PROFILE
-        workload_resp.raise_for_status = MagicMock()
-
-        rps_resp = MagicMock()
-        rps_resp.status_code = 200
-        rps_resp.json.return_value = SAMPLE_EXPECTED_RPS
-        rps_resp.raise_for_status = MagicMock()
-
-        ranked_resp = MagicMock()
-        ranked_resp.status_code = 200
-        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
-        ranked_resp.raise_for_status = MagicMock()
-
-        mock_client.post.side_effect = [ranked_resp]
-        mock_client.get.side_effect = [slo_resp, workload_resp, rps_resp]
-
-        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
-        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
-
-        client = PlannerClient("http://localhost:8000")
-        client.recommend(
-            "I need a chatbot",
-            use_case_override="chatbot_conversational",
-            user_count_override=1000,
-            gpu_types_override=["H100"],
-        )
-
-        # Verify the GPU override was forwarded
-        ranked_call = mock_client.post.call_args
-        payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
-        assert payload["preferred_gpu_types"] == ["H100"]
 
 
 class TestPlannerClientRequestErrors:
@@ -830,7 +870,6 @@ class TestPlannerClientHealthCheck:
 
         assert healthy is True
         assert "available" in msg.lower()
-        # Verify health check uses /health endpoint (not /api/v1/)
         mock_client.get.assert_called_once_with("http://localhost:8000/health", params=None)
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
@@ -853,15 +892,15 @@ class TestPlannerClientHealthCheck:
         assert "unavailable" in msg.lower()
 
 
-class TestPlannerClientDeploy:
-    """Tests for deploy() method."""
+class TestPlannerClientGenerateDeployment:
+    """Tests for generate_deployment() method."""
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
-    def test_deploy(self, mock_httpx: MagicMock) -> None:
-        """deploy() sends recommendation + namespace and returns response."""
+    def test_generate_deployment(self, mock_httpx: MagicMock) -> None:
+        """generate_deployment() sends configuration + namespace and returns bundle."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        mock_response.json.return_value = SAMPLE_DEPLOYMENT_BUNDLE
         mock_response.raise_for_status = MagicMock()
         mock_client = MagicMock()
         mock_client.post.return_value = mock_response
@@ -869,16 +908,14 @@ class TestPlannerClientDeploy:
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
         client = PlannerClient("http://localhost:8000")
-        result = client.deploy(SAMPLE_RECOMMENDATION, namespace="ml-prod")
+        result = client.generate_deployment(SAMPLE_CONFIGURATION, namespace="ml-prod")
 
-        # Verify correct endpoint and payload
         call_args = mock_client.post.call_args
-        assert "/api/v1/deploy" in call_args.args[0]
+        assert "/api/v1/generate-deployment" in call_args.args[0]
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
-        assert payload["recommendation"] == SAMPLE_RECOMMENDATION
+        assert payload["configuration"] == SAMPLE_CONFIGURATION
         assert payload["namespace"] == "ml-prod"
 
-        # Verify response passthrough
         assert result["deployment_id"] == "chatbot-llama-3-1-70b-20260322143022"
         assert "inferenceservice" in result["files"]
 
@@ -891,6 +928,11 @@ class TestPlannerClientGenerateConfig:
         """generate_config with category='balanced' picks from balanced list."""
         mock_client = MagicMock()
 
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
@@ -898,10 +940,11 @@ class TestPlannerClientGenerateConfig:
 
         deploy_resp = MagicMock()
         deploy_resp.status_code = 200
-        deploy_resp.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        deploy_resp.json.return_value = SAMPLE_DEPLOYMENT_BUNDLE
         deploy_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        # 3 POSTs: generate-specification, generate-recommendations, generate-deployment
+        mock_client.post.side_effect = [spec_resp, ranked_resp, deploy_resp]
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -924,9 +967,15 @@ class TestPlannerClientGenerateConfig:
         assert "inferenceservice" in result.configs
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
-    def test_generate_config_cost(self, mock_httpx: MagicMock) -> None:
-        """category='cost' maps to 'lowest_cost' ranking list."""
+    def test_generate_config_applies_workload_overrides(self, mock_httpx: MagicMock) -> None:
+        """Caller's prompt_tokens/output_tokens/expected_qps override the specification."""
         mock_client = MagicMock()
+
+        spec = sample_specification()
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = spec
+        spec_resp.raise_for_status = MagicMock()
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
@@ -935,10 +984,90 @@ class TestPlannerClientGenerateConfig:
 
         deploy_resp = MagicMock()
         deploy_resp.status_code = 200
-        deploy_resp.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        deploy_resp.json.return_value = SAMPLE_DEPLOYMENT_BUNDLE
         deploy_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_client.post.side_effect = [spec_resp, ranked_resp, deploy_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        client.generate_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=1024,
+            output_tokens=512,
+            expected_qps=25.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        # The second POST is generate-recommendations; its payload should
+        # contain the overridden workload profile values
+        recommend_call = mock_client.post.call_args_list[1]
+        sent_spec = recommend_call.kwargs.get("json", recommend_call[1].get("json", {}))
+        workload = sent_spec["specification"]["workload_profile"]
+        assert workload["prompt_tokens"] == 1024
+        assert workload["output_tokens"] == 512
+        assert workload["expected_qps"] == 25.0
+
+    @pytest.mark.parametrize("bad_workload", [None, []])
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_generate_config_invalid_workload_profile(
+        self, mock_httpx: MagicMock, bad_workload: Any
+    ) -> None:
+        """Non-dict workload_profile raises PlannerAPIError(502)."""
+        mock_client = MagicMock()
+
+        spec = sample_specification()
+        spec["workload_profile"] = bad_workload
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = spec
+        spec_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [spec_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError) as exc_info:
+            client.generate_config(
+                category="balanced",
+                use_case="chatbot_conversational",
+                user_count=1000,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=150,
+                itl_target_ms=65,
+                e2e_target_ms=2000,
+            )
+        assert exc_info.value.status_code == 502
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_generate_config_cost(self, mock_httpx: MagicMock) -> None:
+        """category='cost' maps to 'lowest_cost' ranking list."""
+        mock_client = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        deploy_resp = MagicMock()
+        deploy_resp.status_code = 200
+        deploy_resp.json.return_value = SAMPLE_DEPLOYMENT_BUNDLE
+        deploy_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [spec_resp, ranked_resp, deploy_resp]
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -963,6 +1092,11 @@ class TestPlannerClientGenerateConfig:
         """category='performance' maps to 'lowest_latency' ranking list."""
         mock_client = MagicMock()
 
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
@@ -970,10 +1104,10 @@ class TestPlannerClientGenerateConfig:
 
         deploy_resp = MagicMock()
         deploy_resp.status_code = 200
-        deploy_resp.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        deploy_resp.json.return_value = SAMPLE_DEPLOYMENT_BUNDLE
         deploy_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_client.post.side_effect = [spec_resp, ranked_resp, deploy_resp]
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -993,9 +1127,53 @@ class TestPlannerClientGenerateConfig:
         assert isinstance(result, DeploymentConfigResult)
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_generate_config_quality(self, mock_httpx: MagicMock) -> None:
+        """category='quality' maps to 'best_quality' ranking list."""
+        mock_client = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        deploy_resp = MagicMock()
+        deploy_resp.status_code = 200
+        deploy_resp.json.return_value = SAMPLE_DEPLOYMENT_BUNDLE
+        deploy_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [spec_resp, ranked_resp, deploy_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        result = client.generate_config(
+            category="quality",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert isinstance(result, DeploymentConfigResult)
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_empty_category(self, mock_httpx: MagicMock) -> None:
         """Empty category list raises PlannerAPIError."""
         mock_client = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
 
         empty_ranked = {
             **SAMPLE_RANKED_RESPONSE,
@@ -1006,7 +1184,7 @@ class TestPlannerClientGenerateConfig:
         ranked_resp.json.return_value = empty_ranked
         ranked_resp.raise_for_status = MagicMock()
 
-        mock_client.post.return_value = ranked_resp
+        mock_client.post.side_effect = [spec_resp, ranked_resp]
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -1035,6 +1213,11 @@ class TestPlannerClientGenerateConfig:
         mock_httpx.RequestError = real_httpx.RequestError
         mock_client = MagicMock()
 
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
@@ -1049,7 +1232,7 @@ class TestPlannerClientGenerateConfig:
             response=error_response,
         )
 
-        mock_client.post.side_effect = [ranked_resp, error_response]
+        mock_client.post.side_effect = [spec_resp, ranked_resp, error_response]
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -1072,18 +1255,23 @@ class TestPlannerClientGenerateConfig:
         """Deploy returns empty files dict raises PlannerAPIError."""
         mock_client = MagicMock()
 
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
         ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
         ranked_resp.raise_for_status = MagicMock()
 
-        empty_deploy = {**SAMPLE_DEPLOY_RESPONSE, "files": {}}
+        empty_bundle = {**SAMPLE_DEPLOYMENT_BUNDLE, "files": {}}
         deploy_resp = MagicMock()
         deploy_resp.status_code = 200
-        deploy_resp.json.return_value = empty_deploy
+        deploy_resp.json.return_value = empty_bundle
         deploy_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_client.post.side_effect = [spec_resp, ranked_resp, deploy_resp]
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -1106,6 +1294,11 @@ class TestPlannerClientGenerateConfig:
         """When model_name is None, model_id is used instead."""
         mock_client = MagicMock()
 
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
         rec_no_name = {**SAMPLE_RECOMMENDATION, "model_name": None}
         ranked_no_name = {**SAMPLE_RANKED_RESPONSE, "balanced": [rec_no_name]}
         ranked_resp = MagicMock()
@@ -1115,10 +1308,10 @@ class TestPlannerClientGenerateConfig:
 
         deploy_resp = MagicMock()
         deploy_resp.status_code = 200
-        deploy_resp.json.return_value = SAMPLE_DEPLOY_RESPONSE
+        deploy_resp.json.return_value = SAMPLE_DEPLOYMENT_BUNDLE
         deploy_resp.raise_for_status = MagicMock()
 
-        mock_client.post.side_effect = [ranked_resp, deploy_resp]
+        mock_client.post.side_effect = [spec_resp, ranked_resp, deploy_resp]
         mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
 

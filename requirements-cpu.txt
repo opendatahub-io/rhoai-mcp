@@ -50,7 +50,9 @@ cryptography==50.0.0
     #   pyjwt
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6-EA1/cpu-ubi9-test/simple/
 durationpy==0.10
-    # via kubernetes
+    # via
+    #   -c constraints-lock.tmp
+    #   kubernetes
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6-EA1/cpu-ubi9-test/simple/
 h11==0.16.0
     # via
@@ -79,6 +81,7 @@ httpx-sse==0.4.3
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6-EA1/cpu-ubi9-test/simple/
 idna==3.19
     # via
+    #   -c constraints-lock.tmp
     #   anyio
     #   httpx
     #   requests
@@ -121,7 +124,9 @@ pluggy==1.6.0
     #   hatchling
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6-EA1/cpu-ubi9-test/simple/
 pycparser==3.0
-    # via cffi
+    # via
+    #   -c constraints-lock.tmp
+    #   cffi
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6-EA1/cpu-ubi9-test/simple/
 pydantic==2.13.4
     # via

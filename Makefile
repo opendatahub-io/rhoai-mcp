@@ -179,19 +179,12 @@ eval-trend: ## Show eval score trends over time
 # =============================================================================
 
 generate-requirements-cpu: ## Generate requirements-cpu.txt from pyproject.toml (includes build-system deps)
-	# Relax uv.lock pins to minor-compatible ranges (==X.Y.Z → >=X.Y,<X.Y+1)
-	# so requirements-cpu.txt stays close to the lockfile even when the Red Hat
-	# index carries a different patch version than PyPI.  Dedup by package name
-	# (uv.lock may carry two versions for different Python ranges).
+	# Relax uv.lock pins to minor-compatible ranges so requirements-cpu.txt
+	# stays close to the lockfile even when the Red Hat index carries a
+	# different patch version than PyPI.  For 0.x packages the second
+	# component is effectively major, so use >=0,<1 instead.
 	uv export --no-hashes --no-header --frozen --no-dev --no-emit-project \
-		| uv run --no-project --python ">=3.11" python -c \
-		"import re, sys; \
-		cs = {}; \
-		[cs.__setitem__(m.group(1).lower(), (m.group(1), int(m.group(2)), int(m.group(3)))) \
-		 for line in sys.stdin \
-		 if (m := re.match(r'^([a-zA-Z0-9_-]+)==(\d+)\.(\d+)(?:\.\d+)?', line)) \
-		 and (m.group(1).lower() not in cs or (int(m.group(2)), int(m.group(3))) > (cs[m.group(1).lower()][1], cs[m.group(1).lower()][2]))]; \
-		[print(f'{n}>={M}.{mi},<{M}.{mi+1}') for n, M, mi in cs.values()]" \
+		| uv run --no-project --python ">=3.11" python -c "import re,sys;cs={};[cs.__setitem__(m.group(1).lower(),(m.group(1),int(m.group(2)),int(m.group(3)))) for line in sys.stdin if(m:=re.match(r'^([a-zA-Z0-9_-]+)==(\d+)\.(\d+)(?:\.\d+)?',line)) and(m.group(1).lower() not in cs or(int(m.group(2)),int(m.group(3)))>(cs[m.group(1).lower()][1],cs[m.group(1).lower()][2]))];[print(f'{n}>={M},<{M+1}') if M==0 else print(f'{n}>={M}.{mi},<{M}.{mi+1}') for n,M,mi in cs.values()]" \
 		> constraints-lock.tmp
 	# Extract [build-system].requires from pyproject.toml to a temp file, then compile together.
 	uv run --no-project --python ">=3.11" python -c \

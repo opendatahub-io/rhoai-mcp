@@ -572,6 +572,73 @@ class TestPlannerClientRecommend:
         assert payload["max_cost"] == 5000.0
 
 
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_recommend_forwards_percentile_override(self, mock_httpx: MagicMock) -> None:
+        """percentile_override is applied to the specification's slo_targets."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        client.recommend("I need a chatbot", percentile_override="p99")
+
+        ranked_call = mock_client.post.call_args_list[2]
+        payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
+        assert payload["specification"]["slo_targets"]["percentile"] == "p99"
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_recommend_forwards_priority_weights(self, mock_httpx: MagicMock) -> None:
+        """priority_weights override the specification's priorities."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, spec_resp, ranked_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        weights = {"quality": 8, "price": 2, "latency": 1}
+        client.recommend("I need a chatbot", priority_weights=weights)
+
+        ranked_call = mock_client.post.call_args_list[2]
+        payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
+        priorities = payload["specification"]["priorities"]
+        assert priorities["quality"]["weight"] == 8
+        assert priorities["cost"]["weight"] == 2
+        assert priorities["latency"]["weight"] == 1
+
+
 class TestPlannerClientRecommendExtractionBypass:
     """Tests for skipping extraction when overrides are sufficient."""
 
@@ -853,6 +920,40 @@ class TestPlannerClientGenerateConfig:
         assert workload["prompt_tokens"] == 1024
         assert workload["output_tokens"] == 512
         assert workload["expected_qps"] == 25.0
+
+    @pytest.mark.parametrize("bad_workload", [None, []])
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_generate_config_invalid_workload_profile(
+        self, mock_httpx: MagicMock, bad_workload: Any
+    ) -> None:
+        """Non-dict workload_profile raises PlannerAPIError(502)."""
+        mock_client = MagicMock()
+
+        spec = sample_specification()
+        spec["workload_profile"] = bad_workload
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = spec
+        spec_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [spec_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError) as exc_info:
+            client.generate_config(
+                category="balanced",
+                use_case="chatbot_conversational",
+                user_count=1000,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=150,
+                itl_target_ms=65,
+                e2e_target_ms=2000,
+            )
+        assert exc_info.value.status_code == 502
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
     def test_generate_config_cost(self, mock_httpx: MagicMock) -> None:

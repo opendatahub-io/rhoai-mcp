@@ -189,7 +189,7 @@ generate-requirements-cpu: ## Generate requirements-cpu.txt from pyproject.toml 
 		cs = {}; \
 		[cs.__setitem__(m.group(1).lower(), (m.group(1), int(m.group(2)), int(m.group(3)))) \
 		 for line in sys.stdin \
-		 if (m := re.match(r'^([a-zA-Z0-9_-]+)==(\d+)\.(\d+)\.\d+', line)) \
+		 if (m := re.match(r'^([a-zA-Z0-9_-]+)==(\d+)\.(\d+)(?:\.\d+)?', line)) \
 		 and (m.group(1).lower() not in cs or (int(m.group(2)), int(m.group(3))) > (cs[m.group(1).lower()][1], cs[m.group(1).lower()][2]))]; \
 		[print(f'{n}>={M}.{mi},<{M}.{mi+1}') for n, M, mi in cs.values()]" \
 		> constraints-lock.tmp

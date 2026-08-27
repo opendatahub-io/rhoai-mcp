@@ -151,6 +151,8 @@ class TestRecommendModelTool:
             e2e_override_ms=None,
             min_quality=None,
             max_cost=None,
+            percentile_override=None,
+            priority_weights=None,
         )
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -220,6 +222,8 @@ class TestRecommendModelTool:
             e2e_override_ms=1500,
             min_quality=None,
             max_cost=None,
+            percentile_override=None,
+            priority_weights=None,
         )
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -237,9 +241,9 @@ class TestRecommendModelTool:
             optimization_profile="optimize_latency",
         )
 
-        # optimization_profile is validated but not forwarded to client
-        # (weights are no longer passed directly to the new API)
         mock_client_class.return_value.recommend.assert_called_once()
+        call_kwargs = mock_client_class.return_value.recommend.call_args.kwargs
+        assert call_kwargs["priority_weights"] == {"quality": 2, "price": 2, "latency": 8}
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_all_constraints(self, mock_client_class: MagicMock) -> None:
@@ -275,6 +279,8 @@ class TestRecommendModelTool:
             e2e_override_ms=1500,
             min_quality=70,
             max_cost=5000.0,
+            percentile_override="p99",
+            priority_weights={"quality": 2, "price": 8, "latency": 1},
         )
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -986,3 +992,5 @@ class TestDeploymentConfigTool:
         )
 
         mock_client_class.return_value.generate_config.assert_called_once()
+        call_kwargs = mock_client_class.return_value.generate_config.call_args.kwargs
+        assert call_kwargs["priority_weights"] == {"quality": 2, "price": 8, "latency": 1}

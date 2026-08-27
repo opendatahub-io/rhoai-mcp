@@ -190,6 +190,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             timeout=float(server.config.planner_timeout),
         )
 
+        weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
+
         try:
             result = client.recommend(
                 text,
@@ -201,6 +203,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 e2e_override_ms=e2e_max_ms,
                 min_quality=min_quality,
                 max_cost=max_cost_per_month,
+                percentile_override=percentile,
+                priority_weights=weights,
             )
         except PlannerConnectionError as e:
             logger.warning("Planner connection error")
@@ -369,6 +373,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 f"Valid values: {valid}",
             }
 
+        weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
+
         client = PlannerClient(
             server.config.planner_url,
             timeout=float(server.config.planner_timeout),
@@ -389,6 +395,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 preferred_gpu_types=preferred_gpu_types,
                 min_quality=min_quality,
                 max_cost=max_cost_per_month,
+                percentile=percentile,
+                priority_weights=weights,
             )
         except PlannerConnectionError as e:
             logger.warning("Planner connection error")

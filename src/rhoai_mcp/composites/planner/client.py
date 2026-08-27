@@ -190,6 +190,8 @@ class PlannerClient:
         e2e_override_ms: int | None = None,
         min_quality: float | None = None,
         max_cost: float | None = None,
+        percentile_override: str | None = None,
+        priority_weights: dict[str, int] | None = None,
     ) -> RecommendationResult:
         """Run the full recommendation flow.
 
@@ -250,6 +252,23 @@ class PlannerClient:
             slo_targets["itl_target_ms"] = itl_override_ms
         if e2e_override_ms is not None:
             slo_targets["e2e_target_ms"] = e2e_override_ms
+        if percentile_override is not None:
+            slo_targets["percentile"] = percentile_override
+
+        # Apply priority weight overrides (from optimization_profile).
+        # Profile keys use "price"; spec keys use "cost".
+        if priority_weights is not None:
+            try:
+                priorities = spec_data["priorities"]
+            except KeyError as e:
+                raise PlannerAPIError(
+                    status_code=502,
+                    detail=f"Planner specification response missing expected field: {e}",
+                ) from e
+            profile_to_spec = {"quality": "quality", "price": "cost", "latency": "latency"}
+            for profile_key, spec_key in profile_to_spec.items():
+                if profile_key in priority_weights and spec_key in priorities:
+                    priorities[spec_key]["weight"] = priority_weights[profile_key]
 
         # Step 5: Get recommendations
         ranked = self.generate_recommendations(
@@ -331,6 +350,8 @@ class PlannerClient:
         preferred_gpu_types: list[str] | None = None,
         min_quality: float | None = None,
         max_cost: float | None = None,
+        percentile: str | None = None,
+        priority_weights: dict[str, int] | None = None,
     ) -> DeploymentConfigResult:
         """Generate deployment configs for the top recommendation in a category.
 
@@ -376,9 +397,30 @@ class PlannerClient:
                 status_code=502,
                 detail=f"Planner specification response missing expected field: {e}",
             ) from e
+        if not isinstance(workload, dict):
+            raise PlannerAPIError(
+                status_code=502,
+                detail="Planner specification 'workload_profile' is not a valid object",
+            )
         workload["prompt_tokens"] = prompt_tokens
         workload["output_tokens"] = output_tokens
         workload["expected_qps"] = expected_qps
+
+        if percentile is not None:
+            slo_targets["percentile"] = percentile
+
+        if priority_weights is not None:
+            try:
+                priorities = spec_data["priorities"]
+            except KeyError as e:
+                raise PlannerAPIError(
+                    status_code=502,
+                    detail=f"Planner specification response missing expected field: {e}",
+                ) from e
+            profile_to_spec = {"quality": "quality", "price": "cost", "latency": "latency"}
+            for profile_key, spec_key in profile_to_spec.items():
+                if profile_key in priority_weights and spec_key in priorities:
+                    priorities[spec_key]["weight"] = priority_weights[profile_key]
 
         # Step 3: Get ranked recommendations
         ranked = self.generate_recommendations(

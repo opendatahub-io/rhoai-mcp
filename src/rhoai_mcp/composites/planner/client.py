@@ -272,15 +272,21 @@ class PlannerClient:
                 )
             profile_to_spec = {"quality": "quality", "price": "cost", "latency": "latency"}
             for profile_key, spec_key in profile_to_spec.items():
-                if profile_key in priority_weights and spec_key in priorities:
-                    entry = priorities[spec_key]
-                    if not isinstance(entry, dict):
-                        raise PlannerAPIError(
-                            status_code=502,
-                            detail=f"Planner specification 'priorities.{spec_key}'"
-                            " is not a valid object",
-                        )
-                    entry["weight"] = priority_weights[profile_key]
+                if profile_key not in priority_weights:
+                    continue
+                if spec_key not in priorities:
+                    raise PlannerAPIError(
+                        status_code=502,
+                        detail=f"Planner specification missing 'priorities.{spec_key}'",
+                    )
+                entry = priorities[spec_key]
+                if not isinstance(entry, dict):
+                    raise PlannerAPIError(
+                        status_code=502,
+                        detail=f"Planner specification 'priorities.{spec_key}'"
+                        " is not a valid object",
+                    )
+                entry["weight"] = priority_weights[profile_key]
 
         # Step 5: Get recommendations
         ranked = self.generate_recommendations(
@@ -436,15 +442,21 @@ class PlannerClient:
                 )
             profile_to_spec = {"quality": "quality", "price": "cost", "latency": "latency"}
             for profile_key, spec_key in profile_to_spec.items():
-                if profile_key in priority_weights and spec_key in priorities:
-                    entry = priorities[spec_key]
-                    if not isinstance(entry, dict):
-                        raise PlannerAPIError(
-                            status_code=502,
-                            detail=f"Planner specification 'priorities.{spec_key}'"
-                            " is not a valid object",
-                        )
-                    entry["weight"] = priority_weights[profile_key]
+                if profile_key not in priority_weights:
+                    continue
+                if spec_key not in priorities:
+                    raise PlannerAPIError(
+                        status_code=502,
+                        detail=f"Planner specification missing 'priorities.{spec_key}'",
+                    )
+                entry = priorities[spec_key]
+                if not isinstance(entry, dict):
+                    raise PlannerAPIError(
+                        status_code=502,
+                        detail=f"Planner specification 'priorities.{spec_key}'"
+                        " is not a valid object",
+                    )
+                entry["weight"] = priority_weights[profile_key]
 
         # Step 3: Get ranked recommendations
         ranked = self.generate_recommendations(

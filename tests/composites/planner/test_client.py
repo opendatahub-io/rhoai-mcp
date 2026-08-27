@@ -700,6 +700,36 @@ class TestPlannerClientRecommend:
             )
         assert exc_info.value.status_code == 502
 
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_recommend_missing_priority_category(self, mock_httpx: MagicMock) -> None:
+        """Missing priority category in spec raises PlannerAPIError(502)."""
+        mock_client = MagicMock()
+
+        extract_resp = MagicMock()
+        extract_resp.status_code = 200
+        extract_resp.json.return_value = SAMPLE_INTENT
+        extract_resp.raise_for_status = MagicMock()
+
+        spec = sample_specification()
+        del spec["priorities"]["quality"]
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = spec
+        spec_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [extract_resp, spec_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError) as exc_info:
+            client.recommend(
+                "I need a chatbot",
+                priority_weights={"quality": 8, "price": 2, "latency": 1},
+            )
+        assert exc_info.value.status_code == 502
+        assert "priorities.quality" in exc_info.value.detail
+
 
 class TestPlannerClientRecommendExtractionBypass:
     """Tests for skipping extraction when overrides are sufficient."""

@@ -80,8 +80,7 @@ def _apply_priority_overrides(
         if not isinstance(entry, dict):
             raise PlannerAPIError(
                 status_code=502,
-                detail=f"Planner specification 'priorities.{spec_key}'"
-                " is not a valid object",
+                detail=f"Planner specification 'priorities.{spec_key}' is not a valid object",
             )
         priorities[spec_key] = {**entry, "weight": priority_weights[profile_key]}
 

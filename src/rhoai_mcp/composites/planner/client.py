@@ -46,6 +46,45 @@ CATEGORY_MAP: dict[str, str] = {
     "quality": "best_quality",
 }
 
+_PROFILE_TO_SPEC = {"quality": "quality", "price": "cost", "latency": "latency"}
+
+
+def _apply_priority_overrides(
+    spec_data: dict[str, Any],
+    priority_weights: dict[str, int],
+) -> None:
+    """Apply optimization-profile weights to the specification's priorities."""
+    try:
+        priorities = spec_data["priorities"]
+    except KeyError as e:
+        raise PlannerAPIError(
+            status_code=502,
+            detail=f"Planner specification response missing expected field: {e}",
+        ) from e
+    if not isinstance(priorities, dict):
+        raise PlannerAPIError(
+            status_code=502,
+            detail="Planner specification 'priorities' is not a valid object",
+        )
+    priorities = dict(priorities)
+    spec_data["priorities"] = priorities
+    for profile_key, spec_key in _PROFILE_TO_SPEC.items():
+        if profile_key not in priority_weights:
+            continue
+        if spec_key not in priorities:
+            raise PlannerAPIError(
+                status_code=502,
+                detail=f"Planner specification missing 'priorities.{spec_key}'",
+            )
+        entry = priorities[spec_key]
+        if not isinstance(entry, dict):
+            raise PlannerAPIError(
+                status_code=502,
+                detail=f"Planner specification 'priorities.{spec_key}'"
+                " is not a valid object",
+            )
+        priorities[spec_key] = {**entry, "weight": priority_weights[profile_key]}
+
 
 class PlannerConnectionError(Exception):
     """Raised when Planner service is unreachable."""
@@ -237,9 +276,11 @@ class PlannerClient:
         # Step 3: Generate specification
         spec_data = self.generate_specification(intent_for_spec)
 
-        # Step 4: Apply SLO overrides on top of generated specification
+        # Step 4: Apply SLO overrides on top of generated specification.
+        # Shallow-copy mutable sub-dicts so generate_specification's result is not mutated.
         try:
-            slo_targets = spec_data["slo_targets"]
+            slo_targets = dict(spec_data["slo_targets"])
+            spec_data["slo_targets"] = slo_targets
         except KeyError as e:
             raise PlannerAPIError(
                 status_code=502,
@@ -255,38 +296,8 @@ class PlannerClient:
         if percentile_override is not None:
             slo_targets["percentile"] = percentile_override
 
-        # Apply priority weight overrides (from optimization_profile).
-        # Profile keys use "price"; spec keys use "cost".
         if priority_weights is not None:
-            try:
-                priorities = spec_data["priorities"]
-            except KeyError as e:
-                raise PlannerAPIError(
-                    status_code=502,
-                    detail=f"Planner specification response missing expected field: {e}",
-                ) from e
-            if not isinstance(priorities, dict):
-                raise PlannerAPIError(
-                    status_code=502,
-                    detail="Planner specification 'priorities' is not a valid object",
-                )
-            profile_to_spec = {"quality": "quality", "price": "cost", "latency": "latency"}
-            for profile_key, spec_key in profile_to_spec.items():
-                if profile_key not in priority_weights:
-                    continue
-                if spec_key not in priorities:
-                    raise PlannerAPIError(
-                        status_code=502,
-                        detail=f"Planner specification missing 'priorities.{spec_key}'",
-                    )
-                entry = priorities[spec_key]
-                if not isinstance(entry, dict):
-                    raise PlannerAPIError(
-                        status_code=502,
-                        detail=f"Planner specification 'priorities.{spec_key}'"
-                        " is not a valid object",
-                    )
-                entry["weight"] = priority_weights[profile_key]
+            _apply_priority_overrides(spec_data, priority_weights)
 
         # Step 5: Get recommendations
         ranked = self.generate_recommendations(
@@ -395,9 +406,11 @@ class PlannerClient:
         )
         spec_data = self.generate_specification(intent)
 
-        # Apply explicit SLO targets
+        # Apply explicit SLO targets.
+        # Shallow-copy mutable sub-dicts so generate_specification's result is not mutated.
         try:
-            slo_targets = spec_data["slo_targets"]
+            slo_targets = dict(spec_data["slo_targets"])
+            spec_data["slo_targets"] = slo_targets
         except KeyError as e:
             raise PlannerAPIError(
                 status_code=502,
@@ -420,6 +433,8 @@ class PlannerClient:
                 status_code=502,
                 detail="Planner specification 'workload_profile' is not a valid object",
             )
+        workload = dict(workload)
+        spec_data["workload_profile"] = workload
         workload["prompt_tokens"] = prompt_tokens
         workload["output_tokens"] = output_tokens
         workload["expected_qps"] = expected_qps
@@ -428,35 +443,7 @@ class PlannerClient:
             slo_targets["percentile"] = percentile
 
         if priority_weights is not None:
-            try:
-                priorities = spec_data["priorities"]
-            except KeyError as e:
-                raise PlannerAPIError(
-                    status_code=502,
-                    detail=f"Planner specification response missing expected field: {e}",
-                ) from e
-            if not isinstance(priorities, dict):
-                raise PlannerAPIError(
-                    status_code=502,
-                    detail="Planner specification 'priorities' is not a valid object",
-                )
-            profile_to_spec = {"quality": "quality", "price": "cost", "latency": "latency"}
-            for profile_key, spec_key in profile_to_spec.items():
-                if profile_key not in priority_weights:
-                    continue
-                if spec_key not in priorities:
-                    raise PlannerAPIError(
-                        status_code=502,
-                        detail=f"Planner specification missing 'priorities.{spec_key}'",
-                    )
-                entry = priorities[spec_key]
-                if not isinstance(entry, dict):
-                    raise PlannerAPIError(
-                        status_code=502,
-                        detail=f"Planner specification 'priorities.{spec_key}'"
-                        " is not a valid object",
-                    )
-                entry["weight"] = priority_weights[profile_key]
+            _apply_priority_overrides(spec_data, priority_weights)
 
         # Step 3: Get ranked recommendations
         ranked = self.generate_recommendations(

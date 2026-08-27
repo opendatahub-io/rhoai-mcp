@@ -53,10 +53,9 @@ SAMPLE_REC = ModelRecommendation(
     meets_slo=True,
     reasoning="Selected for chatbot",
     scores={
-        "accuracy_score": 78,
+        "quality_score": 78,
         "price_score": 65,
         "latency_score": 95,
-        "complexity_score": 90,
         "balanced_score": 75.3,
         "slo_status": "compliant",
     },
@@ -66,7 +65,7 @@ SAMPLE_RESULT = RecommendationResult(
     specification={
         "use_case": "chatbot_conversational",
         "user_count": 1000,
-        "slo_targets": {"ttft_ms": 150, "itl_ms": 65, "e2e_ms": 2000},
+        "slo_targets": {"ttft_target_ms": 150, "itl_target_ms": 65, "e2e_target_ms": 2000},
         "traffic_profile": {
             "prompt_tokens": 512,
             "output_tokens": 256,
@@ -76,6 +75,7 @@ SAMPLE_RESULT = RecommendationResult(
     top_performance=SAMPLE_REC,
     top_cost=SAMPLE_REC,
     top_balanced=SAMPLE_REC,
+    top_quality=SAMPLE_REC,
     total_configs_evaluated=2847,
     configs_after_filters=542,
 )
@@ -121,6 +121,8 @@ class TestRecommendModelTool:
         assert recs["top_balanced"]["score"] == 75.3
         assert "top_performance" in recs
         assert "top_cost" in recs
+        assert "top_quality" in recs
+        assert recs["top_quality"]["score"] == 78
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_overrides(self, mock_client_class: MagicMock) -> None:
@@ -147,10 +149,8 @@ class TestRecommendModelTool:
             ttft_override_ms=None,
             itl_override_ms=None,
             e2e_override_ms=None,
-            min_accuracy=None,
+            min_quality=None,
             max_cost=None,
-            weights=None,
-            percentile=None,
         )
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -218,10 +218,8 @@ class TestRecommendModelTool:
             ttft_override_ms=100,
             itl_override_ms=30,
             e2e_override_ms=1500,
-            min_accuracy=None,
+            min_quality=None,
             max_cost=None,
-            weights=None,
-            percentile=None,
         )
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -239,8 +237,9 @@ class TestRecommendModelTool:
             optimization_profile="optimize_latency",
         )
 
-        call_kwargs = mock_client_class.return_value.recommend.call_args.kwargs
-        assert call_kwargs["weights"] == {"accuracy": 2, "price": 2, "latency": 8, "complexity": 1}
+        # optimization_profile is validated but not forwarded to client
+        # (weights are no longer passed directly to the new API)
+        mock_client_class.return_value.recommend.assert_called_once()
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_all_constraints(self, mock_client_class: MagicMock) -> None:
@@ -260,7 +259,7 @@ class TestRecommendModelTool:
             ttft_max_ms=100,
             itl_max_ms=30,
             e2e_max_ms=1500,
-            min_accuracy=70,
+            min_quality=70,
             max_cost_per_month=5000.0,
             optimization_profile="optimize_cost",
             percentile="p99",
@@ -274,10 +273,8 @@ class TestRecommendModelTool:
             ttft_override_ms=100,
             itl_override_ms=30,
             e2e_override_ms=1500,
-            min_accuracy=70,
+            min_quality=70,
             max_cost=5000.0,
-            weights={"accuracy": 2, "price": 8, "latency": 1, "complexity": 1},
-            percentile="p99",
         )
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -296,7 +293,6 @@ class TestRecommendModelTool:
 
         assert "error" in result
         assert "optimization_profile" in result["error"]
-        # Client should NOT have been called
         mock_client_class.assert_not_called()
         mock_client_class.return_value.recommend.assert_not_called()
 
@@ -317,7 +313,6 @@ class TestRecommendModelTool:
         assert "error" in result
         assert "use_case" in result["error"]
         assert "document_summarization" in result["error"]
-        # Client should NOT have been called
         mock_client_class.assert_not_called()
         mock_client_class.return_value.recommend.assert_not_called()
 
@@ -380,16 +375,16 @@ class TestRecommendModelTool:
         mock_client_class.return_value.recommend.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
-    def test_invalid_min_accuracy(self, mock_client_class: MagicMock) -> None:
-        """Out-of-range min_accuracy returns error."""
+    def test_invalid_min_quality(self, mock_client_class: MagicMock) -> None:
+        """Out-of-range min_quality returns error."""
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         recommend_model = mock_mcp._registered_tools["recommend_model"]
 
-        result = recommend_model(text="chatbot", min_accuracy=101)
+        result = recommend_model(text="chatbot", min_quality=101)
 
         assert "error" in result
-        assert "min_accuracy" in result["error"]
+        assert "min_quality" in result["error"]
         mock_client_class.return_value.recommend.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -455,7 +450,6 @@ class TestRecommendModelTool:
                 "traffic_profile": {},
             },
             top_balanced=SAMPLE_REC,
-            # top_performance and top_cost are None
             total_configs_evaluated=2847,
             configs_after_filters=100,
         )
@@ -471,6 +465,7 @@ class TestRecommendModelTool:
         assert "top_balanced" in result["recommendations"]
         assert "top_performance" not in result["recommendations"]
         assert "top_cost" not in result["recommendations"]
+        assert "top_quality" not in result["recommendations"]
         assert "message" not in result
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -819,8 +814,8 @@ class TestDeploymentConfigTool:
         mock_client_class.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
-    def test_invalid_min_accuracy(self, mock_client_class: MagicMock) -> None:
-        """Out-of-range min_accuracy returns error."""
+    def test_invalid_min_quality(self, mock_client_class: MagicMock) -> None:
+        """Out-of-range min_quality returns error."""
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         get_config = mock_mcp._registered_tools["get_deployment_config"]
@@ -835,11 +830,11 @@ class TestDeploymentConfigTool:
             ttft_target_ms=150,
             itl_target_ms=65,
             e2e_target_ms=2000,
-            min_accuracy=101,
+            min_quality=101,
         )
 
         assert "error" in result
-        assert "min_accuracy" in result["error"]
+        assert "min_quality" in result["error"]
         mock_client_class.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
@@ -971,7 +966,7 @@ class TestDeploymentConfigTool:
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_optimization_profile_resolved_to_weights(self, mock_client_class: MagicMock) -> None:
-        """optimization_profile is resolved to weights dict before calling client."""
+        """optimization_profile is validated before calling client."""
         mock_client_class.return_value.generate_config.return_value = SAMPLE_CONFIG_RESULT
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
@@ -990,5 +985,4 @@ class TestDeploymentConfigTool:
             optimization_profile="optimize_cost",
         )
 
-        call_kwargs = mock_client_class.return_value.generate_config.call_args.kwargs
-        assert call_kwargs["weights"] == {"accuracy": 2, "price": 8, "latency": 1, "complexity": 1}
+        mock_client_class.return_value.generate_config.assert_called_once()

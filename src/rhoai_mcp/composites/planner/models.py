@@ -1,9 +1,33 @@
-"""Pydantic models for Planner API request/response types."""
+"""Pydantic models for Planner composite tools.
+
+Shared types are re-exported from the planner package (canonical source).
+Tool-specific output types are defined locally.
+"""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
+# Re-export from planner's public API
+from planner import (
+    DeploymentBundle,
+    DeploymentConfiguration,
+    DeploymentIntent,
+    DeploymentSpecification,
+    GPUConfig,
+    GpuPreference,
+    SLOTargets,
+    WorkloadProfile,
+)
+
+# Re-export from planner's shared schemas (not in planner.__all__)
+from planner.shared.schemas import (
+    Priorities,
+    PriorityEntry,
+    QualityWeights,
+    SLORange,
+    TrafficProfile,
+)
 from pydantic import BaseModel, Field
 
 SloStatusType = Literal["compliant", "near_miss", "exceeds"]
@@ -21,125 +45,6 @@ UseCaseType = Literal[
 ]
 
 PriorityType = Literal["low", "medium", "high"]
-
-
-class GpuPreference(BaseModel):
-    """GPU preference with optional count constraint."""
-
-    gpu_type: str = Field(..., description="GPU type name (e.g., H100, L4)")
-    max_count: int | None = Field(None, description="Maximum GPU count for this type")
-
-
-class DeploymentIntent(BaseModel):
-    """Extracted deployment intent from natural language."""
-
-    use_case: UseCaseType = Field(..., description="Primary use case type")
-    user_count: int = Field(..., description="Number of users or scale")
-    domain_specialization: list[str] = Field(
-        default_factory=lambda: ["general"], description="Domain requirements"
-    )
-    preferred_gpu_types: list[str | GpuPreference] = Field(
-        default_factory=list, description="Preferred GPU types (empty = any)"
-    )
-    preferred_models: list[str] = Field(
-        default_factory=list, description="Preferred model identifiers"
-    )
-    quality_priority: PriorityType = Field(default="medium", description="Quality importance")
-    cost_priority: PriorityType = Field(default="medium", description="Cost sensitivity")
-    latency_priority: PriorityType = Field(default="medium", description="Latency importance")
-
-
-class GPUConfig(BaseModel):
-    """GPU configuration for a recommendation."""
-
-    gpu_type: str = Field(..., description="GPU type (e.g., NVIDIA-H100)")
-    gpu_count: int = Field(..., description="Total number of GPUs")
-    tensor_parallel: int = Field(1, description="Tensor parallelism degree")
-    replicas: int = Field(1, description="Number of replicas")
-
-
-class SLORange(BaseModel):
-    """Range for an SLO metric."""
-
-    min: int = Field(..., description="Minimum value")
-    max: int = Field(..., description="Maximum value")
-
-
-class SLOTargets(BaseModel):
-    """SLO targets used for the recommendation."""
-
-    ttft_target_ms: int = Field(..., description="Time to First Token target (ms)")
-    itl_target_ms: int = Field(..., description="Inter-Token Latency target (ms)")
-    e2e_target_ms: int = Field(..., description="End-to-end latency target (ms)")
-    percentile: str = Field(default="p95", description="Percentile for SLO comparison")
-    ttft_range: SLORange | None = Field(None, description="Recommended TTFT range")
-    itl_range: SLORange | None = Field(None, description="Recommended ITL range")
-    e2e_range: SLORange | None = Field(None, description="Recommended E2E range")
-
-
-class TrafficProfile(BaseModel):
-    """Traffic profile used for the recommendation."""
-
-    prompt_tokens: int = Field(..., description="Target prompt length in tokens")
-    output_tokens: int = Field(..., description="Target output length in tokens")
-    expected_qps: float = Field(..., description="Expected queries per second")
-
-
-class WorkloadProfile(BaseModel):
-    """Workload profile from the specification endpoint."""
-
-    prompt_tokens: int = Field(..., description="Mean input token length per request")
-    output_tokens: int = Field(..., description="Mean output token length per request")
-    expected_qps: float = Field(..., description="Expected queries per second")
-
-
-class QualityWeights(BaseModel):
-    """Per-use-case category weights for quality scoring."""
-
-    categories: dict[str, int] = Field(..., description="Category name to weight mapping")
-
-
-class PriorityEntry(BaseModel):
-    """A priority with its resolved numeric weight."""
-
-    priority: PriorityType = Field(..., description="Priority level")
-    weight: int = Field(..., description="Resolved numeric weight")
-
-
-class Priorities(BaseModel):
-    """Resolved priority weights for scoring."""
-
-    quality: PriorityEntry = Field(..., description="Quality priority and weight")
-    cost: PriorityEntry = Field(..., description="Cost priority and weight")
-    latency: PriorityEntry = Field(..., description="Latency priority and weight")
-
-
-class DeploymentSpecification(BaseModel):
-    """Complete deployment specification generated from intent."""
-
-    intent: DeploymentIntent = Field(..., description="Original deployment intent")
-    slo_targets: SLOTargets = Field(..., description="SLO targets")
-    workload_profile: WorkloadProfile = Field(..., description="Workload profile")
-    quality_weights: QualityWeights | None = Field(
-        None, description="Per-use-case quality scoring weights"
-    )
-    priorities: Priorities = Field(..., description="Resolved priority weights")
-
-
-class DeploymentConfiguration(BaseModel):
-    """Parameters for generating deployment YAML files."""
-
-    model_config = {"protected_namespaces": ()}
-
-    model_id: str = Field(..., description="Model identifier (HuggingFace format)")
-    model_name: str | None = Field(None, description="Human-readable model name")
-    model_uri: str | None = Field(None, description="Model artifact URI")
-    gpu_config: GPUConfig = Field(..., description="GPU configuration")
-    use_case: str = Field(..., description="Use case")
-    expected_qps: float = Field(..., description="Expected queries per second")
-    prompt_tokens: int = Field(..., description="Mean input token length")
-    output_tokens: int = Field(..., description="Mean output token length")
-    e2e_target_ms: int = Field(..., description="End-to-end latency target (ms)")
 
 
 class ConfigurationScores(BaseModel):
@@ -198,20 +103,6 @@ class RecommendationResult(BaseModel):
     configs_after_filters: int = Field(0, description="Configs after filtering")
 
 
-class DeploymentBundle(BaseModel):
-    """Bundle of generated deployment YAML files."""
-
-    deployment_id: str = Field(..., description="Unique deployment identifier")
-    namespace: str = Field(..., description="Kubernetes namespace")
-    stack: str = Field(..., description="Deployment stack (vllm or llm-d)")
-    configuration: DeploymentConfiguration | None = Field(
-        None, description="Configuration used to generate files"
-    )
-    files: dict[str, str] = Field(
-        default_factory=dict, description="Filename to YAML content mapping"
-    )
-
-
 class DeploymentConfigResult(BaseModel):
     """Result of deployment config generation."""
 
@@ -219,3 +110,27 @@ class DeploymentConfigResult(BaseModel):
     namespace: str = Field(..., description="Target Kubernetes namespace")
     model_name: str | None = Field(None, description="Human-readable model name")
     configs: dict[str, str] = Field(..., description="Config type to YAML content mapping")
+
+
+__all__ = [
+    "ConfigurationScores",
+    "DeploymentBundle",
+    "DeploymentConfigResult",
+    "DeploymentConfiguration",
+    "DeploymentIntent",
+    "DeploymentSpecification",
+    "GPUConfig",
+    "GpuPreference",
+    "ModelRecommendation",
+    "Priorities",
+    "PriorityEntry",
+    "PriorityType",
+    "QualityWeights",
+    "RecommendationResult",
+    "SLORange",
+    "SLOTargets",
+    "SloStatusType",
+    "TrafficProfile",
+    "UseCaseType",
+    "WorkloadProfile",
+]

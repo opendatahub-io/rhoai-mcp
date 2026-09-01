@@ -65,6 +65,13 @@ class OIDCKubeAuthStrategy(str, Enum):
     IMPERSONATION = "impersonation"
 
 
+class PlannerMode(str, Enum):
+    """Planner integration mode."""
+
+    LOCAL = "local"
+    REMOTE = "remote"
+
+
 class RHOAIConfig(BaseSettings):
     """Configuration for RHOAI MCP server.
 
@@ -219,15 +226,27 @@ class RHOAIConfig(BaseSettings):
     )
 
     # Planner settings
+    planner_mode: PlannerMode = Field(
+        default=PlannerMode.LOCAL,
+        description="Planner mode: local (embedded library) or remote (REST API)",
+    )
     planner_url: str = Field(
         default="http://backend.planner.svc.cluster.local:8000",
-        description="Planner backend URL",
+        description="Planner backend URL (used only when planner_mode=remote)",
     )
     planner_timeout: int = Field(
         default=120,
         ge=10,
         le=600,
-        description="Planner request timeout in seconds (extract endpoint can be slow on cold starts)",
+        description="Planner request timeout in seconds (used only when planner_mode=remote)",
+    )
+    planner_model_catalog_url: str | None = Field(
+        default=None,
+        description="Model Catalog API URL for benchmark data sync (local mode only, requires llm-d-planner[quality-sync])",
+    )
+    planner_model_catalog_token: str | None = Field(
+        default=None,
+        description="Auth token for Model Catalog API",
     )
 
     # Plugin filtering

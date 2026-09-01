@@ -8,6 +8,7 @@ on:
       - uv.lock
       - Makefile
       - requirements-cpu.txt
+      - .github/workflows/check-requirements-cpu.yml
   push:
     branches: [main]
     paths:
@@ -15,7 +16,7 @@ on:
       - uv.lock
       - Makefile
       - requirements-cpu.txt
-  workflow_dispatch:
+      - .github/workflows/check-requirements-cpu.yml
 
 permissions:
   contents: read

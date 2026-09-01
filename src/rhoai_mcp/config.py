@@ -242,7 +242,7 @@ class RHOAIConfig(BaseSettings):
     )
     planner_model_catalog_url: str | None = Field(
         default=None,
-        description="Model Catalog API URL for benchmark data sync (local mode only, requires llm-d-planner[quality-sync]). "
+        description="Model Catalog API URL for benchmark data sync (local mode only; when Planner is remote, the planner deployment self governs if it syncs from Model Catalog). "
         "Auth is handled automatically: in-cluster via ServiceAccount token, or via MODEL_CATALOG_TOKEN env var.",
     )
 

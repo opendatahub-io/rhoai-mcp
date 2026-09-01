@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 class LocalPlannerClient:
     """Embedded Planner client using in-process library calls.
 
-    Uses an in-memory SQLite database loaded with bundled benchmarks.
+    When a Model Catalog URL is provided, benchmarks are synced from it.
+    Otherwise, falls back to bundled synthetic benchmarks (with a warning).
     Intent extraction is NOT supported — all required fields must be
     provided as explicit overrides by the calling agent.
     """
@@ -39,7 +40,6 @@ class LocalPlannerClient:
         model_catalog_url: str | None = None,
     ) -> None:
         self._planner = Planner()
-        self._planner.load_bundled_benchmarks()
 
         if model_catalog_url:
             try:
@@ -59,6 +59,12 @@ class LocalPlannerClient:
                     status_code=502,
                     detail=f"Model Catalog sync failed: {e}",
                 ) from e
+        else:
+            logger.warning(
+                "No Model Catalog URL configured; loading bundled synthetic benchmarks. "
+                "Set RHOAI_MCP_PLANNER_MODEL_CATALOG_URL for accurate recommendations."
+            )
+            self._planner.load_bundled_benchmarks()
 
     def recommend(
         self,

@@ -103,23 +103,19 @@ class TestLocalPlannerClientInit:
     """Tests for LocalPlannerClient initialization."""
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_init_loads_bundled_benchmarks(self, mock_planner_cls: MagicMock) -> None:
-        """Planner is created and bundled benchmarks are loaded."""
+    def test_init_loads_bundled_benchmarks_when_no_catalog(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """Bundled benchmarks are loaded as fallback when no catalog URL."""
         LocalPlannerClient()
 
         mock_planner_cls.assert_called_once()
         mock_planner_cls.return_value.load_bundled_benchmarks.assert_called_once()
-
-    @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_init_no_catalog_sync_by_default(self, mock_planner_cls: MagicMock) -> None:
-        """Model Catalog sync is NOT called when URL not provided."""
-        LocalPlannerClient()
-
         mock_planner_cls.return_value.sync_model_catalog.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_with_catalog_sync(self, mock_planner_cls: MagicMock) -> None:
-        """Model Catalog sync is called when URL is provided."""
+        """Model Catalog sync is used and bundled benchmarks are skipped."""
         mock_planner_cls.return_value.sync_model_catalog.return_value = {
             "benchmarks_added": 10,
             "models_added": 5,
@@ -133,6 +129,7 @@ class TestLocalPlannerClientInit:
         mock_planner_cls.return_value.sync_model_catalog.assert_called_once_with(
             url="https://catalog.example.com",
         )
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_import_error(self, mock_planner_cls: MagicMock) -> None:

@@ -1,0 +1,46 @@
+name: Check requirements-cpu.txt
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - pyproject.toml
+      - uv.lock
+      - Makefile
+      - requirements-cpu.txt
+      - .github/workflows/check-requirements-cpu.yml
+  push:
+    branches: [main]
+    paths:
+      - pyproject.toml
+      - uv.lock
+      - Makefile
+      - requirements-cpu.txt
+      - .github/workflows/check-requirements-cpu.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check requirements-cpu.txt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Regenerate requirements-cpu.txt
+        run: make generate-requirements-cpu
+
+      - name: Check for drift
+        run: git diff --exit-code requirements-cpu.txt

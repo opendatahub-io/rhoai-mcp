@@ -12,10 +12,25 @@ field names, and value ranges produced by the planner library.
 Run with::
 
     pytest tests/integration/test_planner_local.py -v
+
+The file also includes ``live``-marked tests that exercise the local planner
+with Model Catalog sync.  These require ``RHOAI_MCP_MODEL_CATALOG_URL`` to
+be set (e.g. the HTTPS route of a RHOAI Model Catalog) and
+``MODEL_CATALOG_TOKEN`` to contain a valid bearer token (e.g. ``oc whoami -t``).
+They are skipped automatically when the env vars are absent.
+Note: the Token is only needed for local testing; when rhoai-mcp is
+deployed in-cluster, the local Planner would get the SA token from usual K8s location.
+
+Run Model Catalog tests with::
+
+    MODEL_CATALOG_TOKEN=$(oc whoami -t) \\
+    RHOAI_MCP_MODEL_CATALOG_URL=https://model-catalog.apps.rosa. (...) .openshiftapps.com \\
+    pytest tests/integration/test_planner_local.py -v -m live
 """
 
 from __future__ import annotations
 
+import os
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -423,3 +438,147 @@ def test_mcp_deploy_config_validation_errors(mcp_tools: dict[str, Any]) -> None:
 
     result = get_config(category="balanced", **{**base, "namespace": "INVALID!"})
     assert "error" in result and "namespace" in result["error"]
+
+
+# =============================================================================
+# Model Catalog sync tests (live marker — require RHOAI_MCP_MODEL_CATALOG_URL
+# and MODEL_CATALOG_TOKEN env vars).
+#
+# RHOAI_MCP_MODEL_CATALOG_URL is read as a test parameter (the URL to pass to
+# LocalPlannerClient), not as a runtime env var consumed by the planner library.
+# MODEL_CATALOG_TOKEN is consumed by the planner library's own env-var fallback
+# inside sync_model_catalog(), for _local_ testing.
+# =============================================================================
+
+_has_catalog_url = bool(os.environ.get("RHOAI_MCP_MODEL_CATALOG_URL", ""))
+
+
+@pytest.fixture(scope="module")
+def catalog_client() -> LocalPlannerClient:
+    """LocalPlannerClient with bundled benchmarks + Model Catalog sync."""
+    url = os.environ.get("RHOAI_MCP_MODEL_CATALOG_URL", "")
+    if not url:
+        pytest.skip("RHOAI_MCP_MODEL_CATALOG_URL not set")
+    return LocalPlannerClient(model_catalog_url=url)
+
+
+@pytest.fixture(scope="module")
+def catalog_recommend_result(catalog_client: LocalPlannerClient) -> RecommendationResult:
+    """Recommendation result from catalog-enriched planner."""
+    return catalog_client.recommend(
+        "unused",
+        use_case_override="chatbot_conversational",
+        user_count_override=1000,
+        gpu_types_override=["H100", "A100-80"],
+    )
+
+
+@pytest.fixture(scope="module")
+def catalog_deploy_result(catalog_client: LocalPlannerClient) -> DeploymentConfigResult | None:
+    """Deployment config result from catalog-enriched planner."""
+    try:
+        return catalog_client.generate_config(
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=200,
+            itl_target_ms=65,
+            e2e_target_ms=5000,
+            namespace="catalog-test",
+        )
+    except PlannerAPIError as e:
+        if "No recommendation found" in str(e):
+            return None
+        raise
+
+
+@pytest.mark.live
+@pytest.mark.skipif(not _has_catalog_url, reason="RHOAI_MCP_MODEL_CATALOG_URL not set")
+class TestModelCatalogSync:
+    """Tests exercising the local planner after syncing with a live Model Catalog."""
+
+    def test_catalog_enriches_benchmarks(
+        self, catalog_recommend_result: RecommendationResult
+    ) -> None:
+        """Model Catalog sync increases the number of configs evaluated."""
+        assert catalog_recommend_result.total_configs_evaluated > 0
+
+    def test_catalog_recommend_has_categories(
+        self, catalog_recommend_result: RecommendationResult
+    ) -> None:
+        """With catalog data, at least one recommendation category is populated."""
+        has_any = any([
+            catalog_recommend_result.top_balanced,
+            catalog_recommend_result.top_cost,
+            catalog_recommend_result.top_performance,
+            catalog_recommend_result.top_quality,
+        ])
+        assert has_any, "Expected at least one recommendation category"
+
+    def test_catalog_recommend_specification_structure(
+        self, catalog_recommend_result: RecommendationResult
+    ) -> None:
+        """Specification from catalog-enriched planner has valid structure."""
+        spec = catalog_recommend_result.specification
+        assert spec["use_case"] == "chatbot_conversational"
+        slo = spec["slo_targets"]
+        assert 1 < slo["ttft_target_ms"] < 10_000
+        assert 1 < slo["itl_target_ms"] < 1_000
+        assert 1 < slo["e2e_target_ms"] < 100_000
+
+    def test_catalog_recommend_scores_in_range(
+        self, catalog_recommend_result: RecommendationResult
+    ) -> None:
+        """Recommendation scores from catalog data are within [0, 100]."""
+        for rec in [
+            catalog_recommend_result.top_balanced,
+            catalog_recommend_result.top_cost,
+            catalog_recommend_result.top_performance,
+            catalog_recommend_result.top_quality,
+        ]:
+            if rec is None or rec.scores is None:
+                continue
+            for field in ("quality_score", "price_score", "latency_score", "balanced_score"):
+                score = getattr(rec.scores, field)
+                assert 0 <= score <= 100, f"{field} = {score} out of range"
+
+    def test_catalog_deploy_config(
+        self, catalog_deploy_result: DeploymentConfigResult | None
+    ) -> None:
+        """generate_config with catalog data returns valid deployment YAML."""
+        if catalog_deploy_result is None:
+            pytest.skip("No recommendations with catalog benchmark data")
+        assert catalog_deploy_result.deployment_id
+        assert catalog_deploy_result.namespace == "catalog-test"
+        assert len(catalog_deploy_result.configs) > 0
+        assert any("inferenceservice" in k.lower() for k in catalog_deploy_result.configs)
+
+    @pytest.mark.parametrize("category", list(CATEGORY_MAP.keys()))
+    def test_catalog_deploy_all_categories(
+        self, catalog_client: LocalPlannerClient, category: str
+    ) -> None:
+        """generate_config works for every valid category with catalog data."""
+        try:
+            result = catalog_client.generate_config(
+                category=category,
+                use_case="chatbot_conversational",
+                user_count=1000,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=200,
+                itl_target_ms=65,
+                e2e_target_ms=5000,
+            )
+        except PlannerAPIError as e:
+            if "No recommendation found" in str(e):
+                pytest.skip(f"No recommendations for '{category}' with catalog data")
+                return
+            raise
+
+        assert isinstance(result, DeploymentConfigResult)
+        assert result.deployment_id
+        assert len(result.configs) > 0

@@ -23,6 +23,7 @@ src/rhoai_mcp/
     ├── cluster/          # Cluster-wide summaries and exploration
     ├── training/         # Training workflow orchestration
     ├── meta/             # Tool discovery and guidance
+    ├── planner/          # Recommendation-to-deployment workflow
     └── registry.py       # Composite plugin registry
 ```
 
@@ -208,6 +209,42 @@ MODEL_SIZE_ESTIMATES = {
     # Add or adjust ranges as needed
 }
 ```
+
+### Planner Composite - Recommendation to Deployment
+
+**Location:** `src/rhoai_mcp/composites/planner/`
+
+**Purpose:** End-to-end workflow from llm-d-planner model recommendations to deployed InferenceServices. Bridges the planner's `DeploymentRecommendation` to rhoai-mcp's `deploy_model` parameters.
+
+```text
+composites/planner/
+├── client.py          # HTTP client for llm-d-planner API
+├── models.py          # Pydantic models (recommendations + deployment plans)
+├── tools.py           # MCP tools: recommend_model, plan_deployment, execute_deployment
+├── deployment.py      # Deployment planning (runtime/storage/GPU resolution)
+├── execution.py       # Deployment execution (create ISVC, poll, validate)
+└── prompts.py         # recommend-and-deploy MCP prompt
+```
+
+| Tool | Purpose |
+| ---- | ------- |
+| `recommend_model()` | Get recommendations from llm-d-planner with cluster GPU cross-reference |
+| `plan_deployment()` | Resolve runtime, storage, resources from a recommendation |
+| `execute_deployment()` | Create InferenceService, wait for Ready, validate endpoint |
+
+**3-tool workflow:**
+1. `recommend_model` calls the planner backend and optionally cross-references GPU recommendations against cluster availability
+2. `plan_deployment` takes a recommendation JSON, resolves the serving runtime, storage URI, and compute resources, and runs pre-flight checks (namespace exists, GPUs available)
+3. `execute_deployment` takes the plan, creates the InferenceService, polls for readiness, and returns the endpoint URL with SLO comparison
+
+**Key implementation details:**
+- `deployment.py` uses lazy imports for domain clients (`InferenceClient`, `ProjectClient`, `TrainingClient`) to avoid circular dependencies
+- `GPU_RESOURCE_PROFILES` maps GPU types to (cpu_req, cpu_lim, mem_req, mem_lim) tuples
+- `generate_deployment_name()` converts HuggingFace model IDs to DNS-1123 names
+- GPU name matching uses `_GPU_NAME_ALIASES` for fuzzy matching between planner types (e.g., "A100-80") and cluster product labels (e.g., "NVIDIA-A100-SXM4-80GB")
+- The `recommend-and-deploy` prompt guides agents through all 4 steps
+
+**Deployment overlay:** `deploy/kustomize/overlays/openshift-planner/` adds the llm-d-planner backend and wires `RHOAI_MCP_PLANNER_URL` so the workflow works out of the box.
 
 ## Generic Resource Tools
 

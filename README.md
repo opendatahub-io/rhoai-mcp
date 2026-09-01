@@ -14,11 +14,12 @@ An MCP (Model Context Protocol) server that enables AI agents to interact with R
 - **Project Management**: Create, list, and manage Data Science Projects
 - **Workbench Operations**: Create, start, stop, and delete Jupyter workbenches
 - **Model Serving**: Deploy and manage InferenceServices with KServe
+- **Model Recommendations**: Get model recommendations from llm-d-planner and deploy them end-to-end with cluster-aware GPU validation
 - **Data Connections**: Manage S3 credentials for data access
 - **Pipelines**: Configure Data Science Pipelines infrastructure
 - **Storage**: Create and manage persistent volume claims
 - **Training**: Fine-tune models with Kubeflow Training Operator
-- **MCP Prompts**: Workflow guidance for multi-step operations (18 prompts)
+- **MCP Prompts**: Workflow guidance for multi-step operations (19 prompts)
 
 ## Technology Stack
 

@@ -1,0 +1,6 @@
+- op: add
+  path: /data/RHOAI_MCP_PLANNER_URL
+  value: "http://llm-d-planner.rhoai-mcp.svc.cluster.local:8000"
+- op: add
+  path: /data/RHOAI_MCP_PLANNER_TIMEOUT
+  value: "120"

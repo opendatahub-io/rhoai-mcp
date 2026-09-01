@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Chains on top of the openshift overlay, adding the llm-d-planner backend
+# and wiring RHOAI_MCP_PLANNER_URL so the recommendation-to-deployment
+# workflow works out of the box.
+
+resources:
+  - ../openshift
+  - planner-deployment.yaml
+  - planner-service.yaml
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: rhoai-mcp-config
+    path: config-patch.yaml

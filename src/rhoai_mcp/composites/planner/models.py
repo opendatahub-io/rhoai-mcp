@@ -219,3 +219,122 @@ class DeploymentConfigResult(BaseModel):
     namespace: str = Field(..., description="Target Kubernetes namespace")
     model_name: str | None = Field(None, description="Human-readable model name")
     configs: dict[str, str] = Field(..., description="Config type to YAML content mapping")
+
+
+# ---------------------------------------------------------------------------
+# Cluster-aware recommendation models (Skill 1 enhancement)
+# ---------------------------------------------------------------------------
+
+ClusterFitStatus = Literal["available", "partial", "unavailable"]
+
+
+class ClusterGPU(BaseModel):
+    """A GPU type available on the cluster."""
+
+    product: str = Field(..., description="GPU product name (e.g., NVIDIA-H100-80GB-HBM3)")
+    total: int = Field(0, description="Total GPUs of this type")
+    available: int = Field(0, description="Available GPUs of this type")
+    nodes: int = Field(0, description="Number of nodes with this GPU type")
+
+
+class ClusterFitResult(BaseModel):
+    """Result of checking a recommendation against cluster GPU availability."""
+
+    status: ClusterFitStatus = Field(..., description="Fit status")
+    gpu_type: str = Field(..., description="GPU type from the recommendation")
+    needed: int = Field(..., description="Total GPUs needed (count * replicas)")
+    available: int = Field(0, description="Available GPUs of this type on cluster")
+    message: str = Field("", description="Human-readable fit explanation")
+
+
+# ---------------------------------------------------------------------------
+# Deployment planning models (Skill 2 - plan_deployment)
+# ---------------------------------------------------------------------------
+
+IssueCategoryType = Literal["runtime", "storage", "gpu", "namespace", "other"]
+
+
+class DeploymentPlanIssue(BaseModel):
+    """An issue discovered during deployment planning."""
+
+    category: IssueCategoryType = Field(..., description="Issue category")
+    message: str = Field(..., description="Description of the issue")
+    blocking: bool = Field(..., description="Whether this blocks deployment")
+    suggestion: str | None = Field(None, description="Suggested fix")
+
+
+class DeploymentPlanStep(BaseModel):
+    """A step in the deployment execution plan."""
+
+    action: str = Field(..., description="Action identifier")
+    description: str = Field(..., description="Human-readable description")
+
+
+class ResolvedDeployParams(BaseModel):
+    """Fully resolved parameters for deploy_model."""
+
+    model_config = {"protected_namespaces": ()}
+
+    name: str = Field(..., description="DNS-safe deployment name")
+    namespace: str = Field(..., description="Target namespace")
+    display_name: str | None = Field(None, description="Human-readable display name")
+    runtime: str = Field(..., description="Serving runtime name")
+    model_format: str = Field("pytorch", description="Model format")
+    storage_uri: str = Field(..., description="Model artifact location")
+    min_replicas: int = Field(1, ge=0, description="Minimum replicas")
+    max_replicas: int = Field(1, ge=1, description="Maximum replicas")
+    cpu_request: str = Field("8", description="CPU request per replica")
+    cpu_limit: str = Field("16", description="CPU limit per replica")
+    memory_request: str = Field("32Gi", description="Memory request per replica")
+    memory_limit: str = Field("64Gi", description="Memory limit per replica")
+    gpu_count: int = Field(1, ge=0, description="GPUs per replica")
+
+
+class DeploymentPlan(BaseModel):
+    """A reviewable deployment plan ready for execution."""
+
+    ready: bool = Field(..., description="Whether the plan can be executed (no blocking issues)")
+    recommendation_summary: dict[str, Any] = Field(
+        ..., description="Summary of the source recommendation"
+    )
+    resolved_params: ResolvedDeployParams = Field(
+        ..., description="Fully resolved deployment parameters"
+    )
+    steps: list[DeploymentPlanStep] = Field(..., description="Ordered execution steps")
+    issues: list[DeploymentPlanIssue] = Field(
+        default_factory=list, description="Issues found during planning"
+    )
+    warnings: list[str] = Field(default_factory=list, description="Non-blocking warnings")
+
+
+# ---------------------------------------------------------------------------
+# Deployment execution models (Skill 3 - execute_deployment)
+# ---------------------------------------------------------------------------
+
+
+class EndpointValidation(BaseModel):
+    """Result of testing a deployed model endpoint."""
+
+    reachable: bool = Field(..., description="Whether the endpoint responded")
+    response_time_ms: float | None = Field(None, description="Response time in milliseconds")
+    status: str | None = Field(None, description="InferenceService status")
+    url: str | None = Field(None, description="Endpoint URL")
+    message: str = Field("", description="Validation message")
+
+
+class DeploymentResult(BaseModel):
+    """Result of executing a deployment plan."""
+
+    success: bool = Field(..., description="Whether deployment succeeded")
+    message: str = Field(..., description="Result summary")
+    deployment_name: str | None = Field(None, description="InferenceService name")
+    namespace: str | None = Field(None, description="Deployment namespace")
+    status: str | None = Field(None, description="Final InferenceService status")
+    endpoint_url: str | None = Field(None, description="Inference endpoint URL")
+    validation: EndpointValidation | None = Field(None, description="Endpoint validation results")
+    slo_comparison: dict[str, Any] | None = Field(
+        None, description="Predicted vs. actual SLO comparison"
+    )
+    issues: list[DeploymentPlanIssue] | None = Field(
+        None, description="Issues if deployment failed"
+    )

@@ -1,5 +1,6 @@
-"""Tests for Planner recommend_model MCP tool."""
+"""Tests for Planner MCP tools."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 from rhoai_mcp.composites.planner.models import (
@@ -7,7 +8,11 @@ from rhoai_mcp.composites.planner.models import (
     ModelRecommendation,
     RecommendationResult,
 )
-from rhoai_mcp.composites.planner.tools import register_tools
+from rhoai_mcp.composites.planner.tools import (
+    _extract_gpu_count,
+    _extract_gpu_type,
+    register_tools,
+)
 
 
 def _make_mock_mcp() -> MagicMock:
@@ -994,3 +999,311 @@ class TestDeploymentConfigTool:
         mock_client_class.return_value.generate_config.assert_called_once()
         call_kwargs = mock_client_class.return_value.generate_config.call_args.kwargs
         assert call_kwargs["priority_weights"] == {"quality": 2, "price": 8, "latency": 1}
+
+
+class TestPlanDeploymentTool:
+    """Tests for plan_deployment tool."""
+
+    def test_tool_registration(self) -> None:
+        """plan_deployment tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "plan_deployment" in mock_mcp._registered_tools
+
+    async def test_invalid_json_returns_error(self) -> None:
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        plan_dep = mock_mcp._registered_tools["plan_deployment"]
+
+        result = await plan_dep(recommendation_json="not valid json", namespace="prod")
+
+        assert "error" in result
+        assert "valid JSON" in result["error"]
+
+    async def test_non_object_json_returns_error(self) -> None:
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        plan_dep = mock_mcp._registered_tools["plan_deployment"]
+
+        result = await plan_dep(recommendation_json='"just a string"', namespace="prod")
+
+        assert "error" in result
+        assert "JSON object" in result["error"]
+
+    async def test_invalid_namespace_returns_error(self) -> None:
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        plan_dep = mock_mcp._registered_tools["plan_deployment"]
+
+        rec = json.dumps({"model_id": "test"})
+        result = await plan_dep(recommendation_json=rec, namespace="INVALID NS!")
+
+        assert "error" in result
+        assert "namespace" in result["error"]
+
+    async def test_invalid_name_override_returns_error(self) -> None:
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        plan_dep = mock_mcp._registered_tools["plan_deployment"]
+
+        rec = json.dumps({"model_id": "test"})
+        result = await plan_dep(
+            recommendation_json=rec, namespace="prod", name="BAD NAME!"
+        )
+
+        assert "error" in result
+        assert "name" in result["error"]
+
+    @patch("rhoai_mcp.composites.planner.deployment.plan_deployment")
+    async def test_successful_plan(self, mock_plan: MagicMock) -> None:
+        from rhoai_mcp.composites.planner.models import (
+            DeploymentPlan,
+            DeploymentPlanStep,
+            ResolvedDeployParams,
+        )
+
+        plan = DeploymentPlan(
+            ready=True,
+            recommendation_summary={"model_id": "test-model"},
+            resolved_params=ResolvedDeployParams(
+                name="test-model",
+                namespace="prod",
+                runtime="vllm-cuda-runtime",
+                storage_uri="oci://test",
+            ),
+            steps=[DeploymentPlanStep(action="deploy_model", description="Deploy")],
+        )
+        mock_plan.return_value = plan
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        plan_dep = mock_mcp._registered_tools["plan_deployment"]
+
+        rec = json.dumps({"model_id": "test-model"})
+        result = await plan_dep(recommendation_json=rec, namespace="prod")
+
+        assert result["ready"] is True
+        assert "next_action" in result
+        assert "execute_deployment" in result["next_action"]
+
+    @patch("rhoai_mcp.composites.planner.deployment.plan_deployment")
+    async def test_not_ready_plan_shows_blocking_issues(self, mock_plan: MagicMock) -> None:
+        from rhoai_mcp.composites.planner.models import (
+            DeploymentPlan,
+            DeploymentPlanIssue,
+            DeploymentPlanStep,
+            ResolvedDeployParams,
+        )
+
+        plan = DeploymentPlan(
+            ready=False,
+            recommendation_summary={"model_id": "test-model"},
+            resolved_params=ResolvedDeployParams(
+                name="test-model",
+                namespace="prod",
+                runtime="rt",
+                storage_uri="oci://test",
+            ),
+            steps=[DeploymentPlanStep(action="fix_issues", description="Fix")],
+            issues=[
+                DeploymentPlanIssue(
+                    category="storage",
+                    message="Cannot resolve storage URI",
+                    blocking=True,
+                    suggestion="Provide storage_uri",
+                )
+            ],
+        )
+        mock_plan.return_value = plan
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        plan_dep = mock_mcp._registered_tools["plan_deployment"]
+
+        rec = json.dumps({"model_id": "test-model"})
+        result = await plan_dep(recommendation_json=rec, namespace="prod")
+
+        assert result["ready"] is False
+        assert "Resolve" in result["next_action"]
+        assert "Cannot resolve storage URI" in result["next_action"]
+
+
+class TestExecuteDeploymentTool:
+    """Tests for execute_deployment tool."""
+
+    def test_tool_registration(self) -> None:
+        """execute_deployment tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "execute_deployment" in mock_mcp._registered_tools
+
+    async def test_invalid_json_returns_error(self) -> None:
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        exec_dep = mock_mcp._registered_tools["execute_deployment"]
+
+        result = await exec_dep(plan_json="not json")
+
+        assert "error" in result
+        assert "valid JSON" in result["error"]
+
+    async def test_non_object_json_returns_error(self) -> None:
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        exec_dep = mock_mcp._registered_tools["execute_deployment"]
+
+        result = await exec_dep(plan_json="[1, 2, 3]")
+
+        assert "error" in result
+        assert "JSON object" in result["error"]
+
+    async def test_invalid_plan_data_returns_error(self) -> None:
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        exec_dep = mock_mcp._registered_tools["execute_deployment"]
+
+        result = await exec_dep(plan_json='{"bad": "data"}')
+
+        assert "error" in result
+        assert "Invalid deployment plan" in result["error"]
+
+    async def test_not_ready_plan_returns_error(self) -> None:
+        from rhoai_mcp.composites.planner.models import (
+            DeploymentPlan,
+            DeploymentPlanIssue,
+            DeploymentPlanStep,
+            ResolvedDeployParams,
+        )
+
+        plan = DeploymentPlan(
+            ready=False,
+            recommendation_summary={"model_id": "test"},
+            resolved_params=ResolvedDeployParams(
+                name="test", namespace="ns", runtime="rt", storage_uri="oci://test"
+            ),
+            steps=[DeploymentPlanStep(action="fix", description="Fix")],
+            issues=[
+                DeploymentPlanIssue(
+                    category="storage", message="Missing", blocking=True
+                )
+            ],
+        )
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        exec_dep = mock_mcp._registered_tools["execute_deployment"]
+
+        result = await exec_dep(plan_json=json.dumps(plan.model_dump()))
+
+        assert "error" in result
+        assert "blocking" in result["error"].lower()
+
+    @patch("rhoai_mcp.composites.planner.execution.execute_deployment")
+    async def test_successful_execution(self, mock_execute: MagicMock) -> None:
+        from rhoai_mcp.composites.planner.models import (
+            DeploymentPlan,
+            DeploymentPlanStep,
+            DeploymentResult,
+            ResolvedDeployParams,
+        )
+
+        mock_execute.return_value = DeploymentResult(
+            success=True,
+            message="Deployed",
+            deployment_name="test-model",
+            namespace="prod",
+            status="Ready",
+            endpoint_url="https://test-model.example.com",
+        )
+
+        plan = DeploymentPlan(
+            ready=True,
+            recommendation_summary={"model_id": "test"},
+            resolved_params=ResolvedDeployParams(
+                name="test-model",
+                namespace="prod",
+                runtime="vllm-cuda-runtime",
+                storage_uri="oci://test",
+            ),
+            steps=[DeploymentPlanStep(action="deploy_model", description="Deploy")],
+        )
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        exec_dep = mock_mcp._registered_tools["execute_deployment"]
+
+        result = await exec_dep(plan_json=json.dumps(plan.model_dump()))
+
+        assert result["success"] is True
+        assert result["deployment_name"] == "test-model"
+        assert result["status"] == "Ready"
+
+
+class TestRecommendModelClusterCheck:
+    """Tests for recommend_model with check_cluster parameter."""
+
+    @patch("rhoai_mcp.composites.planner.tools._check_cluster_gpu_fit")
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_check_cluster_adds_fit_info(
+        self, mock_client_class: MagicMock, mock_fit: MagicMock
+    ) -> None:
+        from rhoai_mcp.composites.planner.models import ClusterFitResult, ClusterGPU
+
+        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_fit.return_value = (
+            {
+                "top_balanced": ClusterFitResult(
+                    status="available",
+                    gpu_type="H100",
+                    needed=2,
+                    available=8,
+                    message="2x H100 available",
+                )
+            },
+            [ClusterGPU(product="NVIDIA-H100-80GB", total=8, available=8, nodes=2)],
+        )
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        recommend = mock_mcp._registered_tools["recommend_model"]
+
+        result = recommend(text="I need a chatbot", check_cluster=True)
+
+        assert "cluster_fit" in result
+        assert "cluster_gpus" in result
+        assert result["cluster_fit"]["top_balanced"]["status"] == "available"
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_check_cluster_false_skips_fit(self, mock_client_class: MagicMock) -> None:
+        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        recommend = mock_mcp._registered_tools["recommend_model"]
+
+        result = recommend(text="I need a chatbot", check_cluster=False)
+
+        assert "cluster_fit" not in result
+        assert "cluster_gpus" not in result
+
+
+class TestHelperFunctions:
+    """Tests for GPU extraction helper functions."""
+
+    def test_extract_gpu_type_standard(self) -> None:
+        assert _extract_gpu_type("2x H100") == "H100"
+
+    def test_extract_gpu_type_no_count(self) -> None:
+        assert _extract_gpu_type("A100-80") == "A100-80"
+
+    def test_extract_gpu_type_empty(self) -> None:
+        assert _extract_gpu_type("") == ""
+
+    def test_extract_gpu_count_with_prefix(self) -> None:
+        assert _extract_gpu_count("4x H100") == 4
+
+    def test_extract_gpu_count_no_prefix(self) -> None:
+        assert _extract_gpu_count("H100") == 1
+
+    def test_extract_gpu_count_single(self) -> None:
+        assert _extract_gpu_count("1x L4") == 1

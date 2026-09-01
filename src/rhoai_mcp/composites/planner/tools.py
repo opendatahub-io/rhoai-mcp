@@ -1,7 +1,8 @@
-"""MCP tool for Planner model recommendations."""
+"""MCP tools for Planner model recommendations and deployment workflow."""
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -14,7 +15,11 @@ from rhoai_mcp.composites.planner.client import (
     PlannerClient,
     PlannerConnectionError,
 )
-from rhoai_mcp.composites.planner.models import ModelRecommendation
+from rhoai_mcp.composites.planner.models import (
+    ClusterFitResult,
+    ClusterGPU,
+    ModelRecommendation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +51,118 @@ OPTIMIZATION_PROFILES: dict[str, dict[str, int]] = {
 
 VALID_CATEGORIES: set[str] = set(CATEGORY_MAP)
 _K8S_NAMESPACE_RE = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
+
+_GPU_NAME_ALIASES: dict[str, list[str]] = {
+    "h100": ["h100"],
+    "h200": ["h200"],
+    "b200": ["b200"],
+    "a100-80": ["a100", "80gb", "a100-sxm"],
+    "a100-40": ["a100", "40gb"],
+    "l4": ["l4"],
+}
+
+
+def _check_cluster_gpu_fit(
+    server: RHOAIServer,
+    recommendations: dict[str, Any],
+) -> tuple[dict[str, ClusterFitResult], list[ClusterGPU]]:
+    """Cross-reference recommendations against actual cluster GPUs.
+
+    Returns a mapping of slot name -> ClusterFitResult, plus the list of
+    cluster GPU types.
+    """
+    try:
+        from rhoai_mcp.domains.training.client import TrainingClient
+
+        training_client = TrainingClient(server.k8s)
+        resources = training_client.get_cluster_resources()
+    except Exception as e:
+        logger.debug("Cluster GPU check failed: %s", e)
+        return {}, []
+
+    cluster_gpus: list[ClusterGPU] = []
+    if resources.gpu_info:
+        for product in resources.gpu_info.products:
+            cluster_gpus.append(
+                ClusterGPU(
+                    product=product,
+                    total=resources.gpu_info.total,
+                    available=resources.gpu_info.available,
+                    nodes=resources.gpu_info.nodes_with_gpu,
+                )
+            )
+    if not resources.has_gpus:
+        cluster_gpus = []
+
+    fit_results: dict[str, ClusterFitResult] = {}
+    for slot, rec in recommendations.items():
+        if not isinstance(rec, dict):
+            continue
+        gpu_str = rec.get("gpu", "")
+        if not gpu_str:
+            continue
+
+        gpu_type = _extract_gpu_type(gpu_str)
+        needed = _extract_gpu_count(gpu_str)
+        matched_available = _match_gpu_on_cluster(gpu_type, resources)
+
+        if matched_available is None:
+            fit_results[slot] = ClusterFitResult(
+                status="unavailable",
+                gpu_type=gpu_type,
+                needed=needed,
+                available=0,
+                message=f"{gpu_type} not found on cluster",
+            )
+        elif matched_available >= needed:
+            fit_results[slot] = ClusterFitResult(
+                status="available",
+                gpu_type=gpu_type,
+                needed=needed,
+                available=matched_available,
+                message=f"{needed}x {gpu_type} available ({matched_available} total)",
+            )
+        else:
+            fit_results[slot] = ClusterFitResult(
+                status="partial",
+                gpu_type=gpu_type,
+                needed=needed,
+                available=matched_available,
+                message=f"Need {needed}x {gpu_type} but only {matched_available} available",
+            )
+
+    return fit_results, cluster_gpus
+
+
+def _extract_gpu_type(gpu_str: str) -> str:
+    """Extract GPU type from a formatted string like '4x H100'."""
+    parts = gpu_str.split()
+    return parts[-1] if parts else gpu_str
+
+
+def _extract_gpu_count(gpu_str: str) -> int:
+    """Extract GPU count from a formatted string like '4x H100'."""
+    match = re.match(r"(\d+)x", gpu_str)
+    return int(match.group(1)) if match else 1
+
+
+def _match_gpu_on_cluster(
+    gpu_type: str,
+    resources: Any,
+) -> int | None:
+    """Check if a GPU type is available on the cluster. Returns available count or None."""
+    if not resources.has_gpus or not resources.gpu_info:
+        return None
+
+    gpu_lower = gpu_type.lower().replace("-", "")
+    aliases = _GPU_NAME_ALIASES.get(gpu_type.lower(), [gpu_lower])
+
+    for product in resources.gpu_info.products:
+        product_lower = product.lower().replace("-", "")
+        if any(alias in product_lower for alias in aliases):
+            return int(resources.gpu_info.available)
+
+    return None
 
 
 def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any]:
@@ -86,6 +203,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         max_cost_per_month: float | None = None,
         optimization_profile: str | None = None,
         percentile: str | None = None,
+        check_cluster: bool = True,
     ) -> dict[str, Any]:
         """Get LLM model recommendations from Planner.
 
@@ -94,6 +212,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         four named recommendations: top_performance (lowest latency),
         top_cost (cheapest), top_balanced (weighted composite), and
         top_quality (highest quality score).
+
+        When check_cluster is True (default), cross-references the
+        recommended GPU configurations against actual cluster GPU
+        availability, so you can see which recommendations are
+        immediately deployable.
 
         Args:
             text: Natural language description of the use case
@@ -122,10 +245,13 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 optimize_quality.
             percentile: Percentile for SLO evaluation. Valid values:
                 mean, p90, p95 (default), p99.
+            check_cluster: Cross-reference GPU recommendations against
+                actual cluster GPU availability. Default True.
 
         Returns:
             Four top model recommendations (top_performance, top_cost,
-            top_balanced, top_quality) with assembled specification,
+            top_balanced, top_quality) with assembled specification
+            and optional cluster GPU fit information,
             or error dict if the request fails.
         """
         # Validate text input
@@ -239,6 +365,16 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         if not recommendations:
             response["message"] = "No configurations matched the requirements"
+
+        # Cluster GPU cross-reference
+        if check_cluster and recommendations:
+            fit_results, cluster_gpus = _check_cluster_gpu_fit(server, recommendations)
+            if fit_results:
+                response["cluster_fit"] = {
+                    slot: fit.model_dump() for slot, fit in fit_results.items()
+                }
+            if cluster_gpus:
+                response["cluster_gpus"] = [g.model_dump() for g in cluster_gpus]
 
         return response
 
@@ -422,3 +558,141 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             response["model"] = result.model_name
 
         return response
+
+    @mcp.tool()
+    async def plan_deployment(
+        recommendation_json: str,
+        namespace: str,
+        name: str | None = None,
+        storage_uri: str | None = None,
+        runtime: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a deployment plan from a Planner recommendation.
+
+        Takes a recommendation from recommend_model and resolves all
+        parameters needed to deploy the model on OpenShift AI: serving
+        runtime, storage URI, GPU resources, and replica count.
+        Validates the plan against the live cluster.
+
+        Typical workflow:
+        1. Call recommend_model to get recommendations
+        2. Call plan_deployment with the chosen recommendation JSON
+        3. Review the plan, then call execute_deployment to deploy
+
+        Args:
+            recommendation_json: JSON string of a recommendation from
+                recommend_model output (e.g., the value of the
+                "top_balanced" key from the recommendations dict).
+            namespace: Target Kubernetes namespace for deployment.
+            name: Override the auto-generated deployment name.
+                Must be DNS-1123 compatible if provided.
+            storage_uri: Override storage URI resolution. Provide
+                the model artifact location (oci://, s3://, pvc://).
+            runtime: Override serving runtime selection. Provide
+                the exact runtime name (e.g., "vllm-cuda-runtime").
+
+        Returns:
+            A deployment plan with resolved parameters, execution steps,
+            and any issues that need resolution before deployment.
+        """
+        # Parse recommendation JSON
+        try:
+            recommendation = json.loads(recommendation_json)
+        except (json.JSONDecodeError, TypeError):
+            return {"error": "recommendation_json must be valid JSON"}
+
+        if not isinstance(recommendation, dict):
+            return {"error": "recommendation_json must be a JSON object"}
+
+        # Validate namespace
+        if not _K8S_NAMESPACE_RE.match(namespace):
+            return {
+                "error": "namespace must be a valid DNS-1123 label "
+                "(lowercase alphanumeric or '-', 1-63 chars, start/end alphanumeric)",
+            }
+
+        # Validate name override if provided
+        if name is not None and not _K8S_NAMESPACE_RE.match(name):
+            return {
+                "error": "name must be a valid DNS-1123 label "
+                "(lowercase alphanumeric or '-', 1-63 chars, start/end alphanumeric)",
+            }
+
+        from rhoai_mcp.composites.planner.deployment import plan_deployment as _plan
+
+        plan = await _plan(
+            server,
+            recommendation=recommendation,
+            namespace=namespace,
+            name_override=name,
+            storage_uri_override=storage_uri,
+            runtime_override=runtime,
+        )
+
+        result = plan.model_dump()
+
+        # Add a human-readable next_action hint
+        if plan.ready:
+            result["next_action"] = (
+                "Plan is ready. Call execute_deployment with this plan to deploy."
+            )
+        else:
+            blocking = [i for i in plan.issues if i.blocking]
+            result["next_action"] = (
+                f"Resolve {len(blocking)} blocking issue(s) before deployment: "
+                + "; ".join(i.message for i in blocking)
+            )
+
+        return result
+
+    @mcp.tool()
+    async def execute_deployment(
+        plan_json: str,
+    ) -> dict[str, Any]:
+        """Execute a deployment plan to deploy a model on OpenShift AI.
+
+        Takes a deployment plan from plan_deployment and executes it:
+        creates the KServe InferenceService, waits for the model to
+        become Ready, and validates the endpoint.
+
+        This tool creates real resources on the cluster. The plan must
+        have ready=true (no blocking issues).
+
+        Typical workflow:
+        1. Call recommend_model to get recommendations
+        2. Call plan_deployment to create a validated plan
+        3. Call execute_deployment with the plan JSON to deploy
+
+        Args:
+            plan_json: JSON string of a DeploymentPlan from plan_deployment.
+                Must have ready=true (no blocking issues).
+
+        Returns:
+            Deployment result with status, endpoint URL, and SLO comparison.
+        """
+        # Parse plan JSON
+        try:
+            plan_data = json.loads(plan_json)
+        except (json.JSONDecodeError, TypeError):
+            return {"error": "plan_json must be valid JSON"}
+
+        if not isinstance(plan_data, dict):
+            return {"error": "plan_json must be a JSON object"}
+
+        from rhoai_mcp.composites.planner.models import DeploymentPlan
+
+        try:
+            plan = DeploymentPlan(**plan_data)
+        except Exception as e:
+            return {"error": f"Invalid deployment plan: {e}"}
+
+        if not plan.ready:
+            return {
+                "error": "Deployment plan has unresolved blocking issues",
+                "issues": [i.model_dump() for i in plan.issues if i.blocking],
+            }
+
+        from rhoai_mcp.composites.planner.execution import execute_deployment as _execute
+
+        result = await _execute(server, plan)
+        return result.model_dump()

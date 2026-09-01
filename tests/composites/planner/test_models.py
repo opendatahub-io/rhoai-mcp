@@ -6,17 +6,25 @@ import pytest
 from pydantic import ValidationError
 
 from rhoai_mcp.composites.planner.models import (
+    ClusterFitResult,
+    ClusterGPU,
     ConfigurationScores,
     DeploymentBundle,
     DeploymentConfigResult,
     DeploymentConfiguration,
     DeploymentIntent,
+    DeploymentPlan,
+    DeploymentPlanIssue,
+    DeploymentPlanStep,
+    DeploymentResult,
     DeploymentSpecification,
+    EndpointValidation,
     GPUConfig,
     ModelRecommendation,
     Priorities,
     PriorityEntry,
     RecommendationResult,
+    ResolvedDeployParams,
     SLORange,
     SLOTargets,
     TrafficProfile,
@@ -315,3 +323,225 @@ class TestDeploymentConfigResult:
         )
         assert result.model_name is None
         assert result.namespace == "ml-prod"
+
+
+class TestClusterGPU:
+    """Tests for ClusterGPU model."""
+
+    def test_construction(self) -> None:
+        gpu = ClusterGPU(product="NVIDIA-A100-SXM4-80GB", total=8, available=4, nodes=2)
+        assert gpu.product == "NVIDIA-A100-SXM4-80GB"
+        assert gpu.total == 8
+        assert gpu.available == 4
+        assert gpu.nodes == 2
+
+    def test_defaults(self) -> None:
+        gpu = ClusterGPU(product="NVIDIA-H100")
+        assert gpu.total == 0
+        assert gpu.available == 0
+        assert gpu.nodes == 0
+
+
+class TestClusterFitResult:
+    """Tests for ClusterFitResult model."""
+
+    def test_available(self) -> None:
+        result = ClusterFitResult(
+            status="available", gpu_type="H100", needed=2, available=8, message="ok"
+        )
+        assert result.status == "available"
+        assert result.needed == 2
+
+    def test_partial(self) -> None:
+        result = ClusterFitResult(
+            status="partial", gpu_type="A100-80", needed=4, available=2
+        )
+        assert result.status == "partial"
+
+    def test_unavailable(self) -> None:
+        result = ClusterFitResult(
+            status="unavailable", gpu_type="B200", needed=1, available=0
+        )
+        assert result.status == "unavailable"
+
+    def test_invalid_status_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ClusterFitResult(status="unknown", gpu_type="H100", needed=1)
+
+
+class TestDeploymentPlanIssue:
+    """Tests for DeploymentPlanIssue model."""
+
+    def test_blocking_issue(self) -> None:
+        issue = DeploymentPlanIssue(
+            category="storage",
+            message="Cannot resolve URI",
+            blocking=True,
+            suggestion="Provide storage_uri",
+        )
+        assert issue.blocking is True
+        assert issue.category == "storage"
+
+    def test_non_blocking_issue(self) -> None:
+        issue = DeploymentPlanIssue(
+            category="gpu",
+            message="GPU type not found",
+            blocking=False,
+        )
+        assert issue.blocking is False
+        assert issue.suggestion is None
+
+    def test_invalid_category_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            DeploymentPlanIssue(
+                category="invalid",
+                message="test",
+                blocking=False,
+            )
+
+
+class TestDeploymentPlanStep:
+    """Tests for DeploymentPlanStep model."""
+
+    def test_step(self) -> None:
+        step = DeploymentPlanStep(action="deploy_model", description="Create InferenceService")
+        assert step.action == "deploy_model"
+        assert step.description == "Create InferenceService"
+
+
+class TestResolvedDeployParams:
+    """Tests for ResolvedDeployParams model."""
+
+    def test_full_params(self) -> None:
+        params = ResolvedDeployParams(
+            name="llama-8b",
+            namespace="prod",
+            display_name="Llama 3.1 8B",
+            runtime="vllm-cuda-runtime",
+            model_format="pytorch",
+            storage_uri="oci://meta-llama/Llama-3.1-8B",
+            min_replicas=1,
+            max_replicas=2,
+            cpu_request="24",
+            cpu_limit="48",
+            memory_request="128Gi",
+            memory_limit="256Gi",
+            gpu_count=1,
+        )
+        assert params.name == "llama-8b"
+        assert params.runtime == "vllm-cuda-runtime"
+        assert params.gpu_count == 1
+
+    def test_model_prefix_fields_allowed(self) -> None:
+        """model_format should work despite Pydantic's model_ namespace protection."""
+        params = ResolvedDeployParams(
+            name="test",
+            namespace="ns",
+            runtime="rt",
+            storage_uri="oci://test",
+            model_format="onnx",
+        )
+        assert params.model_format == "onnx"
+
+    def test_defaults(self) -> None:
+        params = ResolvedDeployParams(
+            name="test", namespace="ns", runtime="rt", storage_uri="oci://test"
+        )
+        assert params.model_format == "pytorch"
+        assert params.min_replicas == 1
+        assert params.gpu_count == 1
+
+
+class TestDeploymentPlan:
+    """Tests for DeploymentPlan model."""
+
+    def test_ready_plan(self) -> None:
+        plan = DeploymentPlan(
+            ready=True,
+            recommendation_summary={"model_id": "test"},
+            resolved_params=ResolvedDeployParams(
+                name="test", namespace="ns", runtime="rt", storage_uri="oci://test"
+            ),
+            steps=[DeploymentPlanStep(action="deploy", description="Deploy")],
+        )
+        assert plan.ready is True
+        assert len(plan.steps) == 1
+        assert plan.issues == []
+        assert plan.warnings == []
+
+    def test_not_ready_plan(self) -> None:
+        plan = DeploymentPlan(
+            ready=False,
+            recommendation_summary={"model_id": "test"},
+            resolved_params=ResolvedDeployParams(
+                name="test", namespace="ns", runtime="rt", storage_uri="oci://test"
+            ),
+            steps=[DeploymentPlanStep(action="fix", description="Fix issues")],
+            issues=[
+                DeploymentPlanIssue(
+                    category="storage", message="Missing URI", blocking=True
+                )
+            ],
+        )
+        assert plan.ready is False
+        assert len(plan.issues) == 1
+
+
+class TestEndpointValidation:
+    """Tests for EndpointValidation model."""
+
+    def test_reachable(self) -> None:
+        val = EndpointValidation(
+            reachable=True,
+            status="Ready",
+            url="https://model.example.com",
+            message="Endpoint is ready",
+        )
+        assert val.reachable is True
+        assert val.url == "https://model.example.com"
+
+    def test_not_reachable(self) -> None:
+        val = EndpointValidation(reachable=False, message="Connection refused")
+        assert val.reachable is False
+        assert val.response_time_ms is None
+        assert val.url is None
+
+
+class TestDeploymentResult:
+    """Tests for DeploymentResult model."""
+
+    def test_success(self) -> None:
+        result = DeploymentResult(
+            success=True,
+            message="Deployed",
+            deployment_name="llama-8b",
+            namespace="prod",
+            status="Ready",
+            endpoint_url="https://model.example.com",
+        )
+        assert result.success is True
+        assert result.endpoint_url == "https://model.example.com"
+
+    def test_failure(self) -> None:
+        result = DeploymentResult(
+            success=False,
+            message="Failed to deploy",
+            issues=[
+                DeploymentPlanIssue(
+                    category="storage", message="No URI", blocking=True
+                )
+            ],
+        )
+        assert result.success is False
+        assert result.issues is not None
+        assert len(result.issues) == 1
+
+    def test_defaults(self) -> None:
+        result = DeploymentResult(success=True, message="ok")
+        assert result.deployment_name is None
+        assert result.namespace is None
+        assert result.status is None
+        assert result.endpoint_url is None
+        assert result.validation is None
+        assert result.slo_comparison is None
+        assert result.issues is None

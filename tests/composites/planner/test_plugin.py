@@ -70,3 +70,19 @@ class TestPlannerPlugin:
             "http://localhost:8000",
             timeout=120,
         )
+
+    def test_register_prompts(self) -> None:
+        """Plugin registers prompts with MCP."""
+        plugin = PlannerCompositesPlugin()
+        mock_mcp = MagicMock()
+        mock_server = MagicMock()
+
+        with patch("rhoai_mcp.composites.planner.prompts.register_prompts") as mock_reg:
+            plugin.rhoai_register_prompts(mock_mcp, mock_server)
+            mock_reg.assert_called_once_with(mock_mcp, mock_server)
+
+    def test_plugin_version_1_1(self) -> None:
+        """Plugin version is 1.1.0 (updated for deployment workflow)."""
+        plugin = PlannerCompositesPlugin()
+        meta = plugin.rhoai_get_plugin_metadata()
+        assert meta.version == "1.1.0"

@@ -35,7 +35,6 @@ def _make_mock_server(mode: PlannerMode = PlannerMode.REMOTE) -> MagicMock:
     server.config.planner_url = "http://localhost:8000"
     server.config.planner_timeout = 120
     server.config.planner_model_catalog_url = None
-    server.config.planner_model_catalog_token = None
     return server
 
 
@@ -1022,7 +1021,6 @@ class TestClientFactory:
 
         mock_local_cls.assert_called_once_with(
             model_catalog_url=None,
-            model_catalog_token=None,
         )
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")

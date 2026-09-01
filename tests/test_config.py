@@ -217,16 +217,6 @@ class TestPlannerConfig:
         config = RHOAIConfig()
         assert config.planner_model_catalog_url == "https://catalog.example.com"
 
-    def test_planner_model_catalog_token_default_none(self) -> None:
-        """Model Catalog token defaults to None."""
-        config = RHOAIConfig()
-        assert config.planner_model_catalog_token is None
-
-    def test_planner_model_catalog_token_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Model Catalog token can be set via environment variable."""
-        monkeypatch.setenv("RHOAI_MCP_PLANNER_MODEL_CATALOG_TOKEN", "secret-token")
-        config = RHOAIConfig()
-        assert config.planner_model_catalog_token == "secret-token"
 
 
 class TestOIDCConfig:

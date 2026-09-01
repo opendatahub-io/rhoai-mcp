@@ -128,12 +128,10 @@ class TestLocalPlannerClientInit:
 
         LocalPlannerClient(
             model_catalog_url="https://catalog.example.com",
-            model_catalog_token="test-token",
         )
 
         mock_planner_cls.return_value.sync_model_catalog.assert_called_once_with(
             url="https://catalog.example.com",
-            token="test-token",
         )
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")

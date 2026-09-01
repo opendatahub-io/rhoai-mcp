@@ -242,11 +242,8 @@ class RHOAIConfig(BaseSettings):
     )
     planner_model_catalog_url: str | None = Field(
         default=None,
-        description="Model Catalog API URL for benchmark data sync (local mode only, requires llm-d-planner[quality-sync])",
-    )
-    planner_model_catalog_token: str | None = Field(
-        default=None,
-        description="Auth token for Model Catalog API",
+        description="Model Catalog API URL for benchmark data sync (local mode only, requires llm-d-planner[quality-sync]). "
+        "Auth is handled automatically: in-cluster via ServiceAccount token, or via MODEL_CATALOG_TOKEN env var.",
     )
 
     # Plugin filtering

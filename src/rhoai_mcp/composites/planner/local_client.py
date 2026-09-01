@@ -37,17 +37,13 @@ class LocalPlannerClient:
     def __init__(
         self,
         model_catalog_url: str | None = None,
-        model_catalog_token: str | None = None,
     ) -> None:
         self._planner = Planner()
         self._planner.load_bundled_benchmarks()
 
         if model_catalog_url:
             try:
-                result = self._planner.sync_model_catalog(
-                    url=model_catalog_url,
-                    token=model_catalog_token,
-                )
+                result = self._planner.sync_model_catalog(url=model_catalog_url)
                 logger.info(
                     "Model Catalog sync: %d benchmarks added, %d models added",
                     result.get("benchmarks_added", 0),

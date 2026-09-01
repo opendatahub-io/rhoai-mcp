@@ -86,7 +86,6 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         if _local_client is None:
             _local_client = LocalPlannerClient(
                 model_catalog_url=server.config.planner_model_catalog_url,
-                model_catalog_token=server.config.planner_model_catalog_token,
             )
         return _local_client
 

@@ -1,6 +1,6 @@
 """Pydantic models for Data Science Pipelines."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from rhoai_mcp.models.common import Condition, ResourceMetadata
 
 
-class PipelineServerStatus(str, Enum):
+class PipelineServerStatus(StrEnum):
     """DSPA status values."""
 
     READY = "Ready"

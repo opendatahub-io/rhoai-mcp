@@ -1,6 +1,6 @@
 """Pydantic models for Storage (PVCs)."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from rhoai_mcp.models.common import ResourceMetadata
 
 
-class StorageStatus(str, Enum):
+class StorageStatus(StrEnum):
     """PVC status values."""
 
     BOUND = "Bound"
@@ -17,7 +17,7 @@ class StorageStatus(str, Enum):
     UNKNOWN = "Unknown"
 
 
-class StorageAccessMode(str, Enum):
+class StorageAccessMode(StrEnum):
     """PVC access modes."""
 
     READ_WRITE_ONCE = "ReadWriteOnce"

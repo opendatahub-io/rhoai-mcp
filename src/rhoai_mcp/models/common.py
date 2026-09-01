@@ -1,13 +1,13 @@
 """Common Pydantic models shared across RHOAI resources."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class ResourceStatus(str, Enum):
+class ResourceStatus(StrEnum):
     """Common status values for RHOAI resources."""
 
     UNKNOWN = "Unknown"

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class TrainingState(str, Enum):
+class TrainingState(StrEnum):
     """Training progress state values."""
 
     INITIALIZING = "Initializing"
@@ -19,7 +19,7 @@ class TrainingState(str, Enum):
     SUSPENDED = "Suspended"
 
 
-class PeftMethod(str, Enum):
+class PeftMethod(StrEnum):
     """Parameter-efficient fine-tuning methods."""
 
     FULL = "full"
@@ -28,7 +28,7 @@ class PeftMethod(str, Enum):
     DORA = "dora"
 
 
-class TrainJobStatus(str, Enum):
+class TrainJobStatus(StrEnum):
     """TrainJob status values."""
 
     CREATED = "Created"

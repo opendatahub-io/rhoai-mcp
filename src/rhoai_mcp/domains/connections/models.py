@@ -1,7 +1,7 @@
 """Pydantic models for Data Connections (Secrets)."""
 
 import base64
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from rhoai_mcp.models.common import ResourceMetadata
 
 
-class ConnectionType(str, Enum):
+class ConnectionType(StrEnum):
     """Data connection types."""
 
     S3 = "s3"

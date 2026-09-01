@@ -1,7 +1,7 @@
 """Notebook (Workbench) client operations."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from kubernetes.client.exceptions import ApiException  # type: ignore[import-untyped]
@@ -76,7 +76,7 @@ class NotebookClient:
 
     def stop_workbench(self, name: str, namespace: str) -> Workbench:
         """Stop a running workbench by adding the stop annotation."""
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         patch_body = {
             "metadata": {"annotations": RHOAIAnnotations.notebook_stopped_annotation(timestamp)}

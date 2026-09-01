@@ -4,11 +4,11 @@ This module provides verbosity levels and response builders to reduce
 token usage when AI agents interact with the MCP server.
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class Verbosity(str, Enum):
+class Verbosity(StrEnum):
     """Response verbosity levels for context window optimization.
 
     - MINIMAL: Only essential fields (name, status) - ~85% token savings

@@ -201,11 +201,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 f"Valid values: {valid}",
             }
 
-        client = _get_client()
-
         weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
         try:
+            client = _get_client()
             result = client.recommend(
                 text,
                 use_case_override=use_case,
@@ -388,9 +387,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
-        client = _get_client()
-
         try:
+            client = _get_client()
             result = client.generate_config(
                 category=category,
                 use_case=use_case,

@@ -85,11 +85,7 @@ class LocalPlannerClient:
         All overrides (use_case, user_count, gpu_types) must be provided.
         Intent extraction from natural language is not supported in local mode.
         """
-        if (
-            use_case_override is None
-            or user_count_override is None
-            or gpu_types_override is None
-        ):
+        if use_case_override is None or user_count_override is None or gpu_types_override is None:
             raise PlannerAPIError(
                 status_code=400,
                 detail="Local mode requires explicit overrides: "

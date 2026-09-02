@@ -141,6 +141,32 @@ class TestLocalPlannerClientInit:
         with pytest.raises(PlannerAPIError, match="extra dependency"):
             LocalPlannerClient(model_catalog_url="https://catalog.example.com")
 
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_catalog_sync_value_error(self, mock_planner_cls: MagicMock) -> None:
+        """ValueError from sync_model_catalog is mapped to PlannerAPIError(502)."""
+        mock_planner_cls.return_value.sync_model_catalog.side_effect = ValueError("bad url")
+
+        with pytest.raises(PlannerAPIError) as exc_info:
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        assert exc_info.value.status_code == 502
+        assert "Model Catalog sync failed" in exc_info.value.detail
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_catalog_sync_planner_error(self, mock_planner_cls: MagicMock) -> None:
+        """PlannerError from sync_model_catalog is mapped to PlannerAPIError(502)."""
+        from planner import PlannerError
+
+        mock_planner_cls.return_value.sync_model_catalog.side_effect = PlannerError(
+            "unreachable"
+        )
+
+        with pytest.raises(PlannerAPIError) as exc_info:
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        assert exc_info.value.status_code == 502
+        assert "Model Catalog sync failed" in exc_info.value.detail
+
 
 class TestLocalPlannerRecommend:
     """Tests for LocalPlannerClient.recommend()."""

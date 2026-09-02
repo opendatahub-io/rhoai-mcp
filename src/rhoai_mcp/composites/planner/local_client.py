@@ -41,6 +41,13 @@ class LocalPlannerClient:
     ) -> None:
         self._planner = Planner()
 
+        # Pre-seed the gpu_normalizer singleton with the Planner's catalog
+        # to avoid a redundant ModelCatalog() construction on first
+        # normalize_gpu_types() call (llm-d-planner bug workaround).
+        import planner.shared.utils.gpu_normalizer as _gpu_norm
+
+        _gpu_norm._catalog_instance = self._planner._model_catalog
+
         if model_catalog_url:
             try:
                 result = self._planner.sync_model_catalog(url=model_catalog_url)

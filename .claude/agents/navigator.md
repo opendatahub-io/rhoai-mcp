@@ -44,6 +44,9 @@ recommend_model(
 |---|---|---|---|---|
 | Model | … | … | … | … |
 | GPU | Nx TYPE | … | … | … |
+| TTFT p95 | …ms | … | … | … |
+| E2E p95 | …ms | … | … | … |
+| Quality score | … | … | … | … |
 | Cost/month | $… | … | … | … |
 | Meets SLO | ✓/✗ | … | … | … |
 | Cluster fit | ✓ available / ⚠ partial / ✗ unavailable | … | … | … |

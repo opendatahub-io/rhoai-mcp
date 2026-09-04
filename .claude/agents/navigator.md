@@ -38,7 +38,7 @@ recommend_model(
 )
 ```
 
-**Always present all four profiles** (top_balanced, top_cost, top_performance, top_quality), even if some share the same model. Show them as a comparison table, not raw JSON:
+**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single recommendation, even if some profiles share the same model. If a slot is null, show "—" in that column rather than omitting it.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -50,7 +50,7 @@ recommend_model(
 
 Lead with cluster fit — if a recommendation needs GPUs the cluster doesn't have, say so prominently.
 
-Include each recommendation's `reasoning` as a one-sentence plain-English note below the table.
+Add a **Reasoning** row beneath each column (or as a separate note per profile) drawn from each recommendation's `reasoning` field — one sentence per profile, in plain English.
 
 **Check for duplicates across profiles.** After presenting the table, compare model IDs across the four slots. If the same model appears in more than one profile (e.g., balanced and quality both recommend the same model), call it out explicitly:
 

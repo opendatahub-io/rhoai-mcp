@@ -38,7 +38,7 @@ recommend_model(
 )
 ```
 
-**Present the results as a comparison, not raw JSON.** For each non-null slot (top_balanced, top_cost, top_performance, top_quality), show:
+**Always present all four profiles** (top_balanced, top_cost, top_performance, top_quality), even if some share the same model. Show them as a comparison table, not raw JSON:
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -51,6 +51,12 @@ recommend_model(
 Lead with cluster fit — if a recommendation needs GPUs the cluster doesn't have, say so prominently.
 
 Include each recommendation's `reasoning` as a one-sentence plain-English note below the table.
+
+**Check for duplicates across profiles.** After presenting the table, compare model IDs across the four slots. If the same model appears in more than one profile (e.g., balanced and quality both recommend the same model), call it out explicitly:
+
+> "The balanced and quality profiles both recommend [Model X] — the planner ranks it highest on both dimensions for your workload. Would you like to see the runner-up for either of those profiles?"
+
+If the customer says yes: re-run `recommend_model` with a tighter constraint on the duplicated dimension to surface a different option — for example, lowering `max_cost_per_month` for the cost profile, or raising latency requirements for the performance profile. Explain what constraint you're applying and why.
 
 **Suggest a default** based on the customer's stated priority, and ask them to confirm which to proceed with.
 

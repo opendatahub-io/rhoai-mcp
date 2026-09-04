@@ -29,3 +29,7 @@ patches:
       kind: Deployment
       name: rhoai-mcp
     path: deployment-patch.yaml
+  - target:
+      kind: Service
+      name: rhoai-mcp
+    path: service-patch.yaml

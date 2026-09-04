@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# MCPServer overlay for OpenShift OIDC deployments.
+#
+# Replaces the explicit Deployment and Service from the openshift-oidc overlay
+# with an MCPServer CR.  The MCP Lifecycle Operator reconciles the MCPServer
+# and creates the Deployment, Service, and NetworkPolicy automatically.
+
+resources:
+  - ../openshift-oidc
+  - mcpserver.yaml
+
+patches:
+  # Remove the Deployment — the MCPServer operator manages it.
+  - patch: |
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: rhoai-mcp
+  # Remove the Service — the MCPServer operator manages it.
+  - patch: |
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: rhoai-mcp
+  # The operator-created Service names the port "mcp" (not "http").
+  - target:
+      kind: Route
+      name: rhoai-mcp
+    path: route-patch.yaml
+
+replacements:
+  # Inject the container image from params.env into the MCPServer CR,
+  # mirroring the base-level replacement that targets the Deployment.
+  - source:
+      kind: ConfigMap
+      name: rhoai-mcp-images
+      fieldPath: data.RHOAI_MCP_IMAGE
+    targets:
+      - select:
+          kind: MCPServer
+          name: rhoai-mcp
+        fieldPaths:
+          - spec.source.containerImage.ref

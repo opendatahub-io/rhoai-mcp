@@ -1,0 +1,7 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: rhoai-mcp
+spec:
+  port:
+    targetPort: mcp

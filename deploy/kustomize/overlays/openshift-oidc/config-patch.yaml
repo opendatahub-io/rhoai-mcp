@@ -10,3 +10,6 @@
 - op: add
   path: /data/RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY
   value: "user-token"
+- op: add
+  path: /data/RHOAI_MCP_PLANNER_MODEL_CATALOG_URL
+  value: "https://model-catalog.rhoai-model-registries.svc:8443"

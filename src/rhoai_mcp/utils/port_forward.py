@@ -148,7 +148,7 @@ class PortForwardManager:
                 writer.close()
                 await writer.wait_closed()
                 return True
-            except (ConnectionRefusedError, asyncio.TimeoutError, OSError):
+            except (TimeoutError, ConnectionRefusedError, OSError):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return False
@@ -289,7 +289,7 @@ class PortForwardManager:
                     stored_conn.process.terminate()
                     try:
                         await asyncio.wait_for(stored_conn.process.wait(), timeout=5.0)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         stored_conn.process.kill()
                         await stored_conn.process.wait()
                 del self._connections[key]
@@ -311,7 +311,7 @@ class PortForwardManager:
                     conn.process.terminate()
                     try:
                         await asyncio.wait_for(conn.process.wait(), timeout=5.0)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         conn.process.kill()
                         await conn.process.wait()
 

@@ -1,0 +1,22 @@
+# OpenShift *service*-serving CA bundle.
+#
+# On OpenShift, services annotated with
+#   service.beta.openshift.io/serving-cert-secret-name
+# get TLS certificates signed by a cluster-internal "service-serving signer"
+# CA. This CA is *separate* from the Kubernetes API server CA available at
+# /var/run/secrets/kubernetes.io/serviceaccount/ca.crt — so pods cannot
+# verify service-serving certificates using the default SA trust bundle.
+#
+# This is the standard OpenShift pattern for inter-service TLS trust
+# Ref: https://docs.okd.io/latest/security/certificates/service-serving-certificate.html
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhoai-mcp-service-ca
+  namespace: rhoai-mcp
+  labels:
+    app.kubernetes.io/name: rhoai-mcp
+    app.kubernetes.io/component: config
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
+data: {}

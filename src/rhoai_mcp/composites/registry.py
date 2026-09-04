@@ -153,6 +153,11 @@ class PlannerCompositesPlugin(BasePlugin):
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        from rhoai_mcp.config import PlannerMode
+
+        if server.config.planner_mode == PlannerMode.LOCAL:
+            return True, "Planner available (local)"
+
         from rhoai_mcp.composites.planner.client import PlannerClient
 
         client = PlannerClient(

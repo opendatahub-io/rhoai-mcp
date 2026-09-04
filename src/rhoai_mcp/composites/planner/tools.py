@@ -14,7 +14,9 @@ from rhoai_mcp.composites.planner.client import (
     PlannerClient,
     PlannerConnectionError,
 )
+from rhoai_mcp.composites.planner.local_client import LocalPlannerClient
 from rhoai_mcp.composites.planner.models import ModelRecommendation
+from rhoai_mcp.config import PlannerMode
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ VALID_USE_CASES: set[str] = {
 }
 
 VALID_GPU_TYPES: set[str] = {"L4", "A100-40", "A100-80", "H100", "H200", "B200"}
-VALID_PERCENTILES: set[str] = {"mean", "p90", "p95", "p99"}
+VALID_PERCENTILES: set[str] = {"p90", "p95", "p99"}
 MAX_TEXT_CHARS = 4000
 
 OPTIMIZATION_PROFILES: dict[str, dict[str, int]] = {
@@ -72,6 +74,20 @@ def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any
 
 def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
     """Register Planner composite tools with the MCP server."""
+    _local_client: LocalPlannerClient | None = None
+
+    def _get_client() -> PlannerClient | LocalPlannerClient:
+        nonlocal _local_client
+        if server.config.planner_mode == PlannerMode.REMOTE:
+            return PlannerClient(
+                server.config.planner_url,
+                timeout=float(server.config.planner_timeout),
+            )
+        if _local_client is None:
+            _local_client = LocalPlannerClient(
+                model_catalog_url=server.config.planner_model_catalog_url,
+            )
+        return _local_client
 
     @mcp.tool()
     def recommend_model(
@@ -121,7 +137,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 balanced (default), optimize_latency, optimize_cost,
                 optimize_quality.
             percentile: Percentile for SLO evaluation. Valid values:
-                mean, p90, p95 (default), p99.
+                p90, p95 (default), p99.
 
         Returns:
             Four top model recommendations (top_performance, top_cost,
@@ -185,14 +201,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 f"Valid values: {valid}",
             }
 
-        client = PlannerClient(
-            server.config.planner_url,
-            timeout=float(server.config.planner_timeout),
-        )
-
         weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
         try:
+            client = _get_client()
             result = client.recommend(
                 text,
                 use_case_override=use_case,
@@ -294,7 +306,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             min_quality: Minimum quality score (0-100).
             max_cost_per_month: Maximum monthly cost in USD.
             percentile: Percentile for SLO evaluation.
-                Valid: mean, p90, p95, p99.
+                Valid: p90, p95, p99.
 
         Returns:
             Deployment config with deployment_id, namespace, model name,
@@ -375,12 +387,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
-        client = PlannerClient(
-            server.config.planner_url,
-            timeout=float(server.config.planner_timeout),
-        )
-
         try:
+            client = _get_client()
             result = client.generate_config(
                 category=category,
                 use_case=use_case,

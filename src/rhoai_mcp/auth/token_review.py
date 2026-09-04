@@ -47,7 +47,7 @@ class TokenReviewValidator:
                 asyncio.to_thread(self._authn_api.create_token_review, review),
                 timeout=10.0,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TokenReviewError("TokenReview API call timed out")
 
         if not result.status.authenticated or result.status.user is None:

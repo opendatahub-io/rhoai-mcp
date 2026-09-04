@@ -9,6 +9,7 @@ from rhoai_mcp.config import (
     LogLevel,
     OIDCKubeAuthStrategy,
     OIDCTokenMode,
+    PlannerMode,
     RHOAIConfig,
     TransportMode,
 )
@@ -162,6 +163,17 @@ class TestRHOAIConfig:
 class TestPlannerConfig:
     """Tests for Planner configuration."""
 
+    def test_planner_mode_default_local(self) -> None:
+        """Default Planner mode is local."""
+        config = RHOAIConfig()
+        assert config.planner_mode == PlannerMode.LOCAL
+
+    def test_planner_mode_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Planner mode can be set via environment variable."""
+        monkeypatch.setenv("RHOAI_MCP_PLANNER_MODE", "remote")
+        config = RHOAIConfig()
+        assert config.planner_mode == PlannerMode.REMOTE
+
     def test_planner_url_default(self) -> None:
         """Default Planner URL points to in-cluster service."""
         config = RHOAIConfig()
@@ -193,6 +205,18 @@ class TestPlannerConfig:
         """Planner timeout rejects values above maximum."""
         with pytest.raises(ValueError):
             RHOAIConfig(planner_timeout=601)
+
+    def test_planner_model_catalog_url_default_none(self) -> None:
+        """Model Catalog URL defaults to None."""
+        config = RHOAIConfig()
+        assert config.planner_model_catalog_url is None
+
+    def test_planner_model_catalog_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Model Catalog URL can be set via environment variable."""
+        monkeypatch.setenv("RHOAI_MCP_PLANNER_MODEL_CATALOG_URL", "https://catalog.example.com")
+        config = RHOAIConfig()
+        assert config.planner_model_catalog_url == "https://catalog.example.com"
+
 
 
 class TestOIDCConfig:

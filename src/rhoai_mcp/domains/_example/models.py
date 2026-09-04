@@ -1,6 +1,6 @@
 """Pydantic models for the example domain."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from rhoai_mcp.models.common import ResourceMetadata
 
 
-class ExampleStatus(str, Enum):
+class ExampleStatus(StrEnum):
     """Status values for example items."""
 
     ACTIVE = "Active"

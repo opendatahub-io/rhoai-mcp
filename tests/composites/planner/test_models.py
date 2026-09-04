@@ -278,6 +278,15 @@ class TestDeploymentBundle:
             deployment_id="chatbot-llama-20260322",
             namespace="default",
             stack="vllm",
+            configuration=DeploymentConfiguration(
+                model_id="meta-llama/Llama-3.1-70B-Instruct",
+                gpu_config=GPUConfig(gpu_type="NVIDIA-H100", gpu_count=2),
+                use_case="chatbot_conversational",
+                expected_qps=10.0,
+                prompt_tokens=512,
+                output_tokens=256,
+                e2e_target_ms=2000,
+            ),
             files={"inferenceservice.yaml": "apiVersion: serving.kserve.io/v1beta1"},
         )
         assert bundle.deployment_id == "chatbot-llama-20260322"

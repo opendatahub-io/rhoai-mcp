@@ -1,7 +1,7 @@
 """Configuration management for RHOAI MCP server."""
 
 import os
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _DEFAULT_WORKFLOW_TOKEN_TTL_SECONDS = 3600
 
 
-class AuthMode(str, Enum):
+class AuthMode(StrEnum):
     """Authentication mode for Kubernetes API."""
 
     AUTO = "auto"
@@ -19,7 +19,7 @@ class AuthMode(str, Enum):
     TOKEN = "token"
 
 
-class TransportMode(str, Enum):
+class TransportMode(StrEnum):
     """MCP transport mode."""
 
     STDIO = "stdio"
@@ -27,7 +27,7 @@ class TransportMode(str, Enum):
     STREAMABLE_HTTP = "streamable-http"
 
 
-class LogLevel(str, Enum):
+class LogLevel(StrEnum):
     """Logging level."""
 
     DEBUG = "DEBUG"
@@ -36,14 +36,14 @@ class LogLevel(str, Enum):
     ERROR = "ERROR"
 
 
-class ModelRegistryDiscoveryMode(str, Enum):
+class ModelRegistryDiscoveryMode(StrEnum):
     """Model Registry discovery mode."""
 
     AUTO = "auto"  # Discover from cluster, fall back to configured URL
     MANUAL = "manual"  # Only use configured URL
 
 
-class ModelRegistryAuthMode(str, Enum):
+class ModelRegistryAuthMode(StrEnum):
     """Model Registry authentication mode."""
 
     NONE = "none"  # No authentication (for in-cluster access via port 8080)
@@ -51,18 +51,25 @@ class ModelRegistryAuthMode(str, Enum):
     TOKEN = "token"  # Use explicit bearer token
 
 
-class OIDCTokenMode(str, Enum):
+class OIDCTokenMode(StrEnum):
     """Token validation strategy for OIDC auth."""
 
     JWT = "jwt"
     TOKEN_REVIEW = "token-review"
 
 
-class OIDCKubeAuthStrategy(str, Enum):
+class OIDCKubeAuthStrategy(StrEnum):
     """How the MCP server authenticates to K8s API when OIDC is enabled."""
 
     USER_TOKEN = "user-token"
     IMPERSONATION = "impersonation"
+
+
+class PlannerMode(StrEnum):
+    """Planner integration mode."""
+
+    LOCAL = "local"
+    REMOTE = "remote"
 
 
 class RHOAIConfig(BaseSettings):
@@ -219,15 +226,24 @@ class RHOAIConfig(BaseSettings):
     )
 
     # Planner settings
+    planner_mode: PlannerMode = Field(
+        default=PlannerMode.LOCAL,
+        description="Planner mode: local (embedded library) or remote (REST API)",
+    )
     planner_url: str = Field(
         default="http://backend.planner.svc.cluster.local:8000",
-        description="Planner backend URL",
+        description="Planner backend URL (used only when planner_mode=remote)",
     )
     planner_timeout: int = Field(
         default=120,
         ge=10,
         le=600,
-        description="Planner request timeout in seconds (extract endpoint can be slow on cold starts)",
+        description="Planner request timeout in seconds (used only when planner_mode=remote)",
+    )
+    planner_model_catalog_url: str | None = Field(
+        default=None,
+        description="Model Catalog API URL for benchmark data sync (local mode only; when Planner is remote, the planner deployment self governs if it syncs from Model Catalog). "
+        "Auth is handled automatically: in-cluster via ServiceAccount token, or via MODEL_CATALOG_TOKEN env var.",
     )
 
     # Plugin filtering

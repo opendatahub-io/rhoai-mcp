@@ -9,6 +9,8 @@ kind: Kustomization
 
 resources:
   - ../openshift
+  # OpenShift service-serving CA bundle (see service-ca-configmap.yaml for details).
+  - service-ca-configmap.yaml
 
 patches:
   - target:
@@ -23,3 +25,7 @@ patches:
       kind: Route
       name: rhoai-mcp
     path: route-patch.yaml
+  - target:
+      kind: Deployment
+      name: rhoai-mcp
+    path: deployment-patch.yaml

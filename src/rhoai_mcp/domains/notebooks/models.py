@@ -2,7 +2,7 @@
 
 import contextlib
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -15,7 +15,7 @@ from rhoai_mcp.models.common import (
 from rhoai_mcp.utils.annotations import RHOAIAnnotations
 
 
-class WorkbenchStatus(str, Enum):
+class WorkbenchStatus(StrEnum):
     """Workbench-specific status values."""
 
     RUNNING = "Running"

@@ -8,6 +8,7 @@ from rhoai_mcp.composites.planner.models import (
     RecommendationResult,
 )
 from rhoai_mcp.composites.planner.tools import register_tools
+from rhoai_mcp.config import PlannerMode
 
 
 def _make_mock_mcp() -> MagicMock:
@@ -27,11 +28,13 @@ def _make_mock_mcp() -> MagicMock:
     return mock
 
 
-def _make_mock_server() -> MagicMock:
+def _make_mock_server(mode: PlannerMode = PlannerMode.REMOTE) -> MagicMock:
     """Create a mock RHOAIServer."""
     server = MagicMock()
+    server.config.planner_mode = mode
     server.config.planner_url = "http://localhost:8000"
     server.config.planner_timeout = 120
+    server.config.planner_model_catalog_url = None
     return server
 
 
@@ -994,3 +997,45 @@ class TestDeploymentConfigTool:
         mock_client_class.return_value.generate_config.assert_called_once()
         call_kwargs = mock_client_class.return_value.generate_config.call_args.kwargs
         assert call_kwargs["priority_weights"] == {"quality": 2, "price": 8, "latency": 1}
+
+
+class TestClientFactory:
+    """Tests for the _get_client factory function."""
+
+    @patch("rhoai_mcp.composites.planner.tools.LocalPlannerClient")
+    def test_local_mode_creates_local_client(self, mock_local_cls: MagicMock) -> None:
+        """Factory creates LocalPlannerClient when mode is LOCAL."""
+        mock_local_cls.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_mcp = _make_mock_mcp()
+        mock_server = _make_mock_server(mode=PlannerMode.LOCAL)
+
+        register_tools(mock_mcp, mock_server)
+        recommend_model = mock_mcp._registered_tools["recommend_model"]
+
+        recommend_model(
+            text="chatbot",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            preferred_gpu_types=["H100"],
+        )
+
+        mock_local_cls.assert_called_once_with(
+            model_catalog_url=None,
+        )
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_remote_mode_creates_remote_client(self, mock_client_class: MagicMock) -> None:
+        """Factory creates PlannerClient when mode is REMOTE."""
+        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_mcp = _make_mock_mcp()
+        mock_server = _make_mock_server(mode=PlannerMode.REMOTE)
+
+        register_tools(mock_mcp, mock_server)
+        recommend_model = mock_mcp._registered_tools["recommend_model"]
+
+        recommend_model(text="chatbot")
+
+        mock_client_class.assert_called_once_with(
+            "http://localhost:8000",
+            timeout=120.0,
+        )

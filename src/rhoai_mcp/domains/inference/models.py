@@ -1,6 +1,6 @@
 """Pydantic models for InferenceService (Model Serving)."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from rhoai_mcp.models.common import Condition, ContainerResources, ResourceMetadata
 
 
-class InferenceServiceStatus(str, Enum):
+class InferenceServiceStatus(StrEnum):
     """InferenceService status values."""
 
     READY = "Ready"
@@ -18,7 +18,7 @@ class InferenceServiceStatus(str, Enum):
     UNKNOWN = "Unknown"
 
 
-class ModelFormat(str, Enum):
+class ModelFormat(StrEnum):
     """Supported model formats."""
 
     ONNX = "onnx"

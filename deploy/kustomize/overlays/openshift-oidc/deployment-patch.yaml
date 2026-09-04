@@ -1,0 +1,20 @@
+# Mount the OpenShift service-serving CA bundle so the Planner's
+# ModelCatalogClient can verify the Model Catalog's TLS certificate.
+# See service-ca-configmap.yaml for why this is needed.
+- op: add
+  path: /spec/template/spec/containers/0/env
+  value:
+    - name: MODEL_CATALOG_CA_BUNDLE
+      value: /etc/pki/service-ca/service-ca.crt
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    name: service-ca
+    mountPath: /etc/pki/service-ca
+    readOnly: true
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: service-ca
+    configMap:
+      name: rhoai-mcp-service-ca

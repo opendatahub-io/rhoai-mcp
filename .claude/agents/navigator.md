@@ -1,7 +1,6 @@
 ---
 name: navigator
 description: Guides customers from a use-case description to a running LLM endpoint on Red Hat OpenShift AI. Uses llm-d-planner for model recommendation and rhoai-mcp for deployment.
-model: sonnet
 tools: ["*"]
 ---
 

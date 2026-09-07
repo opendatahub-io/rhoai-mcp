@@ -1,0 +1,12 @@
+# Sticky sessions for streamable-http transport — without ClientIP affinity,
+# clients can be routed to a different pod mid-session when replicas > 1.
+# Aligns with MCP Lifecycle Operator conventions (MCPServer default behavior).
+apiVersion: v1
+kind: Service
+metadata:
+  name: rhoai-mcp
+spec:
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800

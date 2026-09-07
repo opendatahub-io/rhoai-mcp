@@ -22,6 +22,7 @@ from pathlib import Path
 
 _PKG_RE = re.compile(r"^([a-zA-Z0-9_-]+)==(\d+)\.(\d+)(?:\.(\d+))?")
 _INDEX_RE = re.compile(r"^--index-url\s+(\S+)")
+_SKIP_RE = re.compile(r"^(\s*#|\s*$)")  # comments and blank lines
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class Requirements:
     def from_file(cls, path: Path) -> Requirements:
         packages: dict[str, Version] = {}
         index_url: str | None = None
+        unparsed: list[str] = []
         for line in path.read_text().splitlines():
             if m := _PKG_RE.match(line):
                 name = m.group(1).lower().replace("_", "-")
@@ -53,6 +55,13 @@ class Requirements:
                 )
             elif m := _INDEX_RE.match(line):
                 index_url = m.group(1)
+            elif not _SKIP_RE.match(line):
+                unparsed.append(line)
+        if unparsed:
+            raise ValueError(
+                f"{path}: unrecognised requirement lines:\n"
+                + "\n".join(f"  {l}" for l in unparsed)
+            )
         return cls(packages=packages, index_url=index_url)
 
 

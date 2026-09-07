@@ -8,6 +8,7 @@ on:
       - uv.lock
       - Makefile
       - requirements-cpu.txt
+      - .github/scripts/check_requirements_drift.py
       - .github/workflows/check-requirements-cpu.yml
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - uv.lock
       - Makefile
       - requirements-cpu.txt
+      - .github/scripts/check_requirements_drift.py
       - .github/workflows/check-requirements-cpu.yml
 
 permissions:
@@ -39,8 +41,14 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      - name: Save committed requirements
+        run: cp requirements-cpu.txt requirements-cpu.committed.txt
+
       - name: Regenerate requirements-cpu.txt
         run: make generate-requirements-cpu
 
       - name: Check for drift
-        run: git diff --exit-code requirements-cpu.txt
+        run: >
+          python .github/scripts/check_requirements_drift.py
+          requirements-cpu.committed.txt
+          requirements-cpu.txt

@@ -103,7 +103,7 @@ recommend_model(
 )
 ```
 
-**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single result, even if some profiles share the same model/configuration. If a slot is null, show "—".
+**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single result, even if some profiles share the same model/configuration. If a slot is null, show "—". All rows must always appear — never omit a row even if values are unavailable; show "—" in place of any missing value.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|

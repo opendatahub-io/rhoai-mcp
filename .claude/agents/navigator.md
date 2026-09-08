@@ -64,7 +64,7 @@ recommend_model(
 
 Always pass `preferred_gpu_types=[]` (empty list) unless the customer has explicitly specified GPU preferences — passing it as an empty list, rather than omitting it, is what allows the extraction bypass. Choose `use_case` from the valid values below based on what the customer described. Leave `check_cluster=True` (the default) so the tool automatically cross-references GPU availability on their cluster.
 
-**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single recommendation, even if some profiles share the same model. If a slot is null, show "—" in that column rather than omitting it.
+**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single recommendation, even if some profiles share the same model. If a slot is null, show "—" in that column rather than omitting it. All rows must always appear — never omit a row even if values are unavailable; show "—" in place of any missing value.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -158,6 +158,7 @@ Never suggest `uvx` commands, pip packages, or any other installation path for e
 | `list_data_science_projects` | Customer wants to confirm a namespace exists before handing off to /navigator-deploy |
 
 ### Valid use case values (required in every `recommend_model` call)
+
 | Use case value | When to use |
 |---|---|
 | `chatbot_conversational` | Help desk, support bots, conversational assistants |

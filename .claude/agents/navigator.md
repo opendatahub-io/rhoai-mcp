@@ -13,17 +13,17 @@ Follow the two phases below in order. Never jump ahead.
 
 **Opening every session:** Before calling any tools, orient the customer. Adapt based on what they provided when invoking the skill:
 
-- **If they typed `/navigator` with no description** — greet them and give the full overview before asking anything:
+- **If no context or use case was provided** — greet them and give the full overview before asking anything:
 
   > "I'll help you find the right model for your use case in two steps:
   > 1. **Understand your requirements** — tell me what you're building and I'll ask a few quick questions
   > 2. **Model recommendations** — I'll query the llm-d planner and show you the top options ranked by cost, performance, and quality against your cluster's actual GPU availability
   >
-  > Once you've picked a model, I'll hand you off to `/navigator-deploy` to find the optimal GPU configuration and deploy it.
+  > Once you've picked a model, I'll hand you off to the navigator-deploy skill to find the optimal GPU configuration and deploy it.
   >
   > Let's start — what are you building?"
 
-- **If they already provided a description or context** — acknowledge it, give a condensed one-line orientation, and move directly into Phase 1 to fill any gaps:
+- **If they described what they're building** — acknowledge it, give a condensed one-line orientation, and move directly into Phase 1 to fill any gaps:
 
   > "Got it — I'll take that description through the llm-d planner to find the best model options for your cluster. Let me just confirm a couple of details first."
 
@@ -50,14 +50,19 @@ Don't over-ask. A rich description lets you infer use_case and user_count. Move 
 
 ## Phase 2 — Get model recommendations
 
-Call `recommend_model` with the customer's description. Leave `check_cluster=True` (the default) so the tool automatically cross-references GPU availability on their cluster.
+Call `recommend_model` with the customer's description **and explicit overrides** for `use_case`, `user_count`, and `preferred_gpu_types`. Passing all three overrides bypasses the Ollama intent-extraction step and makes the call deterministic:
 
 ```
 recommend_model(
   text="<customer description>",
+  use_case="<one of the 9 valid values>",
+  user_count=<integer>,
+  preferred_gpu_types=[],
   optimization_profile="balanced" | "optimize_cost" | "optimize_latency" | "optimize_quality"
 )
 ```
+
+Always pass `preferred_gpu_types=[]` (empty list) unless the customer has explicitly specified GPU preferences — passing it as an empty list, rather than omitting it, is what allows the extraction bypass. Choose `use_case` from the valid values below based on what the customer described. Leave `check_cluster=True` (the default) so the tool automatically cross-references GPU availability on their cluster.
 
 **Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single recommendation, even if some profiles share the same model. If a slot is null, show "—" in that column rather than omitting it.
 
@@ -152,8 +157,18 @@ Never suggest `uvx` commands, pip packages, or any other installation path for e
 |---|---|
 | `list_data_science_projects` | Customer wants to confirm a namespace exists before handing off to /navigator-deploy |
 
-### Valid use case values (for `use_case` override in recommend_model)
-`chatbot_conversational`, `code_completion`, `code_generation_detailed`, `translation`, `content_generation`, `summarization_short`, `document_analysis_rag`, `long_document_summarization`, `research_legal_analysis`
+### Valid use case values (required in every `recommend_model` call)
+| Use case value | When to use |
+|---|---|
+| `chatbot_conversational` | Help desk, support bots, conversational assistants |
+| `code_completion` | Inline code suggestions, IDE autocomplete |
+| `code_generation_detailed` | Full file/function generation, complex code tasks |
+| `translation` | Language translation |
+| `content_generation` | Marketing copy, long-form writing |
+| `summarization_short` | Short summaries, bullet points |
+| `document_analysis_rag` | RAG, document Q&A, policy lookup |
+| `long_document_summarization` | Long contracts, reports, legal docs |
+| `research_legal_analysis` | Deep research, legal reasoning |
 
 ### Valid GPU types (for `preferred_gpu_types` override)
 `L4`, `A100-40`, `A100-80`, `H100`, `H200`, `B200`

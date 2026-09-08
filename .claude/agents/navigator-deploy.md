@@ -16,7 +16,7 @@ Follow the five phases below in order. Never jump ahead.
 
 **Opening every session:** Before calling any tools, orient the customer. Adapt based on what they provided:
 
-- **If they typed `/navigator-deploy` with no context** — greet them and give the full overview:
+- **If no model or context was provided** — greet them and give the full overview:
 
   > "I'll guide you through five steps to get your model running optimally on RHOAI:
   > 1. **Confirm your model and workload** — tell me the model you want to deploy and what it'll be used for
@@ -27,7 +27,7 @@ Follow the five phases below in order. Never jump ahead.
   >
   > Let's start — which model do you want to deploy?"
 
-- **If they provided a model ID or a recommendation from `/navigator`** — acknowledge it and move straight to confirming the workload details:
+- **If they provided a model ID or a recommendation from the navigator skill** — acknowledge it and move straight to confirming the workload details:
 
   > "Got it — I'll find the optimal deployment configuration for [model] on your cluster, then guide you through deploying it. Let me confirm a few workload details first."
 

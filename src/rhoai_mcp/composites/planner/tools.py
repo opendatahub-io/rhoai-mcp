@@ -696,3 +696,154 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         result = await _execute(server, plan)
         return result.model_dump()
+
+    @mcp.tool()
+    def get_use_case_defaults(use_case: str) -> dict[str, Any]:
+        """Get SLO targets and workload profile for a use case.
+
+        Returns the benchmark-backed defaults that the planner uses when
+        building deployment specifications for a given use case. Useful for
+        showing customers the derived workload profile before running
+        recommendations, so they can review and adjust SLO targets.
+
+        Args:
+            use_case: The use case identifier. Valid values:
+                chatbot_conversational, code_completion, code_generation_detailed,
+                translation, content_generation, summarization_short,
+                document_analysis_rag, long_document_summarization,
+                research_legal_analysis.
+
+        Returns:
+            Combined SLO targets (TTFT, ITL, E2E with min/max/default) and
+            workload profile (prompt tokens, output tokens, active fraction,
+            requests per user per minute) for the use case.
+        """
+        if use_case not in VALID_USE_CASES:
+            valid = ", ".join(sorted(VALID_USE_CASES))
+            return {"error": f"Invalid use_case '{use_case}'. Valid values: {valid}"}
+
+        client = PlannerClient(
+            server.config.planner_url,
+            timeout=float(server.config.planner_timeout),
+        )
+
+        try:
+            slo_data = client.get_slo_defaults(use_case)
+            workload_data = client.get_workload_profile(use_case)
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
+            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
+            return {"error": "Planner API error", "status_code": e.status_code}
+
+        slo_defaults = slo_data.get("slo_defaults", {})
+        workload_profile = workload_data.get("workload_profile", {})
+
+        return {
+            "use_case": use_case,
+            "description": slo_defaults.get("description", workload_data.get("description", "")),
+            "slo_targets": {
+                "ttft_ms": slo_defaults.get("ttft_ms", {}),
+                "itl_ms": slo_defaults.get("itl_ms", {}),
+                "e2e_ms": slo_defaults.get("e2e_ms", {}),
+            },
+            "workload": {
+                "prompt_tokens": workload_profile.get("prompt_tokens"),
+                "output_tokens": workload_profile.get("output_tokens"),
+                "active_fraction": workload_profile.get("active_fraction"),
+                "requests_per_active_user_per_min": workload_profile.get(
+                    "requests_per_active_user_per_min"
+                ),
+            },
+        }
+
+    @mcp.tool()
+    def get_expected_rps(use_case: str, user_count: int) -> dict[str, Any]:
+        """Calculate expected and peak requests per second for a use case and user count.
+
+        Uses the planner's research-backed workload distribution parameters
+        (active fraction, request rate per active user) to estimate the traffic
+        the deployment will need to handle. Useful for validating the workload
+        profile before getting recommendations.
+
+        Args:
+            use_case: The use case identifier. Valid values:
+                chatbot_conversational, code_completion, code_generation_detailed,
+                translation, content_generation, summarization_short,
+                document_analysis_rag, long_document_summarization,
+                research_legal_analysis.
+            user_count: Number of concurrent users.
+
+        Returns:
+            Expected RPS, peak RPS, and expected concurrent users.
+        """
+        if use_case not in VALID_USE_CASES:
+            valid = ", ".join(sorted(VALID_USE_CASES))
+            return {"error": f"Invalid use_case '{use_case}'. Valid values: {valid}"}
+
+        if user_count <= 0:
+            return {"error": "user_count must be > 0"}
+
+        client = PlannerClient(
+            server.config.planner_url,
+            timeout=float(server.config.planner_timeout),
+        )
+
+        try:
+            data = client.get_expected_rps(use_case, user_count)
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
+            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
+            return {"error": "Planner API error", "status_code": e.status_code}
+
+        return {
+            "use_case": use_case,
+            "user_count": user_count,
+            "expected_rps": data.get("expected_rps"),
+            "peak_rps": data.get("peak_rps"),
+            "expected_concurrent_users": data.get("expected_concurrent_users"),
+        }
+
+    @mcp.tool()
+    def list_use_cases() -> dict[str, Any]:
+        """List all supported use cases with plain-English descriptions.
+
+        Returns the 9 use case identifiers the planner recognizes, with
+        descriptions that explain what kind of workload each covers.
+        Useful for confirming use case mappings with the customer before
+        running recommendations.
+
+        Returns:
+            List of use case objects with id and description fields,
+            plus a count.
+        """
+        client = PlannerClient(
+            server.config.planner_url,
+            timeout=float(server.config.planner_timeout),
+        )
+
+        try:
+            data = client.list_use_cases()
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
+            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
+            return {"error": "Planner API error", "status_code": e.status_code}
+
+        use_cases_raw = data.get("use_cases", {})
+        use_cases = [
+            {"id": uc_id, "description": uc.get("description", "")}
+            for uc_id, uc in use_cases_raw.items()
+        ]
+
+        return {"use_cases": use_cases, "count": len(use_cases)}

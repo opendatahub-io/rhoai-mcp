@@ -174,6 +174,10 @@ class PlannerClient:
             params={"user_count": user_count},
         )
 
+    def list_use_cases(self) -> dict[str, Any]:
+        """List all supported use cases with descriptions."""
+        return self._request("GET", "/api/v1/use-cases")
+
     def generate_specification(self, intent: DeploymentIntent) -> dict[str, Any]:
         """Generate a deployment specification from a deployment intent."""
         return self._request(

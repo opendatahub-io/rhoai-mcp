@@ -1307,3 +1307,269 @@ class TestHelperFunctions:
 
     def test_extract_gpu_count_single(self) -> None:
         assert _extract_gpu_count("1x L4") == 1
+
+
+class TestGetUseCaseDefaultsTool:
+    """Tests for get_use_case_defaults tool."""
+
+    def test_tool_registration(self) -> None:
+        """get_use_case_defaults tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "get_use_case_defaults" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_successful_response(self, mock_client_class: MagicMock) -> None:
+        """Merges SLO and workload data into a single clean response."""
+        mock_client_class.return_value.get_slo_defaults.return_value = {
+            "success": True,
+            "slo_defaults": {
+                "use_case": "chatbot_conversational",
+                "description": "Conversational AI chatbot",
+                "ttft_ms": {"min": 50, "max": 500, "default": 388},
+                "itl_ms": {"min": 10, "max": 100, "default": 78},
+                "e2e_ms": {"min": 500, "max": 10000, "default": 7875},
+            },
+        }
+        mock_client_class.return_value.get_workload_profile.return_value = {
+            "success": True,
+            "use_case": "chatbot_conversational",
+            "description": "Conversational AI chatbot",
+            "workload_profile": {
+                "prompt_tokens": 512,
+                "output_tokens": 256,
+                "active_fraction": 0.1,
+                "requests_per_active_user_per_min": 2.0,
+            },
+        }
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_use_case_defaults"]
+
+        result = tool(use_case="chatbot_conversational")
+
+        assert "error" not in result
+        assert result["use_case"] == "chatbot_conversational"
+        assert result["description"] == "Conversational AI chatbot"
+        assert result["slo_targets"]["ttft_ms"]["default"] == 388
+        assert result["workload"]["prompt_tokens"] == 512
+        assert result["workload"]["active_fraction"] == 0.1
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_invalid_use_case(self, mock_client_class: MagicMock) -> None:
+        """Invalid use_case returns error without calling client."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_use_case_defaults"]
+
+        result = tool(use_case="invalid_use_case")
+
+        assert "error" in result
+        assert "use_case" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_connection_error(self, mock_client_class: MagicMock) -> None:
+        """Connection error returns error dict with hint."""
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
+
+        mock_client_class.return_value.get_slo_defaults.side_effect = PlannerConnectionError(
+            "Planner service unavailable"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_use_case_defaults"]
+
+        result = tool(use_case="chatbot_conversational")
+
+        assert "error" in result
+        assert "unavailable" in result["error"].lower()
+        assert "hint" in result
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_api_error(self, mock_client_class: MagicMock) -> None:
+        """Planner API error returns error dict with status code."""
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
+
+        mock_client_class.return_value.get_slo_defaults.side_effect = PlannerAPIError(
+            status_code=404, detail="Use case not found"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_use_case_defaults"]
+
+        result = tool(use_case="chatbot_conversational")
+
+        assert "error" in result
+        assert result["status_code"] == 404
+
+
+class TestGetExpectedRpsTool:
+    """Tests for get_expected_rps tool."""
+
+    def test_tool_registration(self) -> None:
+        """get_expected_rps tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "get_expected_rps" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_successful_response(self, mock_client_class: MagicMock) -> None:
+        """Returns expected and peak RPS for the given use case and user count."""
+        mock_client_class.return_value.get_expected_rps.return_value = {
+            "success": True,
+            "use_case": "chatbot_conversational",
+            "user_count": 1000,
+            "workload_params": {"active_fraction": 0.1, "requests_per_active_user_per_min": 2.0, "peak_multiplier": 2.0},
+            "expected_rps": 3.33,
+            "expected_concurrent_users": 100,
+            "peak_rps": 6.67,
+        }
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="chatbot_conversational", user_count=1000)
+
+        assert "error" not in result
+        assert result["use_case"] == "chatbot_conversational"
+        assert result["user_count"] == 1000
+        assert result["expected_rps"] == 3.33
+        assert result["peak_rps"] == 6.67
+        assert result["expected_concurrent_users"] == 100
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_invalid_use_case(self, mock_client_class: MagicMock) -> None:
+        """Invalid use_case returns error without calling client."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="not_a_real_use_case", user_count=500)
+
+        assert "error" in result
+        assert "use_case" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_invalid_user_count(self, mock_client_class: MagicMock) -> None:
+        """user_count <= 0 returns error without calling client."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="chatbot_conversational", user_count=0)
+
+        assert "error" in result
+        assert "user_count" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_connection_error(self, mock_client_class: MagicMock) -> None:
+        """Connection error returns error dict with hint."""
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
+
+        mock_client_class.return_value.get_expected_rps.side_effect = PlannerConnectionError(
+            "Planner service unavailable"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="chatbot_conversational", user_count=1000)
+
+        assert "error" in result
+        assert "unavailable" in result["error"].lower()
+        assert "hint" in result
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_api_error(self, mock_client_class: MagicMock) -> None:
+        """API error returns error dict with status code."""
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
+
+        mock_client_class.return_value.get_expected_rps.side_effect = PlannerAPIError(
+            status_code=500, detail="Internal error"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="chatbot_conversational", user_count=1000)
+
+        assert "error" in result
+        assert result["status_code"] == 500
+
+
+class TestListUseCasesTool:
+    """Tests for list_use_cases tool."""
+
+    def test_tool_registration(self) -> None:
+        """list_use_cases tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "list_use_cases" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_successful_response(self, mock_client_class: MagicMock) -> None:
+        """Returns use case list with id and description."""
+        mock_client_class.return_value.list_use_cases.return_value = {
+            "use_cases": {
+                "chatbot_conversational": {
+                    "use_case_id": "chatbot_conversational",
+                    "description": "Conversational AI chatbot",
+                },
+                "code_completion": {
+                    "use_case_id": "code_completion",
+                    "description": "Code autocompletion",
+                },
+            },
+            "count": 2,
+        }
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["list_use_cases"]
+
+        result = tool()
+
+        assert "error" not in result
+        assert result["count"] == 2
+        ids = {uc["id"] for uc in result["use_cases"]}
+        assert "chatbot_conversational" in ids
+        assert "code_completion" in ids
+        descriptions = {uc["description"] for uc in result["use_cases"]}
+        assert "Conversational AI chatbot" in descriptions
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_connection_error(self, mock_client_class: MagicMock) -> None:
+        """Connection error returns error dict with hint."""
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
+
+        mock_client_class.return_value.list_use_cases.side_effect = PlannerConnectionError(
+            "Planner service unavailable"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["list_use_cases"]
+
+        result = tool()
+
+        assert "error" in result
+        assert "unavailable" in result["error"].lower()
+        assert "hint" in result
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_api_error(self, mock_client_class: MagicMock) -> None:
+        """API error returns error dict with status code."""
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
+
+        mock_client_class.return_value.list_use_cases.side_effect = PlannerAPIError(
+            status_code=500, detail="Internal error"
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["list_use_cases"]
+
+        result = tool()
+
+        assert "error" in result
+        assert result["status_code"] == 500

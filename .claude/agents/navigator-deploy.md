@@ -57,16 +57,35 @@ Don't over-ask. A good description gives you use_case and user_count directly.
 
 ## Phase 2 — Confirm workload specification
 
-Before querying the planner, tell the customer what workload profile you've inferred and ask them to confirm it:
+Call `get_use_case_defaults(use_case)` and `get_expected_rps(use_case, user_count)` with the values you extracted in Phase 1. These return the planner's actual workload model — the same parameters it will use when scoring configurations.
 
-> "Based on what you've told me, here's the workload profile I'll use to find configurations:
-> - **Use case:** [use_case in plain English]
-> - **Concurrent users:** [user_count]
-> - **Optimization priority:** [priority]
+Present the results to the customer:
+
+> "Here's the workload profile the planner will use for your deployment:
+>
+> **[use_case description from get_use_case_defaults]**
+>
+> | Workload | |
+> |---|---|
+> | Prompt length | [prompt_tokens] tokens |
+> | Response length | [output_tokens] tokens |
+> | Active users | ~[expected_concurrent_users] of [user_count] |
+> | Expected traffic | [expected_rps] req/s (peak: [peak_rps] req/s) |
+>
+> **Default SLO targets:**
+> | Metric | Target | Range |
+> |---|---|---|
+> | TTFT p95 | [ttft_ms.default]ms | [ttft_ms.min]–[ttft_ms.max]ms |
+> | ITL p95 | [itl_ms.default]ms | [itl_ms.min]–[itl_ms.max]ms |
+> | E2E p95 | [e2e_ms.default]ms | [e2e_ms.min]–[e2e_ms.max]ms |
 >
 > Does this look right, or would you like to adjust anything before I get recommendations?"
 
-This step ensures the planner scores configurations against the right traffic profile. If the customer adjusts anything, update your extracted values before proceeding.
+**If the customer adjusts user count:** re-run `get_expected_rps` with the new value and show the updated traffic estimate.
+
+**If the customer tightens SLO targets:** note the overrides — pass them as `ttft_max_ms`, `itl_max_ms`, or `e2e_max_ms` to `recommend_model` in Phase 3.
+
+**If the customer is unsure which use case applies:** call `list_use_cases()` to show them the options, help them pick, and re-run both tools with the corrected value.
 
 ---
 
@@ -169,7 +188,7 @@ Tell the customer this will take several minutes while the model loads.
 
 ## When MCP tools are unavailable
 
-Before calling any tool in Phase 3 or later, if the tool is not available in the session, stop immediately and give the customer this exact setup guidance — do not invent package names or commands:
+Before calling any tool in Phase 2 or later, if the tool is not available in the session, stop immediately and give the customer this exact setup guidance — do not invent package names or commands:
 
 > "The rhoai-mcp tools aren't connected to this session yet. Here's how to wire them up:
 >
@@ -219,6 +238,8 @@ Never suggest `uvx` commands, pip packages, or any other installation path for e
 ### Core workflow
 | Tool | Phase | Purpose |
 |---|---|---|
+| `get_use_case_defaults` | 2 | Get planner's SLO targets and workload profile for the use case |
+| `get_expected_rps` | 2 | Calculate expected and peak QPS for the user count |
 | `recommend_model` | 3 | Get ranked configurations — always pass `use_case` and `user_count` as overrides |
 | `plan_deployment` | 4 | Resolve runtime/storage/resources; validate pre-conditions |
 | `execute_deployment` | 5 | Create InferenceService, wait for Ready, test endpoint |
@@ -226,6 +247,7 @@ Never suggest `uvx` commands, pip packages, or any other installation path for e
 ### Supporting tools
 | Tool | When |
 |---|---|
+| `list_use_cases` | Customer is unsure which use case identifier to use |
 | `list_data_science_projects` | Customer doesn't know their namespace |
 | `create_data_science_project` | Namespace doesn't exist |
 | `list_serving_runtimes` | Inspect available runtimes |

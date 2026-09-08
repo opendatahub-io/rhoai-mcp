@@ -90,8 +90,11 @@ class TestNavigatorTableCompleteness:
         result = await lcs_client.query(self.TASK)
 
         assert result.tool_names_used, "Agent should call at least one tool"
-        assert "recommend_model" in result.tool_names_used, (
-            "Agent must call recommend_model"
+
+        recommend_model_calls = [t for t in result.tool_names_used if t == "recommend_model"]
+        assert len(recommend_model_calls) >= 4, (
+            f"Agent must call recommend_model 4 times (once per profile), "
+            f"got {len(recommend_model_calls)}"
         )
 
         _assert_table_completeness(result.final_output)

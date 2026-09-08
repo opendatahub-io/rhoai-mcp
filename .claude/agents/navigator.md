@@ -50,27 +50,33 @@ Don't over-ask. A rich description lets you infer use_case and user_count. Move 
 
 ## Phase 2 — Get model recommendations
 
-Call `recommend_model` with the customer's description **and explicit overrides** for `use_case`, `user_count`, and `preferred_gpu_types`. Passing all three overrides bypasses the Ollama intent-extraction step and makes the call deterministic:
+Make **four separate `recommend_model` calls** — one per optimization profile — in this order: `balanced`, `optimize_cost`, `optimize_latency`, `optimize_quality`. Each call uses the same base parameters; only `optimization_profile` changes. Always pass `preferred_gpu_types=[]` to bypass the Ollama extraction step.
 
 ```
-recommend_model(
-  text="<customer description>",
-  use_case="<one of the 9 valid values>",
-  user_count=<integer>,
-  preferred_gpu_types=[],
-  optimization_profile="balanced" | "optimize_cost" | "optimize_latency" | "optimize_quality"
-)
+# Call 1 — Balanced column
+recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="balanced")
+
+# Call 2 — Cost column
+recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_cost")
+
+# Call 3 — Performance column
+recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_latency")
+
+# Call 4 — Quality column
+recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_quality")
 ```
 
-Always pass `preferred_gpu_types=[]` (empty list) unless the customer has explicitly specified GPU preferences — passing it as an empty list, rather than omitting it, is what allows the extraction bypass. Choose `use_case` from the valid values below based on what the customer described. Leave `check_cluster=True` (the default) so the tool automatically cross-references GPU availability on their cluster.
+**Handle duplicates before building the table.** Column priority: Balanced > Cost > Performance > Quality. After the four calls, compare the model ID returned by each. If the same model ID appears in more than one column, keep it in the highest-priority column and immediately make a replacement call for each lower-priority duplicate using the exact parameter changes below — do not relabel or copy data:
 
-**Before outputting the table, run this self-check silently:**
-1. Does it have exactly 4 columns (Balanced, Cost, Performance, Quality)? If not, add the missing columns.
-2. Does it have exactly 8 rows (Model, GPU, TTFT p95, E2E p95, Quality score, Cost/month, Meets SLO, Cluster fit)? If not, add the missing rows.
-3. Is every cell filled with a value or "—"? If not, fill it.
-Only output the table after all three checks pass. Never skip this gate.
+| Duplicate column | Replacement call change |
+|---|---|
+| Cost | Add `max_cost_per_month=<winner_cost * 0.7>` to the `optimize_cost` call |
+| Performance | Add `ttft_max_ms=<winner_ttft * 0.7>` to the `optimize_latency` call |
+| Quality | Add `min_quality_score=<winner_quality + 0.05>` to the `optimize_quality` call |
 
-Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column. Use "—" where data is unavailable.
+If a replacement call returns no result, show "—" in that column and note why.
+
+**Build the table only after all four columns have data (or confirmed "—").** Fill in this exact template — replace every `[value]` placeholder with the result from the corresponding call. Do not add, remove, or rename any row or column.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -85,15 +91,13 @@ Fill in this exact template — replace every `[value]` placeholder. Do not add,
 
 Show cluster fit as informational context — if a profile needs GPUs the cluster doesn't currently have, note it clearly in the table but do not let it suppress or re-rank recommendations. The customer decides whether cluster fit is a hard constraint.
 
-Add a **Reasoning** note per profile drawn from each recommendation's `reasoning` field — one sentence per profile, in plain English.
-
-**Handle duplicates across profiles automatically.** After presenting the table, compare model IDs across the four slots. Column priority order is: Balanced > Cost > Performance > Quality. If the same model appears in more than one profile, keep it only in the highest-priority column where it appears and immediately re-run `recommend_model` with a tighter constraint on each duplicated column to surface a distinct runner-up. Do not ask the customer first — resolve duplicates before presenting the table. Explain briefly which constraint you tightened for each runner-up (e.g., "lowered cost ceiling for Cost profile", "tightened latency for Performance profile").
+Add a **Reasoning** note per profile drawn from each recommendation's `reasoning` field — one sentence per profile, in plain English. For any runner-up column, note which constraint was tightened and why.
 
 **Suggest a default** based on the customer's stated priority, and ask them to confirm which to proceed with.
 
 **If all slots are cluster_fit=unavailable:** Present the table as-is and tell the customer which GPU types the cluster has (from `cluster_gpus`). Ask whether they want to: (a) proceed with a model that requires provisioning new GPU capacity, or (b) re-run constrained to the cluster's current GPU types. Only pass `preferred_gpu_types` if they choose option (b).
 
-**If recommend_model returns no recommendations:** Ask the customer to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count — and retry.
+**If a call returns no recommendations:** Show "—" in that column and ask the customer if they want to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count.
 
 ### Handoff to /navigator-deploy
 

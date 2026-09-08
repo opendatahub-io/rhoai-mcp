@@ -103,18 +103,24 @@ recommend_model(
 )
 ```
 
-**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single result, even if some profiles share the same model/configuration. If a slot is null, show "—". All rows must always appear — never omit a row even if values are unavailable; show "—" in place of any missing value. Never summarize, paraphrase, or abbreviate the table — always render every cell in full.
+**Before outputting the table, run this self-check silently:**
+1. Does it have exactly 4 columns (Balanced, Cost, Performance, Quality)? If not, add the missing columns.
+2. Does it have exactly 8 rows (Model, GPU, TTFT p95, E2E p95, Quality score, Cost/month, Meets SLO, Cluster fit)? If not, add the missing rows.
+3. Is every cell filled with a value or "—"? If not, fill it.
+Only output the table after all three checks pass. Never skip this gate.
+
+Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column. Use "—" where data is unavailable.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
-| Model | … | … | … | … |
-| GPU | Nx TYPE | … | … | … |
-| TTFT p95 | …ms | … | … | … |
-| E2E p95 | …ms | … | … | … |
-| Quality score | … | … | … | … |
-| Cost/month | $… | … | … | … |
-| Meets SLO | ✓/✗ | … | … | … |
-| Cluster fit | ✓ available / ⚠ partial / ✗ unavailable | … | … | … |
+| Model | [value] | [value] | [value] | [value] |
+| GPU | [value] | [value] | [value] | [value] |
+| TTFT p95 | [value] | [value] | [value] | [value] |
+| E2E p95 | [value] | [value] | [value] | [value] |
+| Quality score | [value] | [value] | [value] | [value] |
+| Cost/month | [value] | [value] | [value] | [value] |
+| Meets SLO | [value] | [value] | [value] | [value] |
+| Cluster fit | [value] | [value] | [value] | [value] |
 
 Show cluster fit as informational context — note unavailable GPU types clearly in the table but do not let cluster fit suppress or re-rank configurations. The customer decides whether cluster fit is a hard constraint. Add a **Reasoning** note per profile drawn from the `reasoning` field — one sentence each in plain English.
 

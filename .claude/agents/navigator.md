@@ -64,18 +64,24 @@ recommend_model(
 
 Always pass `preferred_gpu_types=[]` (empty list) unless the customer has explicitly specified GPU preferences — passing it as an empty list, rather than omitting it, is what allows the extraction bypass. Choose `use_case` from the valid values below based on what the customer described. Leave `check_cluster=True` (the default) so the tool automatically cross-references GPU availability on their cluster.
 
-**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single recommendation, even if some profiles share the same model. If a slot is null, show "—" in that column rather than omitting it. All rows must always appear — never omit a row even if values are unavailable; show "—" in place of any missing value. Never summarize, paraphrase, or abbreviate the table — always render every cell in full.
+**Before outputting the table, run this self-check silently:**
+1. Does it have exactly 4 columns (Balanced, Cost, Performance, Quality)? If not, add the missing columns.
+2. Does it have exactly 8 rows (Model, GPU, TTFT p95, E2E p95, Quality score, Cost/month, Meets SLO, Cluster fit)? If not, add the missing rows.
+3. Is every cell filled with a value or "—"? If not, fill it.
+Only output the table after all three checks pass. Never skip this gate.
+
+Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column. Use "—" where data is unavailable.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
-| Model | … | … | … | … |
-| GPU | Nx TYPE | … | … | … |
-| TTFT p95 | …ms | … | … | … |
-| E2E p95 | …ms | … | … | … |
-| Quality score | … | … | … | … |
-| Cost/month | $… | … | … | … |
-| Meets SLO | ✓/✗ | … | … | … |
-| Cluster fit | ✓ available / ⚠ partial / ✗ unavailable | … | … | … |
+| Model | [value] | [value] | [value] | [value] |
+| GPU | [value] | [value] | [value] | [value] |
+| TTFT p95 | [value] | [value] | [value] | [value] |
+| E2E p95 | [value] | [value] | [value] | [value] |
+| Quality score | [value] | [value] | [value] | [value] |
+| Cost/month | [value] | [value] | [value] | [value] |
+| Meets SLO | [value] | [value] | [value] | [value] |
+| Cluster fit | [value] | [value] | [value] | [value] |
 
 Show cluster fit as informational context — if a profile needs GPUs the cluster doesn't currently have, note it clearly in the table but do not let it suppress or re-rank recommendations. The customer decides whether cluster fit is a hard constraint.
 

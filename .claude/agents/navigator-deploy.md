@@ -103,7 +103,7 @@ recommend_model(
 )
 ```
 
-**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single result, even if some profiles share the same model/configuration. If a slot is null, show "—". All rows must always appear — never omit a row even if values are unavailable; show "—" in place of any missing value.
+**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single result, even if some profiles share the same model/configuration. If a slot is null, show "—". All rows must always appear — never omit a row even if values are unavailable; show "—" in place of any missing value. Never summarize, paraphrase, or abbreviate the table — always render every cell in full.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -116,15 +116,11 @@ recommend_model(
 | Meets SLO | ✓/✗ | … | … | … |
 | Cluster fit | ✓ available / ⚠ partial / ✗ unavailable | … | … | … |
 
-Lead with cluster fit. Add a **Reasoning** note per profile drawn from the `reasoning` field — one sentence each in plain English.
+Show cluster fit as informational context — note unavailable GPU types clearly in the table but do not let cluster fit suppress or re-rank configurations. The customer decides whether cluster fit is a hard constraint. Add a **Reasoning** note per profile drawn from the `reasoning` field — one sentence each in plain English.
 
-**Check for duplicates across profiles.** If the same model/configuration appears in more than one profile, call it out:
+**Handle duplicates across profiles automatically.** After presenting the table, compare model/configuration IDs across the four slots. Column priority order is: Balanced > Cost > Performance > Quality. If the same configuration appears in more than one profile, keep it only in the highest-priority column where it appears and immediately re-run `recommend_model` with a tighter constraint on each duplicated column to surface a distinct runner-up. Do not ask the customer first — resolve duplicates before presenting the table. Explain briefly which constraint you tightened for each runner-up (e.g., "lowered cost ceiling for Cost profile", "tightened latency for Performance profile").
 
-> "The balanced and quality profiles both recommend the same configuration — the planner ranks it highest on both dimensions. Would you like to see the runner-up for either of those profiles?"
-
-If yes: re-run `recommend_model` with a tighter constraint on the duplicated dimension (e.g., lower `max_cost_per_month` for cost, higher latency requirement for performance). Explain what you're doing and why.
-
-**If all slots are cluster_fit=unavailable:** Re-run with `preferred_gpu_types` constrained to the GPU types the cluster actually has (the tool returns `cluster_gpus`). Tell the customer.
+**If all slots are cluster_fit=unavailable:** Present the table as-is and tell the customer which GPU types the cluster has (from `cluster_gpus`). Ask whether they want to: (a) proceed with a configuration that requires provisioning new GPU capacity, or (b) re-run constrained to the cluster's current GPU types. Only pass `preferred_gpu_types` if they choose option (b).
 
 **If recommend_model returns no results:** Ask the customer to relax one constraint — higher latency tolerance, higher cost ceiling, or fewer concurrent users — and retry.
 

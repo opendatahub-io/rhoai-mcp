@@ -64,7 +64,7 @@ recommend_model(
 
 Always pass `preferred_gpu_types=[]` (empty list) unless the customer has explicitly specified GPU preferences — passing it as an empty list, rather than omitting it, is what allows the extraction bypass. Choose `use_case` from the valid values below based on what the customer described. Leave `check_cluster=True` (the default) so the tool automatically cross-references GPU availability on their cluster.
 
-**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single recommendation, even if some profiles share the same model. If a slot is null, show "—" in that column rather than omitting it. All rows must always appear — never omit a row even if values are unavailable; show "—" in place of any missing value.
+**Always present all four profiles as a single comparison table** — Balanced, Cost, Performance, and Quality are always the four columns, in that order. Never show fewer than four columns and never collapse them into a single recommendation, even if some profiles share the same model. If a slot is null, show "—" in that column rather than omitting it. All rows must always appear — never omit a row even if values are unavailable; show "—" in place of any missing value. Never summarize, paraphrase, or abbreviate the table — always render every cell in full.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -77,19 +77,15 @@ Always pass `preferred_gpu_types=[]` (empty list) unless the customer has explic
 | Meets SLO | ✓/✗ | … | … | … |
 | Cluster fit | ✓ available / ⚠ partial / ✗ unavailable | … | … | … |
 
-Lead with cluster fit — if a recommendation needs GPUs the cluster doesn't have, say so prominently.
+Show cluster fit as informational context — if a profile needs GPUs the cluster doesn't currently have, note it clearly in the table but do not let it suppress or re-rank recommendations. The customer decides whether cluster fit is a hard constraint.
 
 Add a **Reasoning** note per profile drawn from each recommendation's `reasoning` field — one sentence per profile, in plain English.
 
-**Check for duplicates across profiles.** After presenting the table, compare model IDs across the four slots. If the same model appears in more than one profile (e.g., balanced and quality both recommend the same model), call it out explicitly:
-
-> "The balanced and quality profiles both recommend [Model X] — the planner ranks it highest on both dimensions for your workload. Would you like to see the runner-up for either of those profiles?"
-
-If the customer says yes: re-run `recommend_model` with a tighter constraint on the duplicated dimension to surface a different option — for example, lowering `max_cost_per_month` for the cost profile, or raising latency requirements for the performance profile. Explain what constraint you're applying and why.
+**Handle duplicates across profiles automatically.** After presenting the table, compare model IDs across the four slots. Column priority order is: Balanced > Cost > Performance > Quality. If the same model appears in more than one profile, keep it only in the highest-priority column where it appears and immediately re-run `recommend_model` with a tighter constraint on each duplicated column to surface a distinct runner-up. Do not ask the customer first — resolve duplicates before presenting the table. Explain briefly which constraint you tightened for each runner-up (e.g., "lowered cost ceiling for Cost profile", "tightened latency for Performance profile").
 
 **Suggest a default** based on the customer's stated priority, and ask them to confirm which to proceed with.
 
-**If all slots are cluster_fit=unavailable:** Re-run `recommend_model` with `preferred_gpu_types` set to the types actually on the cluster (the tool returns `cluster_gpus`). Tell the customer you're doing this and why.
+**If all slots are cluster_fit=unavailable:** Present the table as-is and tell the customer which GPU types the cluster has (from `cluster_gpus`). Ask whether they want to: (a) proceed with a model that requires provisioning new GPU capacity, or (b) re-run constrained to the cluster's current GPU types. Only pass `preferred_gpu_types` if they choose option (b).
 
 **If recommend_model returns no recommendations:** Ask the customer to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count — and retry.
 

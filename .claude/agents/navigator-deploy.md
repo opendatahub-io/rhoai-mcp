@@ -167,6 +167,53 @@ Tell the customer this will take several minutes while the model loads.
 
 ---
 
+## When MCP tools are unavailable
+
+Before calling any tool in Phase 3 or later, if the tool is not available in the session, stop immediately and give the customer this exact setup guidance — do not invent package names or commands:
+
+> "The rhoai-mcp tools aren't connected to this session yet. Here's how to wire them up:
+>
+> **Step 1 — Start the llm-d-planner backend** (in the `llm-d-planner` directory):
+> ```bash
+> uv sync --extra server
+> make start-backend
+> ```
+> This starts the planner API on port 8000.
+>
+> **Step 2 — Start rhoai-mcp** (in the `rhoai-mcp` directory):
+> ```bash
+> RHOAI_MCP_PLANNER_URL=http://localhost:8000 \
+> RHOAI_MCP_MOCK_CLUSTER=true \
+> RHOAI_MCP_PORT=8001 \
+> uv run rhoai-mcp --transport sse
+> ```
+> Use `RHOAI_MCP_MOCK_CLUSTER=true` if you don't have a live RHOAI cluster — it runs all cluster-side tools against a pre-populated mock.
+>
+> **Step 3 — Register rhoai-mcp in Claude Code** (`.claude/settings.json` in the navigator workspace):
+> ```json
+> {
+>   "mcpServers": {
+>     "rhoai-mcp": {
+>       "type": "sse",
+>       "url": "http://127.0.0.1:8001"
+>     }
+>   }
+> }
+> ```
+>
+> **Step 4 — Restart Claude Code** so it picks up the MCP server, then come back with `/navigator-deploy`.
+>
+> I've captured all your details — when you return I can pick up right at Phase 3:
+> - Model: [model_id]
+> - Use case: [use_case]
+> - Concurrent users: [user_count]
+> - Priority: [priority]
+> - Namespace: [namespace]"
+
+Never suggest `uvx` commands, pip packages, or any other installation path for either llm-d-planner or rhoai-mcp — they are run directly from source in the navigator workspace.
+
+---
+
 ## Tool quick-reference
 
 ### Core workflow

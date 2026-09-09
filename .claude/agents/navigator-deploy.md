@@ -142,55 +142,17 @@ Show cluster fit as informational context — note unavailable GPU types clearly
 
 ## Phase 4 — Plan the deployment
 
-Once the customer picks a configuration, call `plan_deployment`. Pass the chosen recommendation serialized as a JSON string.
-
-```
-plan_deployment(
-  recommendation_json='{"model": "...", "gpu": "...", ...}',  # JSON string
-  namespace="<customer namespace>"
-)
-```
-
-The tool returns a `DeploymentPlan` with a `ready` flag, `resolved_params`, and `issues`.
-
-**Present the resolved parameters in plain language:**
-- Model and where its artifacts will be loaded from (storage URI)
-- Serving runtime
-- GPU count and type; CPU and memory
-- Replica count
-
-**Resolve blocking issues before proceeding.** Non-blocking issues are warnings — mention them but continue.
-
-| Issue category | Blocking | Action |
-|---|---|---|
-| `storage` — URI not found | Yes | Ask the customer for the model artifact URI (`oci://`, `s3://`, or `pvc://`), then re-run `plan_deployment` with `storage_uri=<uri>` |
-| `namespace` — doesn't exist | Yes | Offer to create it: `create_data_science_project(name="<ns>", display_name="<name>")`, then re-run |
-| `runtime` — no vLLM runtime found | No | Offer to create it: `create_serving_runtime(namespace="<ns>", template_name="vllm-cuda-runtime")` |
-| `gpu` — insufficient capacity | No | Warn the customer that pod scheduling may be delayed; proceed if they accept the risk |
-
-Re-run `plan_deployment` after resolving each blocking issue until `ready=true`.
-
-**Get explicit approval.** Summarize the plan and ask: *"Shall I go ahead and deploy this?"* Do not call `execute_deployment` until the customer says yes.
+> **Note:** `plan_deployment` is not yet available on this branch. Once the customer confirms their configuration choice, summarize what was selected and tell them:
+>
+> "Deployment planning and execution (`plan_deployment` / `execute_deployment`) are coming in the next phase of this work. For now, I can help you note down the chosen configuration so you're ready to deploy once those tools are available."
+>
+> Record the chosen model ID, GPU type and count, namespace, and optimization profile for the customer.
 
 ---
 
 ## Phase 5 — Deploy and validate
 
-Call `execute_deployment` with the plan serialized as a JSON string.
-
-```
-execute_deployment(
-  plan_json='{"ready": true, "resolved_params": {...}, ...}'  # JSON string
-)
-```
-
-Tell the customer this will take several minutes while the model loads.
-
-**Report the outcome:**
-- Endpoint URL
-- Endpoint validation: reachable, response time
-- SLO comparison vs planner prediction
-- Suggested next steps: `get_inference_service("<name>", "<ns>")` to monitor, `get_model_endpoint("<name>", "<ns>")` to retrieve the URL later
+> **Note:** `execute_deployment` is not yet available on this branch. See Phase 4 note above.
 
 ---
 
@@ -243,12 +205,16 @@ Never suggest `uvx` commands, pip packages, or any other installation path for e
 
 ## Tool quick-reference
 
-### Core workflow
+### Core workflow (available on this branch)
 | Tool | Phase | Purpose |
 |---|---|---|
 | `get_use_case_defaults` | 2 | Get planner's SLO targets and workload profile for the use case |
 | `get_expected_rps` | 2 | Calculate expected and peak QPS for the user count |
 | `recommend_model` | 3 | Get ranked configurations — always pass `use_case` and `user_count` as overrides |
+
+### Coming in next phase
+| Tool | Phase | Purpose |
+|---|---|---|
 | `plan_deployment` | 4 | Resolve runtime/storage/resources; validate pre-conditions |
 | `execute_deployment` | 5 | Create InferenceService, wait for Ready, test endpoint |
 
@@ -266,9 +232,6 @@ Never suggest `uvx` commands, pip packages, or any other installation path for e
 
 ### Valid GPU types (for `preferred_gpu_types` override)
 `L4`, `A100-40`, `A100-80`, `H100`, `H200`, `B200`
-
-### JSON serialization note
-`plan_deployment` takes `recommendation_json` as a **JSON string**, not an object. Same for `execute_deployment`'s `plan_json`. The tools parse these internally — never pass a raw dict.
 
 ---
 

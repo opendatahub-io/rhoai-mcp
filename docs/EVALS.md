@@ -60,7 +60,6 @@ make eval-scenario SCENARIO=training_workflow
 make eval-scenario SCENARIO=model_deployment
 make eval-scenario SCENARIO=troubleshooting
 make eval-scenario SCENARIO=tool_discovery
-make eval-scenario SCENARIO=recommendation_deployment
 ```
 
 ### Direct pytest
@@ -146,10 +145,9 @@ evals/
 └── scenarios/
     ├── test_cluster_exploration.py    # Cluster discovery scenario
     ├── test_training_workflow.py      # Training job creation scenario
-    ├── test_model_deployment.py              # Model serving scenario
-    ├── test_troubleshooting.py               # Failed job diagnosis scenario
-    ├── test_tool_discovery.py                # Meta tool usage scenario
-    └── test_recommendation_deployment.py     # Recommendation-to-deployment workflow
+    ├── test_model_deployment.py       # Model serving scenario
+    ├── test_troubleshooting.py        # Failed job diagnosis scenario
+    └── test_tool_discovery.py         # Meta tool usage scenario
 ```
 
 ### How the pieces fit together
@@ -198,7 +196,6 @@ Scenario TASK ──> MCPAgent.run()
 | Model Deployment | `test_model_deployment.py` | Deploy granite model via vLLM runtime and verify status | `MultiTurnMCPUseMetric`, `MCPTaskCompletionMetric` |
 | Troubleshooting | `test_troubleshooting.py` | Diagnose why `failed-training-001` failed (OOMKilled) | `MultiTurnMCPUseMetric`, `MCPTaskCompletionMetric` |
 | Tool Discovery | `test_tool_discovery.py` | Discover which tools to use for project setup with storage and workbench | `MCPUseMetric` (single-turn) |
-| Recommendation Deployment | `test_recommendation_deployment.py` | Plan and validate a model deployment from a pre-provided recommendation | `MultiTurnMCPUseMetric`, `MCPTaskCompletionMetric` |
 
 ## Mock Cluster State
 

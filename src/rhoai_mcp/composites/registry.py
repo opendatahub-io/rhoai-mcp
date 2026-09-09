@@ -128,19 +128,18 @@ class MetaCompositesPlugin(BasePlugin):
 
 
 class PlannerCompositesPlugin(BasePlugin):
-    """Plugin for Planner model recommendations and deployment workflow.
+    """Plugin for Planner model recommendations.
 
-    Provides tools for the recommendation-to-deployment workflow:
-    recommend_model, plan_deployment, execute_deployment, and the
-    recommend-and-deploy prompt.
+    Provides a tool that orchestrates Planner APIs to recommend
+    LLM models based on natural language use case descriptions.
     """
 
     def __init__(self) -> None:
         super().__init__(
             PluginMetadata(
                 name="planner-composites",
-                version="1.1.0",
-                description="Planner recommendation and deployment workflow tools",
+                version="1.0.0",
+                description="Planner model recommendation tools",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=[],
             )
@@ -151,12 +150,6 @@ class PlannerCompositesPlugin(BasePlugin):
         from rhoai_mcp.composites.planner.tools import register_tools
 
         register_tools(mcp, server)
-
-    @hookimpl
-    def rhoai_register_prompts(self, mcp: FastMCP, server: RHOAIServer) -> None:
-        from rhoai_mcp.composites.planner.prompts import register_prompts
-
-        register_prompts(mcp, server)
 
     @hookimpl
     def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:

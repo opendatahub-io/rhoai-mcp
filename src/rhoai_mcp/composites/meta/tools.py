@@ -36,9 +36,6 @@ TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
     "inference": {
         "description": "Model deployment and serving",
         "tools": [
-            "recommend_model",
-            "plan_deployment",
-            "execute_deployment",
             "prepare_model_deployment",
             "deploy_model",
             "get_model_endpoint",
@@ -46,9 +43,9 @@ TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
             "recommend_serving_runtime",
         ],
         "typical_workflow": [
-            "recommend_model",
-            "plan_deployment",
-            "execute_deployment",
+            "prepare_model_deployment",
+            "deploy_model",
+            "test_model_endpoint",
         ],
     },
     "workbenches": {
@@ -113,21 +110,6 @@ INTENT_PATTERNS = [
         "workflow": ["prepare_training", "train"],
         "explanation": "Training workflow: First use prepare_training() to check prerequisites, "
         "then train() with confirmed=True to start the job.",
-    },
-    {
-        "patterns": [
-            "recommend",
-            "which model",
-            "best model",
-            "model selection",
-            "recommend and deploy",
-            "what should I deploy",
-        ],
-        "category": "inference",
-        "workflow": ["recommend_model", "plan_deployment", "execute_deployment"],
-        "explanation": "Recommendation-to-deployment workflow: Use recommend_model() to get "
-        "ranked model suggestions, plan_deployment() to resolve deployment "
-        "parameters, then execute_deployment() to deploy and validate.",
     },
     {
         "patterns": ["deploy", "serve", "inference", "predict"],

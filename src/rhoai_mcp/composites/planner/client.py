@@ -319,6 +319,21 @@ class PlannerClient:
                 detail=f"Planner ranking response missing expected field: {e}",
             ) from e
 
+        # Hard-filter by GPU type when the caller specified preferred_gpu_types.
+        # The planner treats it as a scoring hint; enforce it as a constraint here.
+        if gpu_types_override:
+            allowed = set(gpu_types_override)
+
+            def _gpu_matches(rec_data: dict[str, Any]) -> bool:
+                gpu_config = rec_data.get("gpu_config") or {}
+                gpu_type = gpu_config.get("gpu_type") if isinstance(gpu_config, dict) else None
+                return gpu_type in allowed
+
+            balanced_list = [r for r in balanced_list if _gpu_matches(r)]
+            cost_list = [r for r in cost_list if _gpu_matches(r)]
+            latency_list = [r for r in latency_list if _gpu_matches(r)]
+            quality_list = [r for r in quality_list if _gpu_matches(r)]
+
         try:
             top_balanced = _parse_recommendation(balanced_list[0]) if balanced_list else None
             top_cost = _parse_recommendation(cost_list[0]) if cost_list else None

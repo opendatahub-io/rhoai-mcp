@@ -730,6 +730,82 @@ class TestPlannerClientRecommend:
         assert exc_info.value.status_code == 502
         assert "priorities.quality" in exc_info.value.detail
 
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_gpu_types_override_acts_as_hard_filter(self, mock_httpx: MagicMock) -> None:
+        """gpu_types_override filters out recommendations whose GPU type is not in the list."""
+        mock_client = MagicMock()
+
+        h100_rec = {**SAMPLE_RECOMMENDATION, "gpu_config": {"gpu_type": "H100", "gpu_count": 2}}
+        l4_rec = {**SAMPLE_RECOMMENDATION, "gpu_config": {"gpu_type": "L4", "gpu_count": 4}}
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = {
+            **SAMPLE_RANKED_RESPONSE,
+            "balanced": [h100_rec],
+            "lowest_cost": [l4_rec],   # should be filtered out — L4 not in override
+            "lowest_latency": [h100_rec],
+            "best_quality": [l4_rec],  # should be filtered out — L4 not in override
+        }
+        ranked_resp.raise_for_status = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [spec_resp, ranked_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        result = client.recommend(
+            "chatbot",
+            use_case_override="chatbot_conversational",
+            user_count_override=100,
+            gpu_types_override=["H100"],
+        )
+
+        assert result.top_balanced is not None
+        assert result.top_balanced.gpu_config.gpu_type == "H100"
+        assert result.top_performance is not None
+        assert result.top_performance.gpu_config.gpu_type == "H100"
+        # L4 slots filtered to empty → None
+        assert result.top_cost is None
+        assert result.top_quality is None
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_empty_gpu_types_override_skips_filter(self, mock_httpx: MagicMock) -> None:
+        """Empty gpu_types_override does not filter any recommendations."""
+        mock_client = MagicMock()
+
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = SAMPLE_RANKED_RESPONSE
+        ranked_resp.raise_for_status = MagicMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [spec_resp, ranked_resp]
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        result = client.recommend(
+            "chatbot",
+            use_case_override="chatbot_conversational",
+            user_count_override=100,
+            gpu_types_override=[],
+        )
+
+        assert result.top_balanced is not None
+        assert result.top_cost is not None
+        assert result.top_performance is not None
+        assert result.top_quality is not None
+
 
 class TestPlannerClientRecommendExtractionBypass:
     """Tests for skipping extraction when overrides are sufficient."""

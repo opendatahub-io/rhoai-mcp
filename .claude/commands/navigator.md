@@ -1,5 +1,5 @@
 ---
-allowed-tools: mcp__rhoai-mcp__recommend_model, mcp__rhoai-mcp__list_data_science_projects
+allowed-tools: mcp__rhoai-mcp__recommend_model, mcp__rhoai-mcp__get_use_case_defaults, mcp__rhoai-mcp__get_expected_rps, mcp__rhoai-mcp__list_use_cases, mcp__rhoai-mcp__list_data_science_projects
 description: Guides customers through LLM model selection for Red Hat OpenShift AI
 ---
 
@@ -59,9 +59,10 @@ Adapt based on what the customer provided when invoking `/navigator`:
 
 - **If no context was provided** — greet them and give the full overview:
 
-  > "I'll help you find the right model for your use case in two steps:
+  > "I'll help you find the right model for your use case in three steps:
   > 1. **Understand your requirements** — tell me what you're building and I'll ask a few quick questions
-  > 2. **Model recommendations** — I'll query the llm-d planner and show you the top options ranked by cost, performance, and quality against your cluster's actual GPU availability
+  > 2. **Confirm workload profile** — I'll show you the planner's workload model so you can confirm the response time targets before recommendations are fetched
+  > 3. **Model recommendations** — I'll query the llm-d planner and show you the top options ranked by cost, performance, and quality against your cluster's actual GPU availability
   >
   > Once you've picked a model, I'll tell you exactly how to continue with `/navigator-deploy` to find the optimal GPU configuration and deploy it.
   >
@@ -69,61 +70,84 @@ Adapt based on what the customer provided when invoking `/navigator`:
 
 - **If they described what they're building** — acknowledge it and move straight to Phase 1:
 
-  > "Got it — I'll take that description through the llm-d planner to find the best model options for your cluster. Let me just confirm a couple of details first."
+  > "Got it — let me confirm a couple of details first before I query the planner."
 
 Announce each phase transition with a clear header:
 
 > ---
-> **Phase [N] of 2 — [Phase name]**
+> **Phase [N] of 3 — [Phase name]**
 > ---
 
 ---
 
 ## Phase 1 — Understand requirements
 
-Collect what you need to call `recommend_model`. If the customer's opening message already covered these, skip the questions and move directly to Phase 2.
+Collect the three things needed for a reliable recommendation:
 
-1. **What they're building** — a sentence or two ("customer support chatbot for 300 agents", "code completion plugin for our IDE")
+1. **Use case** — what the model will do, specific enough to map to one of the 9 use cases (chatbot? code completion? real-time translation? document Q&A?)
 2. **Scale** — approximate concurrent users or requests per second
-3. **Priority** — cost, latency, quality, or balanced (default: balanced)
+3. **Priority** — cost, latency, quality, or balanced (default: balanced if they're unsure)
 
-Don't over-ask. A rich description lets you infer `use_case` and `user_count` directly.
+**Assess vagueness before proceeding.** A description is sufficient only when you can confidently map it to a use case AND estimate scale. Examples:
+
+- **Sufficient**: "Real-time translation for customer support, English ↔ Spanish/French/German, ~100 concurrent sessions, cost is the main constraint" — use case clear, scale clear, priority clear.
+- **Too vague**: "Something for AI features on our platform" — can't map to a use case, no scale.
+- **Partially vague**: "We're building a chatbot for our support team" — use case clear, but scale is missing; ask specifically about expected concurrent users.
+
+If anything is missing, ask only for what's needed. Don't ask all three at once if some are already clear.
 
 **Wait for the customer's response before proceeding to Phase 2.**
 
 ---
 
-## Phase 2 — Get model recommendations
+## Phase 2 — Confirm workload profile
 
-Make **four separate `recommend_model` calls** — one per optimization profile — in this order: `balanced`, `optimize_cost`, `optimize_latency`, `optimize_quality`. Each call uses the same base parameters; only `optimization_profile` changes.
+Call `get_use_case_defaults(use_case)` and `get_expected_rps(use_case, user_count)` with the values from Phase 1.
+
+Present the results before making any recommendations:
+
+> "Here's the workload profile and response time targets the planner will use:
+>
+> **[use_case description]**
+>
+> | Workload | |
+> |---|---|
+> | Prompt length | [prompt_tokens] tokens |
+> | Response length | [output_tokens] tokens |
+> | Active users | ~[expected_concurrent_users] of [user_count] |
+> | Expected traffic | [expected_rps] req/s (peak: [peak_rps] req/s) |
+>
+> **Default SLO targets:**
+> | Metric | Target | Range |
+> |---|---|---|
+> | TTFT p95 | [ttft_ms.default]ms | [ttft_ms.min]–[ttft_ms.max]ms |
+> | ITL p95 | [itl_ms.default]ms | [itl_ms.min]–[itl_ms.max]ms |
+> | E2E p95 | [e2e_ms.default]ms | [e2e_ms.min]–[e2e_ms.max]ms |
+>
+> Do these response time targets match your actual requirements? For real-time or interactive use cases, your users may need stricter latency than these defaults."
+
+**Wait for the customer's confirmation before proceeding to Phase 3.**
+
+- **If they tighten SLO targets** — note the overrides and pass them as `ttft_max_ms`, `itl_max_ms`, or `e2e_max_ms` to `recommend_model` in Phase 3.
+- **If they adjust user count** — re-run `get_expected_rps` with the new value before asking again.
+- **If they're unsure which use case applies** — call `list_use_cases()`, help them choose, then re-run both tools.
+
+---
+
+## Phase 3 — Get model recommendations
+
+Make a **single `recommend_model` call**. The planner returns four named slots in one response — `top_balanced`, `top_cost`, `top_performance`, `top_quality` — each with cluster fit status.
 
 ```
-# Always pass preferred_gpu_types=[] to bypass the Ollama GPU extraction step
-
-# Call 1 — Balanced column
-recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="balanced")
-
-# Call 2 — Cost column
-recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_cost")
-
-# Call 3 — Performance column
-recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_latency")
-
-# Call 4 — Quality column
-recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_quality")
+# preferred_gpu_types=[] lets the planner consider all GPU types and return cluster fit per slot
+recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[])
 ```
 
-**Handle duplicates before building the table.** Column priority: Balanced > Cost > Performance > Quality. After the four calls, compare the model ID returned by each. If the same model ID appears in more than one column, keep it in the highest-priority column and immediately make a replacement call for each lower-priority duplicate using the exact parameter changes below — do not relabel or copy data:
+Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`).
 
-| Duplicate column | Replacement call change |
-|---|---|
-| Cost | Add `max_cost_per_month=<winner_cost * 0.7>` to the `optimize_cost` call |
-| Performance | Add `ttft_max_ms=<winner_ttft * 0.7>` to the `optimize_latency` call |
-| Quality | Add `min_quality_score=<winner_quality + 0.05>` to the `optimize_quality` call |
+Map the response slots to table columns: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
 
-If a replacement call returns no result, show "—" in that column and note why.
-
-**Build the table only after all four columns have data (or confirmed "—").** Fill in this exact template — replace every `[value]` placeholder with the result from the corresponding call. Do not add, remove, or rename any row or column.
+**Build the table from the response.** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -136,17 +160,27 @@ If a replacement call returns no result, show "—" in that column and note why.
 | Meets SLO | [value] | [value] | [value] | [value] |
 | Cluster fit | [value] | [value] | [value] | [value] |
 
-Show cluster fit as informational context — if a profile needs GPUs the cluster doesn't currently have, note it clearly in the table but do not let it suppress or re-rank recommendations. The customer decides whether cluster fit is a hard constraint.
+**Lead with cluster availability** in your narrative summary after the table. Call out cluster-available configurations as ready-to-deploy options. If a configuration requires GPUs the cluster doesn't have, note it clearly — but do not suppress or re-rank it. The customer decides whether cluster fit is a hard constraint.
 
-Add a **Reasoning** note per profile drawn from each recommendation's `reasoning` field — one sentence per profile, in plain English. For any runner-up column, note which constraint was tightened and why.
+**If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint — do not relabel or copy data:
+
+| Duplicate slot | Tighter constraint to add |
+|---|---|
+| Cost | `max_cost_per_month=<current_cost * 0.7>` |
+| Performance | `ttft_max_ms=<current_ttft * 0.7>` |
+| Quality | `min_quality=<current_quality_score + 5>` |
+
+If a re-run returns no result, show "—" in that slot and note why.
+
+Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English.
 
 Suggest a default based on the customer's stated priority, then ask them to confirm which model to proceed with.
 
 **Wait for the customer's confirmation before proceeding.**
 
-**If all slots are cluster_fit=unavailable:** Present the table as-is and tell the customer which GPU types the cluster has (from `cluster_gpus`). Ask whether they want to: (a) proceed with a model that requires provisioning new GPU capacity, or (b) re-run constrained to the cluster's current GPU types. Only pass `preferred_gpu_types` if they choose option (b).
+**If all slots are cluster_fit=unavailable:** Present the table as-is and ask whether they want to: (a) proceed with a model that requires provisioning new GPU capacity, or (b) re-run constrained to specific GPU types they know are available. Only pass `preferred_gpu_types` if they choose option (b).
 
-**If a call returns no recommendations:** Show "—" in that column and ask the customer if they want to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count.
+**If a slot is missing from the response:** Show "—" in that column and ask the customer if they want to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count.
 
 ---
 
@@ -164,14 +198,17 @@ This skill ends here. Do not attempt to plan or execute a deployment.
 
 ## Tool quick-reference
 
-### Core tool
-| Tool | Purpose |
-|---|---|
-| `recommend_model` | Get ranked model recommendations with cluster GPU cross-reference |
+### Core tools
+| Tool | Phase | Purpose |
+|---|---|---|
+| `get_use_case_defaults` | 2 | SLO targets and workload profile for the use case |
+| `get_expected_rps` | 2 | Expected and peak RPS for the user count |
+| `recommend_model` | 3 | Single call returning all four ranked slots with cluster fit |
 
 ### Supporting tools
 | Tool | When to use |
 |---|---|
+| `list_use_cases` | Customer is unsure which use case identifier to use |
 | `list_data_science_projects` | Customer wants to confirm a namespace exists before handing off |
 
 ### Valid use case values

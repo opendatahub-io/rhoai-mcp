@@ -136,33 +136,28 @@ Present the results:
 
 ## Phase 3 — Get ranked configurations
 
-Make **four separate `recommend_model` calls** — one per optimization profile — in this order: `balanced`, `optimize_cost`, `optimize_latency`, `optimize_quality`. Each call uses the same base parameters; only `optimization_profile` changes.
+Make a **single `recommend_model` call**. The planner returns four named slots in one response — `top_balanced`, `top_cost`, `top_performance`, `top_quality` — each with cluster fit status.
 
 ```
-# Call 1 — Balanced column
-recommend_model(text="Deploy [model_id] for [use_case]", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="balanced", check_cluster=True)
-
-# Call 2 — Cost column
-recommend_model(text="Deploy [model_id] for [use_case]", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_cost", check_cluster=True)
-
-# Call 3 — Performance column
-recommend_model(text="Deploy [model_id] for [use_case]", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_latency", check_cluster=True)
-
-# Call 4 — Quality column
-recommend_model(text="Deploy [model_id] for [use_case]", use_case="<value>", user_count=<n>, preferred_gpu_types=[], optimization_profile="optimize_quality", check_cluster=True)
+# preferred_gpu_types=[] lets the planner consider all GPU types and return cluster fit per slot
+recommend_model(text="Deploy [model_id] for [use_case]", use_case="<value>", user_count=<n>, preferred_gpu_types=[])
 ```
 
-**Handle duplicates before building the table.** Column priority: Balanced > Cost > Performance > Quality. After the four calls, compare the model ID returned by each. If the same model ID appears in more than one column, keep it in the highest-priority column and immediately make a replacement call for each lower-priority duplicate using the exact parameter changes below — do not relabel or copy data:
+Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`).
 
-| Duplicate column | Replacement call change |
+Map the response slots to table columns: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
+
+**If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint — do not relabel or copy data:
+
+| Duplicate slot | Tighter constraint to add |
 |---|---|
-| Cost | Add `max_cost_per_month=<winner_cost * 0.7>` to the `optimize_cost` call |
-| Performance | Add `ttft_max_ms=<winner_ttft * 0.7>` to the `optimize_latency` call |
-| Quality | Add `min_quality_score=<winner_quality + 0.05>` to the `optimize_quality` call |
+| Cost | `max_cost_per_month=<current_cost * 0.7>` |
+| Performance | `ttft_max_ms=<current_ttft * 0.7>` |
+| Quality | `min_quality=<current_quality_score + 5>` |
 
-If a replacement call returns no result, show "—" in that column and note why.
+If a re-run returns no result, show "—" in that slot and note why.
 
-**Build the table only after all four columns have data (or confirmed "—").** Fill in this exact template — replace every `[value]` placeholder with the result from the corresponding call. Do not add, remove, or rename any row or column.
+**Build the table from the response.** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -175,17 +170,17 @@ If a replacement call returns no result, show "—" in that column and note why.
 | Meets SLO | [value] | [value] | [value] | [value] |
 | Cluster fit | [value] | [value] | [value] | [value] |
 
-Show cluster fit as informational context — note unavailable GPU types clearly but do not let cluster fit suppress or re-rank configurations. The customer decides whether cluster fit is a hard constraint.
+**Lead with cluster availability** in your narrative summary after the table. Call out cluster-available configurations as ready-to-deploy options. If a configuration requires GPUs the cluster doesn't have, note it clearly — but do not suppress or re-rank it. The customer decides whether cluster fit is a hard constraint.
 
-Add a **Reasoning** note per profile — one sentence each in plain English from the `reasoning` field. For any runner-up column, note which constraint was tightened and why.
+Add a **Reasoning** note per slot — one sentence each in plain English from the `reasoning` field. For any re-run slot, note which constraint was tightened and why.
 
 Suggest a default based on the customer's stated priority, then ask them to confirm which configuration to proceed with.
 
-**Wait for the customer's confirmation before proceeding to Phase 4.**
+**Wait for the customer's confirmation before proceeding to Phases 4 & 5.**
 
-**If all slots are cluster_fit=unavailable:** Present the table as-is and tell the customer which GPU types the cluster has (from `cluster_gpus`). Ask whether they want to: (a) proceed with a configuration that requires provisioning new GPU capacity, or (b) re-run constrained to the cluster's current GPU types. Only pass `preferred_gpu_types` if they choose option (b).
+**If all slots are cluster_fit=unavailable:** Present the table as-is and ask whether they want to: (a) proceed with a configuration that requires provisioning new GPU capacity, or (b) re-run constrained to specific GPU types they know are available. Only pass `preferred_gpu_types` if they choose option (b).
 
-**If a call returns no results:** Show "—" in that column and ask the customer to relax one constraint — higher latency tolerance, higher cost ceiling, or fewer concurrent users.
+**If a slot is missing from the response:** Show "—" in that column and ask the customer to relax one constraint — higher latency tolerance, higher cost ceiling, or fewer concurrent users.
 
 ---
 

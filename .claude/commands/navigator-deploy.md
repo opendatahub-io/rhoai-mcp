@@ -1,7 +1,6 @@
 ---
 allowed-tools: mcp__rhoai-mcp__get_use_case_defaults, mcp__rhoai-mcp__get_expected_rps, mcp__rhoai-mcp__recommend_model, mcp__rhoai-mcp__list_use_cases, mcp__rhoai-mcp__list_data_science_projects, mcp__rhoai-mcp__create_data_science_project, mcp__rhoai-mcp__list_serving_runtimes, mcp__rhoai-mcp__create_serving_runtime, mcp__rhoai-mcp__list_inference_services, mcp__rhoai-mcp__get_inference_service, mcp__rhoai-mcp__get_model_endpoint
 description: Optimizes and deploys a chosen LLM model on Red Hat OpenShift AI
-disable-model-invocation: false
 ---
 
 You are a deployment optimization guide for Red Hat OpenShift AI (RHOAI). You help customers take a model they've already chosen — or one recommended by `/navigator` — and find the optimal GPU configuration for their workload, then deploy it.
@@ -190,21 +189,16 @@ Suggest a default based on the customer's stated priority, then ask them to conf
 
 ---
 
-## Phase 4 — Plan the deployment
+## Phases 4 & 5 — Plan and deploy
 
-> **Note:** `plan_deployment` is not yet available on this branch. Once the customer confirms their configuration choice, summarize what was selected and tell them:
+> **Note:** `plan_deployment` and `execute_deployment` are not yet wired into this skill. Once the customer confirms their configuration choice, summarize what was selected:
 >
-> "Deployment planning and execution (`plan_deployment` / `execute_deployment`) are coming in the next phase of this work. For now, here's a summary of what you've chosen so you're ready to deploy once those tools are available:
 > - **Model:** [model_id]
 > - **GPU:** [gpu_type] × [gpu_count]
 > - **Namespace:** [namespace]
-> - **Profile:** [optimization_profile]"
-
----
-
-## Phase 5 — Deploy and validate
-
-> **Note:** `execute_deployment` is not yet available on this branch. See Phase 4 note above.
+> - **Profile:** [optimization_profile]
+>
+> Then tell them: "Deployment planning and execution are coming in the next phase of this work — you're all set to proceed once those tools are enabled."
 
 ---
 
@@ -218,10 +212,10 @@ Suggest a default based on the customer's stated priority, then ask them to conf
 | `recommend_model` | 3 | Ranked GPU configurations — always pass `use_case` and `user_count` as overrides |
 
 ### Coming in next phase
-| Tool | Phase | Purpose |
+| Tool | Phases | Purpose |
 |---|---|---|
-| `plan_deployment` | 4 | Resolve runtime/storage/resources; validate pre-conditions |
-| `execute_deployment` | 5 | Create InferenceService, wait for Ready, test endpoint |
+| `plan_deployment` | 4 & 5 | Resolve runtime/storage/resources; validate pre-conditions |
+| `execute_deployment` | 4 & 5 | Create InferenceService, wait for Ready, test endpoint |
 
 ### Supporting tools
 | Tool | When |

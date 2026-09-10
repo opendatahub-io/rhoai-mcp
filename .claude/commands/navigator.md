@@ -1,5 +1,5 @@
 ---
-allowed-tools: mcp__rhoai-mcp__recommend_model, mcp__rhoai-mcp__get_use_case_defaults, mcp__rhoai-mcp__get_expected_rps, mcp__rhoai-mcp__list_use_cases, mcp__rhoai-mcp__list_data_science_projects
+allowed-tools: mcp__rhoai-mcp__recommend_model, mcp__rhoai-mcp__get_use_case_defaults, mcp__rhoai-mcp__get_expected_rps, mcp__rhoai-mcp__list_use_cases, mcp__rhoai-mcp__list_data_science_projects, mcp__rhoai-mcp__get_cluster_resources
 description: Guides customers through LLM model selection for Red Hat OpenShift AI
 ---
 
@@ -136,18 +136,34 @@ Present the results before making any recommendations:
 
 ## Phase 3 — Get model recommendations
 
-Make a **single `recommend_model` call**. The planner returns four named slots in one response — `top_balanced`, `top_cost`, `top_performance`, `top_quality` — each with cluster fit status.
+**Step 1 — Discover cluster GPU inventory.**
+
+Call `get_cluster_resources`. Extract `gpu_info.products` — the list of GPU product names installed in the cluster. Map each product name to a planner GPU type using this table (match substrings, case-insensitive):
+
+| If product name contains | Planner GPU type |
+|---|---|
+| "A100" and "80" | A100-80 |
+| "A100" and "40" | A100-40 |
+| "H100" | H100 |
+| "H200" | H200 |
+| "B200" | B200 |
+| "L4" | L4 |
+
+If `gpu_info` is missing or `products` is empty, set `cluster_gpu_types = []`.
+
+**Step 2 — Primary call (cluster-constrained).**
 
 ```
-# preferred_gpu_types=[] lets the planner consider all GPU types and return cluster fit per slot
-recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[])
+recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[<cluster_gpu_types>])
 ```
 
-Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`).
+Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`). Map response slots: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
 
-Map the response slots to table columns: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
+**Step 3 — Fallback for empty slots.**
 
-**Build the table from the response.** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
+For any slot that returned `None` (no match on cluster hardware), make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ requires new hardware" in the Cluster fit row.
+
+**Build the table only after all slots have data (or confirmed "—").** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -158,9 +174,7 @@ Map the response slots to table columns: `top_balanced` → Balanced, `top_cost`
 | Quality score | [value] | [value] | [value] | [value] |
 | Cost/month | [value] | [value] | [value] | [value] |
 | Meets SLO | [value] | [value] | [value] | [value] |
-| Cluster fit | [value] | [value] | [value] | [value] |
-
-**Lead with cluster availability** in your narrative summary after the table. Call out cluster-available configurations as ready-to-deploy options. If a configuration requires GPUs the cluster doesn't have, note it clearly — but do not suppress or re-rank it. The customer decides whether cluster fit is a hard constraint.
+| Cluster fit | Available ✓ or ⚠ requires new hardware | | | |
 
 **If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint — do not relabel or copy data:
 
@@ -172,13 +186,13 @@ Map the response slots to table columns: `top_balanced` → Balanced, `top_cost`
 
 If a re-run returns no result, show "—" in that slot and note why.
 
-Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English.
+Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English. For fallback slots, note that the recommendation requires hardware not currently in the cluster.
 
-Suggest a default based on the customer's stated priority, then ask them to confirm which model to proceed with.
+Suggest a default based on the customer's stated priority, favouring cluster-available options. Ask them to confirm which model to proceed with.
 
 **Wait for the customer's confirmation before proceeding.**
 
-**If all slots are cluster_fit=unavailable:** Present the table as-is and ask whether they want to: (a) proceed with a model that requires provisioning new GPU capacity, or (b) re-run constrained to specific GPU types they know are available. Only pass `preferred_gpu_types` if they choose option (b).
+**If `cluster_gpu_types` is empty (no GPU info):** Skip Step 2 and go straight to Step 3 (unconstrained call). Note in the Cluster fit row that GPU inventory could not be determined.
 
 **If a slot is missing from the response:** Show "—" in that column and ask the customer if they want to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count.
 
@@ -203,7 +217,8 @@ This skill ends here. Do not attempt to plan or execute a deployment.
 |---|---|---|
 | `get_use_case_defaults` | 2 | SLO targets and workload profile for the use case |
 | `get_expected_rps` | 2 | Expected and peak RPS for the user count |
-| `recommend_model` | 3 | Single call returning all four ranked slots with cluster fit |
+| `get_cluster_resources` | 3 | Discover cluster GPU inventory before calling recommend_model |
+| `recommend_model` | 3 | Ranked model slots — called with cluster GPUs, then unconstrained for any empty slots |
 
 ### Supporting tools
 | Tool | When to use |

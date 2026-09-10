@@ -1,5 +1,5 @@
 ---
-allowed-tools: mcp__rhoai-mcp__get_use_case_defaults, mcp__rhoai-mcp__get_expected_rps, mcp__rhoai-mcp__recommend_model, mcp__rhoai-mcp__list_use_cases, mcp__rhoai-mcp__list_data_science_projects, mcp__rhoai-mcp__create_data_science_project, mcp__rhoai-mcp__list_serving_runtimes, mcp__rhoai-mcp__create_serving_runtime, mcp__rhoai-mcp__list_inference_services, mcp__rhoai-mcp__get_inference_service, mcp__rhoai-mcp__get_model_endpoint
+allowed-tools: mcp__rhoai-mcp__get_use_case_defaults, mcp__rhoai-mcp__get_expected_rps, mcp__rhoai-mcp__recommend_model, mcp__rhoai-mcp__get_cluster_resources, mcp__rhoai-mcp__list_use_cases, mcp__rhoai-mcp__list_data_science_projects, mcp__rhoai-mcp__create_data_science_project, mcp__rhoai-mcp__list_serving_runtimes, mcp__rhoai-mcp__create_serving_runtime, mcp__rhoai-mcp__list_inference_services, mcp__rhoai-mcp__get_inference_service, mcp__rhoai-mcp__get_model_endpoint
 description: Optimizes and deploys a chosen LLM model on Red Hat OpenShift AI
 ---
 
@@ -136,16 +136,32 @@ Present the results:
 
 ## Phase 3 — Get ranked configurations
 
-Make a **single `recommend_model` call**. The planner returns four named slots in one response — `top_balanced`, `top_cost`, `top_performance`, `top_quality` — each with cluster fit status.
+**Step 1 — Discover cluster GPU inventory.**
+
+Call `get_cluster_resources`. Extract `gpu_info.products` — the list of GPU product names installed in the cluster. Map each product name to a planner GPU type using this table (match substrings, case-insensitive):
+
+| If product name contains | Planner GPU type |
+|---|---|
+| "A100" and "80" | A100-80 |
+| "A100" and "40" | A100-40 |
+| "H100" | H100 |
+| "H200" | H200 |
+| "B200" | B200 |
+| "L4" | L4 |
+
+If `gpu_info` is missing or `products` is empty, set `cluster_gpu_types = []`.
+
+**Step 2 — Primary call (cluster-constrained).**
 
 ```
-# preferred_gpu_types=[] lets the planner consider all GPU types and return cluster fit per slot
-recommend_model(text="Deploy [model_id] for [use_case]", use_case="<value>", user_count=<n>, preferred_gpu_types=[])
+recommend_model(text="Deploy [model_id] for [use_case]", use_case="<value>", user_count=<n>, preferred_gpu_types=[<cluster_gpu_types>])
 ```
 
-Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`).
+Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`). Map response slots: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
 
-Map the response slots to table columns: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
+**Step 3 — Fallback for empty slots.**
+
+For any slot that returned `None` (no match on cluster hardware), make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ requires new hardware" in the Cluster fit row.
 
 **If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint — do not relabel or copy data:
 
@@ -157,7 +173,7 @@ Map the response slots to table columns: `top_balanced` → Balanced, `top_cost`
 
 If a re-run returns no result, show "—" in that slot and note why.
 
-**Build the table from the response.** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
+**Build the table only after all slots have data (or confirmed "—").** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -168,17 +184,15 @@ If a re-run returns no result, show "—" in that slot and note why.
 | Quality score | [value] | [value] | [value] | [value] |
 | Cost/month | [value] | [value] | [value] | [value] |
 | Meets SLO | [value] | [value] | [value] | [value] |
-| Cluster fit | [value] | [value] | [value] | [value] |
+| Cluster fit | Available ✓ or ⚠ requires new hardware | | | |
 
-**Lead with cluster availability** in your narrative summary after the table. Call out cluster-available configurations as ready-to-deploy options. If a configuration requires GPUs the cluster doesn't have, note it clearly — but do not suppress or re-rank it. The customer decides whether cluster fit is a hard constraint.
+Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English. For fallback slots, note that the recommendation requires hardware not currently in the cluster.
 
-Add a **Reasoning** note per slot — one sentence each in plain English from the `reasoning` field. For any re-run slot, note which constraint was tightened and why.
-
-Suggest a default based on the customer's stated priority, then ask them to confirm which configuration to proceed with.
+Suggest a default based on the customer's stated priority, favouring cluster-available options. Ask them to confirm which configuration to proceed with.
 
 **Wait for the customer's confirmation before proceeding to Phases 4 & 5.**
 
-**If all slots are cluster_fit=unavailable:** Present the table as-is and ask whether they want to: (a) proceed with a configuration that requires provisioning new GPU capacity, or (b) re-run constrained to specific GPU types they know are available. Only pass `preferred_gpu_types` if they choose option (b).
+**If `cluster_gpu_types` is empty (no GPU info):** Skip Step 2 and go straight to Step 3 (unconstrained call). Note in the Cluster fit row that GPU inventory could not be determined.
 
 **If a slot is missing from the response:** Show "—" in that column and ask the customer to relax one constraint — higher latency tolerance, higher cost ceiling, or fewer concurrent users.
 
@@ -204,7 +218,8 @@ Suggest a default based on the customer's stated priority, then ask them to conf
 |---|---|---|
 | `get_use_case_defaults` | 2 | SLO targets and workload profile for the use case |
 | `get_expected_rps` | 2 | Expected and peak RPS for the user count |
-| `recommend_model` | 3 | Ranked GPU configurations — always pass `use_case` and `user_count` as overrides |
+| `get_cluster_resources` | 3 | Discover cluster GPU inventory before calling recommend_model |
+| `recommend_model` | 3 | Ranked GPU configs — called with cluster GPUs first, then unconstrained for any empty slots |
 
 ### Coming in next phase
 | Tool | Phases | Purpose |

@@ -41,11 +41,11 @@ spec:
                 name: rhoai-mcp-config
           resources:
             requests:
-              memory: "128Mi"
               cpu: "100m"
+              memory: "256Mi"
             limits:
-              memory: "512Mi"
               cpu: "500m"
+              memory: "1Gi"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

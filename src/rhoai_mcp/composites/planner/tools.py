@@ -472,13 +472,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         try:
             slo_data = await client.get_slo_defaults(use_case)
             workload_data = await client.get_workload_profile(use_case)
-        except PlannerConnectionError as e:
+        except PlannerConnectionError:
             logger.warning("Planner connection error")
-            logger.debug("Planner connection error detail: %s", e)
             return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
         except PlannerAPIError as e:
             logger.warning("Planner API error status=%s", e.status_code)
-            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
             return {"error": "Planner API error", "status_code": e.status_code}
 
         slo_defaults = slo_data.get("slo_defaults", {})
@@ -535,13 +533,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         try:
             data = await client.get_expected_rps(use_case, user_count)
-        except PlannerConnectionError as e:
+        except PlannerConnectionError:
             logger.warning("Planner connection error")
-            logger.debug("Planner connection error detail: %s", e)
             return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
         except PlannerAPIError as e:
             logger.warning("Planner API error status=%s", e.status_code)
-            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
             return {"error": "Planner API error", "status_code": e.status_code}
 
         return {
@@ -571,13 +567,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         try:
             data = await client.list_use_cases()
-        except PlannerConnectionError as e:
+        except PlannerConnectionError:
             logger.warning("Planner connection error")
-            logger.debug("Planner connection error detail: %s", e)
             return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
         except PlannerAPIError as e:
             logger.warning("Planner API error status=%s", e.status_code)
-            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
             return {"error": "Planner API error", "status_code": e.status_code}
 
         use_cases_raw = data.get("use_cases", {})
@@ -706,13 +700,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 preferred_gpu_types=preferred_gpu_types,
                 priority_weights=weights,
             )
-        except PlannerConnectionError as e:
+        except PlannerConnectionError:
             logger.warning("Planner connection error")
-            logger.debug("Planner connection error detail: %s", e)
             return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
         except PlannerAPIError as e:
             logger.warning("Planner API error status=%s", e.status_code)
-            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
             return {"error": "Planner API error", "status_code": e.status_code}
 
         # Extract GPU config

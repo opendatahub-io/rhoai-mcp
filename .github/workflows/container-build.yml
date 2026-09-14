@@ -7,7 +7,6 @@ on:
     types: [completed]
   push:
     tags: ['v*']
-  workflow_dispatch:
 
 permissions:
   contents: read

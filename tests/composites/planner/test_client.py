@@ -1292,6 +1292,44 @@ class TestPlannerClientGenerateConfig:
             )
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
+    async def test_generate_config_gpu_filter_removes_unsupported(
+        self, mock_httpx: MagicMock
+    ) -> None:
+        """preferred_gpu_types filters out recommendations before category selection."""
+        mock_client = AsyncMock()
+
+        spec_resp = MagicMock()
+        spec_resp.status_code = 200
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+
+        # Planner returns NVIDIA-A100-80 (not in cluster), not H100
+        unsupported_rec = {**SAMPLE_RECOMMENDATION, "gpu_config": {"gpu_type": "NVIDIA-A100-80", "gpu_count": 2}}
+        ranked_resp = MagicMock()
+        ranked_resp.status_code = 200
+        ranked_resp.json.return_value = {**SAMPLE_RANKED_RESPONSE, "balanced": [unsupported_rec]}
+        ranked_resp.raise_for_status = MagicMock()
+
+        mock_client.post.side_effect = [spec_resp, ranked_resp]
+        mock_httpx.AsyncClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_httpx.AsyncClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+        with pytest.raises(PlannerAPIError, match="No recommendation found"):
+            await client.generate_config(
+                category="balanced",
+                use_case="chatbot_conversational",
+                user_count=1000,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=150,
+                itl_target_ms=65,
+                e2e_target_ms=2000,
+                preferred_gpu_types=["H100"],
+            )
+
+    @patch("rhoai_mcp.composites.planner.client.httpx")
     async def test_generate_config_deploy_error(self, mock_httpx: MagicMock) -> None:
         """Deploy failure after ranking succeeds raises PlannerAPIError."""
         import httpx as real_httpx

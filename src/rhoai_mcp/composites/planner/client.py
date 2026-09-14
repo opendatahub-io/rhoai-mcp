@@ -545,7 +545,7 @@ class PlannerClient:
         except (TimeoutException, ConnectError, RequestError, HTTPStatusError) as e:
             logger.debug("Planner health check failed (%s)", type(e).__name__)
             return False, "Planner unavailable"
+
     async def list_use_cases(self) -> dict[str, Any]:
         """List all supported use cases with descriptions."""
         return await self._request("GET", "/api/v1/use-cases")
-

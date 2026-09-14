@@ -475,14 +475,19 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         client = await _get_client()
         if isinstance(client, LocalPlannerClient):
-            return {"error": "get_use_case_defaults requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"}
+            return {
+                "error": "get_use_case_defaults requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"
+            }
 
         try:
             slo_data = await client.get_slo_defaults(use_case)
             workload_data = await client.get_workload_profile(use_case)
         except PlannerConnectionError:
             logger.warning("Planner connection error")
-            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+            return {
+                "error": "Planner unavailable",
+                "hint": "Planner may be warming up. Retry shortly.",
+            }
         except PlannerAPIError as e:
             logger.warning("Planner API error status=%s", e.status_code)
             return {"error": "Planner API error", "status_code": e.status_code}
@@ -537,13 +542,18 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         client = await _get_client()
         if isinstance(client, LocalPlannerClient):
-            return {"error": "get_expected_rps requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"}
+            return {
+                "error": "get_expected_rps requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"
+            }
 
         try:
             data = await client.get_expected_rps(use_case, user_count)
         except PlannerConnectionError:
             logger.warning("Planner connection error")
-            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+            return {
+                "error": "Planner unavailable",
+                "hint": "Planner may be warming up. Retry shortly.",
+            }
         except PlannerAPIError as e:
             logger.warning("Planner API error status=%s", e.status_code)
             return {"error": "Planner API error", "status_code": e.status_code}
@@ -571,13 +581,18 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         """
         client = await _get_client()
         if isinstance(client, LocalPlannerClient):
-            return {"error": "list_use_cases requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"}
+            return {
+                "error": "list_use_cases requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"
+            }
 
         try:
             data = await client.list_use_cases()
         except PlannerConnectionError:
             logger.warning("Planner connection error")
-            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+            return {
+                "error": "Planner unavailable",
+                "hint": "Planner may be warming up. Retry shortly.",
+            }
         except PlannerAPIError as e:
             logger.warning("Planner API error status=%s", e.status_code)
             return {"error": "Planner API error", "status_code": e.status_code}
@@ -710,7 +725,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             )
         except PlannerConnectionError:
             logger.warning("Planner connection error")
-            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+            return {
+                "error": "Planner unavailable",
+                "hint": "Planner may be warming up. Retry shortly.",
+            }
         except PlannerAPIError as e:
             logger.warning("Planner API error status=%s", e.status_code)
             return {"error": "Planner API error", "status_code": e.status_code}
@@ -718,8 +736,12 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         # Extract GPU config
         gpu_config = config_result.gpu_config or {}
         gpu_count = gpu_config.get("gpu_count", 1) if isinstance(gpu_config, dict) else 1
-        gpu_type = gpu_config.get("gpu_type", "unknown") if isinstance(gpu_config, dict) else "unknown"
-        tensor_parallel = gpu_config.get("tensor_parallel", 1) if isinstance(gpu_config, dict) else 1
+        gpu_type = (
+            gpu_config.get("gpu_type", "unknown") if isinstance(gpu_config, dict) else "unknown"
+        )
+        tensor_parallel = (
+            gpu_config.get("tensor_parallel", 1) if isinstance(gpu_config, dict) else 1
+        )
         replicas = gpu_config.get("replicas", 1) if isinstance(gpu_config, dict) else 1
 
         # Estimate memory per replica from GPU type
@@ -761,9 +783,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             warnings.append(f"Could not verify runtime availability: {type(e).__name__}")
 
         if config_result.model_id is None:
-            issues.append(
-                "Planner did not return a model_id. Cannot proceed with deployment."
-            )
+            issues.append("Planner did not return a model_id. Cannot proceed with deployment.")
 
         if storage_uri is None:
             warnings.append(

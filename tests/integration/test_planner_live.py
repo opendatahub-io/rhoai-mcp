@@ -607,9 +607,9 @@ async def test_mcp_deploy_config_validation_errors(mcp_tools: dict[str, Any]) ->
 
 
 @pytest.fixture(scope="module")
-def mcp_use_case_defaults(mcp_tools: dict[str, Any]) -> dict[str, Any]:
+async def mcp_use_case_defaults(mcp_tools: dict[str, Any]) -> dict[str, Any]:
     """get_use_case_defaults result for chatbot_conversational."""
-    return mcp_tools["get_use_case_defaults"](use_case="chatbot_conversational")
+    return await mcp_tools["get_use_case_defaults"](use_case="chatbot_conversational")
 
 
 def test_mcp_use_case_defaults_structure(mcp_use_case_defaults: dict[str, Any]) -> None:
@@ -650,20 +650,20 @@ def test_mcp_use_case_defaults_workload(mcp_use_case_defaults: dict[str, Any]) -
         "summarization_short",
     ],
 )
-def test_mcp_use_case_defaults_all_use_cases(
+async def test_mcp_use_case_defaults_all_use_cases(
     mcp_tools: dict[str, Any], use_case: str
 ) -> None:
     """get_use_case_defaults returns valid data for multiple use cases."""
-    result = mcp_tools["get_use_case_defaults"](use_case=use_case)
+    result = await mcp_tools["get_use_case_defaults"](use_case=use_case)
     assert "error" not in result, f"Tool error for {use_case}: {result}"
     assert result["use_case"] == use_case
     assert result["slo_targets"]["ttft_ms"]["default"] > 0
     assert result["workload"]["prompt_tokens"] > 0
 
 
-def test_mcp_use_case_defaults_invalid_use_case(mcp_tools: dict[str, Any]) -> None:
+async def test_mcp_use_case_defaults_invalid_use_case(mcp_tools: dict[str, Any]) -> None:
     """get_use_case_defaults returns error for an unknown use case."""
-    result = mcp_tools["get_use_case_defaults"](use_case="not_a_real_use_case")
+    result = await mcp_tools["get_use_case_defaults"](use_case="not_a_real_use_case")
     assert "error" in result
     assert "use_case" in result["error"]
 
@@ -672,9 +672,9 @@ def test_mcp_use_case_defaults_invalid_use_case(mcp_tools: dict[str, Any]) -> No
 
 
 @pytest.fixture(scope="module")
-def mcp_expected_rps(mcp_tools: dict[str, Any]) -> dict[str, Any]:
+async def mcp_expected_rps(mcp_tools: dict[str, Any]) -> dict[str, Any]:
     """get_expected_rps result for chatbot_conversational with 1000 users."""
-    return mcp_tools["get_expected_rps"](use_case="chatbot_conversational", user_count=1000)
+    return await mcp_tools["get_expected_rps"](use_case="chatbot_conversational", user_count=1000)
 
 
 def test_mcp_expected_rps_structure(mcp_expected_rps: dict[str, Any]) -> None:
@@ -694,12 +694,12 @@ def test_mcp_expected_rps_values(mcp_expected_rps: dict[str, Any]) -> None:
     assert mcp_expected_rps["expected_concurrent_users"] > 0
 
 
-def test_mcp_expected_rps_scales_with_user_count(mcp_tools: dict[str, Any]) -> None:
+async def test_mcp_expected_rps_scales_with_user_count(mcp_tools: dict[str, Any]) -> None:
     """Expected RPS scales proportionally with user count."""
-    result_1k = mcp_tools["get_expected_rps"](
+    result_1k = await mcp_tools["get_expected_rps"](
         use_case="chatbot_conversational", user_count=1000
     )
-    result_2k = mcp_tools["get_expected_rps"](
+    result_2k = await mcp_tools["get_expected_rps"](
         use_case="chatbot_conversational", user_count=2000
     )
     assert "error" not in result_1k
@@ -707,16 +707,16 @@ def test_mcp_expected_rps_scales_with_user_count(mcp_tools: dict[str, Any]) -> N
     assert result_2k["expected_rps"] > result_1k["expected_rps"]
 
 
-def test_mcp_expected_rps_invalid_use_case(mcp_tools: dict[str, Any]) -> None:
+async def test_mcp_expected_rps_invalid_use_case(mcp_tools: dict[str, Any]) -> None:
     """get_expected_rps returns error for an unknown use case."""
-    result = mcp_tools["get_expected_rps"](use_case="invalid_case", user_count=100)
+    result = await mcp_tools["get_expected_rps"](use_case="invalid_case", user_count=100)
     assert "error" in result
     assert "use_case" in result["error"]
 
 
-def test_mcp_expected_rps_invalid_user_count(mcp_tools: dict[str, Any]) -> None:
+async def test_mcp_expected_rps_invalid_user_count(mcp_tools: dict[str, Any]) -> None:
     """get_expected_rps returns error for non-positive user count."""
-    result = mcp_tools["get_expected_rps"](use_case="chatbot_conversational", user_count=0)
+    result = await mcp_tools["get_expected_rps"](use_case="chatbot_conversational", user_count=0)
     assert "error" in result
     assert "user_count" in result["error"]
 
@@ -725,9 +725,9 @@ def test_mcp_expected_rps_invalid_user_count(mcp_tools: dict[str, Any]) -> None:
 
 
 @pytest.fixture(scope="module")
-def mcp_use_cases_list(mcp_tools: dict[str, Any]) -> dict[str, Any]:
+async def mcp_use_cases_list(mcp_tools: dict[str, Any]) -> dict[str, Any]:
     """list_use_cases result from the live planner."""
-    return mcp_tools["list_use_cases"]()
+    return await mcp_tools["list_use_cases"]()
 
 
 def test_mcp_list_use_cases_structure(mcp_use_cases_list: dict[str, Any]) -> None:

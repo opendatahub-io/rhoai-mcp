@@ -508,6 +508,6 @@ class PlannerClient:
                 response = client.get(f"{self._base_url}/health", params=None)
                 response.raise_for_status()
             return True, "Planner available"
-        except Exception as e:
+        except (TimeoutException, ConnectError, RequestError, HTTPStatusError) as e:
             logger.debug("Planner health check failed (%s)", type(e).__name__)
             return False, "Planner unavailable"

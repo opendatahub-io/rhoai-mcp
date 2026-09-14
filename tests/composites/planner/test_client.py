@@ -891,6 +891,19 @@ class TestPlannerClientHealthCheck:
         assert healthy is False
         assert "unavailable" in msg.lower()
 
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    def test_health_check_propagates_programming_errors(self, mock_httpx: MagicMock) -> None:
+        """Health check must not hide internal programming errors as an outage."""
+        mock_client = MagicMock()
+        mock_client.get.side_effect = AttributeError("unexpected missing attribute")
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        client = PlannerClient("http://localhost:8000")
+
+        with pytest.raises(AttributeError, match="unexpected missing attribute"):
+            client.health_check()
+
 
 class TestPlannerClientGenerateDeployment:
     """Tests for generate_deployment() method."""

@@ -81,6 +81,8 @@ class TestNavigatorTableCompleteness:
         "Cost is my top priority. Get model recommendations and show me the comparison table."
     )
 
+    WORKLOAD_CONFIRMATION = "Yes, that looks right. Please go ahead and get the recommendations."
+
     @pytest.mark.eval
     async def test_table_has_all_columns_and_rows(
         self,
@@ -90,11 +92,18 @@ class TestNavigatorTableCompleteness:
         evaluate_and_record: Callable[[str, LCSResult, list[Any], list[Any]], Any],
     ) -> None:
         """Navigator must output a table with all 4 columns and all 8 rows populated."""
-        result = await lcs_client.query(self.TASK)
+        # Turn 1: send the task — navigator presents the workload profile and waits for
+        # confirmation before calling recommend_model (Phase 2 gate in the skill).
+        turn1 = await lcs_client.query(self.TASK)
+        assert turn1.conversation_id, "LCS must return a conversation_id for multi-turn flow"
 
-        assert result.tool_names_used, "Agent should call at least one tool"
+        # Turn 2: confirm the workload profile — navigator proceeds to Phase 3 and outputs
+        # the recommendation table.
+        result = await lcs_client.follow_up(self.WORKLOAD_CONFIRMATION, turn1.conversation_id)
 
-        recommend_model_calls = [t for t in result.tool_names_used if t == "recommend_model"]
+        # Merge tool calls from both turns for metric evaluation.
+        all_tool_calls = turn1.tool_calls + result.tool_calls
+        recommend_model_calls = [t for t in all_tool_calls if t.name == "recommend_model"]
         assert len(recommend_model_calls) >= 1, (
             f"Navigator must call recommend_model at least once, "
             f"got {len(recommend_model_calls)}"

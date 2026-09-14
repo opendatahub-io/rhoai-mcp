@@ -1662,6 +1662,35 @@ class TestExecuteDeploymentTool:
         assert "error" in result
 
     @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_execute_tensor_parallel_forwarded(self, mock_inference_cls: MagicMock) -> None:
+        """tensor_parallel is passed to InferenceServiceCreate, not silently dropped."""
+        mock_isvc = MagicMock()
+        mock_isvc.status.value = "Ready"
+        mock_isvc.metadata.name = "llama-3-1-70b-instruct"
+        mock_isvc.metadata.namespace = "my-project"
+        mock_isvc.metadata.to_source_dict.return_value = {"kind": "InferenceService", "name": "llama-3-1-70b-instruct"}
+        mock_inference_cls.return_value.deploy_model.return_value = mock_isvc
+
+        mock_mcp = _make_mock_mcp()
+        with patch("rhoai_mcp.composites.planner.tools.asyncio.sleep", new_callable=AsyncMock):
+            register_tools(mock_mcp, _make_mock_server_with_k8s())
+            tool = mock_mcp._registered_tools["execute_deployment"]
+            tool(
+                model_id="meta-llama/Llama-3.1-70B-Instruct",
+                namespace="my-project",
+                runtime="vllm-cuda-runtime",
+                storage_uri="oci://quay.io/rhoai/llama:latest",
+                gpu_count=4,
+                gpu_type="H100",
+                tensor_parallel=4,
+                replicas=1,
+            )
+
+        call_args = mock_inference_cls.return_value.deploy_model.call_args
+        request = call_args[0][0]
+        assert request.tensor_parallel == 4
+
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
     def test_execute_deploy_failure(self, mock_inference_cls: MagicMock) -> None:
         """Returns deployed=False when InferenceClient raises."""
         mock_inference_cls.return_value.deploy_model.side_effect = RuntimeError("K8s API error")

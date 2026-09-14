@@ -793,7 +793,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         storage_uri: str,
         gpu_count: int,
         gpu_type: str,
-        tensor_parallel: int = 1,  # noqa: ARG001 — accepted for API consistency, not passed to k8s
+        tensor_parallel: int = 1,
         replicas: int = 1,
         display_name: str | None = None,
     ) -> dict[str, Any]:
@@ -863,6 +863,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             memory_request=memory_per_replica,
             memory_limit=memory_per_replica,
             gpu_count=gpu_count,
+            tensor_parallel=tensor_parallel,
         )
 
         try:

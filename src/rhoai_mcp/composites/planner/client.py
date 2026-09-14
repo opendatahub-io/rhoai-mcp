@@ -328,7 +328,12 @@ class PlannerClient:
             def _gpu_matches(rec_data: dict[str, Any]) -> bool:
                 gpu_config = rec_data.get("gpu_config") or {}
                 gpu_type = gpu_config.get("gpu_type") if isinstance(gpu_config, dict) else None
-                return gpu_type in allowed
+                if gpu_type is None:
+                    return False
+                # Planner responses use vendor-prefixed names (e.g. "NVIDIA-H100");
+                # the public API uses short names ("H100"). Normalise before comparing.
+                normalised = gpu_type.removeprefix("NVIDIA-")
+                return normalised in allowed
 
             balanced_list = [r for r in balanced_list if _gpu_matches(r)]
             cost_list = [r for r in cost_list if _gpu_matches(r)]

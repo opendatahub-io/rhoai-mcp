@@ -735,8 +735,8 @@ class TestPlannerClientRecommend:
         """gpu_types_override filters out recommendations whose GPU type is not in the list."""
         mock_client = AsyncMock()
 
-        h100_rec = {**SAMPLE_RECOMMENDATION, "gpu_config": {"gpu_type": "H100", "gpu_count": 2}}
-        l4_rec = {**SAMPLE_RECOMMENDATION, "gpu_config": {"gpu_type": "L4", "gpu_count": 4}}
+        h100_rec = {**SAMPLE_RECOMMENDATION, "gpu_config": {"gpu_type": "NVIDIA-H100", "gpu_count": 2}}
+        l4_rec = {**SAMPLE_RECOMMENDATION, "gpu_config": {"gpu_type": "NVIDIA-L4", "gpu_count": 4}}
 
         ranked_resp = MagicMock()
         ranked_resp.status_code = 200
@@ -767,10 +767,10 @@ class TestPlannerClientRecommend:
         )
 
         assert result.top_balanced is not None
-        assert result.top_balanced.gpu_config.gpu_type == "H100"
+        assert result.top_balanced.gpu_config.gpu_type == "NVIDIA-H100"
         assert result.top_performance is not None
-        assert result.top_performance.gpu_config.gpu_type == "H100"
-        # L4 slots filtered to empty → None
+        assert result.top_performance.gpu_config.gpu_type == "NVIDIA-H100"
+        # NVIDIA-L4 slots filtered to empty — L4 not in override → None
         assert result.top_cost is None
         assert result.top_quality is None
 

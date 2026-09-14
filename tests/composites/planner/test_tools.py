@@ -1713,6 +1713,36 @@ class TestGpuMemoryHelper:
         assert _gpu_memory_for_type("NVIDIA-A100-80", 1) == "80Gi"
 
 
+class TestMakeDeploymentName:
+    """Tests for _make_deployment_name helper."""
+
+    def test_basic_model_id(self) -> None:
+        from rhoai_mcp.composites.planner.tools import _make_deployment_name
+
+        assert _make_deployment_name("meta-llama/Llama-3.1-70B-Instruct") == "llama-3-1-70b-instruct"
+
+    def test_no_trailing_hyphen_after_truncation(self) -> None:
+        """Truncation at 50 chars must not leave a trailing hyphen."""
+        from rhoai_mcp.composites.planner.tools import _make_deployment_name
+
+        # 'a' * 49 + '-b' → after sanitise = 'a'*49 + '-b', truncate at 50 = 'a'*49 + '-'
+        model_id = "a" * 49 + "-b"
+        result = _make_deployment_name(model_id)
+        assert not result.endswith("-")
+        assert len(result) <= 50
+
+    def test_special_chars_replaced(self) -> None:
+        from rhoai_mcp.composites.planner.tools import _make_deployment_name
+
+        assert _make_deployment_name("org/My_Model.v2") == "my-model-v2"
+
+    def test_numeric_prefix_gets_model_prefix(self) -> None:
+        from rhoai_mcp.composites.planner.tools import _make_deployment_name
+
+        result = _make_deployment_name("7b-instruct")
+        assert result.startswith("model-")
+
+
 class TestClientFactory:
     """Tests for the _get_client factory function."""
 

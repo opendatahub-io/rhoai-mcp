@@ -943,4 +943,4 @@ def _make_deployment_name(model_id: str) -> str:
     name = re.sub(r"-+", "-", name).strip("-") or "model"
     if not name[0].isalpha():
         name = f"model-{name}"
-    return name[:50]
+    return name[:50].strip("-")

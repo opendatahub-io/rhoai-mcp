@@ -205,11 +205,17 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         try:
             result = await _get_client().recommend(
-                text, use_case_override=use_case, user_count_override=user_count,
-                gpu_types_override=preferred_gpu_types, ttft_override_ms=ttft_max_ms,
-                itl_override_ms=itl_max_ms, e2e_override_ms=e2e_max_ms,
-                min_quality=min_quality, max_cost=max_cost_per_month,
-                percentile_override=percentile, priority_weights=weights,
+                text,
+                use_case_override=use_case,
+                user_count_override=user_count,
+                gpu_types_override=preferred_gpu_types,
+                ttft_override_ms=ttft_max_ms,
+                itl_override_ms=itl_max_ms,
+                e2e_override_ms=e2e_max_ms,
+                min_quality=min_quality,
+                max_cost=max_cost_per_month,
+                percentile_override=percentile,
+                priority_weights=weights,
             )
         except PlannerConnectionError as e:
             logger.warning("Planner connection error")

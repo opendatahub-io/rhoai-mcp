@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -75,22 +76,26 @@ def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any
 def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
     """Register Planner composite tools with the MCP server."""
     _local_client: LocalPlannerClient | None = None
+    _local_client_lock = asyncio.Lock()
 
-    def _get_client() -> PlannerClient | LocalPlannerClient:
+    async def _get_client() -> PlannerClient | LocalPlannerClient:
         nonlocal _local_client
         if server.config.planner_mode == PlannerMode.REMOTE:
             return PlannerClient(
                 server.config.planner_url,
                 timeout=float(server.config.planner_timeout),
             )
-        if _local_client is None:
-            _local_client = LocalPlannerClient(
-                model_catalog_url=server.config.planner_model_catalog_url,
-            )
-        return _local_client
+
+        async with _local_client_lock:
+            if _local_client is None:
+                _local_client = await asyncio.to_thread(
+                    LocalPlannerClient,
+                    model_catalog_url=server.config.planner_model_catalog_url,
+                )
+            return _local_client
 
     @mcp.tool()
-    def recommend_model(
+    async def recommend_model(
         text: str,
         use_case: str | None = None,
         user_count: int | None = None,
@@ -204,8 +209,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
         try:
-            client = _get_client()
-            result = client.recommend(
+            result = await (await _get_client()).recommend(
                 text,
                 use_case_override=use_case,
                 user_count_override=user_count,
@@ -255,7 +259,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         return response
 
     @mcp.tool()
-    def get_deployment_config(
+    async def get_deployment_config(
         category: str,
         use_case: str,
         user_count: int,
@@ -388,8 +392,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
         try:
-            client = _get_client()
-            result = client.generate_config(
+            result = await (await _get_client()).generate_config(
                 category=category,
                 use_case=use_case,
                 user_count=user_count,

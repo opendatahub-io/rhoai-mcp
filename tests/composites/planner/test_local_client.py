@@ -172,13 +172,13 @@ class TestLocalPlannerRecommend:
     """Tests for LocalPlannerClient.recommend()."""
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_recommend_full_flow(self, mock_planner_cls: MagicMock) -> None:
+    async def test_recommend_full_flow(self, mock_planner_cls: MagicMock) -> None:
         """Full recommend flow with all overrides works."""
         mock_planner = _make_mock_planner()
         mock_planner_cls.return_value = mock_planner
 
         client = LocalPlannerClient()
-        result = client.recommend(
+        result = await client.recommend(
             text="ignored in local mode",
             use_case_override="chatbot_conversational",
             user_count_override=1000,
@@ -192,23 +192,23 @@ class TestLocalPlannerRecommend:
         assert result.total_configs_evaluated == 2847
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_recommend_missing_overrides_raises(self, mock_planner_cls: MagicMock) -> None:
+    async def test_recommend_missing_overrides_raises(self, mock_planner_cls: MagicMock) -> None:
         """Missing required overrides raises PlannerAPIError(400)."""
         client = LocalPlannerClient()
 
         with pytest.raises(PlannerAPIError) as exc_info:
-            client.recommend(text="chatbot for 1000 users")
+            await client.recommend(text="chatbot for 1000 users")
 
         assert exc_info.value.status_code == 400
         assert "use_case" in exc_info.value.detail
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_recommend_missing_use_case_raises(self, mock_planner_cls: MagicMock) -> None:
+    async def test_recommend_missing_use_case_raises(self, mock_planner_cls: MagicMock) -> None:
         """Missing use_case override raises PlannerAPIError(400)."""
         client = LocalPlannerClient()
 
         with pytest.raises(PlannerAPIError) as exc_info:
-            client.recommend(
+            await client.recommend(
                 text="chatbot",
                 user_count_override=1000,
                 gpu_types_override=["H100"],
@@ -217,13 +217,13 @@ class TestLocalPlannerRecommend:
         assert exc_info.value.status_code == 400
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_recommend_slo_overrides_applied(self, mock_planner_cls: MagicMock) -> None:
+    async def test_recommend_slo_overrides_applied(self, mock_planner_cls: MagicMock) -> None:
         """SLO overrides are applied to the specification."""
         mock_planner = _make_mock_planner()
         mock_planner_cls.return_value = mock_planner
 
         client = LocalPlannerClient()
-        client.recommend(
+        await client.recommend(
             text="test",
             use_case_override="chatbot_conversational",
             user_count_override=1000,
@@ -240,13 +240,13 @@ class TestLocalPlannerRecommend:
         assert spec_arg.slo_targets.e2e_target_ms == 1500
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_recommend_priority_overrides_applied(self, mock_planner_cls: MagicMock) -> None:
+    async def test_recommend_priority_overrides_applied(self, mock_planner_cls: MagicMock) -> None:
         """Priority weight overrides are applied to the specification."""
         mock_planner = _make_mock_planner()
         mock_planner_cls.return_value = mock_planner
 
         client = LocalPlannerClient()
-        client.recommend(
+        await client.recommend(
             text="test",
             use_case_override="chatbot_conversational",
             user_count_override=1000,
@@ -261,13 +261,13 @@ class TestLocalPlannerRecommend:
         assert spec_arg.priorities.latency.weight == 1
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_recommend_constraints_forwarded(self, mock_planner_cls: MagicMock) -> None:
+    async def test_recommend_constraints_forwarded(self, mock_planner_cls: MagicMock) -> None:
         """min_quality and max_cost are forwarded to generate_recommendations."""
         mock_planner = _make_mock_planner()
         mock_planner_cls.return_value = mock_planner
 
         client = LocalPlannerClient()
-        client.recommend(
+        await client.recommend(
             text="test",
             use_case_override="chatbot_conversational",
             user_count_override=1000,
@@ -281,7 +281,7 @@ class TestLocalPlannerRecommend:
         assert call_kwargs["max_cost"] == 5000.0
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_recommend_planner_error_mapped(self, mock_planner_cls: MagicMock) -> None:
+    async def test_recommend_planner_error_mapped(self, mock_planner_cls: MagicMock) -> None:
         """PlannerError is mapped to PlannerAPIError(502)."""
         from planner import PlannerError
 
@@ -291,7 +291,7 @@ class TestLocalPlannerRecommend:
 
         client = LocalPlannerClient()
         with pytest.raises(PlannerAPIError) as exc_info:
-            client.recommend(
+            await client.recommend(
                 text="test",
                 use_case_override="chatbot_conversational",
                 user_count_override=1000,
@@ -301,7 +301,7 @@ class TestLocalPlannerRecommend:
         assert exc_info.value.status_code == 502
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_recommend_value_error_mapped(self, mock_planner_cls: MagicMock) -> None:
+    async def test_recommend_value_error_mapped(self, mock_planner_cls: MagicMock) -> None:
         """ValueError is mapped to PlannerAPIError(400)."""
         mock_planner = _make_mock_planner()
         mock_planner.generate_specification.side_effect = ValueError("Unknown use case")
@@ -309,7 +309,7 @@ class TestLocalPlannerRecommend:
 
         client = LocalPlannerClient()
         with pytest.raises(PlannerAPIError) as exc_info:
-            client.recommend(
+            await client.recommend(
                 text="test",
                 use_case_override="chatbot_conversational",
                 user_count_override=1000,
@@ -323,13 +323,13 @@ class TestLocalPlannerGenerateConfig:
     """Tests for LocalPlannerClient.generate_config()."""
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_generate_config_full_flow(self, mock_planner_cls: MagicMock) -> None:
+    async def test_generate_config_full_flow(self, mock_planner_cls: MagicMock) -> None:
         """Full generate_config flow returns deployment configs."""
         mock_planner = _make_mock_planner()
         mock_planner_cls.return_value = mock_planner
 
         client = LocalPlannerClient()
-        result = client.generate_config(
+        result = await client.generate_config(
             category="balanced",
             use_case="chatbot_conversational",
             user_count=1000,
@@ -347,12 +347,12 @@ class TestLocalPlannerGenerateConfig:
         assert "inferenceservice" in result.configs
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_generate_config_invalid_category(self, mock_planner_cls: MagicMock) -> None:
+    async def test_generate_config_invalid_category(self, mock_planner_cls: MagicMock) -> None:
         """Invalid category raises PlannerAPIError(400)."""
         client = LocalPlannerClient()
 
         with pytest.raises(PlannerAPIError) as exc_info:
-            client.generate_config(
+            await client.generate_config(
                 category="fastest",
                 use_case="chatbot_conversational",
                 user_count=1000,
@@ -368,7 +368,7 @@ class TestLocalPlannerGenerateConfig:
         assert "category" in exc_info.value.detail
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_generate_config_empty_category(self, mock_planner_cls: MagicMock) -> None:
+    async def test_generate_config_empty_category(self, mock_planner_cls: MagicMock) -> None:
         """Empty category list raises PlannerAPIError(404)."""
         mock_planner = _make_mock_planner()
         mock_planner.generate_recommendations.return_value.model_dump.return_value = {
@@ -381,7 +381,7 @@ class TestLocalPlannerGenerateConfig:
 
         client = LocalPlannerClient()
         with pytest.raises(PlannerAPIError) as exc_info:
-            client.generate_config(
+            await client.generate_config(
                 category="balanced",
                 use_case="chatbot_conversational",
                 user_count=1000,
@@ -396,7 +396,7 @@ class TestLocalPlannerGenerateConfig:
         assert exc_info.value.status_code == 404
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    def test_generate_config_no_files_raises(self, mock_planner_cls: MagicMock) -> None:
+    async def test_generate_config_no_files_raises(self, mock_planner_cls: MagicMock) -> None:
         """Empty files in deployment bundle raises PlannerAPIError(502)."""
         mock_planner = _make_mock_planner()
         mock_planner.generate_deployment.return_value.files = {}
@@ -404,7 +404,7 @@ class TestLocalPlannerGenerateConfig:
 
         client = LocalPlannerClient()
         with pytest.raises(PlannerAPIError) as exc_info:
-            client.generate_config(
+            await client.generate_config(
                 category="balanced",
                 use_case="chatbot_conversational",
                 user_count=1000,

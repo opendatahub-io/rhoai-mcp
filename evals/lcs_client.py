@@ -164,7 +164,9 @@ class LCSClient:
                 data = response.json()
                 return self._parse_response(message, data)
 
-        raise last_error  # type: ignore[misc]
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("follow_up failed without capturing a retryable error")
 
     def _parse_response(self, task: str, data: dict[str, Any]) -> LCSResult:
         """Parse an LCS query response into an LCSResult.

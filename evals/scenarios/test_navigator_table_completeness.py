@@ -15,7 +15,6 @@ Uses the mock cluster so no live planner backend is required.
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Any
 
 import pytest

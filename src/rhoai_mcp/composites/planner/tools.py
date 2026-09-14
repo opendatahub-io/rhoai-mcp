@@ -752,6 +752,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             logger.warning("Could not check serving runtimes: %s", type(e).__name__)
             warnings.append(f"Could not verify runtime availability: {type(e).__name__}")
 
+        if config_result.model_id is None:
+            issues.append(
+                "Planner did not return a model_id. Cannot proceed with deployment."
+            )
+
         if storage_uri is None:
             warnings.append(
                 "Model storage URI could not be resolved automatically. "

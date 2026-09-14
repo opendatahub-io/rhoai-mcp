@@ -1535,6 +1535,46 @@ class TestPlanDeploymentTool:
         assert "unavailable" in result["error"].lower()
 
 
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_plan_missing_model_id_blocks_ready(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """ready=False and an issue is raised when planner returns no model_id."""
+        no_model_id_result = DeploymentConfigResult(
+            deployment_id="chatbot-unknown-20260322143022",
+            namespace="my-project",
+            model_name="Llama 3.1 70B",
+            model_id=None,
+            model_uri="oci://quay.io/rhoai/llama-3-1-70b:latest",
+            gpu_config={"gpu_type": "NVIDIA-H100", "gpu_count": 2, "tensor_parallel": 2, "replicas": 1},
+            configs={"inferenceservice": "apiVersion: serving.kserve.io/v1beta1"},
+        )
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=no_model_id_result)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["ready"] is False
+        assert result["issues"] is not None
+        assert any("model_id" in issue for issue in result["issues"])
+
+
 class TestExecuteDeploymentTool:
     """Tests for execute_deployment tool."""
 

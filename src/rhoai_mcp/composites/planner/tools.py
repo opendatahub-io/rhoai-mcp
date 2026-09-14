@@ -58,12 +58,20 @@ def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any
         compact["model"] = rec.model_name
     elif rec.model_id:
         compact["model"] = rec.model_id
+    if rec.model_id:
+        compact["model_id"] = rec.model_id
     if rec.gpu_config:
         gpu = rec.gpu_config
         compact["gpu"] = f"{gpu.gpu_count}x {gpu.gpu_type}"
+    if rec.predicted_ttft_p95_ms is not None:
+        compact["ttft_p95_ms"] = rec.predicted_ttft_p95_ms
+    if rec.predicted_e2e_p95_ms is not None:
+        compact["e2e_p95_ms"] = rec.predicted_e2e_p95_ms
     if rec.cost_per_month_usd is not None:
         compact["cost_usd_month"] = rec.cost_per_month_usd
     compact["meets_slo"] = rec.meets_slo
+    if rec.scores:
+        compact["quality_score"] = rec.scores.quality_score
     if slot == "top_balanced" and rec.scores:
         compact["score"] = rec.scores.balanced_score
     if slot == "top_quality" and rec.scores:

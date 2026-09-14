@@ -164,11 +164,20 @@ class TestRecommendModelTool:
         recs = result["recommendations"]
         assert "top_balanced" in recs
         assert recs["top_balanced"]["model"] == "Llama 3.1 70B"
+        assert recs["top_balanced"]["model_id"] == "meta-llama/Llama-3.1-70B-Instruct"
         assert recs["top_balanced"]["score"] == 75.3
+        assert recs["top_balanced"]["ttft_p95_ms"] == 140
+        assert recs["top_balanced"]["e2e_p95_ms"] == 1200
+        assert recs["top_balanced"]["quality_score"] == 78
+        assert recs["top_balanced"]["cost_usd_month"] == 2872.32
         assert "top_performance" in recs
+        assert recs["top_performance"]["ttft_p95_ms"] == 140
+        assert recs["top_performance"]["quality_score"] == 78
         assert "top_cost" in recs
+        assert recs["top_cost"]["cost_usd_month"] == 2872.32
         assert "top_quality" in recs
         assert recs["top_quality"]["score"] == 78
+        assert recs["top_quality"]["quality_score"] == 78
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_overrides(self, mock_client_class: MagicMock) -> None:

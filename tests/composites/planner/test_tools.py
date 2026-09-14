@@ -16,6 +16,7 @@ def _make_mock_mcp() -> MagicMock:
     """Create a mock FastMCP server that captures tool registrations."""
     mock = MagicMock()
     registered_tools: dict = {}
+    registered_async_tools: dict = {}
 
     def capture_tool():
         def decorator(f):
@@ -23,12 +24,14 @@ def _make_mock_mcp() -> MagicMock:
                 return asyncio.run(f(*args, **kwargs))
 
             registered_tools[f.__name__] = sync_tool
+            registered_async_tools[f.__name__] = f
             return f
 
         return decorator
 
     mock.tool = capture_tool
     mock._registered_tools = registered_tools
+    mock._registered_async_tools = registered_async_tools
     return mock
 
 
@@ -107,6 +110,34 @@ class TestRecommendModelTool:
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         assert "recommend_model" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.LocalPlannerClient")
+    async def test_concurrent_local_requests_initialize_one_client(
+        self, mock_client_class: MagicMock
+    ) -> None:
+        """Concurrent local requests share one asynchronously initialized client."""
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server(PlannerMode.LOCAL))
+        recommend_model = mock_mcp._registered_async_tools["recommend_model"]
+
+        await asyncio.gather(
+            recommend_model(
+                text="I need a chatbot",
+                use_case="chatbot_conversational",
+                user_count=1000,
+                preferred_gpu_types=["H100"],
+            ),
+            recommend_model(
+                text="I need a chatbot",
+                use_case="chatbot_conversational",
+                user_count=1000,
+                preferred_gpu_types=["H100"],
+            ),
+        )
+
+        # asyncio.Lock serialises inside _get_client(); only one LocalPlannerClient is created
+        mock_client_class.assert_called_once_with(model_catalog_url=None)
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_successful_recommendation(self, mock_client_class: MagicMock) -> None:

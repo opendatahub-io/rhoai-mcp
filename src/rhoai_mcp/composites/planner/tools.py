@@ -90,7 +90,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         return _local_client
 
     @mcp.tool()
-    def recommend_model(
+    async def recommend_model(
         text: str,
         use_case: str | None = None,
         user_count: int | None = None,
@@ -204,19 +204,12 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
         try:
-            client = _get_client()
-            result = client.recommend(
-                text,
-                use_case_override=use_case,
-                user_count_override=user_count,
-                gpu_types_override=preferred_gpu_types,
-                ttft_override_ms=ttft_max_ms,
-                itl_override_ms=itl_max_ms,
-                e2e_override_ms=e2e_max_ms,
-                min_quality=min_quality,
-                max_cost=max_cost_per_month,
-                percentile_override=percentile,
-                priority_weights=weights,
+            result = await _get_client().recommend(
+                text, use_case_override=use_case, user_count_override=user_count,
+                gpu_types_override=preferred_gpu_types, ttft_override_ms=ttft_max_ms,
+                itl_override_ms=itl_max_ms, e2e_override_ms=e2e_max_ms,
+                min_quality=min_quality, max_cost=max_cost_per_month,
+                percentile_override=percentile, priority_weights=weights,
             )
         except PlannerConnectionError as e:
             logger.warning("Planner connection error")
@@ -255,7 +248,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         return response
 
     @mcp.tool()
-    def get_deployment_config(
+    async def get_deployment_config(
         category: str,
         use_case: str,
         user_count: int,
@@ -388,8 +381,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
 
         try:
-            client = _get_client()
-            result = client.generate_config(
+            result = await _get_client().generate_config(
                 category=category,
                 use_case=use_case,
                 user_count=user_count,

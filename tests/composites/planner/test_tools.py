@@ -1,6 +1,7 @@
 """Tests for Planner recommend_model MCP tool."""
 
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
@@ -18,7 +19,10 @@ def _make_mock_mcp() -> MagicMock:
 
     def capture_tool():
         def decorator(f):
-            registered_tools[f.__name__] = f
+            def sync_tool(*args, **kwargs):
+                return asyncio.run(f(*args, **kwargs))
+
+            registered_tools[f.__name__] = sync_tool
             return f
 
         return decorator
@@ -107,7 +111,7 @@ class TestRecommendModelTool:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_successful_recommendation(self, mock_client_class: MagicMock) -> None:
         """Successful recommendation returns formatted result."""
-        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -130,7 +134,7 @@ class TestRecommendModelTool:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_overrides(self, mock_client_class: MagicMock) -> None:
         """Overrides are passed to the client."""
-        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -163,9 +167,9 @@ class TestRecommendModelTool:
         """Connection error returns error dict."""
         from rhoai_mcp.composites.planner.client import PlannerConnectionError
 
-        mock_client_class.return_value.recommend.side_effect = PlannerConnectionError(
+        mock_client_class.return_value.recommend = AsyncMock(side_effect=PlannerConnectionError(
             "Planner service unavailable at http://localhost:8000"
-        )
+        ))
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -183,10 +187,10 @@ class TestRecommendModelTool:
         """API error returns error dict with status code."""
         from rhoai_mcp.composites.planner.client import PlannerAPIError
 
-        mock_client_class.return_value.recommend.side_effect = PlannerAPIError(
+        mock_client_class.return_value.recommend = AsyncMock(side_effect=PlannerAPIError(
             status_code=500,
             detail="Internal Server Error",
-        )
+        ))
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -201,7 +205,7 @@ class TestRecommendModelTool:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_slo_overrides(self, mock_client_class: MagicMock) -> None:
         """SLO override parameters are passed to the client."""
-        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -232,7 +236,7 @@ class TestRecommendModelTool:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_valid_optimization_profile_accepted(self, mock_client_class: MagicMock) -> None:
         """A valid optimization_profile passes validation and the client is called."""
-        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -251,7 +255,7 @@ class TestRecommendModelTool:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_all_constraints(self, mock_client_class: MagicMock) -> None:
         """All constraint parameters are forwarded to the client."""
-        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -328,7 +332,7 @@ class TestRecommendModelTool:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_valid_use_case_accepted(self, mock_client_class: MagicMock) -> None:
         """Valid use_case is passed through to the client."""
-        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -436,7 +440,7 @@ class TestRecommendModelTool:
             total_configs_evaluated=2847,
             configs_after_filters=0,
         )
-        mock_client_class.return_value.recommend.return_value = empty_result
+        mock_client_class.return_value.recommend = AsyncMock(return_value=empty_result)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -462,7 +466,7 @@ class TestRecommendModelTool:
             total_configs_evaluated=2847,
             configs_after_filters=100,
         )
-        mock_client_class.return_value.recommend.return_value = partial_result
+        mock_client_class.return_value.recommend = AsyncMock(return_value=partial_result)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server()
 
@@ -529,7 +533,7 @@ class TestDeploymentConfigTool:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_successful_deployment_config(self, mock_client_class: MagicMock) -> None:
         """Successful config generation returns formatted result."""
-        mock_client_class.return_value.generate_config.return_value = SAMPLE_CONFIG_RESULT
+        mock_client_class.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         get_config = mock_mcp._registered_tools["get_deployment_config"]
@@ -561,7 +565,7 @@ class TestDeploymentConfigTool:
             namespace="default",
             configs={"inferenceservice": "yaml-content"},
         )
-        mock_client_class.return_value.generate_config.return_value = no_model
+        mock_client_class.return_value.generate_config = AsyncMock(return_value=no_model)
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         get_config = mock_mcp._registered_tools["get_deployment_config"]
@@ -590,7 +594,7 @@ class TestDeploymentConfigTool:
             model_name="meta-llama/Llama-3.1-70B-Instruct",
             configs={"inferenceservice": "yaml-content"},
         )
-        mock_client_class.return_value.generate_config.return_value = fallback_result
+        mock_client_class.return_value.generate_config = AsyncMock(return_value=fallback_result)
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         get_config = mock_mcp._registered_tools["get_deployment_config"]
@@ -614,9 +618,9 @@ class TestDeploymentConfigTool:
         """When no recommendations exist for category, returns error dict."""
         from rhoai_mcp.composites.planner.client import PlannerAPIError
 
-        mock_client_class.return_value.generate_config.side_effect = PlannerAPIError(
+        mock_client_class.return_value.generate_config = AsyncMock(side_effect=PlannerAPIError(
             status_code=404, detail="No recommendation found for category 'cost'"
-        )
+        ))
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         get_config = mock_mcp._registered_tools["get_deployment_config"]
@@ -899,9 +903,9 @@ class TestDeploymentConfigTool:
         """Planner connection error returns error dict."""
         from rhoai_mcp.composites.planner.client import PlannerConnectionError
 
-        mock_client_class.return_value.generate_config.side_effect = PlannerConnectionError(
+        mock_client_class.return_value.generate_config = AsyncMock(side_effect=PlannerConnectionError(
             "Planner service unavailable at http://localhost:8000"
-        )
+        ))
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         get_config = mock_mcp._registered_tools["get_deployment_config"]
@@ -927,9 +931,9 @@ class TestDeploymentConfigTool:
         """Planner API error returns error dict with status code."""
         from rhoai_mcp.composites.planner.client import PlannerAPIError
 
-        mock_client_class.return_value.generate_config.side_effect = PlannerAPIError(
+        mock_client_class.return_value.generate_config = AsyncMock(side_effect=PlannerAPIError(
             status_code=500, detail="Internal Server Error"
-        )
+        ))
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         get_config = mock_mcp._registered_tools["get_deployment_config"]
@@ -976,7 +980,7 @@ class TestDeploymentConfigTool:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_valid_optimization_profile_accepted(self, mock_client_class: MagicMock) -> None:
         """A valid optimization_profile passes validation and the client is called."""
-        mock_client_class.return_value.generate_config.return_value = SAMPLE_CONFIG_RESULT
+        mock_client_class.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server())
         get_config = mock_mcp._registered_tools["get_deployment_config"]
@@ -1005,7 +1009,7 @@ class TestClientFactory:
     @patch("rhoai_mcp.composites.planner.tools.LocalPlannerClient")
     def test_local_mode_creates_local_client(self, mock_local_cls: MagicMock) -> None:
         """Factory creates LocalPlannerClient when mode is LOCAL."""
-        mock_local_cls.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_local_cls.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server(mode=PlannerMode.LOCAL)
 
@@ -1026,7 +1030,7 @@ class TestClientFactory:
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_remote_mode_creates_remote_client(self, mock_client_class: MagicMock) -> None:
         """Factory creates PlannerClient when mode is REMOTE."""
-        mock_client_class.return_value.recommend.return_value = SAMPLE_RESULT
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
         mock_mcp = _make_mock_mcp()
         mock_server = _make_mock_server(mode=PlannerMode.REMOTE)
 

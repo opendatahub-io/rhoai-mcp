@@ -30,6 +30,7 @@ Run Model Catalog tests with::
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 from unittest.mock import MagicMock
@@ -55,9 +56,9 @@ def local_client() -> LocalPlannerClient:
 
 
 @pytest.fixture(scope="module")
-def recommend_result(local_client: LocalPlannerClient) -> RecommendationResult:
+async def recommend_result(local_client: LocalPlannerClient) -> RecommendationResult:
     """Recommendation result generated once with chatbot overrides."""
-    return local_client.recommend(
+    return await local_client.recommend(
         "unused — local mode ignores text",
         use_case_override="chatbot_conversational",
         user_count_override=1000,
@@ -66,10 +67,10 @@ def recommend_result(local_client: LocalPlannerClient) -> RecommendationResult:
 
 
 @pytest.fixture(scope="module")
-def deploy_config_result(local_client: LocalPlannerClient) -> DeploymentConfigResult | None:
+async def deploy_config_result(local_client: LocalPlannerClient) -> DeploymentConfigResult | None:
     """Deployment config result for balanced category, or None if no match."""
     try:
-        return local_client.generate_config(
+        return await local_client.generate_config(
             category="balanced",
             use_case="chatbot_conversational",
             user_count=1000,
@@ -94,7 +95,10 @@ def _register_local_tools() -> dict[str, Any]:
 
     def capture_tool():
         def decorator(f):  # type: ignore[no-untyped-def]
-            registered[f.__name__] = f
+            def sync_tool(*args: Any, **kwargs: Any) -> Any:
+                return asyncio.run(f(*args, **kwargs))
+
+            registered[f.__name__] = sync_tool
             return f
 
         return decorator
@@ -216,9 +220,9 @@ def test_recommend_scores_in_range(recommend_result: RecommendationResult) -> No
             assert 0 <= score <= 100, f"{field} = {score} out of range"
 
 
-def test_recommend_slo_overrides(local_client: LocalPlannerClient) -> None:
+async def test_recommend_slo_overrides(local_client: LocalPlannerClient) -> None:
     """SLO overrides are reflected in the returned specification."""
-    result = local_client.recommend(
+    result = await local_client.recommend(
         "unused",
         use_case_override="chatbot_conversational",
         user_count_override=1000,
@@ -232,10 +236,10 @@ def test_recommend_slo_overrides(local_client: LocalPlannerClient) -> None:
     assert result.specification["slo_targets"]["e2e_target_ms"] == 1500
 
 
-def test_recommend_missing_overrides_raises(local_client: LocalPlannerClient) -> None:
+async def test_recommend_missing_overrides_raises(local_client: LocalPlannerClient) -> None:
     """Missing required overrides raises PlannerAPIError(400)."""
     with pytest.raises(PlannerAPIError) as exc_info:
-        local_client.recommend(text="chatbot for 1000 users")
+        await local_client.recommend(text="chatbot for 1000 users")
     assert exc_info.value.status_code == 400
     assert "use_case" in exc_info.value.detail
 
@@ -278,12 +282,12 @@ def test_generate_config_yaml_looks_valid(
 
 
 @pytest.mark.parametrize("category", list(CATEGORY_MAP.keys()))
-def test_generate_config_all_categories(
+async def test_generate_config_all_categories(
     local_client: LocalPlannerClient, category: str
 ) -> None:
     """generate_config works for every valid category."""
     try:
-        result = local_client.generate_config(
+        result = await local_client.generate_config(
             category=category,
             use_case="chatbot_conversational",
             user_count=1000,
@@ -307,10 +311,10 @@ def test_generate_config_all_categories(
     assert len(result.configs) > 0
 
 
-def test_generate_config_invalid_category(local_client: LocalPlannerClient) -> None:
+async def test_generate_config_invalid_category(local_client: LocalPlannerClient) -> None:
     """Invalid category raises PlannerAPIError(400)."""
     with pytest.raises(PlannerAPIError) as exc_info:
-        local_client.generate_config(
+        await local_client.generate_config(
             category="fastest",
             use_case="chatbot_conversational",
             user_count=1000,
@@ -463,9 +467,9 @@ def catalog_client() -> LocalPlannerClient:
 
 
 @pytest.fixture(scope="module")
-def catalog_recommend_result(catalog_client: LocalPlannerClient) -> RecommendationResult:
+async def catalog_recommend_result(catalog_client: LocalPlannerClient) -> RecommendationResult:
     """Recommendation result from catalog-enriched planner."""
-    return catalog_client.recommend(
+    return await catalog_client.recommend(
         "unused",
         use_case_override="chatbot_conversational",
         user_count_override=1000,
@@ -474,10 +478,12 @@ def catalog_recommend_result(catalog_client: LocalPlannerClient) -> Recommendati
 
 
 @pytest.fixture(scope="module")
-def catalog_deploy_result(catalog_client: LocalPlannerClient) -> DeploymentConfigResult | None:
+async def catalog_deploy_result(
+    catalog_client: LocalPlannerClient,
+) -> DeploymentConfigResult | None:
     """Deployment config result from catalog-enriched planner."""
     try:
-        return catalog_client.generate_config(
+        return await catalog_client.generate_config(
             category="balanced",
             use_case="chatbot_conversational",
             user_count=1000,
@@ -557,12 +563,12 @@ class TestModelCatalogSync:
         assert any("inferenceservice" in k.lower() for k in catalog_deploy_result.configs)
 
     @pytest.mark.parametrize("category", list(CATEGORY_MAP.keys()))
-    def test_catalog_deploy_all_categories(
+    async def test_catalog_deploy_all_categories(
         self, catalog_client: LocalPlannerClient, category: str
     ) -> None:
         """generate_config works for every valid category with catalog data."""
         try:
-            result = catalog_client.generate_config(
+            result = await catalog_client.generate_config(
                 category=category,
                 use_case="chatbot_conversational",
                 user_count=1000,

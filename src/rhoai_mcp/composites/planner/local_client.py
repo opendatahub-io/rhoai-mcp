@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -73,7 +74,7 @@ class LocalPlannerClient:
             )
             self._planner.load_bundled_benchmarks()
 
-    def recommend(
+    async def recommend(
         self,
         text: str,  # noqa: ARG002
         use_case_override: str | None = None,
@@ -100,7 +101,7 @@ class LocalPlannerClient:
                 "Intent extraction from text is not supported in local mode.",
             )
 
-        try:
+        def _run() -> RecommendationResult:
             intent = DeploymentIntent(
                 use_case=use_case_override,
                 user_count=user_count_override,
@@ -169,6 +170,8 @@ class LocalPlannerClient:
                 configs_after_filters=ranked.configs_after_filters,
             )
 
+        try:
+            return await asyncio.to_thread(_run)
         except PlannerAPIError:
             raise
         except ValueError as e:
@@ -176,7 +179,7 @@ class LocalPlannerClient:
         except PlannerError as e:
             raise PlannerAPIError(status_code=502, detail=str(e)) from e
 
-    def generate_config(
+    async def generate_config(
         self,
         category: str,
         use_case: str,
@@ -202,7 +205,7 @@ class LocalPlannerClient:
                 detail=f"Invalid category '{category}'. Valid: {', '.join(CATEGORY_MAP)}",
             )
 
-        try:
+        def _run() -> DeploymentConfigResult:
             intent = DeploymentIntent(
                 use_case=use_case,
                 user_count=user_count,
@@ -288,6 +291,8 @@ class LocalPlannerClient:
                 configs=bundle.files,
             )
 
+        try:
+            return await asyncio.to_thread(_run)
         except PlannerAPIError:
             raise
         except ValueError as e:

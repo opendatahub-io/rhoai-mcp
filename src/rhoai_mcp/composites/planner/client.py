@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 import httpx
+from httpx import ConnectError, HTTPStatusError, RequestError, TimeoutException
 
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
@@ -109,7 +110,7 @@ class PlannerClient:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
 
-    def _request(
+    async def _request(
         self,
         method: str,
         path: str,
@@ -119,12 +120,12 @@ class PlannerClient:
         """Make an HTTP request to Planner."""
         url = f"{self._base_url}{path}"
         try:
-            with httpx.Client(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
                 kwargs: dict[str, Any] = {"params": params}
                 if method.upper() in ("POST", "PUT", "PATCH"):
                     kwargs["json"] = json
                 http_method = getattr(client, method.lower())
-                response = http_method(url, **kwargs)
+                response = await http_method(url, **kwargs)
                 response.raise_for_status()
                 try:
                     return response.json()  # type: ignore[no-any-return]
@@ -133,23 +134,23 @@ class PlannerClient:
                         status_code=502,
                         detail="Planner returned invalid JSON",
                     ) from e
-        except httpx.TimeoutException as e:
+        except TimeoutException as e:
             raise PlannerConnectionError(
                 f"Planner request timed out at {self._base_url}{path}"
             ) from e
-        except httpx.ConnectError as e:
+        except ConnectError as e:
             raise PlannerConnectionError(f"Planner service unavailable at {self._base_url}") from e
-        except httpx.RequestError as e:
+        except RequestError as e:
             raise PlannerConnectionError(f"Planner request failed: {type(e).__name__}") from e
-        except httpx.HTTPStatusError as e:
+        except HTTPStatusError as e:
             raise PlannerAPIError(
                 status_code=e.response.status_code,
                 detail=e.response.text,
             ) from e
 
-    def extract_intent(self, text: str) -> DeploymentIntent:
+    async def extract_intent(self, text: str) -> DeploymentIntent:
         """Extract deployment intent from natural language."""
-        data = self._request("POST", "/api/v1/extract", json={"text": text})
+        data = await self._request("POST", "/api/v1/extract", json={"text": text})
         try:
             return DeploymentIntent(**data)
         except Exception as e:
@@ -158,31 +159,31 @@ class PlannerClient:
                 detail=f"Planner returned invalid intent response: {type(e).__name__}",
             ) from e
 
-    def get_slo_defaults(self, use_case: str) -> dict[str, Any]:
+    async def get_slo_defaults(self, use_case: str) -> dict[str, Any]:
         """Get SLO default values for a use case."""
-        return self._request("GET", f"/api/v1/slo-defaults/{use_case}")
+        return await self._request("GET", f"/api/v1/slo-defaults/{use_case}")
 
-    def get_workload_profile(self, use_case: str) -> dict[str, Any]:
+    async def get_workload_profile(self, use_case: str) -> dict[str, Any]:
         """Get workload profile for a use case."""
-        return self._request("GET", f"/api/v1/workload-profile/{use_case}")
+        return await self._request("GET", f"/api/v1/workload-profile/{use_case}")
 
-    def get_expected_rps(self, use_case: str, user_count: int) -> dict[str, Any]:
+    async def get_expected_rps(self, use_case: str, user_count: int) -> dict[str, Any]:
         """Calculate expected RPS for a use case and user count."""
-        return self._request(
+        return await self._request(
             "GET",
             f"/api/v1/expected-rps/{use_case}",
             params={"user_count": user_count},
         )
 
-    def generate_specification(self, intent: DeploymentIntent) -> dict[str, Any]:
+    async def generate_specification(self, intent: DeploymentIntent) -> dict[str, Any]:
         """Generate a deployment specification from a deployment intent."""
-        return self._request(
+        return await self._request(
             "POST",
             "/api/v1/generate-specification",
             json=intent.model_dump(),
         )
 
-    def generate_recommendations(
+    async def generate_recommendations(
         self,
         specification: dict[str, Any],
         min_quality: float | None = None,
@@ -198,16 +199,16 @@ class PlannerClient:
             payload["min_quality"] = min_quality
         if max_cost is not None:
             payload["max_cost"] = max_cost
-        return self._request("POST", "/api/v1/generate-recommendations", json=payload)
+        return await self._request("POST", "/api/v1/generate-recommendations", json=payload)
 
-    def generate_deployment(
+    async def generate_deployment(
         self,
         configuration: dict[str, Any],
         namespace: str = "default",
         stack: str = "vllm",
     ) -> dict[str, Any]:
         """Generate deployment bundle from a deployment configuration."""
-        return self._request(
+        return await self._request(
             "POST",
             "/api/v1/generate-deployment",
             json={
@@ -217,7 +218,7 @@ class PlannerClient:
             },
         )
 
-    def recommend(
+    async def recommend(
         self,
         text: str,
         use_case_override: str | None = None,
@@ -252,7 +253,7 @@ class PlannerClient:
                 preferred_gpu_types=gpu_types_override,
             )
         else:
-            intent = self.extract_intent(text)
+            intent = await self.extract_intent(text)
             intent_for_spec = DeploymentIntent(
                 use_case=(use_case_override if use_case_override is not None else intent.use_case),
                 user_count=(
@@ -273,7 +274,7 @@ class PlannerClient:
             )
 
         # Step 3: Generate specification
-        spec_data = self.generate_specification(intent_for_spec)
+        spec_data = await self.generate_specification(intent_for_spec)
 
         # Step 4: Apply SLO overrides on top of generated specification.
         # Shallow-copy mutable sub-dicts so generate_specification's result is not mutated.
@@ -299,7 +300,7 @@ class PlannerClient:
             _apply_priority_overrides(spec_data, priority_weights)
 
         # Step 5: Get recommendations
-        ranked = self.generate_recommendations(
+        ranked = await self.generate_recommendations(
             specification=spec_data,
             min_quality=min_quality,
             max_cost=max_cost,
@@ -363,7 +364,7 @@ class PlannerClient:
             configs_after_filters=after_filters,
         )
 
-    def generate_config(
+    async def generate_config(
         self,
         category: str,
         use_case: str,
@@ -403,7 +404,7 @@ class PlannerClient:
             user_count=user_count,
             preferred_gpu_types=preferred_gpu_types or [],
         )
-        spec_data = self.generate_specification(intent)
+        spec_data = await self.generate_specification(intent)
 
         # Apply explicit SLO targets.
         # Shallow-copy mutable sub-dicts so generate_specification's result is not mutated.
@@ -445,7 +446,7 @@ class PlannerClient:
             _apply_priority_overrides(spec_data, priority_weights)
 
         # Step 3: Get ranked recommendations
-        ranked = self.generate_recommendations(
+        ranked = await self.generate_recommendations(
             specification=spec_data,
             min_quality=min_quality,
             max_cost=max_cost,
@@ -478,7 +479,7 @@ class PlannerClient:
                 "e2e_target_ms": e2e_target_ms,
             }
 
-        bundle = self.generate_deployment(configuration, namespace=namespace)
+        bundle = await self.generate_deployment(configuration, namespace=namespace)
 
         files = bundle.get("files", {})
         if not files:
@@ -503,8 +504,10 @@ class PlannerClient:
     def health_check(self) -> tuple[bool, str]:
         """Check if Planner service is available."""
         try:
-            self._request("GET", "/health")
+            with httpx.Client(timeout=self._timeout) as client:
+                response = client.get(f"{self._base_url}/health", params=None)
+                response.raise_for_status()
             return True, "Planner available"
-        except (PlannerConnectionError, PlannerAPIError) as e:
+        except Exception as e:
             logger.debug("Planner health check failed (%s)", type(e).__name__)
             return False, "Planner unavailable"

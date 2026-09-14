@@ -320,6 +320,21 @@ class PlannerClient:
                 detail=f"Planner ranking response missing expected field: {e}",
             ) from e
 
+        # Hard-filter by GPU type when the caller specified preferred_gpu_types.
+        # The planner treats it as a scoring hint; enforce it as a constraint here.
+        if gpu_types_override:
+            allowed = set(gpu_types_override)
+
+            def _gpu_matches(rec_data: dict[str, Any]) -> bool:
+                gpu_config = rec_data.get("gpu_config") or {}
+                gpu_type = gpu_config.get("gpu_type") if isinstance(gpu_config, dict) else None
+                return gpu_type in allowed
+
+            balanced_list = [r for r in balanced_list if _gpu_matches(r)]
+            cost_list = [r for r in cost_list if _gpu_matches(r)]
+            latency_list = [r for r in latency_list if _gpu_matches(r)]
+            quality_list = [r for r in quality_list if _gpu_matches(r)]
+
         try:
             top_balanced = _parse_recommendation(balanced_list[0]) if balanced_list else None
             top_cost = _parse_recommendation(cost_list[0]) if cost_list else None
@@ -488,11 +503,18 @@ class PlannerClient:
                 detail="Planner generated no config files",
             )
 
+        model_id = recommendation.get("model_id")
+        model_uri = recommendation.get("model_uri")
+        gpu_config = recommendation.get("gpu_config")
+
         try:
             return DeploymentConfigResult(
                 deployment_id=bundle["deployment_id"],
                 namespace=bundle["namespace"],
                 model_name=model_name,
+                model_id=model_id,
+                model_uri=model_uri,
+                gpu_config=gpu_config,
                 configs=files,
             )
         except KeyError as e:
@@ -511,3 +533,7 @@ class PlannerClient:
         except (TimeoutException, ConnectError, RequestError, HTTPStatusError) as e:
             logger.debug("Planner health check failed (%s)", type(e).__name__)
             return False, "Planner unavailable"
+    async def list_use_cases(self) -> dict[str, Any]:
+        """List all supported use cases with descriptions."""
+        return await self._request("GET", "/api/v1/use-cases")
+

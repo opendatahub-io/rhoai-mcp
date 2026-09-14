@@ -109,6 +109,9 @@ class DeploymentConfigResult(BaseModel):
     deployment_id: str = Field(..., description="Generated deployment identifier")
     namespace: str = Field(..., description="Target Kubernetes namespace")
     model_name: str | None = Field(None, description="Human-readable model name")
+    model_id: str | None = Field(None, description="Model identifier (HuggingFace format)")
+    model_uri: str | None = Field(None, description="Model artifact URI for storage_uri")
+    gpu_config: dict[str, Any] | None = Field(None, description="GPU configuration from recommendation")
     configs: dict[str, str] = Field(..., description="Config type to YAML content mapping")
 
 

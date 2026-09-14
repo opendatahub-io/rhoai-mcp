@@ -431,5 +431,519 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         }
         if result.model_name:
             response["model"] = result.model_name
+        if result.model_id:
+            response["model_id"] = result.model_id
+        if result.model_uri:
+            response["model_uri"] = result.model_uri
+        if result.gpu_config:
+            response["gpu_config"] = result.gpu_config
 
         return response
+
+    @mcp.tool()
+    async def get_use_case_defaults(use_case: str) -> dict[str, Any]:
+        """Get SLO targets and workload profile for a use case.
+
+        Returns the benchmark-backed defaults that the planner uses when
+        building deployment specifications for a given use case. Useful for
+        showing customers the derived workload profile before running
+        recommendations, so they can review and adjust SLO targets.
+
+        Args:
+            use_case: The use case identifier. Valid values:
+                chatbot_conversational, code_completion, code_generation_detailed,
+                translation, content_generation, summarization_short,
+                document_analysis_rag, long_document_summarization,
+                research_legal_analysis.
+
+        Returns:
+            Combined SLO targets (TTFT, ITL, E2E with min/max/default) and
+            workload profile (prompt tokens, output tokens, active fraction,
+            requests per user per minute) for the use case.
+        """
+        if use_case not in VALID_USE_CASES:
+            valid = ", ".join(sorted(VALID_USE_CASES))
+            return {"error": f"Invalid use_case '{use_case}'. Valid values: {valid}"}
+
+        client = await _get_client()
+        if isinstance(client, LocalPlannerClient):
+            return {"error": "get_use_case_defaults requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"}
+
+        try:
+            slo_data = await client.get_slo_defaults(use_case)
+            workload_data = await client.get_workload_profile(use_case)
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
+            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
+            return {"error": "Planner API error", "status_code": e.status_code}
+
+        slo_defaults = slo_data.get("slo_defaults", {})
+        workload_profile = workload_data.get("workload_profile", {})
+
+        return {
+            "use_case": use_case,
+            "description": slo_defaults.get("description", workload_data.get("description", "")),
+            "slo_targets": {
+                "ttft_ms": slo_defaults.get("ttft_ms", {}),
+                "itl_ms": slo_defaults.get("itl_ms", {}),
+                "e2e_ms": slo_defaults.get("e2e_ms", {}),
+            },
+            "workload": {
+                "prompt_tokens": workload_profile.get("prompt_tokens"),
+                "output_tokens": workload_profile.get("output_tokens"),
+                "active_fraction": workload_profile.get("active_fraction"),
+                "requests_per_active_user_per_min": workload_profile.get(
+                    "requests_per_active_user_per_min"
+                ),
+            },
+        }
+
+    @mcp.tool()
+    async def get_expected_rps(use_case: str, user_count: int) -> dict[str, Any]:
+        """Calculate expected and peak requests per second for a use case and user count.
+
+        Uses the planner's research-backed workload distribution parameters
+        (active fraction, request rate per active user) to estimate the traffic
+        the deployment will need to handle. Useful for validating the workload
+        profile before getting recommendations.
+
+        Args:
+            use_case: The use case identifier. Valid values:
+                chatbot_conversational, code_completion, code_generation_detailed,
+                translation, content_generation, summarization_short,
+                document_analysis_rag, long_document_summarization,
+                research_legal_analysis.
+            user_count: Number of concurrent users.
+
+        Returns:
+            Expected RPS, peak RPS, and expected concurrent users.
+        """
+        if use_case not in VALID_USE_CASES:
+            valid = ", ".join(sorted(VALID_USE_CASES))
+            return {"error": f"Invalid use_case '{use_case}'. Valid values: {valid}"}
+
+        if user_count <= 0:
+            return {"error": "user_count must be > 0"}
+
+        client = await _get_client()
+        if isinstance(client, LocalPlannerClient):
+            return {"error": "get_expected_rps requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"}
+
+        try:
+            data = await client.get_expected_rps(use_case, user_count)
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
+            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
+            return {"error": "Planner API error", "status_code": e.status_code}
+
+        return {
+            "use_case": use_case,
+            "user_count": user_count,
+            "expected_rps": data.get("expected_rps"),
+            "peak_rps": data.get("peak_rps"),
+            "expected_concurrent_users": data.get("expected_concurrent_users"),
+        }
+
+    @mcp.tool()
+    async def list_use_cases() -> dict[str, Any]:
+        """List all supported use cases with plain-English descriptions.
+
+        Returns the 9 use case identifiers the planner recognizes, with
+        descriptions that explain what kind of workload each covers.
+        Useful for confirming use case mappings with the customer before
+        running recommendations.
+
+        Returns:
+            List of use case objects with id and description fields,
+            plus a count.
+        """
+        client = await _get_client()
+        if isinstance(client, LocalPlannerClient):
+            return {"error": "list_use_cases requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"}
+
+        try:
+            data = await client.list_use_cases()
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
+            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
+            return {"error": "Planner API error", "status_code": e.status_code}
+
+        use_cases_raw = data.get("use_cases", {})
+        use_cases = [
+            {"id": uc_id, "description": uc.get("description", "")}
+            for uc_id, uc in use_cases_raw.items()
+        ]
+
+        return {"use_cases": use_cases, "count": len(use_cases)}
+
+    @mcp.tool()
+    async def plan_deployment(
+        category: str,
+        namespace: str,
+        use_case: str,
+        user_count: int,
+        prompt_tokens: int,
+        output_tokens: int,
+        expected_qps: float,
+        ttft_target_ms: int,
+        itl_target_ms: int,
+        e2e_target_ms: int,
+        preferred_gpu_types: list[str] | None = None,
+        optimization_profile: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate a deployment plan for the chosen recommendation.
+
+        Calls the Planner to produce the full deployment configuration for
+        the selected category, then validates cluster readiness: checks that
+        a vLLM serving runtime is available (or identifies which template to
+        create), and surfaces any pre-conditions the customer must resolve
+        before deployment can proceed.
+
+        Call this after the customer confirms their preferred configuration
+        from recommend_model. The returned plan is for human review before
+        execute_deployment is called.
+
+        Args:
+            category: Chosen recommendation slot. Valid values:
+                balanced, cost, performance, quality.
+            namespace: Target RHOAI project namespace.
+            use_case: Use case from the recommend_model specification.
+            user_count: User count from the recommend_model specification.
+            prompt_tokens: Prompt tokens from the recommend_model specification.
+            output_tokens: Output tokens from the recommend_model specification.
+            expected_qps: Expected QPS from the recommend_model specification.
+            ttft_target_ms: TTFT SLO target in milliseconds.
+            itl_target_ms: ITL SLO target in milliseconds.
+            e2e_target_ms: E2E SLO target in milliseconds.
+            preferred_gpu_types: GPU type filter (cluster GPU types from Phase 3).
+                Valid: L4, A100-40, A100-80, H100, H200, B200.
+            optimization_profile: Scoring profile. Valid values:
+                balanced, optimize_latency, optimize_cost, optimize_quality.
+
+        Returns:
+            Deployment plan with model, GPU config, runtime readiness,
+            storage URI (if resolvable), YAML configs for review, and
+            any issues or warnings that must be addressed before deploying.
+        """
+        # Validate category
+        if category not in VALID_CATEGORIES:
+            valid = ", ".join(sorted(VALID_CATEGORIES))
+            return {"error": f"Invalid category '{category}'. Valid values: {valid}"}
+
+        # Validate use_case
+        if use_case not in VALID_USE_CASES:
+            valid = ", ".join(sorted(VALID_USE_CASES))
+            return {"error": f"Invalid use_case '{use_case}'. Valid values: {valid}"}
+
+        if user_count <= 0:
+            return {"error": "user_count must be > 0"}
+
+        for field_name, value in {
+            "prompt_tokens": prompt_tokens,
+            "output_tokens": output_tokens,
+        }.items():
+            if value <= 0:
+                return {"error": f"{field_name} must be > 0"}
+
+        if expected_qps <= 0:
+            return {"error": "expected_qps must be > 0"}
+
+        for field_name, value in {
+            "ttft_target_ms": ttft_target_ms,
+            "itl_target_ms": itl_target_ms,
+            "e2e_target_ms": e2e_target_ms,
+        }.items():
+            if value <= 0:
+                return {"error": f"{field_name} must be > 0"}
+
+        if not _K8S_NAMESPACE_RE.match(namespace):
+            return {
+                "error": "namespace must be a valid DNS-1123 label "
+                "(lowercase alphanumeric or '-', 1-63 chars, start/end alphanumeric)",
+            }
+
+        if preferred_gpu_types:
+            invalid = sorted(set(preferred_gpu_types) - VALID_GPU_TYPES)
+            if invalid:
+                valid = ", ".join(sorted(VALID_GPU_TYPES))
+                return {
+                    "error": f"Invalid preferred_gpu_types {invalid}. Valid values: {valid}",
+                }
+
+        if optimization_profile is not None and optimization_profile not in OPTIMIZATION_PROFILES:
+            valid = ", ".join(sorted(OPTIMIZATION_PROFILES))
+            return {
+                "error": f"Invalid optimization_profile '{optimization_profile}'. "
+                f"Valid values: {valid}",
+            }
+
+        weights = OPTIMIZATION_PROFILES.get(optimization_profile) if optimization_profile else None
+
+        try:
+            config_result = await (await _get_client()).generate_config(
+                category=category,
+                use_case=use_case,
+                user_count=user_count,
+                prompt_tokens=prompt_tokens,
+                output_tokens=output_tokens,
+                expected_qps=expected_qps,
+                ttft_target_ms=ttft_target_ms,
+                itl_target_ms=itl_target_ms,
+                e2e_target_ms=e2e_target_ms,
+                namespace=namespace,
+                preferred_gpu_types=preferred_gpu_types,
+                priority_weights=weights,
+            )
+        except PlannerConnectionError as e:
+            logger.warning("Planner connection error")
+            logger.debug("Planner connection error detail: %s", e)
+            return {"error": "Planner unavailable", "hint": "Planner may be warming up. Retry shortly."}
+        except PlannerAPIError as e:
+            logger.warning("Planner API error status=%s", e.status_code)
+            logger.debug("Planner API error detail (truncated): %s", str(e.detail)[:512])
+            return {"error": "Planner API error", "status_code": e.status_code}
+
+        # Extract GPU config
+        gpu_config = config_result.gpu_config or {}
+        gpu_count = gpu_config.get("gpu_count", 1) if isinstance(gpu_config, dict) else 1
+        gpu_type = gpu_config.get("gpu_type", "unknown") if isinstance(gpu_config, dict) else "unknown"
+        tensor_parallel = gpu_config.get("tensor_parallel", 1) if isinstance(gpu_config, dict) else 1
+        replicas = gpu_config.get("replicas", 1) if isinstance(gpu_config, dict) else 1
+
+        # Estimate memory per replica from GPU type
+        memory_per_replica = _gpu_memory_for_type(gpu_type, gpu_count)
+
+        # Resolve storage URI from model_uri returned by planner
+        storage_uri: str | None = config_result.model_uri
+
+        # Check serving runtime availability in the namespace
+        issues: list[str] = []
+        warnings: list[str] = []
+        runtime: str | None = None
+        runtime_needs_creation = False
+        template_to_instantiate: str | None = None
+
+        try:
+            from rhoai_mcp.domains.inference.client import InferenceClient
+
+            inference_client = InferenceClient(server.k8s)
+            runtimes = inference_client.list_serving_runtimes(namespace, include_templates=True)
+
+            # Look for a vLLM runtime
+            for rt in runtimes:
+                name = rt.get("name", "")
+                if "vllm" in name.lower():
+                    runtime = name
+                    if rt.get("requires_instantiation"):
+                        runtime_needs_creation = True
+                        template_to_instantiate = rt.get("template_name", name)
+                    break
+
+            if runtime is None:
+                issues.append(
+                    f"No vLLM serving runtime found in namespace '{namespace}'. "
+                    "Use list_serving_runtimes to check available options."
+                )
+        except Exception as e:
+            logger.warning("Could not check serving runtimes: %s", type(e).__name__)
+            warnings.append(f"Could not verify runtime availability: {type(e).__name__}")
+
+        if storage_uri is None:
+            warnings.append(
+                "Model storage URI could not be resolved automatically. "
+                "You will need to provide storage_uri (s3://, pvc://, or oci://) "
+                "when calling execute_deployment."
+            )
+
+        ready = len(issues) == 0 and runtime is not None
+
+        return {
+            "ready": ready,
+            "model_name": config_result.model_name,
+            "model_id": config_result.model_id,
+            "namespace": namespace,
+            "runtime": runtime,
+            "runtime_needs_creation": runtime_needs_creation,
+            "template_to_instantiate": template_to_instantiate,
+            "storage_uri": storage_uri,
+            "gpu_count": gpu_count,
+            "gpu_type": gpu_type,
+            "tensor_parallel": tensor_parallel,
+            "replicas": replicas,
+            "memory_per_replica": memory_per_replica,
+            "issues": issues if issues else None,
+            "warnings": warnings if warnings else None,
+            "configs": config_result.configs,
+        }
+
+    @mcp.tool()
+    async def execute_deployment(
+        model_id: str,
+        namespace: str,
+        runtime: str,
+        storage_uri: str,
+        gpu_count: int,
+        gpu_type: str,
+        tensor_parallel: int = 1,  # noqa: ARG001 — accepted for API consistency, not passed to k8s
+        replicas: int = 1,
+        display_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Deploy the chosen model configuration to RHOAI.
+
+        Creates a KServe InferenceService using the parameters resolved
+        by plan_deployment. Should only be called after the customer has
+        reviewed and confirmed the deployment plan.
+
+        The InferenceService may take several minutes to reach Ready state.
+        After calling this tool, use get_inference_service to monitor
+        progress and get_model_endpoint once the model is ready.
+
+        Args:
+            model_id: HuggingFace model ID (e.g., "meta-llama/Llama-3.1-8B-Instruct").
+                Used to generate the deployment name.
+            namespace: Target RHOAI project namespace.
+            runtime: Serving runtime name (from plan_deployment).
+            storage_uri: Model location (s3://, pvc://, or oci://).
+            gpu_count: Total number of GPUs per replica.
+            gpu_type: GPU type (e.g., H100, A100-80). Used for memory estimation.
+            tensor_parallel: Tensor parallelism degree (default: 1).
+            replicas: Number of replicas (default: 1).
+            display_name: Human-readable display name for the deployment.
+
+        Returns:
+            Deployment status including name, namespace, and current state.
+            Check get_inference_service for readiness; get_model_endpoint for the URL.
+        """
+        allowed, reason = server.config.is_operation_allowed("create")
+        if not allowed:
+            return {"error": reason}
+
+        if gpu_count <= 0:
+            return {"error": "gpu_count must be > 0"}
+
+        if replicas <= 0:
+            return {"error": "replicas must be > 0"}
+
+        if not _K8S_NAMESPACE_RE.match(namespace):
+            return {
+                "error": "namespace must be a valid DNS-1123 label "
+                "(lowercase alphanumeric or '-', 1-63 chars, start/end alphanumeric)",
+            }
+
+        from rhoai_mcp.domains.inference.client import InferenceClient
+        from rhoai_mcp.domains.inference.models import InferenceServiceCreate
+
+        name = _make_deployment_name(model_id)
+        memory_per_replica = _gpu_memory_for_type(gpu_type, gpu_count)
+
+        # CPU: LLM serving is GPU-bound; allocate generous CPU for pre/post-processing
+        cpu_request = str(min(gpu_count * 4, 16))
+        cpu_limit = str(min(gpu_count * 8, 32))
+
+        request = InferenceServiceCreate(
+            name=name,
+            namespace=namespace,
+            display_name=display_name or name,
+            runtime=runtime,
+            model_format="pytorch",
+            storage_uri=storage_uri,
+            min_replicas=replicas,
+            max_replicas=replicas,
+            cpu_request=cpu_request,
+            cpu_limit=cpu_limit,
+            memory_request=memory_per_replica,
+            memory_limit=memory_per_replica,
+            gpu_count=gpu_count,
+        )
+
+        try:
+            inference_client = InferenceClient(server.k8s)
+            isvc = inference_client.deploy_model(request)
+        except Exception as e:
+            logger.warning("deploy_model failed: %s", type(e).__name__)
+            return {
+                "deployed": False,
+                "error": str(e),
+                "model_id": model_id,
+                "namespace": namespace,
+            }
+
+        # Short poll: give the InferenceService a moment to transition
+        status = isvc.status.value
+        for _ in range(3):
+            await asyncio.sleep(5)
+            try:
+                updated = inference_client.get_inference_service(name, namespace)
+                status = updated.status.value
+                if status == "Ready":
+                    break
+            except Exception:
+                break
+
+        result: dict[str, Any] = {
+            "deployed": True,
+            "name": name,
+            "namespace": namespace,
+            "status": status,
+            "_source": isvc.metadata.to_source_dict(),
+        }
+
+        if status == "Ready":
+            result["message"] = (
+                f"Model '{name}' is Ready. Call get_model_endpoint to retrieve the inference URL."
+            )
+        else:
+            result["message"] = (
+                f"Model '{name}' deployment initiated (status: {status}). "
+                "It typically takes 3–10 minutes to become Ready. "
+                "Call get_inference_service to monitor progress."
+            )
+
+        return result
+
+
+# GPU VRAM (GiB) per card — used to size memory requests
+_GPU_VRAM_GIB: dict[str, int] = {
+    "L4": 24,
+    "A100-40": 40,
+    "A100-80": 80,
+    "H100": 80,
+    "H200": 141,
+    "B200": 192,
+}
+
+
+def _gpu_memory_for_type(gpu_type: str, gpu_count: int) -> str:
+    """Return a Kubernetes memory string for gpu_count GPUs of gpu_type.
+
+    Matches on the planner GPU type strings (H100, A100-80, etc.) and
+    falls back to 80 GiB per GPU for unknown types.
+    """
+    vram = 80  # conservative default
+    for key, gib in _GPU_VRAM_GIB.items():
+        if key.upper() in gpu_type.upper():
+            vram = gib
+            break
+    return f"{vram * gpu_count}Gi"
+
+
+def _make_deployment_name(model_id: str) -> str:
+    """Generate a DNS-1123 compatible deployment name from a model ID."""
+    name = model_id.split("/")[-1] if "/" in model_id else model_id
+    name = re.sub(r"[^a-z0-9-]", "-", name.lower())
+    name = re.sub(r"-+", "-", name).strip("-") or "model"
+    if not name[0].isalpha():
+        name = f"model-{name}"
+    return name[:50]

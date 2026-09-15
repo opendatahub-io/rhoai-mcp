@@ -858,6 +858,12 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         if gpu_count <= 0:
             return {"error": "gpu_count must be > 0"}
 
+        if tensor_parallel > gpu_count:
+            return {
+                "error": f"tensor_parallel ({tensor_parallel}) exceeds gpu_count ({gpu_count}); "
+                "vLLM requires at least one GPU per tensor-parallel rank"
+            }
+
         if replicas <= 0:
             return {"error": "replicas must be > 0"}
 

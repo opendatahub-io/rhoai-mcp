@@ -116,7 +116,9 @@ class LCSClient:
                 data = response.json()
                 return self._parse_response(task, data)
 
-        raise last_error  # type: ignore[misc]
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("query failed without capturing a retryable error")
 
     async def follow_up(
         self,

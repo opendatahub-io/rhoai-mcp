@@ -21,6 +21,7 @@ import pytest
 
 from evals.config import EvalConfig
 from evals.deepeval_helpers import lcs_result_to_conversational_test_case
+from evals.lcs_client import LCSClient, LCSResult
 from evals.metrics.config import create_multi_turn_mcp_use_metric, create_task_completion_metric
 
 if TYPE_CHECKING:
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 
     from deepeval.test_case import MCPServer
 
-    from evals.lcs_client import LCSClient, LCSResult
+    from evals.lcs_client import LCSClient
 
 
 EXPECTED_COLUMNS = {"Balanced", "Cost", "Performance", "Quality"}
@@ -111,7 +112,16 @@ class TestNavigatorTableCompleteness:
 
         _assert_table_completeness(result.final_output)
 
-        test_case = lcs_result_to_conversational_test_case(result, mcp_server)
+        # Build a merged result so the metric sees the full two-turn conversation.
+        merged = LCSResult(
+            task=turn1.task,
+            final_output=result.final_output,
+            tool_calls=turn1.tool_calls + result.tool_calls,
+            messages=turn1.messages + result.messages,
+            turns=turn1.turns + result.turns,
+            conversation_id=result.conversation_id,
+        )
+        test_case = lcs_result_to_conversational_test_case(merged, mcp_server)
         metrics = [
             create_multi_turn_mcp_use_metric(eval_config),
             create_task_completion_metric(eval_config),
@@ -119,7 +129,7 @@ class TestNavigatorTableCompleteness:
 
         eval_result = evaluate_and_record(
             scenario="navigator_table_completeness",
-            lcs_result=result,
+            lcs_result=merged,
             test_cases=[test_case],
             metrics=metrics,
         )

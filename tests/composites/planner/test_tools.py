@@ -1583,6 +1583,80 @@ class TestPlanDeploymentTool:
         assert result["issues"] is not None
         assert any("model_id" in issue for issue in result["issues"])
 
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_suggested_deploy_params_populated_when_ready(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """suggested_deploy_params is populated when model_id, runtime, and storage_uri are set."""
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        params = result["suggested_deploy_params"]
+        assert params is not None
+        assert params["model_id"] == "meta-llama/Llama-3.1-70B-Instruct"
+        assert params["namespace"] == "my-project"
+        assert params["runtime"] == "vllm-cuda-runtime"
+        assert params["storage_uri"] == "oci://quay.io/rhoai/llama-3-1-70b:latest"
+        assert params["gpu_count"] == 2
+        assert params["gpu_type"] == "H100"
+        assert params["tensor_parallel"] == 2
+        assert params["replicas"] == 1
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_suggested_deploy_params_none_when_storage_missing(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """suggested_deploy_params is None when storage_uri cannot be resolved."""
+        no_storage_result = DeploymentConfigResult(
+            deployment_id="chatbot-llama-20260322143022",
+            namespace="my-project",
+            model_name="Llama 3.1 70B",
+            model_id="meta-llama/Llama-3.1-70B-Instruct",
+            model_uri=None,
+            gpu_config={"gpu_type": "NVIDIA-H100", "gpu_count": 2, "tensor_parallel": 2, "replicas": 1},
+            configs={"inferenceservice": "apiVersion: serving.kserve.io/v1beta1"},
+        )
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=no_storage_result)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["suggested_deploy_params"] is None
+
 
 class TestExecuteDeploymentTool:
     """Tests for execute_deployment tool."""

@@ -291,21 +291,16 @@ If this fails, report the error and stop. Do not proceed to deployment.
 
 **Step 2 — Deploy.**
 
-Call:
+Use `plan_deployment`'s `suggested_deploy_params` as the basis for the call, adding `display_name`:
 
 ```
 execute_deployment(
-    model_id="<model_id>",
-    namespace="<namespace>",
-    runtime="<runtime>",
-    storage_uri="<storage_uri>",
-    gpu_count=<gpu_count>,
-    gpu_type="<gpu_type>",
-    tensor_parallel=<tensor_parallel>,
-    replicas=<replicas>,
+    **suggested_deploy_params,
     display_name="<model_name or model_id>"
 )
 ```
+
+If `suggested_deploy_params` is `None` (storage URI was not resolved), ask the customer to provide it before proceeding.
 
 Tell the customer: "Deploying [model_name]…"
 

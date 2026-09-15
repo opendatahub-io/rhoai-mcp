@@ -736,9 +736,10 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         # Extract GPU config
         gpu_config = config_result.gpu_config or {}
         gpu_count = gpu_config.get("gpu_count", 1) if isinstance(gpu_config, dict) else 1
-        gpu_type = (
+        raw_gpu_type = (
             gpu_config.get("gpu_type", "unknown") if isinstance(gpu_config, dict) else "unknown"
         )
+        gpu_type = raw_gpu_type.removeprefix("NVIDIA-") if isinstance(raw_gpu_type, str) else raw_gpu_type
         tensor_parallel = (
             gpu_config.get("tensor_parallel", 1) if isinstance(gpu_config, dict) else 1
         )
@@ -794,6 +795,19 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         ready = len(issues) == 0 and runtime is not None
 
+        suggested_deploy_params: dict[str, Any] | None = None
+        if config_result.model_id and runtime and storage_uri:
+            suggested_deploy_params = {
+                "model_id": config_result.model_id,
+                "namespace": namespace,
+                "runtime": runtime,
+                "storage_uri": storage_uri,
+                "gpu_count": gpu_count,
+                "gpu_type": gpu_type,
+                "tensor_parallel": tensor_parallel,
+                "replicas": replicas,
+            }
+
         return {
             "ready": ready,
             "model_name": config_result.model_name,
@@ -811,6 +825,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             "issues": issues if issues else None,
             "warnings": warnings if warnings else None,
             "configs": config_result.configs,
+            "suggested_deploy_params": suggested_deploy_params,
         }
 
     @mcp.tool()

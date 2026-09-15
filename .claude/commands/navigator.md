@@ -158,7 +158,7 @@ If `gpu_info` is missing or `products` is empty (which may indicate a permission
 > "I wasn't able to read GPU inventory from the cluster — this can happen if the service account doesn't have node-listing permissions. Could you tell me which GPU type your cluster has? (e.g. H100, A100-80, L4) Or if you're not sure, I can show recommendations without a hardware filter."
 
 - If they provide a GPU type → set `cluster_gpu_types` to that value and proceed to Step 2.
-- If they say they don't know → set `cluster_gpu_types = []` and skip to Step 3.
+- If they say they don't know → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`).
 
 **Step 2 — Primary call (cluster-constrained).**
 

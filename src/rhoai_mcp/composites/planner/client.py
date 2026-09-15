@@ -86,6 +86,22 @@ def _apply_priority_overrides(
         priorities[spec_key] = {**entry, "weight": priority_weights[profile_key]}
 
 
+def _gpu_type_matches(rec_data: dict[str, Any], allowed: set[str]) -> bool:
+    """Return True if rec_data's gpu_type (after NVIDIA- normalisation) is in allowed."""
+    gpu_config = rec_data.get("gpu_config") or {}
+    gpu_type = gpu_config.get("gpu_type") if isinstance(gpu_config, dict) else None
+    if not isinstance(gpu_type, str):
+        return False
+    # Planner responses use vendor-prefixed names (e.g. "NVIDIA-H100");
+    # the public API uses short names ("H100"). Normalise before comparing.
+    return gpu_type.removeprefix("NVIDIA-") in allowed
+
+
+def _filter_by_gpu(recs: list[dict[str, Any]], allowed: set[str]) -> list[dict[str, Any]]:
+    """Filter a recommendation list to only those with a GPU type in allowed."""
+    return [r for r in recs if _gpu_type_matches(r, allowed)]
+
+
 class PlannerConnectionError(Exception):
     """Raised when Planner service is unreachable."""
 
@@ -320,6 +336,15 @@ class PlannerClient:
                 detail=f"Planner ranking response missing expected field: {e}",
             ) from e
 
+        # Hard-filter by GPU type when the caller specified preferred_gpu_types.
+        # The planner treats it as a scoring hint; enforce it as a constraint here.
+        if gpu_types_override:
+            allowed = set(gpu_types_override)
+            balanced_list = _filter_by_gpu(balanced_list, allowed)
+            cost_list = _filter_by_gpu(cost_list, allowed)
+            latency_list = _filter_by_gpu(latency_list, allowed)
+            quality_list = _filter_by_gpu(quality_list, allowed)
+
         try:
             top_balanced = _parse_recommendation(balanced_list[0]) if balanced_list else None
             top_cost = _parse_recommendation(cost_list[0]) if cost_list else None
@@ -452,8 +477,10 @@ class PlannerClient:
             max_cost=max_cost,
         )
 
-        # Step 4: Pick top recommendation from category
+        # Step 4: Pick top recommendation from category, filtered to cluster-supported GPUs.
         category_list = ranked.get(category_key, [])
+        if preferred_gpu_types:
+            category_list = _filter_by_gpu(category_list, set(preferred_gpu_types))
         if not category_list:
             raise PlannerAPIError(
                 status_code=404,
@@ -488,11 +515,18 @@ class PlannerClient:
                 detail="Planner generated no config files",
             )
 
+        model_id = recommendation.get("model_id")
+        model_uri = recommendation.get("model_uri")
+        gpu_config = recommendation.get("gpu_config")
+
         try:
             return DeploymentConfigResult(
                 deployment_id=bundle["deployment_id"],
                 namespace=bundle["namespace"],
                 model_name=model_name,
+                model_id=model_id,
+                model_uri=model_uri,
+                gpu_config=gpu_config,
                 configs=files,
             )
         except KeyError as e:
@@ -511,3 +545,7 @@ class PlannerClient:
         except (TimeoutException, ConnectError, RequestError, HTTPStatusError) as e:
             logger.debug("Planner health check failed (%s)", type(e).__name__)
             return False, "Planner unavailable"
+
+    async def list_use_cases(self) -> dict[str, Any]:
+        """List all supported use cases with descriptions."""
+        return await self._request("GET", "/api/v1/use-cases")

@@ -94,6 +94,14 @@ SAMPLE_CONFIG_RESULT = DeploymentConfigResult(
     deployment_id="chatbot-llama-3-1-70b-20260322143022",
     namespace="default",
     model_name="Llama 3.1 70B",
+    model_id="meta-llama/Llama-3.1-70B-Instruct",
+    model_uri="oci://quay.io/rhoai/llama-3-1-70b:latest",
+    gpu_config={
+        "gpu_type": "NVIDIA-H100",
+        "gpu_count": 2,
+        "tensor_parallel": 2,
+        "replicas": 1,
+    },
     configs={
         "inferenceservice": "apiVersion: serving.kserve.io/v1beta1\nkind: InferenceService",
         "autoscaling": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler",
@@ -156,11 +164,20 @@ class TestRecommendModelTool:
         recs = result["recommendations"]
         assert "top_balanced" in recs
         assert recs["top_balanced"]["model"] == "Llama 3.1 70B"
+        assert recs["top_balanced"]["model_id"] == "meta-llama/Llama-3.1-70B-Instruct"
         assert recs["top_balanced"]["score"] == 75.3
+        assert recs["top_balanced"]["ttft_p95_ms"] == 140
+        assert recs["top_balanced"]["e2e_p95_ms"] == 1200
+        assert recs["top_balanced"]["quality_score"] == 78
+        assert recs["top_balanced"]["cost_usd_month"] == 2872.32
         assert "top_performance" in recs
+        assert recs["top_performance"]["ttft_p95_ms"] == 140
+        assert recs["top_performance"]["quality_score"] == 78
         assert "top_cost" in recs
+        assert recs["top_cost"]["cost_usd_month"] == 2872.32
         assert "top_quality" in recs
         assert recs["top_quality"]["score"] == 78
+        assert recs["top_quality"]["quality_score"] == 78
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_with_overrides(self, mock_client_class: MagicMock) -> None:
@@ -1032,6 +1049,810 @@ class TestDeploymentConfigTool:
         mock_client_class.return_value.generate_config.assert_called_once()
         call_kwargs = mock_client_class.return_value.generate_config.call_args.kwargs
         assert call_kwargs["priority_weights"] == {"quality": 2, "price": 8, "latency": 1}
+
+
+class TestGetUseCaseDefaultsTool:
+    """Tests for get_use_case_defaults tool."""
+
+    def test_tool_registration(self) -> None:
+        """get_use_case_defaults tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "get_use_case_defaults" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_successful_response(self, mock_client_class: MagicMock) -> None:
+        """Merges SLO and workload data into a single clean response."""
+        mock_client_class.return_value.get_slo_defaults = AsyncMock(return_value={
+            "success": True,
+            "slo_defaults": {
+                "use_case": "chatbot_conversational",
+                "description": "Conversational AI chatbot",
+                "ttft_ms": {"min": 50, "max": 500, "default": 388},
+                "itl_ms": {"min": 10, "max": 100, "default": 78},
+                "e2e_ms": {"min": 500, "max": 10000, "default": 7875},
+            },
+        })
+        mock_client_class.return_value.get_workload_profile = AsyncMock(return_value={
+            "success": True,
+            "use_case": "chatbot_conversational",
+            "description": "Conversational AI chatbot",
+            "workload_profile": {
+                "prompt_tokens": 512,
+                "output_tokens": 256,
+                "active_fraction": 0.1,
+                "requests_per_active_user_per_min": 2.0,
+            },
+        })
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_use_case_defaults"]
+
+        result = tool(use_case="chatbot_conversational")
+
+        assert "error" not in result
+        assert result["use_case"] == "chatbot_conversational"
+        assert result["description"] == "Conversational AI chatbot"
+        assert result["slo_targets"]["ttft_ms"]["default"] == 388
+        assert result["workload"]["prompt_tokens"] == 512
+        assert result["workload"]["active_fraction"] == 0.1
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_invalid_use_case(self, mock_client_class: MagicMock) -> None:
+        """Invalid use_case returns error without calling client."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_use_case_defaults"]
+
+        result = tool(use_case="invalid_use_case")
+
+        assert "error" in result
+        assert "use_case" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_connection_error(self, mock_client_class: MagicMock) -> None:
+        """Connection error returns error dict with hint."""
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
+
+        mock_client_class.return_value.get_slo_defaults = AsyncMock(
+            side_effect=PlannerConnectionError("Planner service unavailable")
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_use_case_defaults"]
+
+        result = tool(use_case="chatbot_conversational")
+
+        assert "error" in result
+        assert "unavailable" in result["error"].lower()
+        assert "hint" in result
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_api_error(self, mock_client_class: MagicMock) -> None:
+        """Planner API error returns error dict with status code."""
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
+
+        mock_client_class.return_value.get_slo_defaults = AsyncMock(
+            side_effect=PlannerAPIError(status_code=404, detail="Use case not found")
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_use_case_defaults"]
+
+        result = tool(use_case="chatbot_conversational")
+
+        assert "error" in result
+        assert result["status_code"] == 404
+
+
+class TestGetExpectedRpsTool:
+    """Tests for get_expected_rps tool."""
+
+    def test_tool_registration(self) -> None:
+        """get_expected_rps tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "get_expected_rps" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_successful_response(self, mock_client_class: MagicMock) -> None:
+        """Returns expected and peak RPS for the given use case and user count."""
+        mock_client_class.return_value.get_expected_rps = AsyncMock(return_value={
+            "success": True,
+            "use_case": "chatbot_conversational",
+            "user_count": 1000,
+            "workload_params": {"active_fraction": 0.1, "requests_per_active_user_per_min": 2.0, "peak_multiplier": 2.0},
+            "expected_rps": 3.33,
+            "expected_concurrent_users": 100,
+            "peak_rps": 6.67,
+        })
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="chatbot_conversational", user_count=1000)
+
+        assert "error" not in result
+        assert result["use_case"] == "chatbot_conversational"
+        assert result["user_count"] == 1000
+        assert result["expected_rps"] == 3.33
+        assert result["peak_rps"] == 6.67
+        assert result["expected_concurrent_users"] == 100
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_invalid_use_case(self, mock_client_class: MagicMock) -> None:
+        """Invalid use_case returns error without calling client."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="not_a_real_use_case", user_count=500)
+
+        assert "error" in result
+        assert "use_case" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_invalid_user_count(self, mock_client_class: MagicMock) -> None:
+        """user_count <= 0 returns error without calling client."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="chatbot_conversational", user_count=0)
+
+        assert "error" in result
+        assert "user_count" in result["error"]
+        mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_connection_error(self, mock_client_class: MagicMock) -> None:
+        """Connection error returns error dict with hint."""
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
+
+        mock_client_class.return_value.get_expected_rps = AsyncMock(
+            side_effect=PlannerConnectionError("Planner service unavailable")
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="chatbot_conversational", user_count=1000)
+
+        assert "error" in result
+        assert "unavailable" in result["error"].lower()
+        assert "hint" in result
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_api_error(self, mock_client_class: MagicMock) -> None:
+        """API error returns error dict with status code."""
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
+
+        mock_client_class.return_value.get_expected_rps = AsyncMock(
+            side_effect=PlannerAPIError(status_code=500, detail="Internal error")
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["get_expected_rps"]
+
+        result = tool(use_case="chatbot_conversational", user_count=1000)
+
+        assert "error" in result
+        assert result["status_code"] == 500
+
+
+class TestListUseCasesTool:
+    """Tests for list_use_cases tool."""
+
+    def test_tool_registration(self) -> None:
+        """list_use_cases tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        assert "list_use_cases" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_successful_response(self, mock_client_class: MagicMock) -> None:
+        """Returns use case list with id and description."""
+        mock_client_class.return_value.list_use_cases = AsyncMock(return_value={
+            "use_cases": {
+                "chatbot_conversational": {
+                    "use_case_id": "chatbot_conversational",
+                    "description": "Conversational AI chatbot",
+                },
+                "code_completion": {
+                    "use_case_id": "code_completion",
+                    "description": "Code autocompletion",
+                },
+            },
+            "count": 2,
+        })
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["list_use_cases"]
+
+        result = tool()
+
+        assert "error" not in result
+        assert result["count"] == 2
+        ids = {uc["id"] for uc in result["use_cases"]}
+        assert "chatbot_conversational" in ids
+        assert "code_completion" in ids
+        descriptions = {uc["description"] for uc in result["use_cases"]}
+        assert "Conversational AI chatbot" in descriptions
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_connection_error(self, mock_client_class: MagicMock) -> None:
+        """Connection error returns error dict with hint."""
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
+
+        mock_client_class.return_value.list_use_cases = AsyncMock(
+            side_effect=PlannerConnectionError("Planner service unavailable")
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["list_use_cases"]
+
+        result = tool()
+
+        assert "error" in result
+        assert "unavailable" in result["error"].lower()
+        assert "hint" in result
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_api_error(self, mock_client_class: MagicMock) -> None:
+        """API error returns error dict with status code."""
+        from rhoai_mcp.composites.planner.client import PlannerAPIError
+
+        mock_client_class.return_value.list_use_cases = AsyncMock(
+            side_effect=PlannerAPIError(status_code=500, detail="Internal error")
+        )
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+        tool = mock_mcp._registered_tools["list_use_cases"]
+
+        result = tool()
+
+        assert "error" in result
+        assert result["status_code"] == 500
+
+
+# ---------------------------------------------------------------------------
+# Helpers for plan_deployment / execute_deployment tests
+# ---------------------------------------------------------------------------
+
+def _make_mock_server_with_k8s(mode: PlannerMode = PlannerMode.REMOTE) -> MagicMock:
+    """Mock server with a k8s client stub."""
+    server = _make_mock_server(mode=mode)
+    server.k8s = MagicMock()
+    server.config.is_operation_allowed.return_value = (True, "")
+    return server
+
+
+SAMPLE_VLLM_RUNTIME = {
+    "name": "vllm-cuda-runtime",
+    "display_name": "vLLM CUDA Runtime",
+    "source": "namespace",
+    "requires_instantiation": False,
+    "supported_formats": ["pytorch"],
+}
+
+SAMPLE_VLLM_TEMPLATE = {
+    "name": "vllm-cuda-runtime-template",
+    "display_name": "vLLM CUDA Runtime",
+    "source": "template",
+    "requires_instantiation": True,
+    "template_name": "vllm-cuda-runtime-template",
+    "supported_formats": ["pytorch"],
+}
+
+
+class TestPlanDeploymentTool:
+    """Tests for plan_deployment tool."""
+
+    def test_tool_registration(self) -> None:
+        """plan_deployment tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        assert "plan_deployment" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_successful_plan_runtime_available(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """Returns ready=True when vLLM runtime is already present in namespace."""
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["ready"] is True
+        assert result["runtime"] == "vllm-cuda-runtime"
+        assert result["runtime_needs_creation"] is False
+        assert result["template_to_instantiate"] is None
+        assert result["model_id"] == "meta-llama/Llama-3.1-70B-Instruct"
+        assert result["gpu_count"] == 2
+        assert result["replicas"] == 1
+        assert result["storage_uri"] == "oci://quay.io/rhoai/llama-3-1-70b:latest"
+        assert "inferenceservice" in result["configs"]
+        assert result["issues"] is None
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_plan_runtime_needs_creation(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """Returns runtime_needs_creation=True when runtime is a template."""
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_TEMPLATE]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["ready"] is True
+        assert result["runtime_needs_creation"] is True
+        assert result["template_to_instantiate"] == "vllm-cuda-runtime-template"
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_plan_no_vllm_runtime(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """Returns ready=False with issue when no vLLM runtime is found."""
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [
+            {"name": "openvino-runtime", "source": "namespace", "supported_formats": ["onnx"]}
+        ]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["ready"] is False
+        assert result["runtime"] is None
+        assert result["issues"] is not None
+        assert any("vLLM" in issue for issue in result["issues"])
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_plan_warns_when_no_storage_uri(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """Warns when model_uri is not returned by planner."""
+        config_without_uri = DeploymentConfigResult(
+            deployment_id="test-id",
+            namespace="my-project",
+            model_name="Llama 3.1 70B",
+            configs={"inferenceservice": "yaml"},
+        )
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=config_without_uri)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["storage_uri"] is None
+        assert result["warnings"] is not None
+        assert any("storage" in w.lower() for w in result["warnings"])
+
+    def test_plan_invalid_category(self) -> None:
+        """Invalid category returns error."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="invalid",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=100,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=5.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "invalid" in result["error"].lower()
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_plan_planner_connection_error(self, mock_planner_cls: MagicMock) -> None:
+        """Planner connection error returns error dict."""
+        from rhoai_mcp.composites.planner.client import PlannerConnectionError
+
+        mock_planner_cls.return_value.generate_config = AsyncMock(
+            side_effect=PlannerConnectionError("Planner unavailable")
+        )
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert "error" in result
+        assert "unavailable" in result["error"].lower()
+
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_plan_missing_model_id_blocks_ready(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """ready=False and an issue is raised when planner returns no model_id."""
+        no_model_id_result = DeploymentConfigResult(
+            deployment_id="chatbot-unknown-20260322143022",
+            namespace="my-project",
+            model_name="Llama 3.1 70B",
+            model_id=None,
+            model_uri="oci://quay.io/rhoai/llama-3-1-70b:latest",
+            gpu_config={"gpu_type": "NVIDIA-H100", "gpu_count": 2, "tensor_parallel": 2, "replicas": 1},
+            configs={"inferenceservice": "apiVersion: serving.kserve.io/v1beta1"},
+        )
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=no_model_id_result)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["ready"] is False
+        assert result["issues"] is not None
+        assert any("model_id" in issue for issue in result["issues"])
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_suggested_deploy_params_populated_when_ready(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """suggested_deploy_params is populated when model_id, runtime, and storage_uri are set."""
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        params = result["suggested_deploy_params"]
+        assert params is not None
+        assert params["model_id"] == "meta-llama/Llama-3.1-70B-Instruct"
+        assert params["namespace"] == "my-project"
+        assert params["runtime"] == "vllm-cuda-runtime"
+        assert params["storage_uri"] == "oci://quay.io/rhoai/llama-3-1-70b:latest"
+        assert params["gpu_count"] == 2
+        assert params["gpu_type"] == "H100"
+        assert params["tensor_parallel"] == 2
+        assert params["replicas"] == 1
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_suggested_deploy_params_none_when_storage_missing(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """suggested_deploy_params is None when storage_uri cannot be resolved."""
+        no_storage_result = DeploymentConfigResult(
+            deployment_id="chatbot-llama-20260322143022",
+            namespace="my-project",
+            model_name="Llama 3.1 70B",
+            model_id="meta-llama/Llama-3.1-70B-Instruct",
+            model_uri=None,
+            gpu_config={"gpu_type": "NVIDIA-H100", "gpu_count": 2, "tensor_parallel": 2, "replicas": 1},
+            configs={"inferenceservice": "apiVersion: serving.kserve.io/v1beta1"},
+        )
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=no_storage_result)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["plan_deployment"]
+
+        result = tool(
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+        )
+
+        assert result["suggested_deploy_params"] is None
+
+
+class TestExecuteDeploymentTool:
+    """Tests for execute_deployment tool."""
+
+    def test_tool_registration(self) -> None:
+        """execute_deployment tool is registered."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        assert "execute_deployment" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_successful_deployment(self, mock_inference_cls: MagicMock) -> None:
+        """Successful deployment returns deployed=True with name and namespace."""
+        mock_isvc = MagicMock()
+        mock_isvc.status.value = "Pending"
+        mock_isvc.metadata.name = "llama-3-1-70b-instruct"
+        mock_isvc.metadata.namespace = "my-project"
+        mock_isvc.metadata.to_source_dict.return_value = {
+            "kind": "InferenceService",
+            "name": "llama-3-1-70b-instruct",
+        }
+        mock_inference_cls.return_value.deploy_model.return_value = mock_isvc
+        # Poll returns Pending then Ready
+        mock_updated = MagicMock()
+        mock_updated.status.value = "Ready"
+        mock_inference_cls.return_value.get_inference_service.return_value = mock_updated
+
+        mock_mcp = _make_mock_mcp()
+        server = _make_mock_server_with_k8s()
+
+        with patch("rhoai_mcp.composites.planner.tools.asyncio.sleep", new_callable=AsyncMock):
+            register_tools(mock_mcp, server)
+            tool = mock_mcp._registered_tools["execute_deployment"]
+
+            result = tool(
+                model_id="meta-llama/Llama-3.1-70B-Instruct",
+                namespace="my-project",
+                runtime="vllm-cuda-runtime",
+                storage_uri="oci://quay.io/rhoai/llama:latest",
+                gpu_count=2,
+                gpu_type="H100",
+                replicas=1,
+            )
+
+        assert result["deployed"] is True
+        assert result["name"] == "llama-3-1-70b-instruct"
+        assert result["namespace"] == "my-project"
+        assert result["status"] == "Ready"
+        assert "Ready" in result["message"]
+
+    def test_execute_operation_not_allowed(self) -> None:
+        """Returns error when create operations are not permitted."""
+        mock_mcp = _make_mock_mcp()
+        server = _make_mock_server_with_k8s()
+        server.config.is_operation_allowed.return_value = (False, "Read-only mode is enabled")
+
+        register_tools(mock_mcp, server)
+        tool = mock_mcp._registered_tools["execute_deployment"]
+
+        result = tool(
+            model_id="meta-llama/Llama-3.1-8B-Instruct",
+            namespace="my-project",
+            runtime="vllm-cuda-runtime",
+            storage_uri="oci://quay.io/rhoai/llama:latest",
+            gpu_count=1,
+            gpu_type="H100",
+        )
+
+        assert "error" in result
+
+    def test_execute_invalid_gpu_count(self) -> None:
+        """Returns error for gpu_count <= 0."""
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["execute_deployment"]
+
+        result = tool(
+            model_id="meta-llama/Llama-3.1-8B-Instruct",
+            namespace="my-project",
+            runtime="vllm-cuda-runtime",
+            storage_uri="oci://quay.io/rhoai/llama:latest",
+            gpu_count=0,
+            gpu_type="H100",
+        )
+
+        assert "error" in result
+
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_execute_tensor_parallel_forwarded(self, mock_inference_cls: MagicMock) -> None:
+        """tensor_parallel is passed to InferenceServiceCreate, not silently dropped."""
+        mock_isvc = MagicMock()
+        mock_isvc.status.value = "Ready"
+        mock_isvc.metadata.name = "llama-3-1-70b-instruct"
+        mock_isvc.metadata.namespace = "my-project"
+        mock_isvc.metadata.to_source_dict.return_value = {"kind": "InferenceService", "name": "llama-3-1-70b-instruct"}
+        mock_inference_cls.return_value.deploy_model.return_value = mock_isvc
+
+        mock_mcp = _make_mock_mcp()
+        with patch("rhoai_mcp.composites.planner.tools.asyncio.sleep", new_callable=AsyncMock):
+            register_tools(mock_mcp, _make_mock_server_with_k8s())
+            tool = mock_mcp._registered_tools["execute_deployment"]
+            tool(
+                model_id="meta-llama/Llama-3.1-70B-Instruct",
+                namespace="my-project",
+                runtime="vllm-cuda-runtime",
+                storage_uri="oci://quay.io/rhoai/llama:latest",
+                gpu_count=4,
+                gpu_type="H100",
+                tensor_parallel=4,
+                replicas=1,
+            )
+
+        call_args = mock_inference_cls.return_value.deploy_model.call_args
+        request = call_args[0][0]
+        assert request.tensor_parallel == 4
+
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_execute_deploy_failure(self, mock_inference_cls: MagicMock) -> None:
+        """Returns deployed=False when InferenceClient raises."""
+        mock_inference_cls.return_value.deploy_model.side_effect = RuntimeError("K8s API error")
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        tool = mock_mcp._registered_tools["execute_deployment"]
+
+        result = tool(
+            model_id="meta-llama/Llama-3.1-8B-Instruct",
+            namespace="my-project",
+            runtime="vllm-cuda-runtime",
+            storage_uri="oci://quay.io/rhoai/llama:latest",
+            gpu_count=1,
+            gpu_type="H100",
+        )
+
+        assert result["deployed"] is False
+        assert "error" in result
+
+
+class TestGpuMemoryHelper:
+    """Tests for _gpu_memory_for_type helper."""
+
+    def test_known_gpu_types(self) -> None:
+        """Known GPU types return correct memory strings."""
+        from rhoai_mcp.composites.planner.tools import _gpu_memory_for_type
+
+        assert _gpu_memory_for_type("H100", 1) == "80Gi"
+        assert _gpu_memory_for_type("H100", 2) == "160Gi"
+        assert _gpu_memory_for_type("A100-80", 1) == "80Gi"
+        assert _gpu_memory_for_type("A100-40", 2) == "80Gi"
+        assert _gpu_memory_for_type("L4", 4) == "96Gi"
+        assert _gpu_memory_for_type("H200", 1) == "141Gi"
+        assert _gpu_memory_for_type("B200", 1) == "192Gi"
+
+    def test_unknown_gpu_type_falls_back(self) -> None:
+        """Unknown GPU types return 80Gi per GPU as fallback."""
+        from rhoai_mcp.composites.planner.tools import _gpu_memory_for_type
+
+        assert _gpu_memory_for_type("NVIDIA-T4", 1) == "80Gi"
+        assert _gpu_memory_for_type("NVIDIA-H100", 2) == "160Gi"
+
+    def test_planner_style_names(self) -> None:
+        """Planner-style gpu_type strings like 'NVIDIA-H100' are matched correctly."""
+        from rhoai_mcp.composites.planner.tools import _gpu_memory_for_type
+
+        assert _gpu_memory_for_type("NVIDIA-H100", 1) == "80Gi"
+        assert _gpu_memory_for_type("NVIDIA-A100-80", 1) == "80Gi"
+
+
+class TestMakeDeploymentName:
+    """Tests for _make_deployment_name helper."""
+
+    def test_basic_model_id(self) -> None:
+        from rhoai_mcp.composites.planner.tools import _make_deployment_name
+
+        assert _make_deployment_name("meta-llama/Llama-3.1-70B-Instruct") == "llama-3-1-70b-instruct"
+
+    def test_no_trailing_hyphen_after_truncation(self) -> None:
+        """Truncation at 50 chars must not leave a trailing hyphen."""
+        from rhoai_mcp.composites.planner.tools import _make_deployment_name
+
+        # 'a' * 49 + '-b' → after sanitise = 'a'*49 + '-b', truncate at 50 = 'a'*49 + '-'
+        model_id = "a" * 49 + "-b"
+        result = _make_deployment_name(model_id)
+        assert not result.endswith("-")
+        assert len(result) <= 50
+
+    def test_special_chars_replaced(self) -> None:
+        from rhoai_mcp.composites.planner.tools import _make_deployment_name
+
+        assert _make_deployment_name("org/My_Model.v2") == "my-model-v2"
+
+    def test_numeric_prefix_gets_model_prefix(self) -> None:
+        from rhoai_mcp.composites.planner.tools import _make_deployment_name
+
+        result = _make_deployment_name("7b-instruct")
+        assert result.startswith("model-")
 
 
 class TestClientFactory:

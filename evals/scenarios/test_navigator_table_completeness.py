@@ -1,0 +1,140 @@
+"""Scenario: Navigator recommendation table completeness.
+
+Asserts that the /navigator slash command always outputs a comparison table with
+exactly 4 columns (Balanced, Cost, Performance, Quality) and exactly 8
+rows (Model, GPU, TTFT p95, E2E p95, Quality score, Cost/month,
+Meets SLO, Cluster fit) — with no cells omitted.
+
+The skill makes a single recommend_model call that returns all four slots,
+then a second unconstrained call only for any slots that came back empty
+(cluster GPU filter found no match). Total calls is 1–5 depending on how
+many slots the cluster-constrained call fills.
+
+Uses the mock cluster so no live planner backend is required.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+import pytest
+
+from evals.config import EvalConfig
+from evals.deepeval_helpers import lcs_result_to_conversational_test_case
+from evals.lcs_client import LCSClient, LCSResult
+from evals.metrics.config import create_multi_turn_mcp_use_metric, create_task_completion_metric
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from deepeval.test_case import MCPServer
+
+    from evals.lcs_client import LCSClient
+
+
+EXPECTED_COLUMNS = {"Balanced", "Cost", "Performance", "Quality"}
+EXPECTED_ROWS = {
+    "Model",
+    "GPU",
+    "TTFT p95",
+    "E2E p95",
+    "Quality score",
+    "Cost/month",
+    "Meets SLO",
+    "Cluster fit",
+}
+
+
+def _extract_table_lines(text: str) -> list[str]:
+    """Return lines that look like markdown table rows."""
+    return [line.strip() for line in text.splitlines() if line.strip().startswith("|")]
+
+
+def _assert_table_completeness(output: str) -> None:
+    """Raise AssertionError if the output table is missing columns or rows."""
+    table_lines = _extract_table_lines(output)
+    assert table_lines, "No markdown table found in agent output"
+
+    header = table_lines[0]
+    for col in EXPECTED_COLUMNS:
+        assert col in header, f"Missing column '{col}' in table header: {header}"
+
+    row_labels = {line.split("|")[1].strip() for line in table_lines if "|" in line}
+    for row in EXPECTED_ROWS:
+        assert any(row in label for label in row_labels), (
+            f"Missing row '{row}' in table. Present rows: {sorted(row_labels)}"
+        )
+
+    for line in table_lines[2:]:  # skip header and separator
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        for cell in cells[1:]:  # skip the row-label cell
+            assert cell, (
+                f"Empty cell found in table row: {line!r} — must be filled or '—'"
+            )
+
+
+@pytest.mark.eval
+class TestNavigatorTableCompleteness:
+    """Ensure the navigator agent always outputs a fully populated comparison table."""
+
+    TASK = (
+        "I'm building a customer support chatbot for about 50 concurrent agents. "
+        "Cost is my top priority. Get model recommendations and show me the comparison table."
+    )
+
+    WORKLOAD_CONFIRMATION = "Yes, that looks right. Please go ahead and get the recommendations."
+
+    @pytest.mark.eval
+    async def test_table_has_all_columns_and_rows(
+        self,
+        eval_config: EvalConfig,
+        lcs_client: LCSClient,
+        mcp_server: MCPServer,
+        evaluate_and_record: Callable[[str, LCSResult, list[Any], list[Any]], Any],
+    ) -> None:
+        """Navigator must output a table with all 4 columns and all 8 rows populated."""
+        # Turn 1: send the task — navigator presents the workload profile and waits for
+        # confirmation before calling recommend_model (Phase 2 gate in the skill).
+        turn1 = await lcs_client.query(self.TASK)
+        assert turn1.conversation_id, "LCS must return a conversation_id for multi-turn flow"
+
+        # Turn 2: confirm the workload profile — navigator proceeds to Phase 3 and outputs
+        # the recommendation table.
+        result = await lcs_client.follow_up(self.WORKLOAD_CONFIRMATION, turn1.conversation_id)
+
+        # Merge tool calls from both turns for metric evaluation.
+        all_tool_calls = turn1.tool_calls + result.tool_calls
+        recommend_model_calls = [t for t in all_tool_calls if t.name == "recommend_model"]
+        assert len(recommend_model_calls) >= 1, (
+            f"Navigator must call recommend_model at least once, "
+            f"got {len(recommend_model_calls)}"
+        )
+
+        _assert_table_completeness(result.final_output)
+
+        # Build a merged result so the metric sees the full two-turn conversation.
+        merged = LCSResult(
+            task=turn1.task,
+            final_output=result.final_output,
+            tool_calls=turn1.tool_calls + result.tool_calls,
+            messages=turn1.messages + result.messages,
+            turns=turn1.turns + result.turns,
+            conversation_id=result.conversation_id,
+        )
+        test_case = lcs_result_to_conversational_test_case(merged, mcp_server)
+        metrics = [
+            create_multi_turn_mcp_use_metric(eval_config),
+            create_task_completion_metric(eval_config),
+        ]
+
+        eval_result = evaluate_and_record(
+            scenario="navigator_table_completeness",
+            lcs_result=merged,
+            test_cases=[test_case],
+            metrics=metrics,
+        )
+
+        for metric_result in eval_result.test_results[0].metrics_data:
+            assert metric_result.success, (
+                f"Metric {metric_result.name} failed: {metric_result.reason}"
+            )

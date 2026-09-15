@@ -90,7 +90,7 @@ def _gpu_type_matches(rec_data: dict[str, Any], allowed: set[str]) -> bool:
     """Return True if rec_data's gpu_type (after NVIDIA- normalisation) is in allowed."""
     gpu_config = rec_data.get("gpu_config") or {}
     gpu_type = gpu_config.get("gpu_type") if isinstance(gpu_config, dict) else None
-    if gpu_type is None:
+    if not isinstance(gpu_type, str):
         return False
     # Planner responses use vendor-prefixed names (e.g. "NVIDIA-H100");
     # the public API uses short names ("H100"). Normalise before comparing.

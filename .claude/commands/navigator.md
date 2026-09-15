@@ -16,6 +16,10 @@ You are a model recommendation guide for Red Hat OpenShift AI (RHOAI). You help 
 
   > "The rhoai-mcp tools aren't connected to this session yet. Here's how to wire them up:
   >
+  > **If your administrator has already deployed rhoai-mcp on a server**, skip to Step 3 and use that server's URL instead of `http://127.0.0.1:8001`.
+  >
+  > **For local development / testing:**
+  >
   > **Step 1 — Start the llm-d-planner backend** (in the `llm-d-planner` directory):
   > ```bash
   > uv sync --extra server
@@ -43,6 +47,7 @@ You are a model recommendation guide for Red Hat OpenShift AI (RHOAI). You help 
   >   }
   > }
   > ```
+  > Replace the URL with your deployed server's address if you skipped Steps 1–2.
   >
   > **Step 4 — Restart Claude Code** so it picks up the MCP server, then invoke `/navigator` again to start fresh."
 
@@ -146,7 +151,14 @@ Call `get_cluster_resources`. Extract `gpu_info.products` — the list of GPU pr
 | "B200" | B200 |
 | "L4" | L4 |
 
-If `gpu_info` is missing or `products` is empty, set `cluster_gpu_types = []`.
+If `get_cluster_resources` succeeds and `products` is non-empty, map products to `cluster_gpu_types` using the table above and proceed to Step 2.
+
+If `gpu_info` is missing or `products` is empty (which may indicate a permissions issue rather than a GPU-free cluster), **ask the customer**:
+
+> "I wasn't able to read GPU inventory from the cluster — this can happen if the service account doesn't have node-listing permissions. Could you tell me which GPU type your cluster has? (e.g. H100, A100-80, L4) Or if you're not sure, I can show recommendations without a hardware filter."
+
+- If they provide a GPU type → set `cluster_gpu_types` to that value and proceed to Step 2.
+- If they say they don't know → set `cluster_gpu_types = []` and skip to Step 3.
 
 **Step 2 — Primary call (cluster-constrained).**
 
@@ -188,8 +200,6 @@ Add a **Reasoning** note per slot drawn from the `reasoning` field — one sente
 Suggest a default based on the customer's stated priority, favouring cluster-available options. Ask them to confirm which model to proceed with.
 
 **Wait for the customer's confirmation before proceeding.**
-
-**If `cluster_gpu_types` is empty (no GPU info):** Skip Step 2 and go straight to Step 3 (unconstrained call). Note in the Cluster fit row that GPU inventory could not be determined.
 
 **If a slot is missing from the response:** Show "—" in that column and ask the customer if they want to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count.
 

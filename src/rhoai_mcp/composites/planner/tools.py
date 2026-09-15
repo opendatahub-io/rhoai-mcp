@@ -739,7 +739,9 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         raw_gpu_type = (
             gpu_config.get("gpu_type", "unknown") if isinstance(gpu_config, dict) else "unknown"
         )
-        gpu_type = raw_gpu_type.removeprefix("NVIDIA-") if isinstance(raw_gpu_type, str) else raw_gpu_type
+        gpu_type = (
+            raw_gpu_type.removeprefix("NVIDIA-") if isinstance(raw_gpu_type, str) else raw_gpu_type
+        )
         tensor_parallel = (
             gpu_config.get("tensor_parallel", 1) if isinstance(gpu_config, dict) else 1
         )

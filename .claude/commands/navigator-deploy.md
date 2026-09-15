@@ -100,7 +100,7 @@ Don't over-ask. A good description gives you `use_case` and `user_count` directl
 
 **Wait for the customer's response before proceeding to Phase 2.**
 
-**Valid use case values** (map from the customer's description — never expose this list unless they're genuinely stuck):
+**Valid use case values** (map from the customer's description — never expose this list unless they're genuinely stuck; call `list_use_cases` for the authoritative live list):
 `chatbot_conversational`, `code_completion`, `code_generation_detailed`, `translation`, `content_generation`, `summarization_short`, `document_analysis_rag`, `long_document_summarization`, `research_legal_analysis`
 
 ---

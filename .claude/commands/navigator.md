@@ -251,6 +251,8 @@ This skill ends here. Do not attempt to plan or execute a deployment.
 
 ### Valid use case values
 
+> **Note:** the table below is a reference snapshot. Call `list_use_cases` for the authoritative live list — use it whenever the customer is unsure which value to use or if a value below returns an error.
+
 | Value | When to use |
 |---|---|
 | `chatbot_conversational` | Help desk, support bots, conversational assistants |

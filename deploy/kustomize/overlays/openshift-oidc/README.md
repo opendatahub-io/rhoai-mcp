@@ -2,9 +2,6 @@
 
 Deploys the RHOAI MCP server with multi-user OIDC authentication on OpenShift.
 
-> [!WARNING]
-> This is not a supported overlay and it's being currently used for Development purposes.
-
 ## RBAC model
 
 This overlay **replaces** the base ClusterRole entirely. Instead of granting the ServiceAccount direct access to resources (notebooks, inference services, secrets, etc.), it grants only:
@@ -23,14 +20,15 @@ All resource-level access is enforced by the Kubernetes API against the **user's
 # 1. Apply the overlay
 kubectl kustomize deploy/kustomize/overlays/openshift-oidc | oc apply -f -
 
-# 2. (Optional) Apply the NetworkPolicy to allow traffic to the Model Catalog
+# 2. (Optional) Allow Model Catalog traffic, when it is blocked by NetworkPolicies
 oc apply -f deploy/kustomize/overlays/openshift/networkpolicy.yaml
 
 # 3. Wait for the pod to start
 oc get pods -n rhoai-mcp -w
 ```
 
-> **Note:** The NetworkPolicy targets the `rhoai-model-registries` namespace and must be applied separately because it lives outside this MCP app namespace.
+> [!TIP]
+> This overlay configures the embedded Planner to retrieve benchmark data from the Model Catalog. Apply step 2 only when NetworkPolicies in `rhoai-model-registries` would otherwise block traffic from `rhoai-mcp`; it permits this rhoai-mcp server to reach the Model Catalog service in that namespace.
 
 ## Configuration
 

@@ -160,7 +160,7 @@ If `gpu_info` is missing or `products` is empty (which may indicate a permission
 - If they provide a GPU type → set `cluster_gpu_types` to that value and proceed to Step 2.
 - If they say they don't know → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`).
 
-**Step 2 — Primary call (cluster-constrained).**
+**Step 2 — Primary call.**
 
 ```
 recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[<cluster_gpu_types>])
@@ -168,9 +168,13 @@ recommend_model(text="<customer description>", use_case="<value>", user_count=<n
 
 Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`). Map response slots: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
 
-**Step 3 — Fallback for empty slots.**
+Track whether this call was **cluster-constrained** (`cluster_gpu_types` non-empty) or **unconstrained** (`cluster_gpu_types = []`), as the Cluster fit label depends on it.
 
-For any slot that returned `None` (no match on cluster hardware), make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ requires new hardware" in the Cluster fit row.
+**Step 3 — Fallback (cluster-constrained calls only).**
+
+If Step 2 was cluster-constrained and a slot returned `None` (no match on cluster hardware), make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ requires new hardware" in the Cluster fit row.
+
+If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A `None` slot from an unconstrained call means the planner found no result for this SLO/use-case combination — show "—" in that slot (not a hardware miss).
 
 **Build the table only after all slots have data (or confirmed "—").** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
 
@@ -183,7 +187,12 @@ For any slot that returned `None` (no match on cluster hardware), make a second 
 | Quality score | [value] | [value] | [value] | [value] |
 | Cost/month | [value] | [value] | [value] | [value] |
 | Meets SLO | [value] | [value] | [value] | [value] |
-| Cluster fit | Available ✓ or ⚠ requires new hardware | | | |
+| Cluster fit | Available ✓ / ⚠ requires new hardware / ⚠ cluster GPU unknown | | | |
+
+**Cluster fit values:**
+- `Available ✓` — slot filled by a cluster-constrained call; hardware is confirmed available
+- `⚠ requires new hardware` — slot filled by the unconstrained fallback (Step 3); cluster lacks this GPU
+- `⚠ cluster GPU unknown` — slot filled by an unconstrained call because GPU inventory could not be determined; hardware availability unverified
 
 **If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint — do not relabel or copy data:
 

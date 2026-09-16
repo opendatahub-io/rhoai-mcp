@@ -20,7 +20,7 @@ All resource-level access is enforced by the Kubernetes API against the **user's
 # 1. Apply the overlay
 kubectl kustomize deploy/kustomize/overlays/openshift-oidc | oc apply -f -
 
-# 2. (Optional) Allow Model Catalog traffic, when it is blocked by NetworkPolicies
+# 2. (Optional) Allow Model Catalog traffic explicitly, when it is generally blocked by NetworkPolicies unless otherwise specified
 oc apply -f deploy/kustomize/overlays/openshift/networkpolicy.yaml
 
 # 3. Wait for the pod to start

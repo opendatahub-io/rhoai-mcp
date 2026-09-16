@@ -246,6 +246,35 @@ class RHOAIConfig(BaseSettings):
         "Auth is handled automatically: in-cluster via ServiceAccount token, or via MODEL_CATALOG_TOKEN env var.",
     )
 
+    # Quickstart settings
+    quickstart_registry_ref: str = Field(
+        default="quay.io/rh-ai-quickstart/quickstart-registry:latest",
+        description="OCI reference of the quickstart registry index artifact",
+    )
+    quickstart_job_namespace: str = Field(
+        default="openshift-quickstarts",
+        description="Namespace where quickstart installer Jobs (and their param Secrets) run",
+    )
+    quickstart_installer_service_account: str = Field(
+        default="quickstart-installer",
+        description="Pre-provisioned ServiceAccount the installer Jobs run as",
+    )
+    quickstart_job_ttl_seconds: int = Field(
+        default=3600,
+        ge=0,
+        description="ttlSecondsAfterFinished for installer Jobs (0 deletes immediately on finish)",
+    )
+    quickstart_oci_timeout: int = Field(
+        default=30,
+        ge=1,
+        le=300,
+        description="Timeout in seconds for quickstart OCI registry requests",
+    )
+    quickstart_oci_skip_tls_verify: bool = Field(
+        default=False,
+        description="Skip TLS verification when pulling quickstart OCI artifacts (not recommended)",
+    )
+
     # Plugin filtering
     enabled_plugins: list[str] | None = Field(
         default=None,

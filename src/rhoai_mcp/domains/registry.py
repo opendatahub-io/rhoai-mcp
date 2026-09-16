@@ -15,6 +15,7 @@ from rhoai_mcp.domains.permissions import (
     NOTEBOOKS_PERMISSIONS,
     PIPELINES_PERMISSIONS,
     PROJECTS_PERMISSIONS,
+    QUICKSTARTS_PERMISSIONS,
     STORAGE_PERMISSIONS,
     TRAINING_PERMISSIONS,
 )
@@ -249,6 +250,40 @@ class TrainingPlugin(BasePlugin):
         return TrainingCRDs.all_crds()
 
 
+class QuickstartsPlugin(BasePlugin):
+    """Plugin for Red Hat AI quickstart discovery and deployment.
+
+    Discovery reads OCI artifacts (registry index + manifests) from Quay;
+    deployment actions create Kubernetes Jobs (batch/v1) that run each
+    quickstart's installer image. No custom CRDs are required.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="quickstarts",
+                version="0.1.0",
+                description="Red Hat AI quickstart discovery and deployment",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.quickstarts.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return QUICKSTARTS_PERMISSIONS
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
+        return True, "Quickstarts use the core batch API and an external OCI registry"
+
+
 class PromptsPlugin(BasePlugin):
     """Plugin for MCP workflow prompts.
 
@@ -408,6 +443,7 @@ def get_core_plugins() -> list[BasePlugin]:
         ConnectionsPlugin(),
         StoragePlugin(),
         TrainingPlugin(),
+        QuickstartsPlugin(),
         PromptsPlugin(),
         ModelRegistryPlugin(),
     ]

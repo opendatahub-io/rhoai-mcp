@@ -134,6 +134,22 @@ STORAGE_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
+QUICKSTARTS_PERMISSIONS: dict[str, list[dict[str, str]]] = {
+    # list_quickstarts and get_quickstart_manifest read an external OCI
+    # registry (no Kubernetes API permissions required).
+    "run_quickstart_action": [
+        {"apiGroup": "batch", "resource": "jobs", "verb": "create"},
+        {"apiGroup": "", "resource": "secrets", "verb": "create"},
+    ],
+    "get_quickstart_action_status": [
+        {"apiGroup": "batch", "resource": "jobs", "verb": "get"},
+    ],
+    "get_quickstart_action_logs": [
+        {"apiGroup": "", "resource": "pods", "verb": "list"},
+        {"apiGroup": "", "resource": "pods/log", "verb": "get"},
+    ],
+}
+
 TRAINING_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     # discovery tools
     "list_training_jobs": [

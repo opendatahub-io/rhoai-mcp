@@ -116,7 +116,59 @@ class LCSClient:
                 data = response.json()
                 return self._parse_response(task, data)
 
-        raise last_error  # type: ignore[misc]
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("query failed without capturing a retryable error")
+
+    async def follow_up(
+        self,
+        message: str,
+        conversation_id: str,
+        retries: int = 2,
+    ) -> LCSResult:
+        """Send a follow-up message in an existing conversation.
+
+        Args:
+            message: User reply to continue the conversation.
+            conversation_id: ID returned by a previous query() or follow_up() call.
+            retries: Number of retries on transient 5xx errors.
+
+        Returns:
+            LCSResult with final output and tool calls for this turn.
+        """
+        import asyncio
+
+        payload = {"query": message, "conversation_id": conversation_id}
+        last_error: Exception | None = None
+
+        for attempt in range(1 + retries):
+            async with httpx.AsyncClient(
+                base_url=self._base_url, timeout=httpx.Timeout(self._timeout)
+            ) as client:
+                response = await client.post("/v1/query", json=payload)
+                if response.status_code >= 500 and attempt < retries:
+                    last_error = httpx.HTTPStatusError(
+                        f"Server error {response.status_code}",
+                        request=response.request,
+                        response=response,
+                    )
+                    wait = 2**attempt
+                    logger.warning(
+                        "LCS follow_up returned %d, retrying in %ds (attempt %d/%d)",
+                        response.status_code,
+                        wait,
+                        attempt + 1,
+                        retries,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                response.raise_for_status()
+                data = response.json()
+                return self._parse_response(message, data)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("follow_up failed without capturing a retryable error")
 
     def _parse_response(self, task: str, data: dict[str, Any]) -> LCSResult:
         """Parse an LCS query response into an LCSResult.

@@ -522,6 +522,15 @@ class InferenceClient:
             resources["requests"]["nvidia.com/gpu"] = str(request.gpu_count)
             resources["limits"]["nvidia.com/gpu"] = str(request.gpu_count)
 
+        model_spec: dict[str, Any] = {
+            "modelFormat": {"name": request.model_format},
+            "runtime": request.runtime,
+            "storageUri": request.storage_uri,
+            "resources": resources,
+        }
+        if request.tensor_parallel > 1:
+            model_spec["args"] = ["--tensor-parallel-size", str(request.tensor_parallel)]
+
         return {
             "apiVersion": InferenceCRDs.INFERENCE_SERVICE.api_version,
             "kind": InferenceCRDs.INFERENCE_SERVICE.kind,
@@ -535,12 +544,7 @@ class InferenceClient:
                 "predictor": {
                     "minReplicas": request.min_replicas,
                     "maxReplicas": request.max_replicas,
-                    "model": {
-                        "modelFormat": {"name": request.model_format},
-                        "runtime": request.runtime,
-                        "storageUri": request.storage_uri,
-                        "resources": resources,
-                    },
+                    "model": model_spec,
                 },
             },
         }

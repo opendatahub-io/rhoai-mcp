@@ -164,3 +164,4 @@ class InferenceServiceCreate(BaseModel):
     memory_request: str = Field("4Gi", description="Memory request")
     memory_limit: str = Field("8Gi", description="Memory limit")
     gpu_count: int = Field(0, ge=0, description="Number of GPUs")
+    tensor_parallel: int = Field(1, ge=1, description="Tensor parallelism degree for vLLM")

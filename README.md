@@ -38,6 +38,8 @@ Want to add your team's capabilities to rhoai-mcp? See the [contributor guide](C
 
 ## Installation
 
+For OpenShift installation, refer to [OpenShift deployment](#openshift-deployment).
+
 ### Using uv (recommended)
 
 ```bash
@@ -118,8 +120,7 @@ Deploy using Kustomize with environment-specific overlays:
 # KIND / local development
 kustomize build deploy/kustomize/overlays/kind/ | kubectl apply -f -
 
-# OpenShift production
-kustomize build deploy/kustomize/overlays/openshift/ | oc apply -f -
+# OpenShift — see "OpenShift deployment" section below
 ```
 
 The Kustomize structure uses a shared base with per-environment overlays:
@@ -133,16 +134,41 @@ deploy/kustomize/
 │   └── ...
 └── overlays/
     ├── kind/                # NodePort, DEBUG logging, imagePullPolicy: Never
-    └── openshift/           # GHCR image, TLS Route, OpenShift-specific RBAC, NetworkPolicy
+    ...                      # other platform's overlays
 ```
 
 The **KIND overlay** enables debug logging, dangerous operations, `NodePort` service type, and `imagePullPolicy: Never` (for `kind load docker-image`).
 
-The **OpenShift overlay** adds a TLS-terminated Route, OpenShift-specific RBAC rules (projects, routes, templates, imagestreams, DataScienceCluster, Model Registry), and a NetworkPolicy allowing access to the model-catalog service.
+### OpenShift deployment
 
-To customize the namespace, set it in a downstream overlay's `kustomization.yaml` and include the `replacements` block from the base to keep the `ClusterRoleBinding` subject namespace in sync (see comments in `base/kustomization.yaml`). For the OpenShift overlay, also update the hardcoded namespace in:
-- `deploy/kustomize/overlays/openshift/route.yaml` → `metadata.namespace`
-- `deploy/kustomize/overlays/openshift/networkpolicy.yaml` → `metadata.namespace` and `spec.ingress[].from[].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]`
+Two overlays are available, both configured with multi-user OIDC authentication:
+
+**1. MCP Lifecycle Operator (recommended)**
+
+For environments with the MCP Lifecycle Operator (MCPLO) installed.
+The MCPLO operator manages the Deployment, Service, and NetworkPolicy from an `MCPServer` resource:
+
+```bash
+kustomize build deploy/kustomize/overlays/openshift-oidc-mcpserver | oc apply -f -
+```
+
+**2. GitOps / standalone**
+
+For environments without MCPLO, or where MCPLO is in `Removed` state:
+
+```bash
+kustomize build deploy/kustomize/overlays/openshift-oidc | oc apply -f -
+```
+
+See [`deploy/kustomize/overlays/openshift-oidc/README.md`](deploy/kustomize/overlays/openshift-oidc/README.md) for RBAC model, configuration details, and verification steps.
+
+**Model Catalog NetworkPolicy**
+
+When [required](deploy/kustomize/overlays/openshift-oidc/README.md), apply the NetworkPolicy to allow `rhoai-mcp` to connect to the RHOAI Model Catalog:
+
+```bash
+oc apply -f deploy/kustomize/overlays/openshift/networkpolicy.yaml
+```
 
 ## Configuration
 
@@ -150,7 +176,7 @@ The server can be configured via environment variables (with `RHOAI_MCP_` prefix
 
 ### Authentication
 
-The server supports three authentication modes:
+The server supports three authentication modes for connecting to the Kubernetes API:
 
 1. **Auto (default)**: Tries in-cluster authentication first, falls back to kubeconfig
 2. **Kubeconfig**: Uses a kubeconfig file
@@ -171,6 +197,9 @@ export RHOAI_MCP_API_SERVER=https://api.cluster.example.com:6443
 export RHOAI_MCP_API_TOKEN=sha256~xxxxx
 ```
 
+For multi-user deployments, the OpenShift OIDC overlays add caller-level authentication: each request's bearer token is validated via K8s TokenReview, a SubjectAccessReview pre-flight filters tools based on the caller's RBAC, and resource access is ultimately enforced by the K8s API against the caller's own token.
+See [`deploy/kustomize/overlays/openshift-oidc/README.md`](deploy/kustomize/overlays/openshift-oidc/README.md) for OIDC configuration details.
+
 ### Transport
 
 ```bash
@@ -178,7 +207,7 @@ export RHOAI_MCP_API_TOKEN=sha256~xxxxx
 export RHOAI_MCP_TRANSPORT=stdio
 
 # HTTP transports
-export RHOAI_MCP_TRANSPORT=sse
+export RHOAI_MCP_TRANSPORT=streamable-http
 export RHOAI_MCP_HOST=127.0.0.1
 export RHOAI_MCP_PORT=8000
 ```
@@ -186,19 +215,22 @@ export RHOAI_MCP_PORT=8000
 ### Safety Settings
 
 ```bash
-# Enable delete operations (disabled by default)
+# Enable delete of resources NOT created by rhoai-mcp (disabled by default)
 export RHOAI_MCP_ENABLE_DANGEROUS_OPERATIONS=true
 
 # Read-only mode (disable all write operations)
 export RHOAI_MCP_READ_ONLY_MODE=true
 ```
 
+By default, delete operations are ONLY scoped to resources created by this server (labeled `app.kubernetes.io/managed-by: rhoai-mcp`).
+Deleting resources created outside rhoai-mcp requires `ENABLE_DANGEROUS_OPERATIONS=true`.
+
 ### Safety Features Summary
 
 | Feature | Description | Default |
 |---------|-------------|---------|
-| **Read-Only Mode** | Disables all create/update/delete operations | Off |
-| **Dangerous Operations Gate** | Delete operations require explicit enablement | Disabled |
+| **Read-Only Mode** | Disables all create/update/delete operations | Disabled |
+| **Dangerous Operations Gate** | Deletes restricted to resources created by rhoai-mcp; enable to allow deleting unmanaged resources | Disabled |
 | **Confirmation Pattern** | Delete tools require `confirm=True` parameter | Required |
 | **Credential Masking** | S3 secret keys are masked in all responses | Always |
 | **RBAC-Aware** | Uses OpenShift Projects API to respect user permissions | Always |
@@ -302,7 +334,124 @@ export RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=manual
 | `RHOAI_MCP_MODEL_REGISTRY_TIMEOUT` | Request timeout in seconds | `30` |
 | `RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `false` |
 
-## Usage with Claude Code
+## Usage with agent harness
+
+These examples connect an agent harness to a deployed rhoai-mcp server over HTTP.
+Replace `<RHOAI_MCP_ROUTE>` with the Route URL of your deployment (e.g. `oc get route rhoai-mcp -n rhoai-mcp -o jsonpath='{.spec.host}'`).
+
+### Claude Code
+
+```sh
+claude mcp add rhoai-mcp \
+  --scope project \
+  --transport http \
+  --url "https://<RHOAI_MCP_ROUTE>/mcp" \
+  --header "Authorization: Bearer \${OCP_TOKEN}"
+```
+
+Then start Claude Code with the token:
+
+```sh
+OCP_TOKEN=$(oc whoami -t) claude
+```
+
+### Codex
+
+`.codex/config.toml`:
+
+```toml
+[mcp_servers.rhoai-mcp]
+url = "https://<RHOAI_MCP_ROUTE>/mcp"
+http_headers_helper = ".codex/rhoai-mcp-headers"
+```
+
+`.codex/rhoai-mcp-headers` (make executable with `chmod +x`):
+
+```sh
+#!/bin/sh
+set -eu
+token="$(oc whoami -t)"
+printf '{"Authorization":"Bearer %s"}\n' "$token"
+```
+
+Note: Codex [caches `http_headers_helper`](https://learn.chatgpt.com/docs/extend/mcp?surface=cli#cli-streamable-http-servers), then re-runs the helper after a same-origin 401 or 403.
+Alternatively, do similar setup of exporting OCP_TOKEN, and setup config.toml to use the Env variable instead of `http_headers_helper`.
+
+### OpenCode
+
+`opencode.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "rhoai-mcp": {
+        "type": "remote",
+        "url": "https://<RHOAI_MCP_ROUTE>/mcp",
+        "oauth": false,
+        "headers": {
+          "Authorization": "Bearer {env:OCP_TOKEN}"
+        }
+      }
+    }
+  }
+}
+```
+
+```sh
+export OCP_TOKEN="$(oc whoami -t)"
+opencode service restart
+opencode reload
+opencode mcp list
+opencode
+```
+
+### Pi
+
+Install the MCP adapter first:
+
+```sh
+pi install npm:pi-mcp-adapter
+```
+
+`.mcp.json` (project root):
+
+```json
+{
+  "mcpServers": {
+    "rhoai-mcp": {
+      "url": "https://<RHOAI_MCP_ROUTE>/mcp"
+    }
+  }
+}
+```
+
+`.pi/mcp.json` (Pi-specific override for auth headers):
+
+```json
+{
+  "mcpServers": {
+    "rhoai-mcp": {
+      "headers": {
+        "Authorization": "!.pi/oc-whoami-t-bearer"
+      }
+    }
+  }
+}
+```
+
+`.pi/oc-whoami-t-bearer` (make executable with `chmod +x`):
+
+```sh
+#!/bin/sh
+exec printf 'Bearer %s\n' "$(oc whoami -t)"
+```
+
+Note: the [`!` prefix in headers](https://github.com/nicobailon/pi-mcp-adapter#server-options) tells Pi to execute the script and use its stdout as the header value.
+
+## Local usage with agent harness
+
+### Local usage with Claude Code
 
 Add to your project's `.mcp.json` file:
 
@@ -320,7 +469,7 @@ Add to your project's `.mcp.json` file:
 }
 ```
 
-## Usage with Claude Desktop
+### Local usage with Claude Desktop
 
 Add to your Claude Desktop configuration (`~/.config/claude/claude_desktop_config.json`):
 
@@ -356,7 +505,7 @@ For contributors working with a local clone:
 }
 ```
 
-### Using Container Image (Podman/Docker)
+### Local usage with Container Image (Podman/Docker)
 
 First, build the container image:
 

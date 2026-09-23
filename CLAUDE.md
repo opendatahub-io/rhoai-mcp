@@ -15,7 +15,7 @@ make dev                         # Alias for setup
 
 # Run the server locally
 uv run rhoai-mcp                 # Default (stdio transport)
-uv run rhoai-mcp --transport sse # HTTP transport
+uv run rhoai-mcp --transport streamable-http # HTTP transport
 
 # Testing
 make test                        # All tests

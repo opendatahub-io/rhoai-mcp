@@ -223,7 +223,7 @@ export RHOAI_MCP_READ_ONLY_MODE=true
 ```
 
 By default, delete operations are ONLY scoped to resources created by this server (labeled `app.kubernetes.io/managed-by: rhoai-mcp`).
-Deleting resources created outside rhoai-mcp requires `ENABLE_DANGEROUS_OPERATIONS=true`.
+Deleting resources created outside rhoai-mcp requires `RHOAI_MCP_ENABLE_DANGEROUS_OPERATIONS=true`.
 
 ### Safety Features Summary
 

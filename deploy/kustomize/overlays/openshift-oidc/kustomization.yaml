@@ -3,9 +3,10 @@ kind: Kustomization
 
 # OIDC overlay for OpenShift deployments with multi-user authentication.
 #
-# Replaces the SA-as-actor ClusterRole with impersonation-only permissions:
-# the SA validates tokens and impersonates users; K8s evaluates resource RBAC
-# against the impersonated user's identity, not the SA's.
+# Replaces the SA-as-actor ClusterRole with only the permissions needed to
+# validate tokens and check user access. With the configured user-token
+# strategy, resource RBAC is evaluated against the caller's bearer token,
+# not the ServiceAccount's identity.
 
 resources:
   - ../openshift

@@ -1,5 +1,7 @@
 # NetworkPolicy: Allow rhoai-mcp to reach model-catalog service
-# Applied in the registries namespace (where the target pods live).
+# Applied in the registries namespace.
+# It is only needed when ingress NetworkPolicies there would
+# otherwise block rhoai-mcp from reaching the RHOAI Model Catalog.
 #
 # Apply separately: oc apply -f deploy/kustomize/overlays/openshift/networkpolicy.yaml
 #

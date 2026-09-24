@@ -45,7 +45,7 @@ class TestToolCategories:
 
     def test_categories_defined(self) -> None:
         """All expected categories are defined."""
-        expected = ["discovery", "training", "inference", "workbenches", "diagnostics", "resources", "storage", "model_catalog"]
+        expected = ["discovery", "training", "inference", "workbenches", "diagnostics", "resources", "storage", "model_catalog", "quickstarts"]
         for cat in expected:
             assert cat in TOOL_CATEGORIES
 
@@ -171,6 +171,19 @@ class TestSuggestTools:
         result = suggest_tools("what models are available", None)
 
         assert result["category"] == "model_catalog"
+
+    def test_suggest_quickstart_intent(
+        self, mock_mcp: MagicMock, mock_server: MagicMock
+    ) -> None:
+        """Quickstart intent returns quickstarts workflow."""
+        register_tools(mock_mcp, mock_server)
+        suggest_tools = mock_mcp._registered_tools["suggest_tools"]
+
+        result = suggest_tools("install a quickstart", None)
+
+        assert result["category"] == "quickstarts"
+        assert "list_quickstarts" in result["workflow"]
+        assert "run_quickstart_action" in result["workflow"]
 
     def test_suggest_unknown_intent_defaults_to_discovery(
         self, mock_mcp: MagicMock, mock_server: MagicMock

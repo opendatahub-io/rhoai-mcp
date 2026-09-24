@@ -42,6 +42,9 @@ deployment:
     command: ["/installer/entrypoint.sh"]
     requiredEnv: ["ACTION", "TARGET_NAMESPACE", "INSTALL_MODE"]
   defaultNamespace: "peoplemesh-quickstart"
+status:
+  pollingInterval: "10s"
+  timeout: "15m"
 parameters:
   secrets:
     - name: "keycloak.realm.testUser.password"

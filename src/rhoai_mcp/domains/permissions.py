@@ -137,9 +137,23 @@ STORAGE_PERMISSIONS: dict[str, list[dict[str, str]]] = {
 QUICKSTARTS_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     # list_quickstarts and get_quickstart_manifest read an external OCI
     # registry (no Kubernetes API permissions required).
+    #
+    # run_quickstart_action, as the caller identity, must:
+    #   * create the installer Job (batch/jobs: create) and, on a failed
+    #     params-Secret create, delete that Job to avoid orphaning it
+    #     (batch/jobs: delete);
+    #   * create the params Secret (secrets: create) — it is created owned by
+    #     the Job, so no secrets patch/delete is needed: the Secret is
+    #     garbage-collected with the Job when its TTL expires; and
+    #   * read the target namespace to enforce ownership rules (namespaces: get).
+    # The declared set must stay in step with the operations the tool performs,
+    # or OIDC visibility gating admits callers who cannot complete the action
+    # (e.g. leaving the password Secret behind). See tests/auth for the check.
     "run_quickstart_action": [
         {"apiGroup": "batch", "resource": "jobs", "verb": "create"},
+        {"apiGroup": "batch", "resource": "jobs", "verb": "delete"},
         {"apiGroup": "", "resource": "secrets", "verb": "create"},
+        {"apiGroup": "", "resource": "namespaces", "verb": "get"},
     ],
     "get_quickstart_action_status": [
         {"apiGroup": "batch", "resource": "jobs", "verb": "get"},

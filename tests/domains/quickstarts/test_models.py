@@ -80,6 +80,8 @@ class TestManifest:
         # Passthrough sections preserved.
         assert manifest.prerequisites == {"openshift": {"minimumVersion": "4.12"}}
         assert manifest.llm_context == {"whenToRecommend": "Recommend for talent discovery."}
+        # The status block is preserved verbatim (previously dropped by extra="ignore").
+        assert manifest.status == {"pollingInterval": "10s", "timeout": "15m"}
 
     def test_supports_action_case_insensitive(self) -> None:
         manifest = QuickstartManifest.from_yaml(MANIFEST_YAML)

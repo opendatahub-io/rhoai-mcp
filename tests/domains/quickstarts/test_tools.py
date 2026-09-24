@@ -133,6 +133,39 @@ class TestRunAction:
         mock_client_cls.assert_not_called()
 
     @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
+    def test_uninstall_keep_data_requires_confirm(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        # Tearing down the app requires confirm even though it retains data.
+        tools = _register_tools(mock_server)
+        result = tools["run_quickstart_action"](
+            name="peoplemesh", action="UNINSTALL_KEEP_DATA", confirm=False
+        )
+
+        assert result["error"] == "Action not confirmed"
+        assert "data is retained" in result["message"]
+        mock_client_cls.assert_not_called()
+
+    @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
+    def test_uninstall_keep_data_not_gated_by_dangerous_ops(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        # KEEP_DATA does not destroy data, so it runs with dangerous ops disabled
+        # as long as it is confirmed.
+        mock_server.config.enable_dangerous_operations = False
+        mock_client = MagicMock()
+        mock_client.run_action.return_value = {"action": "UNINSTALL_KEEP_DATA"}
+        mock_client_cls.return_value = mock_client
+
+        tools = _register_tools(mock_server)
+        result = tools["run_quickstart_action"](
+            name="peoplemesh", action="UNINSTALL_KEEP_DATA", confirm=True
+        )
+
+        assert result == {"action": "UNINSTALL_KEEP_DATA"}
+        mock_client.run_action.assert_called_once()
+
+    @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
     def test_success_passes_through(
         self, mock_client_cls: MagicMock, mock_server: MagicMock
     ) -> None:
@@ -165,6 +198,28 @@ class TestRunAction:
 
         assert "error" in result
         assert "missing required" in result["error"]
+
+    @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
+    def test_reserved_namespace_surfaced_as_error(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        from rhoai_mcp.utils.errors import ValidationError
+
+        mock_client = MagicMock()
+        mock_client.run_action.side_effect = ValidationError(
+            "target namespace 'openshift-monitoring' is reserved"
+        )
+        mock_client_cls.return_value = mock_client
+
+        tools = _register_tools(mock_server)
+        result = tools["run_quickstart_action"](
+            name="peoplemesh",
+            action="UNINSTALL_DELETE_ALL",
+            target_namespace="openshift-monitoring",
+            confirm=True,
+        )
+
+        assert "reserved" in result["error"]
 
 
 class TestStatusAndLogs:

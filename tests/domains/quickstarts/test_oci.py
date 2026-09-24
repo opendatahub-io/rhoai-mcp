@@ -139,3 +139,55 @@ class TestFetchLayer:
 
         result = OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
         assert result == b"data"
+
+    def test_transport_error_mapped_to_oci_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Connect/timeout errors must not escape raw past the tools' except RHOAIError.
+        class BoomClient(_FakeClient):
+            def get(self, _url: str, **_kwargs: Any) -> _FakeResp:
+                raise oci_module.httpx.ConnectError("connection refused")
+
+        fake = BoomClient([])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        with pytest.raises(OCIError, match="failed to fetch OCI artifact"):
+            OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
+
+    def test_index_entry_without_digest_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        index = _FakeResp(
+            200,
+            json_data={
+                "mediaType": "application/vnd.oci.image.index.v1+json",
+                "manifests": [{}],
+            },
+        )
+        fake = _FakeClient([("/manifests/", index)])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        with pytest.raises(OCIError, match="no digest"):
+            OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
+
+    def test_layer_without_digest_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        manifest = _FakeResp(200, json_data={"layers": [{"mediaType": MANIFEST_MEDIA_TYPE}]})
+        fake = _FakeClient([("/manifests/", manifest)])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        with pytest.raises(OCIError, match="no digest"):
+            OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
+
+    def test_invalid_token_response_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        challenge = 'Bearer realm="https://auth.example/token",service="registry"'
+        manifest_401 = _FakeResp(401, headers={"www-authenticate": challenge})
+        token = _FakeResp(200)  # no json_data -> .json() raises ValueError
+
+        class SeqClient(_FakeClient):
+            def get(self, url: str, **_kwargs: Any) -> _FakeResp:
+                self.calls.append(url)
+                if "auth.example" in url or "/token" in url:
+                    return token
+                return manifest_401
+
+        fake = SeqClient([])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        with pytest.raises(OCIError, match="invalid token response JSON"):
+            OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)

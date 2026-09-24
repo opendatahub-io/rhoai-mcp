@@ -259,10 +259,37 @@ class RHOAIConfig(BaseSettings):
         default="quickstart-installer",
         description="Pre-provisioned ServiceAccount the installer Jobs run as",
     )
+    quickstart_installer_cpu_request: str = Field(
+        default="100m",
+        description="CPU request for the installer container (guaranteed floor so the Job stays "
+        "schedulable and is not first to be throttled)",
+    )
+    quickstart_installer_cpu_limit: str = Field(
+        default="1",
+        description="CPU limit for the installer container (generous upper bound; CPU over-limit "
+        "throttles rather than crashes)",
+    )
+    quickstart_installer_memory_request: str = Field(
+        default="256Mi",
+        description="Memory request for the installer container (guaranteed floor so the Job is "
+        "not first to be evicted under node memory pressure)",
+    )
+    quickstart_installer_memory_limit: str = Field(
+        default="2Gi",
+        description="Memory limit for the installer container — generous to avoid OOM-killing a "
+        "long-running install, while capping any runaway well below what would harm a node",
+    )
     quickstart_job_ttl_seconds: int = Field(
         default=3600,
         ge=0,
         description="ttlSecondsAfterFinished for installer Jobs (0 deletes immediately on finish)",
+    )
+    quickstart_job_active_deadline_seconds: int = Field(
+        default=7200,
+        ge=1,
+        description="activeDeadlineSeconds for installer Jobs — a hard wall-clock cap on total "
+        "runtime, after which Kubernetes terminates the Job and marks it Failed. Set high by "
+        "default (2 hours) since some quickstarts take a long time to install.",
     )
     quickstart_oci_timeout: int = Field(
         default=30,
@@ -273,6 +300,13 @@ class RHOAIConfig(BaseSettings):
     quickstart_oci_skip_tls_verify: bool = Field(
         default=False,
         description="Skip TLS verification when pulling quickstart OCI artifacts (not recommended)",
+    )
+    quickstart_allowed_repos: list[str] = Field(
+        default=["quay.io/rh-ai-quickstart/"],
+        description="Allowlist of OCI repository prefixes quickstart artifacts (registry, "
+        "manifests, installer images) may be pulled from. Any registry/manifest/installer "
+        "reference outside these prefixes is rejected. Set via "
+        "RHOAI_MCP_QUICKSTART_ALLOWED_REPOS as comma-separated values.",
     )
 
     # Plugin filtering
@@ -332,6 +366,14 @@ class RHOAIConfig(BaseSettings):
         "'user-token' forwards the caller's bearer token directly, "
         "'impersonation' uses SA credentials with Impersonate-* headers.",
     )
+
+    @field_validator("quickstart_allowed_repos", mode="before")
+    @classmethod
+    def parse_quickstart_allowed_repos(cls, v: str | list[str]) -> list[str]:
+        """Parse comma-separated string into list."""
+        if isinstance(v, str):
+            return [r.strip() for r in v.split(",") if r.strip()]
+        return v
 
     @field_validator("enabled_plugins", mode="before")
     @classmethod

@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 
-from rhoai_mcp.domains.quickstarts.client import DESTRUCTIVE_ACTIONS, QuickstartsClient
+from rhoai_mcp.domains.quickstarts.client import (
+    DESTRUCTIVE_ACTIONS,
+    UNINSTALL_ACTION_PREFIX,
+    QuickstartsClient,
+)
 from rhoai_mcp.utils.errors import RHOAIError
 from rhoai_mcp.utils.response import PaginatedResponse, paginate
 
@@ -135,8 +139,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 the manifest's parameters block).
             version: Quickstart version; defaults to the registry's latest.
             source_version: Current version, required for the UPGRADE action.
-            confirm: Must be True for destructive actions (e.g.
-                UNINSTALL_DELETE_ALL).
+            confirm: Must be True for teardown actions (any UNINSTALL_*,
+                including UNINSTALL_KEEP_DATA and UNINSTALL_DELETE_ALL).
 
         Returns:
             Job provenance (job_name/job_namespace) for status and log polling.
@@ -145,23 +149,27 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        if action.upper() in DESTRUCTIVE_ACTIONS:
-            if not server.config.enable_dangerous_operations:
-                return {
-                    "error": "Dangerous operations are disabled",
-                    "message": (
-                        f"Action '{action}' permanently deletes data. Enable "
-                        "dangerous operations to allow it."
-                    ),
-                }
-            if not confirm:
-                return {
-                    "error": "Action not confirmed",
-                    "message": (
-                        f"Action '{action}' permanently deletes data. Set "
-                        "confirm=True to proceed."
-                    ),
-                }
+        action_upper = action.upper()
+        if action_upper in DESTRUCTIVE_ACTIONS and not server.config.enable_dangerous_operations:
+            return {
+                "error": "Dangerous operations are disabled",
+                "message": (
+                    f"Action '{action}' permanently deletes data. Enable "
+                    "dangerous operations to allow it."
+                ),
+            }
+        # Every UNINSTALL_* action tears down the deployment and requires confirm,
+        # matching the project's delete_* tools; DELETE_ALL also destroys data.
+        if action_upper.startswith(UNINSTALL_ACTION_PREFIX) and not confirm:
+            detail = (
+                "permanently deletes data"
+                if action_upper in DESTRUCTIVE_ACTIONS
+                else "tears down the deployed application (data is retained)"
+            )
+            return {
+                "error": "Action not confirmed",
+                "message": f"Action '{action}' {detail}. Set confirm=True to proceed.",
+            }
 
         try:
             return _client().run_action(

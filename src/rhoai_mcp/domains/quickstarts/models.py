@@ -218,6 +218,7 @@ class QuickstartManifest(QuickstartModel):
     prerequisites: dict[str, Any] | None = None
     deployment: QuickstartDeployment
     parameters: QuickstartParameters = Field(default_factory=QuickstartParameters)
+    status: dict[str, Any] | None = None
     access: dict[str, Any] | None = None
     cleanup: dict[str, Any] | None = None
     documentation: dict[str, Any] | None = None

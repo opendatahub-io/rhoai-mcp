@@ -110,25 +110,37 @@ class OCIArtifactClient:
         base = f"https://{parsed.registry}"
         token_box: dict[str, str] = {}
 
-        with httpx.Client(
-            timeout=self._timeout, verify=self._verify, follow_redirects=True
-        ) as client:
-            manifest = self._fetch_manifest(client, base, parsed, token_box)
+        try:
+            with httpx.Client(
+                timeout=self._timeout, verify=self._verify, follow_redirects=True
+            ) as client:
+                manifest = self._fetch_manifest(client, base, parsed, token_box)
 
-            if manifest.get("mediaType") in _INDEX_MEDIA_TYPES or (
-                "manifests" in manifest and "layers" not in manifest
-            ):
-                children = manifest.get("manifests") or []
-                if not children:
-                    raise OCIError(f"empty image index for {ref}")
-                child_ref = ParsedRef(parsed.registry, parsed.repository, children[0]["digest"])
-                manifest = self._fetch_manifest(client, base, child_ref, token_box)
+                if manifest.get("mediaType") in _INDEX_MEDIA_TYPES or (
+                    "manifests" in manifest and "layers" not in manifest
+                ):
+                    children = manifest.get("manifests") or []
+                    if not children:
+                        raise OCIError(f"empty image index for {ref}")
+                    digest = children[0].get("digest") if isinstance(children[0], dict) else None
+                    if not digest:
+                        raise OCIError(f"image index entry has no digest for {ref}")
+                    child_ref = ParsedRef(parsed.registry, parsed.repository, digest)
+                    manifest = self._fetch_manifest(client, base, child_ref, token_box)
 
-            for layer in manifest.get("layers", []):
-                if layer.get("mediaType") == media_type:
-                    return self._fetch_blob(client, base, parsed, layer["digest"], token_box)
+                for layer in manifest.get("layers", []):
+                    if layer.get("mediaType") == media_type:
+                        digest = layer.get("digest")
+                        if not digest:
+                            raise OCIError(f"layer with media type {media_type!r} has no digest")
+                        return self._fetch_blob(client, base, parsed, digest, token_box)
 
-            raise OCIError(f"no layer with media type {media_type!r} in {ref}")
+                raise OCIError(f"no layer with media type {media_type!r} in {ref}")
+        except httpx.HTTPError as exc:
+            # Transport-level failures (connect, timeout, protocol) must surface as
+            # OCIError so the tools' `except RHOAIError` handles them, rather than
+            # escaping raw to the MCP client.
+            raise OCIError(f"failed to fetch OCI artifact {ref}: {exc}")
 
     def _fetch_manifest(
         self,
@@ -188,9 +200,7 @@ class OCIArtifactClient:
                 resp = client.get(url, headers=request_headers)
         return resp
 
-    def _fetch_token(
-        self, client: httpx.Client, challenge: str, parsed: ParsedRef
-    ) -> str | None:
+    def _fetch_token(self, client: httpx.Client, challenge: str, parsed: ParsedRef) -> str | None:
         """Exchange a ``WWW-Authenticate: Bearer`` challenge for an access token."""
         if not challenge.lower().startswith("bearer "):
             return None
@@ -200,13 +210,20 @@ class OCIArtifactClient:
         if not realm:
             return None
 
-        query: dict[str, str] = {"scope": params.get("scope") or f"repository:{parsed.repository}:pull"}
+        query: dict[str, str] = {
+            "scope": params.get("scope") or f"repository:{parsed.repository}:pull"
+        }
         if params.get("service"):
             query["service"] = params["service"]
 
         resp = client.get(realm, params=query)
         if resp.status_code != 200:
             raise OCIError(f"token request failed (HTTP {resp.status_code})")
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise OCIError(f"invalid token response JSON: {exc}")
+        if not isinstance(data, dict):
+            return None
         token = data.get("token") or data.get("access_token")
         return token if isinstance(token, str) else None

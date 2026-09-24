@@ -18,7 +18,8 @@ An MCP (Model Context Protocol) server that enables AI agents to interact with R
 - **Pipelines**: Configure Data Science Pipelines infrastructure
 - **Storage**: Create and manage persistent volume claims
 - **Training**: Fine-tune models with Kubeflow Training Operator
-- **MCP Prompts**: Workflow guidance for multi-step operations (18 prompts)
+- **Quickstarts**: Discover and deploy Red Hat AI quickstarts from an OCI registry
+- **MCP Prompts**: Workflow guidance for multi-step operations (19 prompts)
 
 ## Technology Stack
 
@@ -334,6 +335,48 @@ export RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=manual
 | `RHOAI_MCP_MODEL_REGISTRY_TIMEOUT` | Request timeout in seconds | `30` |
 | `RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `false` |
 
+### Quickstarts
+
+The MCP server can discover Red Hat AI quickstarts from an OCI registry and
+deploy them by running an installer Job in the cluster. Discovery works without
+a cluster; deployment actions require the installer RBAC prerequisite below.
+
+#### Quickstart Installer RBAC
+
+Deployment actions (`run_quickstart_action`) create an installer Job — and its
+parameters Secret — in a dedicated namespace (`RHOAI_MCP_QUICKSTART_JOB_NAMESPACE`,
+default `openshift-quickstarts`), running as a dedicated ServiceAccount
+(`RHOAI_MCP_QUICKSTART_INSTALLER_SERVICE_ACCOUNT`, default `quickstart-installer`).
+
+**The MCP server does not create this namespace or ServiceAccount.** Because the
+installer runs with elevated privileges, a cluster admin must provision them
+once, out-of-band:
+
+```bash
+oc apply -f deploy/quickstarts/installer-rbac.yaml
+```
+
+The quickstarts plugin health check verifies the namespace and ServiceAccount
+exist and points back at this manifest when they are missing. (The **target**
+application namespace is created by the installer Job itself at INSTALL time.)
+
+#### All Quickstart Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RHOAI_MCP_QUICKSTART_REGISTRY_REF` | OCI reference of the quickstart registry index artifact | `quay.io/rh-ai-quickstart/quickstart-registry:latest` |
+| `RHOAI_MCP_QUICKSTART_JOB_NAMESPACE` | Namespace where installer Jobs (and their param Secrets) run | `openshift-quickstarts` |
+| `RHOAI_MCP_QUICKSTART_INSTALLER_SERVICE_ACCOUNT` | Pre-provisioned ServiceAccount the installer Jobs run as | `quickstart-installer` |
+| `RHOAI_MCP_QUICKSTART_INSTALLER_CPU_REQUEST` | CPU request for the installer container | `100m` |
+| `RHOAI_MCP_QUICKSTART_INSTALLER_CPU_LIMIT` | CPU limit for the installer container | `1` |
+| `RHOAI_MCP_QUICKSTART_INSTALLER_MEMORY_REQUEST` | Memory request for the installer container | `256Mi` |
+| `RHOAI_MCP_QUICKSTART_INSTALLER_MEMORY_LIMIT` | Memory limit for the installer container | `2Gi` |
+| `RHOAI_MCP_QUICKSTART_JOB_TTL_SECONDS` | `ttlSecondsAfterFinished` for installer Jobs (0 = delete immediately) | `3600` |
+| `RHOAI_MCP_QUICKSTART_JOB_ACTIVE_DEADLINE_SECONDS` | Hard wall-clock cap on installer Job runtime | `7200` |
+| `RHOAI_MCP_QUICKSTART_OCI_TIMEOUT` | Timeout in seconds for quickstart OCI registry requests | `30` |
+| `RHOAI_MCP_QUICKSTART_OCI_SKIP_TLS_VERIFY` | Skip TLS verification when pulling quickstart OCI artifacts | `false` |
+| `RHOAI_MCP_QUICKSTART_ALLOWED_REPOS` | Comma-separated allowlist of OCI repository prefixes for quickstart artifacts | `quay.io/rh-ai-quickstart/` |
+
 ## Usage with agent harness
 
 These examples connect an agent harness to a deployed rhoai-mcp server over HTTP.
@@ -618,6 +661,22 @@ Note: The container uses `stdio` transport by default, which is required for Cla
 | `create_storage` | Create PVC |
 | `delete_storage` | Delete PVC (requires confirmation) |
 
+### Quickstarts (5 tools)
+
+| Tool | Description |
+|------|-------------|
+| `list_quickstarts` | List available quickstarts from the Red Hat AI quickstart registry |
+| `get_quickstart_manifest` | Get a quickstart's full manifest, including its parameters |
+| `run_quickstart_action` | Run a quickstart action (e.g. `INSTALL`, `UNINSTALL_*`) as an installer Job |
+| `get_quickstart_action_status` | Get the status of a quickstart action (installer Job) |
+| `get_quickstart_action_logs` | Get installer logs for a quickstart action (installer Job) |
+
+> **Prerequisite:** Deployment actions run an installer Job under a dedicated
+> ServiceAccount in a dedicated namespace. A cluster admin must provision these
+> once by applying [`deploy/quickstarts/installer-rbac.yaml`](deploy/quickstarts/installer-rbac.yaml)
+> — the MCP server does not create them automatically. See
+> [Quickstart installer RBAC](#quickstart-installer-rbac).
+
 ## MCP Resources
 
 The server also exposes read-only resources:
@@ -633,7 +692,7 @@ The server also exposes read-only resources:
 
 ## MCP Prompts
 
-The server provides 18 prompts that guide AI agents through multi-step workflows. Prompts are templates that provide step-by-step instructions and reference the appropriate tools for each workflow stage.
+The server provides 19 prompts that guide AI agents through multi-step workflows. Prompts are templates that provide step-by-step instructions and reference the appropriate tools for each workflow stage.
 
 ### Training Workflow (3 prompts)
 
@@ -677,6 +736,12 @@ The server provides 18 prompts that guide AI agents through multi-step workflows
 | `deploy-llm` | Deploy a Large Language Model with vLLM or TGIS |
 | `test-endpoint` | Test a deployed model endpoint |
 | `scale-model` | Scale a model deployment up or down |
+
+### Quickstart Deployment (1 prompt)
+
+| Prompt | Description |
+|--------|-------------|
+| `deploy-quickstart` | Discover, configure and deploy a Red Hat AI quickstart (discover → manifest → elicit parameters → run → poll) |
 
 ## Example Interactions
 

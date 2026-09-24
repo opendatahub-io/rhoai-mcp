@@ -70,28 +70,27 @@ class QuickstartSummary(QuickstartModel):
     name: str
     display_name: str | None = Field(default=None, alias="displayName")
     short_description: str | None = Field(default=None, alias="shortDescription")
-    latest_version: str | None = Field(default=None, alias="latestVersion")
-    available_versions: list[RegistryVersion] = Field(
-        default_factory=list, alias="availableVersions"
+    latest_manifest_version: str | None = Field(default=None, alias="latestManifestVersion")
+    available_manifest_versions: list[RegistryVersion] = Field(
+        default_factory=list, alias="availableManifestVersions"
     )
     estimated_deployment_time: int | None = Field(default=None, alias="estimatedDeploymentTime")
     tags: list[str] = Field(default_factory=list)
     industries: list[str] = Field(default_factory=list)
     manifest_repo: str | None = Field(default=None, alias="manifestRepo")
-    installer_repo: str | None = Field(default=None, alias="installerRepo")
 
     def manifest_ref(self, version: str | None = None) -> str:
         """Build the OCI reference for this quickstart's manifest artifact.
 
         Args:
-            version: Explicit version tag; defaults to ``latest_version``.
+            version: Explicit version tag; defaults to ``latest_manifest_version``.
 
         Raises:
             RHOAIError: If no manifest repository or resolvable version exists.
         """
         if not self.manifest_repo:
             raise RHOAIError(f"quickstart '{self.name}' has no manifestRepo in the registry")
-        resolved = version or self.latest_version
+        resolved = version or self.latest_manifest_version
         if not resolved:
             raise RHOAIError(f"quickstart '{self.name}' has no version to resolve a manifest")
         return f"{self.manifest_repo}:{resolved}"
@@ -102,15 +101,15 @@ class QuickstartSummary(QuickstartModel):
             "name": self.name,
             "display_name": self.display_name,
             "short_description": self.short_description,
-            "latest_version": self.latest_version,
-            "available_versions": [
-                {"version": v.version, "status": v.status} for v in self.available_versions
+            "latest_manifest_version": self.latest_manifest_version,
+            "available_manifest_versions": [
+                {"version": v.version, "status": v.status}
+                for v in self.available_manifest_versions
             ],
             "estimated_deployment_time": self.estimated_deployment_time,
             "tags": self.tags,
             "industries": self.industries,
             "manifest_repo": self.manifest_repo,
-            "installer_repo": self.installer_repo,
         }
 
 

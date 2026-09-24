@@ -39,9 +39,9 @@ class TestRegistry:
         entry = registry.quickstarts[0]
         assert entry.name == "peoplemesh"
         assert entry.display_name == "Peoplemesh"
-        assert entry.latest_version == "1.0.0"
-        assert entry.available_versions[0].version == "1.0.0"
-        assert entry.available_versions[0].status == "stable"
+        assert entry.latest_manifest_version == "1.0.0"
+        assert entry.available_manifest_versions[0].version == "1.0.0"
+        assert entry.available_manifest_versions[0].status == "stable"
         assert entry.tags == ["llm", "rag"]
         assert entry.manifest_repo == "quay.io/rh-ai-quickstart/peoplemesh-manifest"
 

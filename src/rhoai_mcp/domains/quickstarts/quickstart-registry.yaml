@@ -1,0 +1,83 @@
+# Quickstart Registry Index
+#
+# The catalog of all available quickstarts. Drives the Console Plugin catalog
+# and the operator's GET /api/v1/quickstarts endpoint. This file is the
+# lightweight index (catalog-tile data only) — full per-quickstart detail lives
+# in each quickstart's manifest (quay.io/rh-ai-quickstart/<name>-manifest).
+#
+# Published as an OCI artifact to quay.io/rh-ai-quickstart/quickstart-registry:latest
+# (media type application/vnd.redhat.quickstart.registry.v1+yaml). The operator
+# also ships this file as a bundled default for disconnected first-boot.
+apiVersion: quickstart.redhat.com/v1
+kind: QuickstartRegistry
+metadata:
+  lastUpdated: "2026-08-25T00:00:00Z"
+  version: "1.0"
+quickstarts:
+  - name: peoplemesh
+    displayName: "Deploy AI-Powered Talent Discovery with Semantic Search"
+    shortDescription: "Learn to build semantic search that finds talent by meaning, not keywords, using Keycloak, Docling, and embeddings on OpenShift."
+    latestManifestVersion: "1.0.0"
+    availableManifestVersions:
+      - version: "1.0.0"
+        status: stable
+    estimatedDeploymentTime: 15
+    tags:
+      - "vector-search"
+      - "semantic-search"
+      - "llm"
+      - "rag"
+      - "oidc"
+      - "keycloak"
+      - "document-ai"
+      - "embeddings"
+      - "talent-management"
+    industries:
+      - "Media and IT Services"
+      - "Human Resources"
+      - "Professional Services"
+    manifestRepo: "quay.io/rh-ai-quickstart/peoplemesh-manifest"
+
+  - name: lemonade-stand-assistant
+    displayName: "Lemonade Stand Assistant"
+    shortDescription: "Deploy an AI-powered customer service assistant with built-in safety guardrails to ensure family-friendly, compliant interactions for your business."
+    latestManifestVersion: "1.0.0"
+    availableManifestVersions:
+      - version: "1.0.0"
+        status: stable
+    estimatedDeploymentTime: 20
+    tags:
+      - "ai-safety"
+      - "guardrails"
+      - "trustyai"
+      - "openshift-ai"
+      - "kserve"
+      - "llm"
+      - "retail"
+      - "customer-service"
+    industries:
+      - "Retail"
+    manifestRepo: "quay.io/rh-ai-quickstart/lemonade-stand-assistant-manifest"
+
+  - name: maas-code-assistant
+    displayName: "MaaS Code Assistant with NVIDIA"
+    shortDescription: "Optimize private app development using NVIDIA Nemotron models through Models-as-a-Service on your own multi-tenant infrastructure in Red Hat AI."
+    latestManifestVersion: "1.0.0"
+    availableManifestVersions:
+      - version: "1.0.0"
+        status: stable
+    estimatedDeploymentTime: 45
+    tags:
+      - "Red Hat AI Enterprise"
+      - "Code development"
+      - "Adopt and scale AI"
+      - "NVIDIA"
+      - "MaaS"
+      - "Models as a Service"
+      - "DevSpaces"
+      - "GPU"
+      - "vLLM"
+      - "llm-d"
+    industries:
+      - "Adopt and scale AI"
+    manifestRepo: "quay.io/rh-ai-quickstart/maas-code-assistant-manifest"

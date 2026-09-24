@@ -9,15 +9,14 @@ quickstarts:
   - name: peoplemesh
     displayName: "Peoplemesh"
     shortDescription: "Semantic talent search"
-    latestVersion: "1.0.0"
-    availableVersions:
+    latestManifestVersion: "1.0.0"
+    availableManifestVersions:
       - version: "1.0.0"
         status: stable
     estimatedDeploymentTime: 15
     tags: ["llm", "rag"]
     industries: ["Human Resources"]
     manifestRepo: "quay.io/rh-ai-quickstart/peoplemesh-manifest"
-    installerRepo: "quay.io/rh-ai-quickstart/peoplemesh-installer"
 """
 
 MANIFEST_YAML = b"""

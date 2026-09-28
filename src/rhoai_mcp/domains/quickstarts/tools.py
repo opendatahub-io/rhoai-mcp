@@ -142,8 +142,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 the manifest's parameters block).
             version: Quickstart version; defaults to the registry's latest.
             source_version: Current version, required for the UPGRADE action.
-            confirm: Must be True for teardown actions (any UNINSTALL_*,
-                including UNINSTALL_KEEP_DATA and UNINSTALL_DELETE_ALL).
+            confirm: Must be True for every cluster-changing action (INSTALL,
+                UPGRADE, and any UNINSTALL_*). CHECK_PRE_REQS and STATUS need no
+                confirmation.
 
         Returns:
             Job provenance (job_name/job_namespace) for status and log polling.
@@ -167,14 +168,15 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                     f"Action '{action}' {detail}. Enable dangerous operations to allow it."
                 ),
             }
-        # Every UNINSTALL_* action tears down the deployment and requires confirm,
-        # matching the project's delete_* tools; DELETE_ALL also destroys data.
-        if action_upper.startswith(UNINSTALL_ACTION_PREFIX) and not confirm:
-            detail = (
-                "permanently deletes data"
-                if action_upper in DESTRUCTIVE_ACTIONS
-                else "tears down the deployed application (data is retained)"
-            )
+        # Every cluster-changing action requires explicit confirm, matching the
+        # project's delete_* tools; only the inspection actions are exempt.
+        if action_upper not in INSPECTION_ACTIONS and not confirm:
+            if action_upper in DESTRUCTIVE_ACTIONS:
+                detail = "permanently deletes data"
+            elif action_upper.startswith(UNINSTALL_ACTION_PREFIX):
+                detail = "tears down the deployed application (data is retained)"
+            else:
+                detail = "changes cluster state"
             return {
                 "error": "Action not confirmed",
                 "message": f"Action '{action}' {detail}. Set confirm=True to proceed.",

@@ -147,6 +147,32 @@ class TestRunAction:
         mock_client_cls.assert_not_called()
 
     @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
+    def test_install_requires_confirm(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        # INSTALL changes cluster state, so it needs explicit confirmation.
+        tools = _register_tools(mock_server)
+        result = tools["run_quickstart_action"](name="peoplemesh", action="INSTALL")
+
+        assert result["error"] == "Action not confirmed"
+        assert "changes cluster state" in result["message"]
+        mock_client_cls.assert_not_called()
+
+    @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
+    def test_upgrade_requires_confirm(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        # UPGRADE changes cluster state, so it needs explicit confirmation.
+        tools = _register_tools(mock_server)
+        result = tools["run_quickstart_action"](
+            name="peoplemesh", action="UPGRADE", source_version="1.0.0"
+        )
+
+        assert result["error"] == "Action not confirmed"
+        assert "changes cluster state" in result["message"]
+        mock_client_cls.assert_not_called()
+
+    @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
     def test_uninstall_keep_data_requires_dangerous_ops(
         self, mock_client_cls: MagicMock, mock_server: MagicMock
     ) -> None:
@@ -222,6 +248,7 @@ class TestRunAction:
             name="peoplemesh",
             action="INSTALL",
             parameters={"keycloak.realm.testUser.password": "x"},
+            confirm=True,
         )
 
         assert result == {"job_name": "qs-x", "action": "INSTALL"}
@@ -238,7 +265,9 @@ class TestRunAction:
         mock_client_cls.return_value = mock_client
 
         tools = _register_tools(mock_server)
-        result = tools["run_quickstart_action"](name="peoplemesh", action="INSTALL")
+        result = tools["run_quickstart_action"](
+            name="peoplemesh", action="INSTALL", confirm=True
+        )
 
         assert "error" in result
         assert "missing required" in result["error"]

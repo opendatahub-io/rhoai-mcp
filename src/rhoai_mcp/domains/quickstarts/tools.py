@@ -15,6 +15,7 @@ from mcp.server.fastmcp import FastMCP
 
 from rhoai_mcp.domains.quickstarts.client import (
     DESTRUCTIVE_ACTIONS,
+    INSPECTION_ACTIONS,
     UNINSTALL_ACTION_PREFIX,
     QuickstartsClient,
 )
@@ -132,6 +133,8 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             name: The quickstart name.
             action: One of the manifest's supportedActions (e.g. INSTALL,
                 CHECK_PRE_REQS, STATUS, UNINSTALL_KEEP_DATA, UNINSTALL_DELETE_ALL).
+                Every action except CHECK_PRE_REQS and STATUS changes cluster state
+                and requires dangerous operations to be enabled.
             target_namespace: Namespace to deploy into; defaults to the
                 manifest's defaultNamespace.
             mode: Install mode (e.g. "demo"); validated against supportedModes.
@@ -150,12 +153,18 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
             return {"error": reason}
 
         action_upper = action.upper()
-        if action_upper in DESTRUCTIVE_ACTIONS and not server.config.enable_dangerous_operations:
+        # Every cluster-changing action requires dangerous operations; only the
+        # inspection actions (CHECK_PRE_REQS/STATUS) are exempt.
+        if action_upper not in INSPECTION_ACTIONS and not server.config.enable_dangerous_operations:
+            detail = (
+                "permanently deletes data"
+                if action_upper in DESTRUCTIVE_ACTIONS
+                else "changes cluster state"
+            )
             return {
                 "error": "Dangerous operations are disabled",
                 "message": (
-                    f"Action '{action}' permanently deletes data. Enable "
-                    "dangerous operations to allow it."
+                    f"Action '{action}' {detail}. Enable dangerous operations to allow it."
                 ),
             }
         # Every UNINSTALL_* action tears down the deployment and requires confirm,

@@ -48,7 +48,13 @@ QUICKSTART_ACTION_LABEL = "quickstart.redhat.com/action"
 # reconcile uses to find which namespace to stamp as MCP-managed.
 QUICKSTART_TARGET_NS_LABEL = "quickstart.redhat.com/target-namespace"
 
-# Actions that destroy data and therefore additionally require dangerous-operations.
+# Inspection actions that mutate nothing (the installer image runs read-only) and
+# so are exempt from the dangerous-operations gate. Every other action changes
+# cluster state and requires dangerous operations to be enabled.
+INSPECTION_ACTIONS = {"CHECK_PRE_REQS", "STATUS"}
+
+# Actions that destroy data. These additionally drive the confirm-prompt wording;
+# like every other mutating action they also require dangerous-operations.
 DESTRUCTIVE_ACTIONS = {"UNINSTALL_DELETE_ALL"}
 
 # Teardown prefix: every UNINSTALL_* action tears down the deployed quickstart and

@@ -147,23 +147,67 @@ class TestRunAction:
         mock_client_cls.assert_not_called()
 
     @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
-    def test_uninstall_keep_data_not_gated_by_dangerous_ops(
+    def test_uninstall_keep_data_requires_dangerous_ops(
         self, mock_client_cls: MagicMock, mock_server: MagicMock
     ) -> None:
-        # KEEP_DATA does not destroy data, so it runs with dangerous ops disabled
-        # as long as it is confirmed.
+        # KEEP_DATA tears down the app (a cluster change), so it needs dangerous
+        # ops even though it retains data.
         mock_server.config.enable_dangerous_operations = False
-        mock_client = MagicMock()
-        mock_client.run_action.return_value = {"action": "UNINSTALL_KEEP_DATA"}
-        mock_client_cls.return_value = mock_client
 
         tools = _register_tools(mock_server)
         result = tools["run_quickstart_action"](
             name="peoplemesh", action="UNINSTALL_KEEP_DATA", confirm=True
         )
 
-        assert result == {"action": "UNINSTALL_KEEP_DATA"}
-        mock_client.run_action.assert_called_once()
+        assert result["error"] == "Dangerous operations are disabled"
+        assert "changes cluster state" in result["message"]
+        mock_client_cls.assert_not_called()
+
+    @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
+    def test_install_requires_dangerous_ops(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        mock_server.config.enable_dangerous_operations = False
+
+        tools = _register_tools(mock_server)
+        result = tools["run_quickstart_action"](name="peoplemesh", action="INSTALL")
+
+        assert result["error"] == "Dangerous operations are disabled"
+        assert "changes cluster state" in result["message"]
+        mock_client_cls.assert_not_called()
+
+    @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
+    def test_upgrade_requires_dangerous_ops(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        mock_server.config.enable_dangerous_operations = False
+
+        tools = _register_tools(mock_server)
+        result = tools["run_quickstart_action"](
+            name="peoplemesh", action="UPGRADE", source_version="1.0.0"
+        )
+
+        assert result["error"] == "Dangerous operations are disabled"
+        mock_client_cls.assert_not_called()
+
+    @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
+    def test_inspection_actions_not_gated_by_dangerous_ops(
+        self, mock_client_cls: MagicMock, mock_server: MagicMock
+    ) -> None:
+        # CHECK_PRE_REQS and STATUS mutate nothing, so they run with dangerous
+        # ops disabled and need no confirm.
+        mock_server.config.enable_dangerous_operations = False
+        mock_client = MagicMock()
+        mock_client.run_action.return_value = {"action": "CHECK_PRE_REQS"}
+        mock_client_cls.return_value = mock_client
+
+        tools = _register_tools(mock_server)
+        for action in ("CHECK_PRE_REQS", "STATUS"):
+            mock_client.run_action.reset_mock()
+            result = tools["run_quickstart_action"](name="peoplemesh", action=action)
+
+            assert "error" not in result
+            mock_client.run_action.assert_called_once()
 
     @patch("rhoai_mcp.domains.quickstarts.tools.QuickstartsClient")
     def test_success_passes_through(

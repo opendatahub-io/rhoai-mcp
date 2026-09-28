@@ -44,8 +44,7 @@ JOB_CRD = CRDDefinition(group="batch", version="v1", plural="jobs", kind="Job")
 # Quickstart-specific labels applied to Jobs and their parameter Secrets.
 QUICKSTART_NAME_LABEL = "quickstart.redhat.com/name"
 QUICKSTART_ACTION_LABEL = "quickstart.redhat.com/action"
-# Records an action's target namespace on the Job; also the key the status
-# reconcile uses to find which namespace to stamp as MCP-managed.
+# Records an action's target namespace on the Job, for provenance and debugging.
 QUICKSTART_TARGET_NS_LABEL = "quickstart.redhat.com/target-namespace"
 
 # Inspection actions that mutate nothing (the installer image runs read-only) and
@@ -71,10 +70,11 @@ MANAGED_NAMESPACE_ACTIONS = {
 }
 
 # Actions whose installer Job creates/owns the target namespace. For these the
-# Job command is wrapped so that, on a successful installer run, it stamps the
-# managed-by-mcp label onto that namespace; the guarded actions above then
-# recognise it as ours. Because the label is written inside the Job, it does not
-# depend on anyone polling the Job's status afterwards.
+# Job command is wrapped with a background watcher that stamps the managed-by-mcp
+# label onto that namespace as soon as it exists (not only on success), so the
+# guarded actions above still recognise it as ours even if the install fails
+# partway. Because the label is written inside the Job, it does not depend on
+# anyone polling the Job's status afterwards.
 NAMESPACE_LABELING_ACTIONS = {"INSTALL", "UPGRADE"}
 
 # Namespace prefixes that are always off-limits as deployment targets: deploying
@@ -606,24 +606,34 @@ class QuickstartsClient:
 
     @staticmethod
     def _installer_with_labeling(command: list[str]) -> list[str]:
-        """Wrap the installer command so a successful run labels the target namespace.
+        """Wrap the installer command so the target namespace is labeled as ours
+        as soon as it exists — not only after a successful install.
 
-        Runs the installer, then — only if it exits 0 and the namespace exists —
-        stamps the managed-by-mcp label so guarded actions (uninstall/upgrade/
-        status) recognise the namespace as ours. Doing this inside the Job means
-        it does not rely on anyone polling the Job afterwards. The installer's
-        exit code is preserved as the container result so the Job still reflects
-        success or failure. The namespace is read from $TARGET_NAMESPACE (already
-        validated to DNS-1123 characters), so it is safe to reference in the shell.
+        The installer creates the target namespace itself partway through its run.
+        A background watcher stamps the managed-by-mcp label the moment that
+        namespace appears, so a later teardown (uninstall/upgrade/status) still
+        recognises the namespace as ours even when the install then fails partway
+        through. A final attempt after the installer exits closes the race where
+        the namespace is created right at the very end. Doing this inside the Job
+        means it never relies on anyone polling the Job afterwards. The
+        installer's own exit code is preserved as the container result so the Job
+        still reflects success or failure. The namespace is read from
+        $TARGET_NAMESPACE (already validated to DNS-1123 characters), so it is
+        safe to reference in the shell.
         """
         installer = " ".join(shlex.quote(part) for part in command)
         label = f"{RHOAILabels.APP_KUBERNETES_MANAGED_BY}={RHOAILabels.MANAGED_BY_VALUE}"
         script = (
+            "label_ns() {\n"
+            '  oc get namespace "$TARGET_NAMESPACE" >/dev/null 2>&1 || return 1\n'
+            f'  oc label namespace "$TARGET_NAMESPACE" {label} --overwrite >/dev/null 2>&1\n'
+            "}\n"
+            "while ! label_ns; do sleep 2; done &\n"
+            "labeler=$!\n"
             f"{installer}\n"
             "rc=$?\n"
-            'if [ "$rc" -eq 0 ] && oc get namespace "$TARGET_NAMESPACE" >/dev/null 2>&1; then\n'
-            f'  oc label namespace "$TARGET_NAMESPACE" {label} --overwrite\n'
-            "fi\n"
+            'kill "$labeler" 2>/dev/null || true\n'
+            "label_ns || true\n"
             'exit "$rc"\n'
         )
         return ["/bin/sh", "-c", script]

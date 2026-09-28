@@ -603,12 +603,17 @@ class TestInstallerLabeling:
         command = _container(mock_k8s)["command"]
         assert command[:2] == ["/bin/sh", "-c"]
         script = command[2]
-        # The declared installer command is run first...
-        assert "/installer/entrypoint.sh" in script
-        # ...then, only on success + existence, the namespace is labeled as ours...
+        # A background watcher labels the namespace as soon as it exists...
         assert 'oc get namespace "$TARGET_NAMESPACE"' in script
         assert 'oc label namespace "$TARGET_NAMESPACE"' in script
         assert "app.kubernetes.io/managed-by=rhoai-mcp" in script
+        assert "while ! label_ns; do sleep" in script
+        assert "labeler=$!" in script
+        # ...it starts before the installer runs, so a failed install still leaves
+        # the namespace tagged as ours (recoverable by uninstall)...
+        assert script.index("labeler=$!") < script.index("/installer/entrypoint.sh")
+        # ...the background watcher is stopped once the installer returns...
+        assert 'kill "$labeler"' in script
         # ...and the installer's exit code is preserved as the container result.
         assert 'exit "$rc"' in script
 

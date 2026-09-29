@@ -364,7 +364,7 @@ application namespace is created by the installer Job itself at INSTALL time.)
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `RHOAI_MCP_QUICKSTART_REGISTRY_REF` | OCI reference of the quickstart registry index artifact | `quay.io/rh-ai-quickstart/quickstart-registry:latest` |
+| `RHOAI_MCP_QUICKSTART_REGISTRY_REF` | OCI reference of the quickstart registry index artifact (pinned by digest; verified fail-closed on fetch) | `quay.io/rh-ai-quickstart/quickstart-registry:latest@sha256:d1c54e0533e91e28affee90b6ad5fbe513fe0cd834ee688a56d7d10bb4ba805e` |
 | `RHOAI_MCP_QUICKSTART_JOB_NAMESPACE` | Namespace where installer Jobs (and their param Secrets) run | `openshift-quickstarts` |
 | `RHOAI_MCP_QUICKSTART_INSTALLER_SERVICE_ACCOUNT` | Pre-provisioned ServiceAccount the installer Jobs run as | `quickstart-installer` |
 | `RHOAI_MCP_QUICKSTART_INSTALLER_CPU_REQUEST` | CPU request for the installer container | `100m` |

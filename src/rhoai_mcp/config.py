@@ -248,8 +248,14 @@ class RHOAIConfig(BaseSettings):
 
     # Quickstart settings
     quickstart_registry_ref: str = Field(
-        default="quay.io/rh-ai-quickstart/quickstart-registry:latest",
-        description="OCI reference of the quickstart registry index artifact",
+        default=(
+            "quay.io/rh-ai-quickstart/quickstart-registry:latest"
+            "@sha256:d1c54e0533e91e28affee90b6ad5fbe513fe0cd834ee688a56d7d10bb4ba805e"
+        ),
+        description=(
+            "OCI reference of the quickstart registry index artifact. Pinned by digest so the "
+            "fetched index is verified and fail-closed on mismatch; the tag is informational."
+        ),
     )
     quickstart_job_namespace: str = Field(
         default="openshift-quickstarts",

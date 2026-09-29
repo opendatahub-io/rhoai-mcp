@@ -13,6 +13,7 @@ quickstarts:
     availableManifestVersions:
       - version: "1.0.0"
         status: stable
+        digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     estimatedDeploymentTime: 15
     tags: ["llm", "rag"]
     industries: ["Human Resources"]

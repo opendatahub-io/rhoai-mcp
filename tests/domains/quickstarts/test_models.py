@@ -42,6 +42,7 @@ class TestRegistry:
         assert entry.latest_manifest_version == "1.0.0"
         assert entry.available_manifest_versions[0].version == "1.0.0"
         assert entry.available_manifest_versions[0].status == "stable"
+        assert entry.available_manifest_versions[0].digest == "sha256:" + "a" * 64
         assert entry.tags == ["llm", "rag"]
         assert entry.manifest_repo == "quay.io/rh-ai-quickstart/peoplemesh-manifest"
 
@@ -50,11 +51,15 @@ class TestRegistry:
         assert registry.get("peoplemesh") is not None
         assert registry.get("missing") is None
 
-    def test_manifest_ref_defaults_to_latest(self) -> None:
+    def test_manifest_ref_defaults_to_latest_and_pins_digest(self) -> None:
         entry = QuickstartRegistry.from_yaml(REGISTRY_YAML).quickstarts[0]
-        assert entry.manifest_ref() == "quay.io/rh-ai-quickstart/peoplemesh-manifest:1.0.0"
+        assert entry.manifest_ref() == (
+            "quay.io/rh-ai-quickstart/peoplemesh-manifest:1.0.0@sha256:" + "a" * 64
+        )
 
-    def test_manifest_ref_with_explicit_version(self) -> None:
+    def test_manifest_ref_without_digest_falls_back_to_tag(self) -> None:
+        # A version not recorded in availableManifestVersions has no digest to
+        # pin, so the bare tag is used.
         entry = QuickstartRegistry.from_yaml(REGISTRY_YAML).quickstarts[0]
         assert entry.manifest_ref("2.0.0") == "quay.io/rh-ai-quickstart/peoplemesh-manifest:2.0.0"
 

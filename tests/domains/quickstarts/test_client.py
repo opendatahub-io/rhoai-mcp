@@ -92,9 +92,10 @@ class TestDiscovery:
     ) -> None:
         manifest = client.get_manifest("peoplemesh")
         assert manifest.name == "peoplemesh"
-        # Second fetch is for the manifest at the registry-resolved ref.
+        # Second fetch is for the manifest at the registry-resolved, digest-pinned ref.
         mock_oci.fetch_layer.assert_any_call(
-            "quay.io/rh-ai-quickstart/peoplemesh-manifest:1.0.0", MANIFEST_MEDIA_TYPE
+            "quay.io/rh-ai-quickstart/peoplemesh-manifest:1.0.0@sha256:" + "a" * 64,
+            MANIFEST_MEDIA_TYPE,
         )
 
     def test_get_manifest_unknown_quickstart(self, client: QuickstartsClient) -> None:

@@ -58,10 +58,17 @@ def _parse_yaml(raw: bytes | str) -> dict[str, Any]:
 
 
 class RegistryVersion(QuickstartModel):
-    """One available version of a quickstart in the registry index."""
+    """One available version of a quickstart in the registry index.
+
+    ``digest`` pins the manifest OCI artifact for this version (``algo:hex``).
+    When present it binds the version tag to exact, immutable manifest content —
+    the manifest can no longer drift under a re-pushed tag — and lets the OCI
+    client verify what it fetched.
+    """
 
     version: str
     status: str | None = None
+    digest: str | None = None
 
 
 class QuickstartSummary(QuickstartModel):
@@ -93,6 +100,14 @@ class QuickstartSummary(QuickstartModel):
         resolved = version or self.latest_manifest_version
         if not resolved:
             raise RHOAIError(f"quickstart '{self.name}' has no version to resolve a manifest")
+        entry = next(
+            (v for v in self.available_manifest_versions if v.version == resolved), None
+        )
+        # Pin by digest when the registry records one (tag kept for readability;
+        # the digest is what the OCI client verifies). Fall back to the bare tag
+        # for versions not yet digest-pinned.
+        if entry and entry.digest:
+            return f"{self.manifest_repo}:{resolved}@{entry.digest}"
         return f"{self.manifest_repo}:{resolved}"
 
     def to_dict(self) -> dict[str, Any]:
@@ -103,7 +118,7 @@ class QuickstartSummary(QuickstartModel):
             "short_description": self.short_description,
             "latest_manifest_version": self.latest_manifest_version,
             "available_manifest_versions": [
-                {"version": v.version, "status": v.status}
+                {"version": v.version, "status": v.status, "digest": v.digest}
                 for v in self.available_manifest_versions
             ],
             "estimated_deployment_time": self.estimated_deployment_time,

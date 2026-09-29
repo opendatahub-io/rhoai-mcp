@@ -13,6 +13,7 @@ registry, not just Quay.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -43,6 +44,35 @@ _INDEX_MEDIA_TYPES = {
 _CHALLENGE_PARAM_RE = re.compile(r'(\w+)="([^"]*)"')
 
 
+def _is_digest(reference: str) -> bool:
+    """Whether an OCI reference is a digest (``algo:hex``) rather than a tag.
+
+    Tags cannot contain ``:``, so its presence unambiguously marks a digest.
+    """
+    return ":" in reference
+
+
+def _verify_digest(content: bytes, digest: str) -> None:
+    """Fail closed unless ``content`` hashes to ``digest`` (an ``algo:hex`` string).
+
+    This is the integrity check that makes digest-pinning mean anything on the
+    client side: nothing else recomputes the hash of what the registry returned,
+    so any mismatch (tampering, corruption, a re-pushed tag resolved elsewhere)
+    must abort the fetch rather than hand back unverified bytes.
+    """
+    algo, _, expected = digest.partition(":")
+    if not algo or not expected:
+        raise OCIError(f"malformed content digest {digest!r}")
+    try:
+        hasher = hashlib.new(algo)
+    except ValueError:
+        raise OCIError(f"unsupported digest algorithm in {digest!r}")
+    hasher.update(content)
+    actual = hasher.hexdigest()
+    if actual != expected:
+        raise OCIError(f"content digest mismatch (expected {digest}, computed {algo}:{actual})")
+
+
 class OCIError(RHOAIError):
     """Raised when an OCI artifact cannot be fetched or parsed."""
 
@@ -57,24 +87,33 @@ class ParsedRef:
 
 
 def parse_ref(ref: str) -> ParsedRef:
-    """Parse ``registry/repository[:tag|@digest]`` into its components.
+    """Parse ``registry/repository[:tag][@digest]`` into its components.
 
-    Defaults the reference to ``latest`` when neither a tag nor a digest is
-    present, matching the OCI convention.
+    A digest, when present, is authoritative and becomes the reference; any tag
+    to its left (the canonical ``repo:tag@digest`` form) is kept only for humans
+    and dropped from the repository path. With no digest the tag is the
+    reference; with neither, it defaults to ``latest`` per OCI convention.
     """
     if "://" in ref:
         ref = ref.split("://", 1)[1]
 
-    reference = "latest"
+    reference: str | None = None
     if "@" in ref:
-        ref, digest = ref.rsplit("@", 1)
-        reference = digest
-    else:
-        slash = ref.rfind("/")
-        colon = ref.rfind(":")
-        if colon > slash:
-            reference = ref[colon + 1 :]
-            ref = ref[:colon]
+        ref, reference = ref.rsplit("@", 1)
+
+    # Strip a trailing tag. The ':' must sit in the last path segment, not in a
+    # registry host's ':port', so compare its position against the last '/'. If
+    # no digest was given, that tag is the reference.
+    slash = ref.rfind("/")
+    colon = ref.rfind(":")
+    if colon > slash:
+        tag = ref[colon + 1 :]
+        ref = ref[:colon]
+        if reference is None:
+            reference = tag
+
+    if reference is None:
+        reference = "latest"
 
     parts = ref.split("/", 1)
     if len(parts) == 2 and ("." in parts[0] or ":" in parts[0] or parts[0] == "localhost"):
@@ -156,6 +195,11 @@ class OCIArtifactClient:
                 f"failed to fetch manifest {parsed.repository}:{parsed.reference} "
                 f"(HTTP {resp.status_code})"
             )
+        # When the reference is a digest (a pinned registry index, a manifest
+        # pinned from the registry, or an image-index child), verify the bytes
+        # returned actually hash to it before trusting anything inside them.
+        if _is_digest(parsed.reference):
+            _verify_digest(resp.content, parsed.reference)
         try:
             data = resp.json()
         except ValueError as exc:
@@ -176,6 +220,8 @@ class OCIArtifactClient:
         resp = self._authorized_get(client, url, {}, parsed, token_box)
         if resp.status_code != 200:
             raise OCIError(f"failed to fetch blob {digest} (HTTP {resp.status_code})")
+        # The payload must match the layer digest the (verified) manifest declared.
+        _verify_digest(resp.content, digest)
         return resp.content
 
     def _authorized_get(

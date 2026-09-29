@@ -1,5 +1,7 @@
 """Tests for the minimal OCI artifact client."""
 
+import hashlib
+import json
 from typing import Any
 
 import pytest
@@ -11,6 +13,11 @@ from rhoai_mcp.domains.quickstarts.oci import (
     OCIError,
     parse_ref,
 )
+
+
+def _digest(content: bytes) -> str:
+    """The ``sha256:hex`` digest of ``content``, as the registry would compute it."""
+    return "sha256:" + hashlib.sha256(content).hexdigest()
 
 
 class TestParseRef:
@@ -28,6 +35,14 @@ class TestParseRef:
 
     def test_digest_reference(self) -> None:
         parsed = parse_ref("quay.io/org/name@sha256:abc123")
+        assert parsed.reference == "sha256:abc123"
+
+    def test_tag_and_digest_reference(self) -> None:
+        # Canonical repo:tag@digest: the digest wins and the tag is dropped from
+        # the repository path.
+        parsed = parse_ref("quay.io/org/name-manifest:1.0.0@sha256:abc123")
+        assert parsed.registry == "quay.io"
+        assert parsed.repository == "org/name-manifest"
         assert parsed.reference == "sha256:abc123"
 
     def test_strips_scheme(self) -> None:
@@ -79,19 +94,20 @@ class TestFetchLayer:
     """Tests for OCIArtifactClient.fetch_layer."""
 
     def test_happy_path_returns_matching_layer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = b"payload-bytes"
         manifest = _FakeResp(
             200,
-            json_data={"layers": [{"mediaType": MANIFEST_MEDIA_TYPE, "digest": "sha256:deadbeef"}]},
+            json_data={"layers": [{"mediaType": MANIFEST_MEDIA_TYPE, "digest": _digest(payload)}]},
         )
-        blob = _FakeResp(200, content=b"payload-bytes")
+        blob = _FakeResp(200, content=payload)
         fake = _FakeClient([("/manifests/", manifest), ("/blobs/", blob)])
         monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
 
         result = OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
 
-        assert result == b"payload-bytes"
+        assert result == payload
         assert any("/manifests/1.0.0" in c for c in fake.calls)
-        assert any("/blobs/sha256:deadbeef" in c for c in fake.calls)
+        assert any(f"/blobs/{_digest(payload)}" in c for c in fake.calls)
 
     def test_missing_layer_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         manifest = _FakeResp(
@@ -115,7 +131,7 @@ class TestFetchLayer:
         manifest_401 = _FakeResp(401, headers={"www-authenticate": challenge})
         manifest_ok = _FakeResp(
             200,
-            json_data={"layers": [{"mediaType": MANIFEST_MEDIA_TYPE, "digest": "sha256:abc"}]},
+            json_data={"layers": [{"mediaType": MANIFEST_MEDIA_TYPE, "digest": _digest(b"data")}]},
         )
         token = _FakeResp(200, json_data={"token": "tok-123"})
         blob = _FakeResp(200, content=b"data")
@@ -191,3 +207,55 @@ class TestFetchLayer:
 
         with pytest.raises(OCIError, match="invalid token response JSON"):
             OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
+
+
+class TestDigestVerification:
+    """Digest-addressed fetches must verify the returned bytes, failing closed."""
+
+    def test_pinned_manifest_verified_and_returned(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = b"the-yaml-payload"
+        manifest_json = {"layers": [{"mediaType": MANIFEST_MEDIA_TYPE, "digest": _digest(payload)}]}
+        manifest_bytes = json.dumps(manifest_json).encode()
+        manifest = _FakeResp(200, json_data=manifest_json, content=manifest_bytes)
+        blob = _FakeResp(200, content=payload)
+        fake = _FakeClient([("/manifests/", manifest), ("/blobs/", blob)])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        ref = f"quay.io/org/name@{_digest(manifest_bytes)}"
+        result = OCIArtifactClient().fetch_layer(ref, MANIFEST_MEDIA_TYPE)
+
+        assert result == payload
+
+    def test_manifest_digest_mismatch_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        manifest_json = {"layers": [{"mediaType": MANIFEST_MEDIA_TYPE, "digest": "sha256:x"}]}
+        # Content the registry returns does not match the pinned digest.
+        manifest = _FakeResp(200, json_data=manifest_json, content=b"tampered-manifest")
+        fake = _FakeClient([("/manifests/", manifest)])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        ref = f"quay.io/org/name@{_digest(b'original-manifest')}"
+        with pytest.raises(OCIError, match="content digest mismatch"):
+            OCIArtifactClient().fetch_layer(ref, MANIFEST_MEDIA_TYPE)
+
+    def test_blob_digest_mismatch_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Manifest fetched by tag (not verified), but the blob must still match
+        # the layer digest the manifest declared.
+        manifest_json = {
+            "layers": [{"mediaType": MANIFEST_MEDIA_TYPE, "digest": _digest(b"expected")}]
+        }
+        manifest = _FakeResp(200, json_data=manifest_json)
+        blob = _FakeResp(200, content=b"tampered-blob")
+        fake = _FakeClient([("/manifests/", manifest), ("/blobs/", blob)])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        with pytest.raises(OCIError, match="content digest mismatch"):
+            OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
+
+    def test_malformed_digest_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        manifest = _FakeResp(200, json_data={"layers": []}, content=b"whatever")
+        fake = _FakeClient([("/manifests/", manifest)])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        # "@sha256:" with no hex is a digest-shaped reference with an empty hash.
+        with pytest.raises(OCIError, match="malformed content digest"):
+            OCIArtifactClient().fetch_layer("quay.io/org/name@sha256:", MANIFEST_MEDIA_TYPE)

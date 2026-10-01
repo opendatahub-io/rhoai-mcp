@@ -556,6 +556,60 @@ Then configure Claude Desktop with the container:
 
 Note: The container uses `stdio` transport by default, which is required for Claude Desktop integration.
 
+## Navigator: Guided AI Workflows
+
+The repository ships two Claude Code slash commands that guide you through the full LLM lifecycle — from picking the right model for your workload to deploying it on RHOAI with an optimally-sized GPU configuration.
+
+Both commands require Claude Code connected to a running rhoai-mcp server (see [Claude Code](#claude-code) above).
+
+### `/navigator` — Model Selection
+
+Guides you through choosing the right LLM for your use case in three phases:
+
+1. **Understand requirements** — describe what you're building; the skill maps it to a use case and asks for scale and priority
+2. **Confirm workload profile** — review the planner's workload model (prompt/output token lengths, expected RPS, SLO targets) and adjust before recommendations are fetched
+3. **Model recommendations** — the planner returns up to four ranked options (balanced, cost, performance, quality) against your cluster's actual GPU inventory, with cost, latency, and quality scores for each
+
+Once you confirm a model, `/navigator` outputs a handoff block that pre-fills `/navigator-deploy` with everything it needs.
+
+Invoke it in Claude Code:
+
+```
+/navigator
+```
+
+Or describe your use case inline:
+
+```
+/navigator We're building a document Q&A system for ~50 concurrent users, latency is the priority
+```
+
+### `/navigator-deploy` — Deployment
+
+Takes a chosen model and finds the optimal GPU configuration for your workload, then deploys it. Works in five phases:
+
+1. **Confirm model and workload** — model ID, use case, user count, target namespace
+2. **Workload profile** — review token lengths, RPS, and SLO targets before sizing
+3. **Ranked GPU configurations** — planner returns configurations ranked by cost, performance, and quality against available cluster hardware
+4. **Deployment plan** — resolves runtime, storage URI, GPU count, and replicas; surfaces any blockers before you commit
+5. **Deploy and validate** — creates the serving runtime if needed, deploys the InferenceService, and returns the inference endpoint URL once ready
+
+Invoke it directly:
+
+```
+/navigator-deploy
+```
+
+Or paste the handoff block from `/navigator` to skip phases 1–3:
+
+```
+/navigator-deploy
+<!-- navigator-handoff
+model_id: meta-llama/Llama-3.1-8B-Instruct
+...
+-->
+```
+
 ## Available Tools
 
 ### Project Management (6 tools)

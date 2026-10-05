@@ -66,7 +66,7 @@ rhoai-mcp's MCP API surface is designed for a **Tier 2** classification, with a 
 **Why Tier 2:**
 
 - **Not Tier 1**: Tier 1 is for APIs customers hardcode in automation (CRDs, REST endpoints).
-MCP tools are dynamically discovered by AI agents, and the surface (currently 76+ tools, 5 resources, 18 prompts) is still being refined based on real-world agent usage.
+MCP tools are dynamically discovered by AI agents, and the surface (currently 97 tools, 8 resources, 18 prompts) is still being refined based on real-world agent usage.
 Locking individual tool signatures for 18 months would prevent improving this `rhoai-mcp` for better agent ergonomics without providing meaningful additional value to the AI Agent consumers.
 
 - **Not Tier 4**: Tier 4 is for internal-only APIs.
@@ -82,7 +82,15 @@ Because MCP tools are consumed by AI agents rather than hardcoded in scripts, th
 **Stable (Tier 2 guarantee):**
 
 - The set of achievable goals (see [Capability Catalog](#capability-catalog))
-- MCP Resource URI scheme (`rhoai://`)
+- MCP Resource URI scheme (`rhoai://`) and the following resource URIs:
+  - `rhoai://cluster/status`
+  - `rhoai://cluster/plugins`
+  - `rhoai://cluster/accelerators`
+  - `rhoai://projects/{name}/status`
+  - `rhoai://projects/{name}/workbenches`
+  - `rhoai://projects/{name}/models`
+  - `rhoai://tools/categories`
+  - `rhoai://tools/workflows`
 - The availability of MCP Prompts for each documented workflow category
 
 **Can change without deprecation:**
@@ -117,6 +125,8 @@ The following table defines the **stable capability set**: the use cases that Ti
 
 Each Capability maps to (one or more) MCP Tools, Resources, or Prompts that implement it.
 The Tools may change; the Capability must remain achievable.
+
+> **Scope note:** This catalog currently covers the Navigator capabilities (model recommendation and deployment optimization), which are the capabilities confirmed as Tier 2 GA at initial release. The `rhoai-mcp` server also provides tools for training workflow orchestration, workbench management, data connections and storage, model registry access, pipeline server management, and cluster exploration. These tool areas are implemented and functional, but their capability guarantees have not yet been formally catalogued here. Until a capability is added to this catalog, it carries no Tier 2 stability guarantee — individual tool names and behavior in those areas may change without a deprecation notice. Subsequent releases will expand this catalog as each capability area is validated for Tier 2 stability.
 
 ### [RHAIRFE-1705](https://redhat.atlassian.net/browse/RHAIRFE-1705): Intent-Based Model Recommendation
 

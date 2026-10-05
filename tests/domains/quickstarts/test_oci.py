@@ -168,7 +168,9 @@ class TestFetchLayer:
         with pytest.raises(OCIError, match="failed to fetch OCI artifact"):
             OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
 
-    def test_index_entry_without_digest_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_index_entry_without_digest_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A child without a digest is malformed; it is skipped rather than failing
+        # the whole index. With no usable child, no layer is found.
         index = _FakeResp(
             200,
             json_data={
@@ -179,8 +181,50 @@ class TestFetchLayer:
         fake = _FakeClient([("/manifests/", index)])
         monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
 
-        with pytest.raises(OCIError, match="no digest"):
+        with pytest.raises(OCIError, match="no layer with media type"):
             OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
+
+    def test_index_child_not_first_is_found(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The registry may reorder index children, so the wanted YAML artifact is
+        # not necessarily first. Binding to children[0] would fetch the wrong child
+        # and raise; every child must be searched for the layer.
+        payload = b"payload-bytes"
+        wrong_json = {"layers": [{"mediaType": "other/type", "digest": "sha256:x"}]}
+        wrong_bytes = json.dumps(wrong_json).encode()
+        right_json = {"layers": [{"mediaType": MANIFEST_MEDIA_TYPE, "digest": _digest(payload)}]}
+        right_bytes = json.dumps(right_json).encode()
+        wrong_digest = _digest(wrong_bytes)
+        right_digest = _digest(right_bytes)
+
+        index = _FakeResp(
+            200,
+            json_data={
+                "mediaType": "application/vnd.oci.image.index.v1+json",
+                "manifests": [{"digest": wrong_digest}, {"digest": right_digest}],
+            },
+        )
+        wrong_child = _FakeResp(200, json_data=wrong_json, content=wrong_bytes)
+        right_child = _FakeResp(200, json_data=right_json, content=right_bytes)
+        blob = _FakeResp(200, content=payload)
+
+        class IndexClient(_FakeClient):
+            def get(self, url: str, **_kwargs: Any) -> _FakeResp:
+                self.calls.append(url)
+                if f"/manifests/{wrong_digest}" in url:
+                    return wrong_child
+                if f"/manifests/{right_digest}" in url:
+                    return right_child
+                if "/manifests/" in url:
+                    return index
+                if "/blobs/" in url:
+                    return blob
+                raise AssertionError(f"unexpected URL: {url}")
+
+        fake = IndexClient([])
+        monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
+
+        result = OCIArtifactClient().fetch_layer("quay.io/org/name:1.0.0", MANIFEST_MEDIA_TYPE)
+        assert result == payload
 
     def test_layer_without_digest_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         manifest = _FakeResp(200, json_data={"layers": [{"mediaType": MANIFEST_MEDIA_TYPE}]})

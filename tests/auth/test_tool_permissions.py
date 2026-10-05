@@ -62,27 +62,11 @@ class TestToolPermissionDeclarations:
                 )
                 seen[tool_name] = meta.name
 
-    def test_quickstart_run_action_declares_full_lifecycle(self):
-        """run_quickstart_action must declare every K8s op it performs as the caller.
-
-        Under-declaring lets OIDC visibility gating admit callers who cannot
-        finish the action — e.g. missing secrets:create/jobs:delete would leave
-        the plaintext params Secret behind, and missing namespaces:get would
-        break the ownership check. The Secret is created owned by the Job, so no
-        secrets patch/delete is required.
-        """
-        from rhoai_mcp.domains.permissions import QUICKSTARTS_PERMISSIONS
-
-        declared = {
-            (p["apiGroup"], p["resource"], p["verb"])
-            for p in QUICKSTARTS_PERMISSIONS["run_quickstart_action"]
-        }
-        assert declared == {
-            ("batch", "jobs", "create"),
-            ("batch", "jobs", "delete"),
-            ("", "secrets", "create"),
-            ("", "namespaces", "get"),
-        }
+    # Note: the quickstart tools' permission declarations are covered behaviorally
+    # in tests/domains/quickstarts/test_client.py — each tool is driven under a fake
+    # that 403s any call outside its declared set, so the declaration is verified
+    # against the code's actual K8s calls rather than against a hand-copied set that
+    # would share the author's blind spot.
 
     def test_verb_values_are_valid_k8s_verbs(self):
         """All verb values should be valid Kubernetes API verbs."""

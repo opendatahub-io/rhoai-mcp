@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -155,24 +156,21 @@ class OCIArtifactClient:
             ) as client:
                 manifest = self._fetch_manifest(client, base, parsed, token_box)
 
-                if manifest.get("mediaType") in _INDEX_MEDIA_TYPES or (
-                    "manifests" in manifest and "layers" not in manifest
-                ):
-                    children = manifest.get("manifests") or []
-                    if not children:
-                        raise OCIError(f"empty image index for {ref}")
-                    digest = children[0].get("digest") if isinstance(children[0], dict) else None
-                    if not digest:
-                        raise OCIError(f"image index entry has no digest for {ref}")
-                    child_ref = ParsedRef(parsed.registry, parsed.repository, digest)
-                    manifest = self._fetch_manifest(client, base, child_ref, token_box)
-
-                for layer in manifest.get("layers", []):
-                    if layer.get("mediaType") == media_type:
-                        digest = layer.get("digest")
-                        if not digest:
-                            raise OCIError(f"layer with media type {media_type!r} has no digest")
-                        return self._fetch_blob(client, base, parsed, digest, token_box)
+                # An image index lists its children in no guaranteed order, and
+                # the registry may reorder them, so search every leaf manifest for
+                # the wanted layer instead of assuming a fixed position.
+                leaves = self._iter_leaf_manifests(
+                    client, base, parsed, manifest, token_box, ref
+                )
+                for leaf in leaves:
+                    for layer in leaf.get("layers", []):
+                        if layer.get("mediaType") == media_type:
+                            digest = layer.get("digest")
+                            if not digest:
+                                raise OCIError(
+                                    f"layer with media type {media_type!r} has no digest"
+                                )
+                            return self._fetch_blob(client, base, parsed, digest, token_box)
 
                 raise OCIError(f"no layer with media type {media_type!r} in {ref}")
         except httpx.HTTPError as exc:
@@ -207,6 +205,41 @@ class OCIArtifactClient:
         if not isinstance(data, dict):
             raise OCIError(f"unexpected manifest JSON for {parsed.repository} (not an object)")
         return data
+
+    def _iter_leaf_manifests(
+        self,
+        client: httpx.Client,
+        base: str,
+        parsed: ParsedRef,
+        manifest: dict[str, Any],
+        token_box: dict[str, str],
+        ref: str,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield the image manifest(s) that may carry layers.
+
+        A plain image manifest yields itself. An image index yields each child
+        manifest, fetched (and digest-verified) by its digest. Children are
+        emitted lazily in list order so the caller stops at the first match, but
+        because the registry may reorder them the caller must search all of them
+        rather than binding to a fixed position. Entries without a digest are
+        malformed and skipped, so one bad entry cannot break the whole index.
+        """
+        is_index = manifest.get("mediaType") in _INDEX_MEDIA_TYPES or (
+            "manifests" in manifest and "layers" not in manifest
+        )
+        if not is_index:
+            yield manifest
+            return
+
+        children = manifest.get("manifests") or []
+        if not children:
+            raise OCIError(f"empty image index for {ref}")
+        for child in children:
+            digest = child.get("digest") if isinstance(child, dict) else None
+            if not digest:
+                continue
+            child_ref = ParsedRef(parsed.registry, parsed.repository, digest)
+            yield self._fetch_manifest(client, base, child_ref, token_box)
 
     def _fetch_blob(
         self,

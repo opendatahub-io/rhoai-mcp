@@ -675,7 +675,8 @@ Note: The container uses `stdio` transport by default, which is required for Cla
 > ServiceAccount in a dedicated namespace. A cluster admin must provision these
 > once by applying [`deploy/quickstarts/installer-rbac.yaml`](deploy/quickstarts/installer-rbac.yaml)
 > — the MCP server does not create them automatically. See
-> [Quickstart installer RBAC](#quickstart-installer-rbac).
+> [Quickstart installer RBAC](#quickstart-installer-rbac) 
+> and note this provision is only for development while the team decides on an approach.
 
 ## MCP Resources
 

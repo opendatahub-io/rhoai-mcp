@@ -157,6 +157,7 @@ QUICKSTARTS_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     ],
     "get_quickstart_action_status": [
         {"apiGroup": "batch", "resource": "jobs", "verb": "get"},
+        {"apiGroup": "", "resource": "pods", "verb": "list"},
     ],
     "get_quickstart_action_logs": [
         {"apiGroup": "", "resource": "pods", "verb": "list"},

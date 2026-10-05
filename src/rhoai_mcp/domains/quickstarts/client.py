@@ -325,25 +325,28 @@ class QuickstartsClient:
 
         Returns ``(None, None)`` if the pod is not (yet) terminated or has
         already been garbage-collected — status must degrade gracefully rather
-        than fail when the richer detail is simply unavailable.
+        than fail when the richer detail is simply unavailable. A failed pod read
+        (notably a 403) is swallowed for the same reason, and deliberately so:
+        surfacing a permission denial would leak RBAC topology to a prober, and it
+        must stay indistinguishable from the benign "no detail" cases above.
         """
         try:
             pods = self._k8s.core_v1.list_namespaced_pod(
                 namespace=namespace, label_selector=f"job-name={job_name}"
             ).items
-            if not pods:
-                return None, None
-            pod = max(pods, key=self._pod_creation_key)
-            statuses = getattr(pod.status, "container_statuses", None) or []
-            installer = next((s for s in statuses if getattr(s, "name", None) == "installer"), None)
-            container = installer or (statuses[0] if statuses else None)
-            terminated = getattr(getattr(container, "state", None), "terminated", None)
-            if terminated is None:
-                return None, None
-            return getattr(terminated, "exit_code", None), getattr(terminated, "message", None)
-        except Exception as exc:  # noqa: BLE001 - detail is optional; never fail status on it
+        except ApiException as exc:
             logger.debug("could not read termination details for job %s: %s", job_name, exc)
             return None, None
+        if not pods:
+            return None, None
+        pod = max(pods, key=self._pod_creation_key)
+        statuses = getattr(pod.status, "container_statuses", None) or []
+        installer = next((s for s in statuses if getattr(s, "name", None) == "installer"), None)
+        container = installer or (statuses[0] if statuses else None)
+        terminated = getattr(getattr(container, "state", None), "terminated", None)
+        if terminated is None:
+            return None, None
+        return getattr(terminated, "exit_code", None), getattr(terminated, "message", None)
 
     @staticmethod
     def _pod_creation_key(pod: Any) -> tuple[bool, Any]:
@@ -378,7 +381,15 @@ class QuickstartsClient:
         except ApiException as exc:
             if exc.status == 404:
                 raise NotFoundError("Namespace", namespace)
-            raise RHOAIError(f"failed to list pods for job '{job_name}': {exc.reason}")
+            if exc.status == 403:
+                # Make a permission denial indistinguishable from the benign "no
+                # pod" case below, so its presence can't tell a prober they lack
+                # pods:list. Log the real reason server-side only.
+                logger.debug("forbidden listing pods for job %s: %s", job_name, exc)
+                raise NotFoundError("Pod", f"job-name={job_name}", namespace)
+            # Don't echo the API reason to the caller; log it server-side instead.
+            logger.debug("failed to list pods for job %s: %s", job_name, exc)
+            raise RHOAIError(f"failed to list pods for job '{job_name}'")
         if not pods:
             raise NotFoundError("Pod", f"job-name={job_name}", namespace)
 
@@ -390,7 +401,10 @@ class QuickstartsClient:
                 name=pod_name, namespace=namespace, tail_lines=tail_lines
             )
         except ApiException as exc:
-            logs = f"<logs unavailable: {exc.reason}>"
+            # Don't echo the API reason (a 403 would announce the permission gap);
+            # keep a generic placeholder and log the detail server-side.
+            logger.debug("could not read logs for pod %s: %s", pod_name, exc)
+            logs = "<logs unavailable>"
 
         return {
             "job_name": job_name,
@@ -684,11 +698,20 @@ class QuickstartsClient:
             raise
 
     def _delete_job_quietly(self, job_name: str, namespace: str) -> None:
-        """Best-effort delete of a Job whose params Secret could not be created."""
+        """Best-effort delete of a Job whose params Secret could not be created.
+
+        Cleanup must never raise: it runs while the original Secret-creation error
+        is still in flight, so any exception escaping here would replace that error
+        — the caller would see the wrong failure and the Job would be left orphaned
+        with no params Secret. Any unexpected error is therefore logged and
+        swallowed, like the expected ApiException.
+        """
         try:
             self._k8s.get_resource(JOB_CRD).delete(name=job_name, namespace=namespace)
         except ApiException as exc:
             logger.warning("could not clean up job %s: %s", job_name, exc.reason)
+        except Exception:
+            logger.exception("unexpected error cleaning up job %s", job_name)
 
     @staticmethod
     def _resource_uid(resource: Any) -> str | None:

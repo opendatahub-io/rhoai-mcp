@@ -7,10 +7,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from rhoai_mcp.domains.quickstarts.client import (
+    DESTRUCTIVE_ACTIONS,
+    INSPECTION_ACTIONS,
     INVALID_OPERATION_MESSAGE,
     JOB_CRD,
+    NAMESPACE_LABELING_ACTIONS,
     QUICKSTART_NAME_LABEL,
     QUICKSTART_TARGET_NS_LABEL,
+    UNINSTALL_ACTION_PREFIX,
     QuickstartsClient,
 )
 from rhoai_mcp.domains.quickstarts.oci import MANIFEST_MEDIA_TYPE, REGISTRY_MEDIA_TYPE
@@ -77,6 +81,99 @@ def client(
     mock_k8s: MagicMock, mock_config: SimpleNamespace, mock_oci: MagicMock
 ) -> QuickstartsClient:
     return QuickstartsClient(mock_k8s, mock_config, oci=mock_oci)
+
+
+_ABSENT = object()
+
+
+def _rbac_k8s(
+    declared: set[tuple[str, str, str]],
+    *,
+    namespace_obj: Any = _ABSENT,
+    job_dict: dict[str, Any] | None = None,
+    pods: list[Any] | None = None,
+    pod_log: str = "installer log output",
+) -> MagicMock:
+    """Fake k8s that 403s any quickstart call whose RBAC triple isn't in ``declared``.
+
+    Simulates the caller identity holding exactly ``declared``. Driving the real
+    client code against it proves that what a tool *declares* in permissions.py
+    covers every K8s call it actually *makes* — the coupling a dict-equality
+    assertion can't see, because the author of the code and the author of the
+    assertion share one blind spot. A new, undeclared call 403s here and fails
+    the test instead of silently degrading (or 403ing) at runtime.
+
+    ``namespace_obj`` left absent makes ``get_namespace`` raise ``NotFoundError``
+    (namespace does not exist), the precondition INSTALL needs.
+    """
+    from kubernetes.client import ApiException
+
+    def gate(triple: tuple[str, str, str]) -> None:
+        if triple not in declared:
+            raise ApiException(status=403, reason="Forbidden")
+
+    def create(_crd: Any, **_kwargs: Any) -> Any:
+        gate(("batch", "jobs", "create"))
+        return SimpleNamespace(to_dict=lambda: {"metadata": {"uid": "job-uid"}})
+
+    def get(_crd: Any, _name: str, _ns: str) -> Any:
+        gate(("batch", "jobs", "get"))
+        return SimpleNamespace(to_dict=lambda: (job_dict or {}))
+
+    def get_namespace(ns: str) -> Any:
+        gate(("", "namespaces", "get"))
+        if namespace_obj is _ABSENT:
+            raise NotFoundError("Namespace", ns)
+        return namespace_obj
+
+    def delete(**_kwargs: Any) -> None:
+        gate(("batch", "jobs", "delete"))
+
+    def create_secret(**_kwargs: Any) -> None:
+        gate(("", "secrets", "create"))
+
+    def list_pods(**_kwargs: Any) -> Any:
+        gate(("", "pods", "list"))
+        return SimpleNamespace(items=(pods or []))
+
+    def read_log(**_kwargs: Any) -> str:
+        gate(("", "pods/log", "get"))
+        return pod_log
+
+    k8s = MagicMock()
+    k8s.create.side_effect = create
+    k8s.get.side_effect = get
+    k8s.get_namespace.side_effect = get_namespace
+    k8s.get_resource.return_value.delete.side_effect = delete
+    k8s.core_v1.create_namespaced_secret.side_effect = create_secret
+    k8s.core_v1.list_namespaced_pod.side_effect = list_pods
+    k8s.core_v1.read_namespaced_pod_log.side_effect = read_log
+    return k8s
+
+
+def _declared(tool_name: str) -> set[tuple[str, str, str]]:
+    """The exact RBAC triples a tool declares in permissions.py."""
+    from rhoai_mcp.domains.permissions import QUICKSTARTS_PERMISSIONS
+
+    return {
+        (p["apiGroup"], p["resource"], p["verb"])
+        for p in QUICKSTARTS_PERMISSIONS[tool_name]
+    }
+
+
+def _failed_job_with_pod() -> tuple[dict[str, Any], Any]:
+    """A failed Job plus the installer pod carrying the real exit code/reason."""
+    job_dict = {
+        "metadata": {"uid": "u1", "labels": {QUICKSTART_NAME_LABEL: "peoplemesh"}},
+        "status": {"failed": 1, "conditions": [{"type": "Failed", "status": "True"}]},
+    }
+    terminated = SimpleNamespace(exit_code=2, message='{"status": "prerequisites_failed"}')
+    cs = SimpleNamespace(name="installer", state=SimpleNamespace(terminated=terminated))
+    pod = SimpleNamespace(
+        metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0"),
+        status=SimpleNamespace(container_statuses=[cs]),
+    )
+    return job_dict, pod
 
 
 class TestDiscovery:
@@ -239,6 +336,81 @@ class TestRunAction:
 
         mock_k8s.get_resource.return_value.delete.assert_called_once()
 
+    def test_secret_failure_surfaces_even_if_cleanup_errors(
+        self, client: QuickstartsClient, mock_k8s: MagicMock
+    ) -> None:
+        # Cleanup is best-effort and runs while the original Secret-creation error
+        # is in flight. If deleting the Job itself fails with an unexpected
+        # (non-API) error, that must not replace the error the caller needs to see.
+        mock_k8s.core_v1.create_namespaced_secret.side_effect = RuntimeError("secret boom")
+        mock_k8s.get_resource.return_value.delete.side_effect = KeyError("unexpected")
+
+        with pytest.raises(RuntimeError, match="secret boom"):
+            client.run_action(
+                name="peoplemesh",
+                action="install",
+                parameters={"keycloak.realm.testUser.password": "s3cret"},
+            )
+
+        mock_k8s.get_resource.return_value.delete.assert_called_once()
+
+    def test_declared_permissions_cover_install_code_path(
+        self, mock_config: SimpleNamespace, mock_oci: MagicMock
+    ) -> None:
+        """A full INSTALL must complete using ONLY run_quickstart_action's declared RBAC.
+
+        INSTALL reads the target namespace (namespaces:get), creates the Job
+        (jobs:create) and the params Secret (secrets:create); on a Secret failure
+        it deletes the Job (jobs:delete). Driving the real code under exactly the
+        declared set proves the declaration covers every call the happy path makes
+        — a coupling an equality assertion against a hand-copied set can't verify,
+        since it shares the author's blind spot.
+        """
+        declared = _declared("run_quickstart_action")
+        k8s = _rbac_k8s(declared)  # namespace absent -> INSTALL precondition met
+
+        client = QuickstartsClient(k8s, mock_config, oci=mock_oci)
+        result = client.run_action(
+            name="peoplemesh",
+            action="INSTALL",
+            parameters={"keycloak.realm.testUser.password": "s3cret"},
+        )
+
+        assert result["action"] == "INSTALL"
+        k8s.create.assert_called_once()
+        k8s.core_v1.create_namespaced_secret.assert_called_once()
+
+    def test_install_without_secret_create_permission_cleans_up_job(
+        self, mock_config: SimpleNamespace, mock_oci: MagicMock
+    ) -> None:
+        """secrets:create is necessary: without it INSTALL fails and the Job is deleted.
+
+        Withholding secrets:create makes the Secret create 403; the client must
+        then delete the already-created Job (exercising the declared jobs:delete)
+        and re-raise, so a password Secret is never left behind and no orphan Job
+        lingers. This shows two of the declared permissions are load-bearing, not
+        decorative.
+        """
+        from kubernetes.client import ApiException
+
+        declared = {
+            ("batch", "jobs", "create"),
+            ("batch", "jobs", "delete"),
+            ("", "namespaces", "get"),
+        }  # secrets:create withheld
+        k8s = _rbac_k8s(declared)
+
+        client = QuickstartsClient(k8s, mock_config, oci=mock_oci)
+        with pytest.raises(ApiException):
+            client.run_action(
+                name="peoplemesh",
+                action="INSTALL",
+                parameters={"keycloak.realm.testUser.password": "s3cret"},
+            )
+
+        k8s.create.assert_called_once()
+        k8s.get_resource.return_value.delete.assert_called_once()
+
 
 class TestStatusAndLogs:
     def test_get_action_status_complete(
@@ -259,6 +431,7 @@ class TestStatusAndLogs:
                 "conditions": [{"type": "Complete", "status": "True"}],
             },
         }
+        mock_k8s.core_v1.list_namespaced_pod.return_value.items = []
 
         status = client.get_action_status("qs-peoplemesh-install-abc", "openshift-quickstarts")
 
@@ -359,11 +532,48 @@ class TestStatusAndLogs:
         from kubernetes.client import ApiException
 
         mock_k8s.core_v1.list_namespaced_pod.side_effect = ApiException(
+            status=500, reason="Internal Server Error"
+        )
+        # Non-403/404 maps to RHOAIError so the tool's `except RHOAIError` handles
+        # it, but the raw API reason is not echoed back to the caller.
+        with pytest.raises(RHOAIError, match="failed to list pods") as exc_info:
+            client.get_action_logs("qs-x", "openshift-quickstarts")
+        assert "Internal Server Error" not in str(exc_info.value)
+
+    def test_get_action_logs_forbidden_masked_as_not_found(
+        self, client: QuickstartsClient, mock_k8s: MagicMock
+    ) -> None:
+        # A 403 listing pods must be indistinguishable from the benign "no pod"
+        # case (same NotFoundError), never revealing the permission denial — else
+        # a prober learns they lack pods:list.
+        from kubernetes.client import ApiException
+
+        mock_k8s.core_v1.list_namespaced_pod.side_effect = ApiException(
             status=403, reason="Forbidden"
         )
-        # Mapped to RHOAIError so the tool's `except RHOAIError` handles it.
-        with pytest.raises(RHOAIError, match="failed to list pods"):
+        with pytest.raises(NotFoundError) as exc_info:
             client.get_action_logs("qs-x", "openshift-quickstarts")
+        message = str(exc_info.value).lower()
+        assert "forbidden" not in message
+        assert "permission" not in message
+
+    def test_get_action_logs_forbidden_log_read_not_leaked(
+        self, client: QuickstartsClient, mock_k8s: MagicMock
+    ) -> None:
+        # A 403 reading the pod log degrades to a generic placeholder; the API
+        # reason ("Forbidden") must not reach the caller.
+        from kubernetes.client import ApiException
+
+        pod = SimpleNamespace(metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0"))
+        mock_k8s.core_v1.list_namespaced_pod.return_value.items = [pod]
+        mock_k8s.core_v1.read_namespaced_pod_log.side_effect = ApiException(
+            status=403, reason="Forbidden"
+        )
+
+        result = client.get_action_logs("qs-x", "openshift-quickstarts")
+
+        assert result["logs"] == "<logs unavailable>"
+        assert "forbidden" not in result["logs"].lower()
 
     def test_get_action_logs_namespace_not_found(
         self, client: QuickstartsClient, mock_k8s: MagicMock
@@ -375,6 +585,104 @@ class TestStatusAndLogs:
         )
         with pytest.raises(NotFoundError):
             client.get_action_logs("qs-x", "openshift-quickstarts")
+
+    def test_declared_permissions_cover_status_code_path(
+        self, mock_config: SimpleNamespace, mock_oci: MagicMock
+    ) -> None:
+        """get_action_status must surface the failure reason using ONLY its declared RBAC.
+
+        Reading the installer pod's terminated exit_code/message needs pods:list.
+        If the declaration omits it (the original PR #105 bug), the pod read 403s,
+        is swallowed as best-effort, and the reason silently degrades to null. This
+        drives the real code under exactly the declared permission set, so it fails
+        the moment the code's calls and the declaration drift apart.
+        """
+        declared = _declared("get_quickstart_action_status")
+        job_dict, pod = _failed_job_with_pod()
+        client = QuickstartsClient(
+            _rbac_k8s(declared, job_dict=job_dict, pods=[pod]), mock_config, oci=mock_oci
+        )
+
+        status = client.get_action_status("qs-x", "openshift-quickstarts")
+
+        assert status["exit_code"] == 2
+        assert status["result"] == {"status": "prerequisites_failed"}
+
+    def test_permission_denial_degrades_silently_without_leaking(
+        self, mock_config: SimpleNamespace, mock_oci: MagicMock
+    ) -> None:
+        """A caller lacking pods:list must get the SAME null detail as a running/GC'd pod.
+
+        Reading the installer pod needs pods:list; when the caller lacks it the read
+        403s. That denial is swallowed on purpose — surfacing it would leak RBAC
+        topology to a prober. So the status returns null exit_code/message/result,
+        with no error field and no permission wording, identical to the benign
+        "no terminated pod" case. The Job-level phase (needs only jobs:get) is still
+        reported.
+        """
+        declared = {("batch", "jobs", "get")}  # pods:list withheld -> pod read 403s
+        job_dict, pod = _failed_job_with_pod()
+        client = QuickstartsClient(
+            _rbac_k8s(declared, job_dict=job_dict, pods=[pod]), mock_config, oci=mock_oci
+        )
+
+        status = client.get_action_status("qs-x", "openshift-quickstarts")
+
+        # Detail degrades to null, exactly like a pod that isn't terminated yet.
+        assert status["exit_code"] is None
+        assert status["termination_message"] is None
+        assert status["result"] is None
+        # Nothing in the response reveals that this was a permission denial.
+        assert "error" not in status
+        assert "forbidden" not in repr(status).lower()
+        assert "permission" not in repr(status).lower()
+        # Job-level status, which only needs jobs:get, is still surfaced.
+        assert status["phase"] == "Failed"
+
+    def test_declared_permissions_cover_logs_code_path(
+        self, mock_config: SimpleNamespace, mock_oci: MagicMock
+    ) -> None:
+        """get_action_logs must return the installer logs using ONLY its declared RBAC.
+
+        It lists the Job's pods (pods:list) and reads the newest pod's log
+        (pods/log:get). Driving the real code under exactly the declared set fails
+        if a future change adds a K8s call the declaration doesn't cover — the
+        same drift the status path was vulnerable to.
+        """
+        declared = _declared("get_quickstart_action_logs")
+        pod = SimpleNamespace(
+            metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0")
+        )
+        k8s = _rbac_k8s(declared, pods=[pod], pod_log="installer output")
+        client = QuickstartsClient(k8s, mock_config, oci=mock_oci)
+
+        logs = client.get_action_logs("qs-x", "openshift-quickstarts")
+
+        assert logs["logs"] == "installer output"
+        assert logs["pod"] == "pod-x"
+
+    def test_logs_degrade_without_log_read_permission(
+        self, mock_config: SimpleNamespace, mock_oci: MagicMock
+    ) -> None:
+        """Lacking pods/log:get yields a generic placeholder, not a leaked denial.
+
+        pods/log:get is necessary to actually read the log; without it the read
+        403s and is masked as "<logs unavailable>" — the same output as a pod
+        whose log is genuinely gone — with no permission wording that would tell a
+        prober what they lack.
+        """
+        declared = {("", "pods", "list")}  # pods/log:get withheld
+        pod = SimpleNamespace(
+            metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0")
+        )
+        k8s = _rbac_k8s(declared, pods=[pod])
+        client = QuickstartsClient(k8s, mock_config, oci=mock_oci)
+
+        logs = client.get_action_logs("qs-x", "openshift-quickstarts")
+
+        assert logs["logs"] == "<logs unavailable>"
+        assert "forbidden" not in repr(logs).lower()
+        assert "permission" not in repr(logs).lower()
 
 
 class TestNamespaceValidation:
@@ -646,3 +954,25 @@ class TestInstallerLabeling:
         # STATUS neither creates nor owns the namespace, so it runs the installer
         # command unwrapped.
         assert _container(mock_k8s)["command"] == ["/installer/entrypoint.sh"]
+
+
+class TestActionClassification:
+    """Invariants between the action sets that drive gating in tools.py.
+
+    The confirm / dangerous-ops exemption keys off INSPECTION_ACTIONS: an action
+    there bypasses both gates. So a cluster-mutating action must never land in
+    that set. These assert the *relationships* between the sets rather than
+    copying their contents, so a bad edit (e.g. dropping an INSTALL or UNINSTALL_*
+    action into the exemption) fails here instead of silently shipping an
+    ungated destructive path. An equality pin would just re-encode the same
+    constants the code defines — the tautology we are avoiding.
+    """
+
+    def test_inspection_actions_are_never_destructive(self) -> None:
+        assert INSPECTION_ACTIONS.isdisjoint(DESTRUCTIVE_ACTIONS)
+
+    def test_inspection_actions_never_mutate_namespace(self) -> None:
+        assert INSPECTION_ACTIONS.isdisjoint(NAMESPACE_LABELING_ACTIONS)
+
+    def test_inspection_actions_are_never_uninstall(self) -> None:
+        assert not any(a.startswith(UNINSTALL_ACTION_PREFIX) for a in INSPECTION_ACTIONS)

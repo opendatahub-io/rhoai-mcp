@@ -140,7 +140,7 @@ class OCIArtifactClient:
         """Return the bytes of the single layer whose media type equals ``media_type``.
 
         Args:
-            ref: OCI reference, e.g. ``quay.io/org/name-manifest:1.0.0``.
+            ref: OCI reference, e.g. ``quay.io/org/name-manifest@sha256:abc123``.
             media_type: The layer media type to extract.
 
         Raises:
@@ -159,9 +159,7 @@ class OCIArtifactClient:
                 # An image index lists its children in no guaranteed order, and
                 # the registry may reorder them, so search every leaf manifest for
                 # the wanted layer instead of assuming a fixed position.
-                leaves = self._iter_leaf_manifests(
-                    client, base, parsed, manifest, token_box, ref
-                )
+                leaves = self._iter_leaf_manifests(client, base, parsed, manifest, token_box, ref)
                 for leaf in leaves:
                     for layer in leaf.get("layers", []):
                         if layer.get("mediaType") == media_type:

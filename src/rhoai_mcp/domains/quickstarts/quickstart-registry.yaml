@@ -5,7 +5,7 @@
 # lightweight index (catalog-tile data only) — full per-quickstart detail lives
 # in each quickstart's manifest (quay.io/rh-ai-quickstart/<name>-manifest).
 #
-# Published as an OCI artifact to quay.io/rh-ai-quickstart/quickstart-registry:latest
+# Published as an OCI artifact to quay.io/rh-ai-quickstart/quickstart-registry (pinned by digest)
 # (media type application/vnd.redhat.quickstart.registry.v1+yaml). The operator
 # also ships this file as a bundled default for disconnected first-boot.
 apiVersion: quickstart.redhat.com/v1

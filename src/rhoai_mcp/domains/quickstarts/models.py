@@ -100,9 +100,7 @@ class QuickstartSummary(QuickstartModel):
         resolved = version or self.latest_manifest_version
         if not resolved:
             raise RHOAIError(f"quickstart '{self.name}' has no version to resolve a manifest")
-        entry = next(
-            (v for v in self.available_manifest_versions if v.version == resolved), None
-        )
+        entry = next((v for v in self.available_manifest_versions if v.version == resolved), None)
         # Pin by digest when the registry records one (tag kept for readability;
         # the digest is what the OCI client verifies). Fall back to the bare tag
         # for versions not yet digest-pinned.

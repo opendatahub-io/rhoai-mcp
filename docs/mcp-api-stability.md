@@ -12,7 +12,7 @@ This document applies the [RHAI Release Stages and API Tiers](https://github.com
 | | |
 |---|---|
 | **Lifecycle operator** | MCP Lifecycle Operator (MCPLO) via MCP Catalog |
-| **API tier** | Tier 2 — Goal-Oriented Stability |
+| **API tier** | Tier 2: Goal-Oriented Stability |
 | **Stability unit** | Capability set (documented goals an AI agent can achieve), not individual tool names or signatures |
 | **Deprecation window** | 9 months or 3 minor releases, whichever is longer |
 | **MCP surface** | 97 tools · 8 resources · 18 prompts |
@@ -25,7 +25,7 @@ This document applies the [RHAI Release Stages and API Tiers](https://github.com
 | Characteristic | Typical RHOAI Component | `rhoai-mcp` |
 |---|---|---|
 | **Lifecycle management** | RHOAI Operator | MCP Lifecycle Operator (MCPLO) via MCP Catalog |
-| **K8s APIs / CRDs defined** | Yes (often core to the API surface) | None — consumes others' CRDs, defines none |
+| **K8s APIs / CRDs defined** | Yes (often core to the API surface) | None (consumes others' CRDs, defines none) |
 | **REST APIs exposed** | Often (with SLA/versioning) | None |
 | **Primary API surface** | K8s CRDs and/or REST endpoints | MCP Tools, Resources, and Prompts |
 | **API consumers** | Humans, scripts, controllers | AI agents (LLMs, Agentic frameworks/loops) |
@@ -50,7 +50,7 @@ When a new version changes the MCP tool surface, the rules in [Change and Deprec
 ### MCPLO as the rhoai-mcp Lifecycle Operator
 
 The GA quick reference card in the release-stages-and-api-tiers framework requires "Integrated into the RHOAI operator: Yes" for GA.
-`rhoai-mcp` is not managed by the RHOAI Operator — it is managed by the **MCPLO**.
+`rhoai-mcp` is not managed by the RHOAI Operator. It is managed by the **MCPLO**.
 The reference card pre-dates the MCPLO.
 
 MCPLO integration satisfies this requirement for MCP-Catalog-surfaced components: MCPLO is the designated lifecycle operator for MCP servers in the RHOAI platform and provides equivalent governance to the RHOAI Operator for those components.
@@ -70,7 +70,7 @@ MCP Tools are fundamentally different:
 
 This means that renaming `deploy_model` to `deploy_inference_service`, adding or removing a parameter, or consolidating three tools into one is **not a breaking change** in the traditional sense, as long as an AI agent can still discover and use the tools to achieve the original goal.
 
-### Tier Designation: Tier 2 — Goal-Oriented Stability
+### Tier 2: Goal-Oriented Stability
 
 rhoai-mcp's MCP API surface is designed for a **Tier 2** classification, with a **goal-oriented stability definition** (more below).
 
@@ -129,13 +129,13 @@ The following table defines the **stable capability set**: the use cases that Ti
 Each Capability maps to (one or more) MCP Tools, Resources, or Prompts that implement it.
 The Tools may change; the Capability must remain achievable.
 
-> **Scope note:** This catalog currently covers the Navigator capabilities (model recommendation and deployment optimization) — the capability areas confirmed as Tier 2 GA at initial release. The `rhoai-mcp` server also provides capability areas for training workflow orchestration, workbench management, data connections and storage, model registry access, pipeline server management, and cluster exploration.
+> **Scope note:** This catalog currently covers the Navigator capabilities (model recommendation and deployment optimization), which are the capability areas confirmed as Tier 2 GA at initial release. The `rhoai-mcp` server also provides capability areas for training workflow orchestration, workbench management, data connections and storage, model registry access, pipeline server management, and cluster exploration.
 >
-> These capability areas are implemented and functional, but their Tier 2 guarantees have not yet been formally defined here. Until a capability is added to this catalog, it carries no Tier 2 stability guarantee — individual tool names and behavior in those areas may change without a deprecation notice. Additional capability areas will be added to this catalog as they are validated for Tier 2 stability.
+> These capability areas are implemented and functional, but their Tier 2 guarantees have not yet been formally defined here. Until a capability is added to this catalog, it carries no Tier 2 stability guarantee, so individual tool names and behavior in those areas may change without a deprecation notice. Additional capability areas will be added to this catalog as they are validated for Tier 2 stability.
 
 ### [RHAIRFE-1705](https://redhat.atlassian.net/browse/RHAIRFE-1705): Intent-Based Model Recommendation
 
-**Goal:** An AI agent can guide a user from a natural-language description of their use case to a set of justified, ranked model recommendations — without requiring the user to manually research models, benchmarks, or hardware compatibility.
+**Goal:** An AI agent can guide a user from a natural-language description of their use case to a set of justified, ranked model recommendations, without requiring the user to manually research models, benchmarks, or hardware compatibility.
 
 **What the capability covers (in-scope):**
 
@@ -160,7 +160,7 @@ The Tools may change; the Capability must remain achievable.
 
 ### [RHAIRFE-1706](https://redhat.atlassian.net/browse/RHAIRFE-1706): Deployment Optimization and Execution
 
-**Goal:** An AI agent can take a chosen model and guide a user through finding the optimal GPU configuration for their workload, then deploy the model to a specified namespace on the cluster — all backed by empirical benchmark data rather than manual trial-and-error.
+**Goal:** An AI agent can take a chosen model and guide a user through finding the optimal GPU configuration for their workload, then deploy the model to a specified namespace on the cluster. All of this is backed by empirical benchmark data rather than manual trial-and-error.
 
 **What the capability covers (in-scope):**
 
@@ -210,7 +210,7 @@ The following changes can be made in any release and documented in release notes
 
 The following changes require a deprecation announcement in release notes, with the capability remaining available for at least 9 months or 3 minor releases (whichever is longer) after the announcement:
 
-- **Removing a capability entirely** — making it impossible for an AI agent to achieve a documented goal from the capability catalog.
+- **Removing a capability entirely**: making it impossible for an AI agent to achieve a documented goal from the capability catalog.
 - **Removing the MCP Resource URI scheme** (`rhoai://`) or changing it incompatibly.
 - **Removing an entire prompt category** (training, deployment, troubleshooting, exploration, project setup) without replacement.
 

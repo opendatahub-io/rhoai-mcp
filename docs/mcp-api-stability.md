@@ -11,7 +11,6 @@ This document applies the [RHAI Release Stages and API Tiers](https://github.com
 
 | | |
 |---|---|
-| **Release stage** | GA |
 | **Lifecycle operator** | MCP Lifecycle Operator (MCPLO) via MCP Catalog |
 | **API tier** | Tier 2 — Goal-Oriented Stability |
 | **Stability unit** | Capability set (documented goals an AI agent can achieve), not individual tool names or signatures |
@@ -48,7 +47,7 @@ What `rhoai-mcp` owns is the **MCP API surface and its compatibility contract be
 
 When a new version changes the MCP tool surface, the rules in [Change and Deprecation Process](#change-and-deprecation-process) below determine whether that change is non-breaking (e.g. tool renames, parameter changes) or requires a deprecation window (e.g. use-case removal, capability removal).
 
-### MCPLO as the GA Lifecycle Operator
+### MCPLO as the rhoai-mcp Lifecycle Operator
 
 The GA quick reference card in the release-stages-and-api-tiers framework requires "Integrated into the RHOAI operator: Yes" for GA.
 `rhoai-mcp` is not managed by the RHOAI Operator — it is managed by the **MCPLO**.
@@ -82,7 +81,7 @@ MCP tools are dynamically discovered by AI agents, and the surface (currently 97
 Locking individual tool signatures for 18 months would prevent improving this `rhoai-mcp` for better agent ergonomics without providing meaningful additional value to the AI Agent consumers.
 
 - **Not Tier 4**: Tier 4 is for internal-only APIs.
-MCP tools are explicitly the external interface — what customers' AI agents interact with. Therefore Tier 4 is not appropriate.
+MCP tools are explicitly the external interface: what customers' AI agents interact with. Therefore Tier 4 is not appropriate.
 
 - **Tier 2**: Appropriate for an API surface that is maturing and may evolve based on customer feedback, while still providing meaningful stability guarantees.
 The deprecation window gives consumers time to adapt their workflows.
@@ -94,15 +93,7 @@ Because MCP tools are consumed by AI agents rather than hardcoded in scripts, th
 **Stable (Tier 2 guarantee):**
 
 - The set of achievable goals (see [Capability Catalog](#capability-catalog))
-- MCP Resource URI scheme (`rhoai://`) and the following resource URIs:
-  - `rhoai://cluster/status`
-  - `rhoai://cluster/plugins`
-  - `rhoai://cluster/accelerators`
-  - `rhoai://projects/{name}/status`
-  - `rhoai://projects/{name}/workbenches`
-  - `rhoai://projects/{name}/models`
-  - `rhoai://tools/categories`
-  - `rhoai://tools/workflows`
+- MCP Resource URI scheme (`rhoai://`)
 - The availability of MCP Prompts for each documented workflow category
 
 **Can change without deprecation:**
@@ -221,7 +212,6 @@ The following changes require a deprecation announcement in release notes, with 
 
 - **Removing a capability entirely** — making it impossible for an AI agent to achieve a documented goal from the capability catalog.
 - **Removing the MCP Resource URI scheme** (`rhoai://`) or changing it incompatibly.
-- **Removing a specific resource URI from the Tier 2 stable list** — making a previously-stable `rhoai://` URI unavailable.
 - **Removing an entire prompt category** (training, deployment, troubleshooting, exploration, project setup) without replacement.
 
 ### How to deprecate a Capability

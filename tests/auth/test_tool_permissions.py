@@ -62,6 +62,12 @@ class TestToolPermissionDeclarations:
                 )
                 seen[tool_name] = meta.name
 
+    # Note: the quickstart tools' permission declarations are covered behaviorally
+    # in tests/domains/quickstarts/test_client.py — each tool is driven under a fake
+    # that 403s any call outside its declared set, so the declaration is verified
+    # against the code's actual K8s calls rather than against a hand-copied set that
+    # would share the author's blind spot.
+
     def test_verb_values_are_valid_k8s_verbs(self):
         """All verb values should be valid Kubernetes API verbs."""
         valid_verbs = {"get", "list", "create", "update", "patch", "delete", "watch"}

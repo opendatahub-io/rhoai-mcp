@@ -99,6 +99,22 @@ TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
             "get_catalog_model_artifacts",
         ],
     },
+    "quickstarts": {
+        "description": "Red Hat AI quickstart discovery and deployment",
+        "tools": [
+            "list_quickstarts",
+            "get_quickstart_manifest",
+            "run_quickstart_action",
+            "get_quickstart_action_status",
+            "get_quickstart_action_logs",
+        ],
+        "typical_workflow": [
+            "list_quickstarts",
+            "get_quickstart_manifest",
+            "run_quickstart_action",
+            "get_quickstart_action_status",
+        ],
+    },
 }
 
 
@@ -159,6 +175,15 @@ INTENT_PATTERNS = [
         "Model Catalog. Use list_catalog_sources() to see available sources "
         "(e.g., 'Red Hat AI validated'), and get_catalog_model_artifacts() "
         "for download/deployment URIs.",
+    },
+    {
+        "patterns": ["quickstart", "quick start", "quick-start", "install", "recipe", "bundle"],
+        "category": "quickstarts",
+        "workflow": ["list_quickstarts", "get_quickstart_manifest", "run_quickstart_action"],
+        "explanation": "Quickstart workflow: Use list_quickstarts() to browse the catalog, "
+        "get_quickstart_manifest() to inspect parameters and prerequisites, then "
+        "run_quickstart_action() with action='INSTALL' to deploy. Poll with "
+        "get_quickstart_action_status() and get_quickstart_action_logs().",
     },
 ]
 
@@ -311,6 +336,7 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 "explore_cluster",
                 "list_registered_models",
                 "list_catalog_sources",
+                "list_quickstarts",
             ):
                 example_calls.append(
                     {

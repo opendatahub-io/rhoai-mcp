@@ -36,7 +36,7 @@ This document applies the [RHAI Release Stages and API Tiers](https://github.com
 At Architects' request, `rhoai-mcp` is surfaced through the **MCP Catalog**; the `rhoai-mcp` can be deployed through:
 
 1. **MCP Catalog + MCPLO**: this is the standard path for environments with the MCP Lifecycle Operator installed, provided required/dependent resources are defined prior to the definition of the `MCPServer` resource (e.g., ServiceAccount, ConfigMaps).
-2. **GitOps (via kustomize)**: using the `openshift-oidc-mcpserver` overlay (for MCPLO-managed environments) or the `openshift-oidc` overlay (for environments without MCPLO, or where MCPLO has removed the server but left the MCPServer resource in place).
+2. **GitOps (via kustomize)**: using the `openshift-oidc-mcpserver` overlay (for MCPLO-managed environments) or the `openshift-oidc` overlay (for environments without MCPLO, or where MCPLO is in `Removed` state).
 
 ### Boundary with MCPLO
 

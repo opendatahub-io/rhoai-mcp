@@ -123,17 +123,19 @@ class TestRHOAIConfig:
         assert config.log_level == LogLevel.DEBUG
         assert config.port == 9000
 
-    def test_enabled_plugins_default(self):
+    def test_enabled_plugins_default(self, monkeypatch):
         """Test enabled_plugins defaults to a curated subset."""
-        config = RHOAIConfig()
+        monkeypatch.delenv("RHOAI_MCP_ENABLED_PLUGINS", raising=False)
+        config = RHOAIConfig(_env_file=None)
         assert config.enabled_plugins == [
             "projects", "connections", "storage", "planner-composites",
             "model_registry", "inference", "cluster-composites", "meta-composites",
         ]
 
-    def test_enabled_plugins_none_loads_all(self):
+    def test_enabled_plugins_none_loads_all(self, monkeypatch):
         """Test enabled_plugins=None means all plugins are loaded."""
-        config = RHOAIConfig(enabled_plugins=None)
+        monkeypatch.delenv("RHOAI_MCP_ENABLED_PLUGINS", raising=False)
+        config = RHOAIConfig(enabled_plugins=None, _env_file=None)
         assert config.enabled_plugins is None
 
     def test_enabled_plugins_from_comma_separated_string(self):

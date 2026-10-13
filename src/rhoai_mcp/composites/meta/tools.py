@@ -99,6 +99,20 @@ TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
             "get_catalog_model_artifacts",
         ],
     },
+    "maas": {
+        "description": "Models-as-a-Service (MaaS) endpoints behind the shared gateway",
+        "tools": [
+            "check_maas_readiness",
+            "deploy_maas_model",
+            "get_maas_model",
+            "delete_maas_model",
+        ],
+        "typical_workflow": [
+            "check_maas_readiness",
+            "deploy_maas_model",
+            "get_maas_model",
+        ],
+    },
 }
 
 
@@ -117,6 +131,14 @@ INTENT_PATTERNS = [
         "workflow": ["prepare_model_deployment", "deploy_model"],
         "explanation": "Deployment workflow: First use prepare_model_deployment() to validate, "
         "then deploy_model() to create the InferenceService.",
+    },
+    {
+        "patterns": ["maas", "models as a service", "models-as-a-service", "maas endpoint"],
+        "category": "maas",
+        "workflow": ["check_maas_readiness", "deploy_maas_model", "get_maas_model"],
+        "explanation": "MaaS workflow: First use check_maas_readiness() to verify the MaaS "
+        "platform is installed, then deploy_maas_model() to create the MaaS endpoint, "
+        "and get_maas_model() to check endpoint status.",
     },
     {
         "patterns": ["debug", "troubleshoot", "failed", "error", "why", "broken"],

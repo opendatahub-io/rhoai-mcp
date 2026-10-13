@@ -154,7 +154,7 @@ class TestPluginManager:
 
         class HealthyPlugin:
             @hookimpl
-            def rhoai_health_check(self, server: MagicMock) -> tuple[bool, str]:
+            def rhoai_health_check(self, server: MagicMock) -> tuple[bool, str]:  # noqa: ARG002
                 return True, "All good"
 
         pm = PluginManager()
@@ -171,7 +171,7 @@ class TestPluginManager:
 
         class UnhealthyPlugin:
             @hookimpl
-            def rhoai_health_check(self, server: MagicMock) -> tuple[bool, str]:
+            def rhoai_health_check(self, server: MagicMock) -> tuple[bool, str]:  # noqa: ARG002
                 return False, "Missing CRD"
 
         pm = PluginManager()
@@ -202,7 +202,7 @@ class TestPluginManager:
         """Verify health check exceptions are handled."""
 
         class FailingPlugin:
-            def rhoai_health_check(self, server: MagicMock) -> tuple[bool, str]:
+            def rhoai_health_check(self, server: MagicMock) -> tuple[bool, str]:  # noqa: ARG002
                 raise RuntimeError("Connection failed")
 
         pm = PluginManager()
@@ -235,12 +235,12 @@ class TestPluginManager:
         pm = PluginManager()
         count = pm.load_core_plugins()
 
-        # Should load 9 core domain plugins + 4 composite plugins = 13 total
-        assert count == 13
-        assert len(pm.registered_plugins) == 13
+        # Should load 10 core domain plugins + 4 composite plugins = 14 total
+        assert count == 14
+        assert len(pm.registered_plugins) == 14
 
         # Verify expected plugins are loaded
-        # Core domain plugins (9)
+        # Core domain plugins (10)
         expected_domains = {
             "projects",
             "notebooks",
@@ -251,6 +251,7 @@ class TestPluginManager:
             "training",
             "prompts",
             "model_registry",
+            "maas",
         }
         # Composite plugins (4)
         expected_composites = {
@@ -293,8 +294,8 @@ class TestPluginManager:
         pm = PluginManager()
         count = pm.load_core_plugins(enabled_plugins=None)
 
-        assert count == 13
-        assert len(pm.registered_plugins) == 13
+        assert count == 14
+        assert len(pm.registered_plugins) == 14
 
     def test_load_core_plugins_filter_nonexistent_name(self) -> None:
         """Verify non-existent plugin names in filter are silently ignored."""

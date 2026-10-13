@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from rhoai_mcp.domains.permissions import (
     CONNECTIONS_PERMISSIONS,
     INFERENCE_PERMISSIONS,
+    MAAS_PERMISSIONS,
     NOTEBOOKS_PERMISSIONS,
     PIPELINES_PERMISSIONS,
     PROJECTS_PERMISSIONS,
@@ -249,6 +250,42 @@ class TrainingPlugin(BasePlugin):
         return TrainingCRDs.all_crds()
 
 
+class MaasPlugin(BasePlugin):
+    """Plugin for Models-as-a-Service (MaaS) model deployment.
+
+    Deploys models as MaaS endpoints: an LLMInferenceService routed through
+    the shared MaaS gateway, registered and governed via MaaSModelRef (plus
+    optional AuthPolicy/Subscription). MaaS readiness is verified per-call
+    via check_maas_readiness rather than at plugin startup, because the MaaS
+    platform may be installed after this server starts.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="maas",
+                version="1.0.0",
+                description="Models-as-a-Service (MaaS) model deployment",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.maas.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return MAAS_PERMISSIONS
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:  # noqa: ARG002
+        return True, "MaaS readiness is verified per-call via check_maas_readiness"
+
+
 class PromptsPlugin(BasePlugin):
     """Plugin for MCP workflow prompts.
 
@@ -410,6 +447,7 @@ def get_core_plugins() -> list[BasePlugin]:
         TrainingPlugin(),
         PromptsPlugin(),
         ModelRegistryPlugin(),
+        MaasPlugin(),
     ]
 
     if os.environ.get("RHOAI_MCP_EXAMPLE_PLUGIN"):

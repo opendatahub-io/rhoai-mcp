@@ -70,6 +70,8 @@ def create_default_cluster_state() -> ClusterState:
     - NVIDIA A100 accelerator profile
     - 1 cluster training runtime
     - PVCs and secrets for data connections
+    - MaaS platform: DSC aigateway component, maas-default-gateway,
+      maas-api deployment, and the llm model namespace
     """
     state = ClusterState()
 
@@ -77,14 +79,19 @@ def create_default_cluster_state() -> ClusterState:
     for ns_name, display_name in [
         ("ml-experiments", "ML Experiments"),
         ("production-models", "Production Models"),
+        ("llm", "MaaS Models"),
     ]:
+        labels = {
+            "opendatahub.io/dashboard": "true",
+            "kubernetes.io/metadata.name": ns_name,
+        }
+        # The MaaS model namespace is exposed through the shared gateway
+        if ns_name == "llm":
+            labels["maas.opendatahub.io/gateway-access"] = "true"
         ns = MockResource(
             metadata=MockMetadata(
                 name=ns_name,
-                labels={
-                    "opendatahub.io/dashboard": "true",
-                    "kubernetes.io/metadata.name": ns_name,
-                },
+                labels=labels,
                 annotations={"openshift.io/display-name": display_name},
                 uid=_make_uid("namespace", ns_name),
             ),
@@ -95,10 +102,7 @@ def create_default_cluster_state() -> ClusterState:
         proj = MockResource(
             metadata=MockMetadata(
                 name=ns_name,
-                labels={
-                    "opendatahub.io/dashboard": "true",
-                    "kubernetes.io/metadata.name": ns_name,
-                },
+                labels=labels,
                 annotations={"openshift.io/display-name": display_name},
                 uid=_make_uid("project", ns_name),
             ),
@@ -113,6 +117,13 @@ def create_default_cluster_state() -> ClusterState:
             name="default-dsc",
             uid=_make_uid("dsc", "default-dsc"),
         ),
+        spec={
+            "components": {
+                "aigateway": {
+                    "modelsAsAService": {"managementState": "Managed"},
+                },
+            },
+        },
         status={
             "phase": "Ready",
             "installedComponents": {
@@ -130,6 +141,39 @@ def create_default_cluster_state() -> ClusterState:
     state.resources.setdefault(
         "datasciencecluster.opendatahub.io/v1/datascienceclusters", []
     ).append(dsc)
+
+    # --- MaaS platform (Gateway API gateway + maas-api deployment) ---
+    gateway = MockResource(
+        metadata=MockMetadata(
+            name="maas-default-gateway",
+            namespace="openshift-ingress",
+            uid=_make_uid("gateway", "maas-default-gateway"),
+        ),
+        spec={
+            "listeners": [
+                {"name": "https", "hostname": "maas.apps.mock-cluster.local", "port": 443},
+            ],
+        },
+        status={
+            "conditions": [{"type": "Programmed", "status": "True"}],
+        },
+        kind="Gateway",
+        api_version="gateway.networking.k8s.io/v1",
+    )
+    state.resources.setdefault("gateway.networking.k8s.io/v1/gateways", []).append(gateway)
+
+    maas_api = MockResource(
+        metadata=MockMetadata(
+            name="maas-api",
+            namespace="redhat-ai-gateway-infra",
+            uid=_make_uid("deployment", "maas-api"),
+        ),
+        spec={"replicas": 1},
+        status={"replicas": 1, "readyReplicas": 1},
+        kind="Deployment",
+        api_version="apps/v1",
+    )
+    state.resources.setdefault("apps/v1/deployments", []).append(maas_api)
 
     # --- AcceleratorProfile ---
     acc = MockResource(

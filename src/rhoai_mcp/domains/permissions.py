@@ -92,6 +92,42 @@ INFERENCE_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
+_MAAS_CRD_GROUP = "maas.opendatahub.io"
+
+MAAS_PERMISSIONS: dict[str, list[dict[str, str]]] = {
+    "check_maas_readiness": [
+        {
+            "apiGroup": "datasciencecluster.opendatahub.io",
+            "resource": "datascienceclusters",
+            "verb": "list",
+        },
+        {"apiGroup": "gateway.networking.k8s.io", "resource": "gateways", "verb": "get"},
+        {"apiGroup": "apps", "resource": "deployments", "verb": "get"},
+        {"apiGroup": "config.openshift.io", "resource": "ingresses", "verb": "get"},
+        {"apiGroup": "", "resource": "namespaces", "verb": "get"},
+    ],
+    "deploy_maas_model": [
+        {"apiGroup": "serving.kserve.io", "resource": "llminferenceservices", "verb": "create"},
+        {"apiGroup": _MAAS_CRD_GROUP, "resource": "maasmodelrefs", "verb": "create"},
+        {"apiGroup": _MAAS_CRD_GROUP, "resource": "maasauthpolicies", "verb": "create"},
+        {"apiGroup": _MAAS_CRD_GROUP, "resource": "maassubscriptions", "verb": "create"},
+        {"apiGroup": "", "resource": "namespaces", "verb": "create"},
+        {"apiGroup": "project.openshift.io", "resource": "projects", "verb": "patch"},
+    ],
+    "get_maas_model": [
+        {"apiGroup": "serving.kserve.io", "resource": "llminferenceservices", "verb": "get"},
+        {"apiGroup": _MAAS_CRD_GROUP, "resource": "maasmodelrefs", "verb": "get"},
+        {"apiGroup": "gateway.networking.k8s.io", "resource": "gateways", "verb": "get"},
+        {"apiGroup": "config.openshift.io", "resource": "ingresses", "verb": "get"},
+    ],
+    "delete_maas_model": [
+        {"apiGroup": "serving.kserve.io", "resource": "llminferenceservices", "verb": "delete"},
+        {"apiGroup": _MAAS_CRD_GROUP, "resource": "maasmodelrefs", "verb": "delete"},
+        {"apiGroup": _MAAS_CRD_GROUP, "resource": "maasauthpolicies", "verb": "delete"},
+        {"apiGroup": _MAAS_CRD_GROUP, "resource": "maassubscriptions", "verb": "delete"},
+    ],
+}
+
 _DSPA = "datasciencepipelinesapplications.opendatahub.io"
 
 PIPELINES_PERMISSIONS: dict[str, list[dict[str, str]]] = {

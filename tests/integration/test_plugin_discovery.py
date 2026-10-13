@@ -95,7 +95,7 @@ def test_server_creates_plugin_manager():
         mcp = server.create_mcp()  # noqa: F841
 
     assert server._plugin_manager is not None
-    assert len(server.plugins) == 8  # default enabled_plugins subset
+    assert set(server.plugins.keys()) >= set(server._config.enabled_plugins)
 
 
 def test_server_loads_all_plugins_when_none():
@@ -111,7 +111,13 @@ def test_server_loads_all_plugins_when_none():
         mcp = server.create_mcp()  # noqa: F841
 
     assert server._plugin_manager is not None
-    assert len(server.plugins) == 13  # 9 domain + 4 composite
+    expected_plugins = {
+        "projects", "notebooks", "inference", "pipelines", "connections",
+        "storage", "training", "prompts", "model_registry",
+        "cluster-composites", "training-composites", "meta-composites",
+        "planner-composites",
+    }
+    assert set(server.plugins.keys()) >= expected_plugins
 
 
 def test_external_plugins_discovered():

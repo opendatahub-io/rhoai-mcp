@@ -212,3 +212,7 @@ __marimo__/
 evals/reports/
 evals/results/
 .env.eval
+
+# OS / editor artifacts
+.DS_Store
+.vscode/

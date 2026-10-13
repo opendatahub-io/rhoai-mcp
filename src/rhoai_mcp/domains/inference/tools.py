@@ -112,7 +112,7 @@ async def _resolve_catalog_storage_uri(
     return None
 
 
-def _extract_oci_registry(uri: str) -> str | None:
+def extract_oci_registry(uri: str) -> str | None:
     """Extract the registry hostname from an OCI or docker URI.
 
     Args:
@@ -140,7 +140,7 @@ def _extract_oci_registry(uri: str) -> str | None:
     return None
 
 
-def _check_pull_secrets(k8s: Any, namespace: str, registry: str, warnings: list[str]) -> None:
+def check_pull_secrets(k8s: Any, namespace: str, registry: str, warnings: list[str]) -> None:
     """Check if a namespace has pull secrets for an OCI registry.
 
     Checks the default service account's imagePullSecrets. If none are
@@ -619,9 +619,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 # S3 validation would require checking data connections
                 warnings.append("Ensure S3 credentials are configured via data connection")
             elif storage_uri.startswith("oci://") or storage_uri.startswith("docker://"):
-                registry = _extract_oci_registry(storage_uri)
+                registry = extract_oci_registry(storage_uri)
                 if registry:
-                    _check_pull_secrets(server.k8s, namespace, registry, warnings)
+                    check_pull_secrets(server.k8s, namespace, registry, warnings)
                 else:
                     issues.append(
                         f"Could not determine OCI registry from storage_uri: {storage_uri}"
@@ -806,10 +806,10 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
                 }
             )
         elif storage_uri.startswith("oci://") or storage_uri.startswith("docker://"):
-            registry = _extract_oci_registry(storage_uri)
+            registry = extract_oci_registry(storage_uri)
             warnings: list[str] = []
             if registry:
-                _check_pull_secrets(server.k8s, namespace, registry, warnings)
+                check_pull_secrets(server.k8s, namespace, registry, warnings)
                 checks.append(
                     {
                         "name": "Storage",

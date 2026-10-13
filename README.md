@@ -14,6 +14,7 @@ An MCP (Model Context Protocol) server that enables AI agents to interact with R
 - **Project Management**: Create, list, and manage Data Science Projects
 - **Workbench Operations**: Create, start, stop, and delete Jupyter workbenches
 - **Model Serving**: Deploy and manage InferenceServices with KServe
+- **Models-as-a-Service**: Deploy models as MaaS endpoints behind the shared MaaS gateway
 - **Data Connections**: Manage S3 credentials for data access
 - **Pipelines**: Configure Data Science Pipelines infrastructure
 - **Storage**: Create and manage persistent volume claims
@@ -646,6 +647,15 @@ model_id: meta-llama/Llama-3.1-8B-Instruct
 | `delete_inference_service` | Delete deployed model |
 | `list_serving_runtimes` | List available runtimes |
 | `get_model_endpoint` | Get inference endpoint URL |
+
+### Models-as-a-Service (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `check_maas_readiness` | Verify the MaaS platform (DSC, gateway, maas-api) is ready |
+| `deploy_maas_model` | Deploy a model as a MaaS endpoint (LLMInferenceService + MaaSModelRef) |
+| `get_maas_model` | Get MaaS model status, registration state, and endpoint URL |
+| `delete_maas_model` | Delete a MaaS model and its registration/governance resources (managed-by guarded) |
 
 ### Data Connections (4 tools)
 

@@ -159,35 +159,35 @@ class TestPrepareModelDeploymentOciValidation:
 
 
 class TestExtractOciRegistry:
-    """Test _extract_oci_registry helper."""
+    """Test extract_oci_registry helper."""
 
     def test_oci_scheme(self) -> None:
-        from rhoai_mcp.domains.inference.tools import _extract_oci_registry
+        from rhoai_mcp.domains.inference.tools import extract_oci_registry
 
-        assert _extract_oci_registry("oci://quay.io/modh/model:v1") == "quay.io"
+        assert extract_oci_registry("oci://quay.io/modh/model:v1") == "quay.io"
 
     def test_docker_scheme(self) -> None:
-        from rhoai_mcp.domains.inference.tools import _extract_oci_registry
+        from rhoai_mcp.domains.inference.tools import extract_oci_registry
 
         assert (
-            _extract_oci_registry("docker://registry.redhat.io/rhoai/model:latest")
+            extract_oci_registry("docker://registry.redhat.io/rhoai/model:latest")
             == "registry.redhat.io"
         )
 
     def test_localhost_returns_host(self) -> None:
-        from rhoai_mcp.domains.inference.tools import _extract_oci_registry
+        from rhoai_mcp.domains.inference.tools import extract_oci_registry
 
-        assert _extract_oci_registry("oci://localhost/model:v1") == "localhost"
+        assert extract_oci_registry("oci://localhost/model:v1") == "localhost"
 
     def test_localhost_with_port_returns_host(self) -> None:
-        from rhoai_mcp.domains.inference.tools import _extract_oci_registry
+        from rhoai_mcp.domains.inference.tools import extract_oci_registry
 
-        assert _extract_oci_registry("oci://localhost:5000/model:v1") == "localhost:5000"
+        assert extract_oci_registry("oci://localhost:5000/model:v1") == "localhost:5000"
 
     def test_bare_name_returns_none(self) -> None:
-        from rhoai_mcp.domains.inference.tools import _extract_oci_registry
+        from rhoai_mcp.domains.inference.tools import extract_oci_registry
 
-        assert _extract_oci_registry("oci://myimage:latest") is None
+        assert extract_oci_registry("oci://myimage:latest") is None
 
 
 class TestResolveCatalogStorageUri:

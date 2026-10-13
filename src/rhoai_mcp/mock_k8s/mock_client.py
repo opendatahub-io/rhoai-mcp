@@ -312,7 +312,21 @@ class MockK8sClient(K8sClient):
         name: str,
         namespace: str | None = None,
     ) -> None:
-        """Mock delete - no-op."""
+        """Mock delete - remove the resource from the state.
+
+        Raises NotFoundError when the resource does not exist, matching the
+        real K8sClient behavior.
+        """
+        key = _crd_key(crd)
+        resources = self._state.resources.get(key, [])
+        for i, resource in enumerate(resources):
+            if resource.metadata.name != name:
+                continue
+            if namespace is not None and resource.metadata.namespace != namespace:
+                continue
+            del resources[i]
+            return
+        raise NotFoundError(crd.kind, name, namespace)
 
     def patch(
         self,

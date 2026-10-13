@@ -90,8 +90,9 @@ test-unit: ## Run unit tests only (training domain)
 test-integration: ## Run integration tests only
 	uv run pytest tests/integration -v
 
-lint: ## Run linter (ruff)
+lint: ## Run linter and formatting (ruff)
 	uv run ruff check src/
+	@uv run ruff format --check src/ || (echo "Formatting issues found. Run 'make format' to fix." && exit 1)
 
 format: ## Format code (ruff)
 	uv run ruff format src/

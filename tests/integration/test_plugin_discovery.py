@@ -88,6 +88,8 @@ def test_server_creates_plugin_manager():
     """Verify RHOAIServer creates and uses PluginManager with default config."""
     from unittest.mock import patch
 
+    from rhoai_mcp.composites.registry import get_composite_plugins
+    from rhoai_mcp.domains.registry import get_core_plugins
     from rhoai_mcp.server import RHOAIServer
 
     server = RHOAIServer()
@@ -96,6 +98,13 @@ def test_server_creates_plugin_manager():
 
     assert server._plugin_manager is not None
     assert set(server.plugins.keys()) >= set(server._config.enabled_plugins)
+    built_in_plugins = {
+        plugin.rhoai_get_plugin_metadata().name
+        for plugin in get_core_plugins() + get_composite_plugins()
+    }
+    # Intersect loaded plugins with built-ins to ignore external entry-point plugins,
+    # then verify exactly the configured set was loaded (no excluded built-in sneaked in).
+    assert set(server.plugins.keys()) & built_in_plugins == set(server._config.enabled_plugins)
 
 
 def test_server_loads_all_plugins_when_none():

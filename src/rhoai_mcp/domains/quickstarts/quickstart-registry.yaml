@@ -21,7 +21,7 @@ quickstarts:
     availableManifestVersions:
       - version: "1.0.0"
         status: stable
-        digest: "sha256:4b517843ad0a9b95f026069fbea646cfaa6c625abbc1fc02efae0c24a8a9e910"
+        digest: "sha256:cfe4efcf6ba218ae63b0034bd66348d9b5dd0f6d959e372fd9af187730bea77b"
     estimatedDeploymentTime: 15
     tags:
       - "vector-search"

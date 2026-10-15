@@ -442,6 +442,21 @@ class TestStatusAndLogs:
         assert status["succeeded"] == 1
         assert status["quickstart"] == "peoplemesh"
 
+    def test_get_action_status_reports_action_in_upper_case(
+        self, client: QuickstartsClient, mock_k8s: MagicMock
+    ) -> None:
+        # The Job label stores the action in lower case; status must report it in
+        # the same upper-case form run_action returns, so callers can compare them.
+        mock_k8s.get.return_value.to_dict.return_value = {
+            "metadata": {"labels": {"quickstart.redhat.com/action": "check_pre_reqs"}},
+            "status": {"succeeded": 1},
+        }
+        mock_k8s.core_v1.list_namespaced_pod.return_value.items = []
+
+        status = client.get_action_status("qs-x", "openshift-quickstarts")
+
+        assert status["action"] == "CHECK_PRE_REQS"
+
     def test_get_action_status_surfaces_failure_reason(
         self, client: QuickstartsClient, mock_k8s: MagicMock
     ) -> None:

@@ -293,12 +293,15 @@ class QuickstartsClient:
             phase = "Pending"
 
         exit_code, termination_message = self._get_termination_details(job_name, namespace)
+        # The label stores the action lower-cased; report it in the upper-case
+        # form run_action returns so the two tools agree.
+        action = labels.get(QUICKSTART_ACTION_LABEL)
 
         return {
             "job_name": job_name,
             "namespace": namespace,
             "quickstart": labels.get(QUICKSTART_NAME_LABEL),
-            "action": labels.get(QUICKSTART_ACTION_LABEL),
+            "action": action.upper() if action else None,
             "phase": phase,
             "active": active,
             "succeeded": succeeded,

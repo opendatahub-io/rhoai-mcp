@@ -250,7 +250,7 @@ class RHOAIConfig(BaseSettings):
     quickstart_registry_ref: str = Field(
         default=(
             "quay.io/rh-ai-quickstart/quickstart-registry"
-            "@sha256:d1c54e0533e91e28affee90b6ad5fbe513fe0cd834ee688a56d7d10bb4ba805e"
+            "@sha256:e9c265f13dead49b38dcd12b59e9dc2f1283b6d07e1c753d74681adbb021c380"
         ),
         description=(
             "OCI reference of the quickstart registry index artifact, pinned by digest so the "

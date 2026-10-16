@@ -30,7 +30,7 @@ FROM --platform=${TARGETPLATFORM} ${BASE_IMAGE} AS runtime
 LABEL org.opencontainers.image.title="RHOAI MCP Server"
 LABEL org.opencontainers.image.description="MCP server for Red Hat OpenShift AI - enables AI agents to interact with RHOAI environments"
 LABEL org.opencontainers.image.vendor="Red Hat"
-LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.source="https://github.com/opendatahub-io/rhoai-mcp"
 
 

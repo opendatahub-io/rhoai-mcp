@@ -1,6 +1,7 @@
 # RHOAI MCP Server
 
 [![CI](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/ci.yml)
+[![Check others imagerefs](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/check-others-imagerefs.yml/badge.svg?branch=main&event=schedule)](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/check-others-imagerefs.yml?query=branch%3Amain+event%3Aschedule)
 [![Container Build](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/container-build.yml/badge.svg)](https://github.com/opendatahub-io/rhoai-mcp/actions/workflows/container-build.yml)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/opendatahub-io/rhoai-mcp)
 [![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/opendatahub-io/rhoai-mcp)

@@ -34,7 +34,7 @@ jobs:
           latest_version=$(jq -r 'last // ""' <<< "$branches")
           echo "latest-version=$latest_version" >> "$GITHUB_OUTPUT"
 
-  chech-rhds-branch:
+  check-rhds-branch:
     needs: discover
     if: needs.discover.outputs.branches != '[]'
     runs-on: ubuntu-latest
@@ -42,7 +42,7 @@ jobs:
       fail-fast: false
       matrix:
         branch: ${{ fromJSON(needs.discover.outputs.branches) }}
-    name: chech-rhds-branch (${{ matrix.branch }})
+    name: check-rhds-branch (${{ matrix.branch }})
     steps:
       - name: Check RHDS image in params.env
         env:

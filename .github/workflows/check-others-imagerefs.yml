@@ -87,7 +87,8 @@ jobs:
           if ! EXPECTED_URI="$expected" yq -e '
             (.artifacts | length == 1) and (.artifacts[0].uri == strenv(EXPECTED_URI))
           ' rhoai-mcp-server.yaml > /dev/null; then
-            printf '::error::Expected exactly one artifact with uri %s\n' "$expected"
+            actual=$(yq -o=json -I=0 '.artifacts' rhoai-mcp-server.yaml)
+            printf '::error::Expected exactly one artifact with uri %s; got artifacts=%s\n' "$expected" "$actual"
             exit 1
           fi
           printf 'artifacts.uri verified: %s\n' "$expected"

@@ -22,8 +22,6 @@ LOG_LEVEL ?= INFO
 PLATFORM ?= linux/amd64
 
 # PyPI index URL for requirements generation (Red Hat internal index).
-# rhoai/3.6 GA channel: new changes ship in releases after 3.6-EA2, and this
-# channel carries current package versions that 3.6-EA2 does not.
 PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
 
 # Guard: ensure a container runtime was found

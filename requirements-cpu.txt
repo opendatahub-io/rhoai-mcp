@@ -132,7 +132,7 @@ packaging==26.3
 pathspec==1.1.1
     # via hatchling
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
-pluggy==1.6.0
+pluggy==1.7.0
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)

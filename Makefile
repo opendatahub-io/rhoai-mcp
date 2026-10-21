@@ -21,8 +21,8 @@ LOG_LEVEL ?= INFO
 # Build platform (force linux/amd64 for consistent builds across host architectures)
 PLATFORM ?= linux/amd64
 
-# PyPI index URL for requirements generation (Red Hat internal index)
-PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6-EA2/cpu-ubi9-test/simple/
+# PyPI index URL for requirements generation (Red Hat internal index).
+PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
 
 # Guard: ensure a container runtime was found
 ifeq ($(CONTAINER_RUNTIME),)

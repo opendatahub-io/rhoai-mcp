@@ -8,3 +8,5 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    exclude-paths:
+      - "requirements-cpu.txt"  # Generated separately with make generate-requirements-cpu.

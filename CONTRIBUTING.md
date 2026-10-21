@@ -46,7 +46,7 @@ rhoai-mcp/
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/) - Fast Python package manager
 - Access to a Kubernetes/OpenShift cluster (for integration testing)
 

@@ -147,6 +147,20 @@ async def test_follow_up_reuses_connection_and_returns_only_current_exchange(
     assert first.conversation_id == second.conversation_id
 
 
+async def test_plain_query_uses_explicit_scenario_tool_allowlist(fake: FakeSDKClient) -> None:
+    fake.get_server_info.return_value = {"commands": []}
+    fake.responses = [[assistant(sdk.TextBlock(text="Cluster summary.")), terminal()]]
+    async with code.ClaudeCodeClient(allowed_tools=["explore_cluster"]) as client:
+        result = await client.query("Explore the cluster")
+    fake.query.assert_awaited_once_with("Explore the cluster")
+    assert result.task == "Explore the cluster"
+    assert client.options.allowed_tools == ["Skill", code.MCP_PREFIX + "explore_cluster"]
+
+
+def test_empty_scenario_tool_allowlist_does_not_enable_navigator_tools() -> None:
+    assert code.ClaudeCodeClient(allowed_tools=[]).options.allowed_tools == ["Skill"]
+
+
 async def test_builtin_and_other_server_tools_stay_in_diagnostics(fake: FakeSDKClient) -> None:
     fake.responses = [
         [
@@ -327,7 +341,10 @@ async def test_initialization_failure_closes_sdk(fake: FakeSDKClient) -> None:
     fake.__aexit__.assert_awaited_once()
 
 
-def test_options_use_local_mock_server_and_project_discovery(tmp_path: Any) -> None:
+def test_options_use_local_mock_server_and_project_discovery(
+    tmp_path: Any, monkeypatch: Any
+) -> None:
+    monkeypatch.delenv("RHOAI_MCP_ENABLED_PLUGINS", raising=False)
     client = code.ClaudeCodeClient(repo_root=tmp_path)
     options = client.options
     assert options.cwd == tmp_path.resolve()

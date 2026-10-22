@@ -411,6 +411,110 @@ Have the scoring entrypoint produce a small paired scenario/metric table as well
 
 DeepEval results supplement the primary assertion gate with a judgment of tool use and task completion. Investigate differences as observed regression evidence, without claiming statistical equivalence or assuming every difference is a discovery failure.
 
+## Part 5: Live pytest backend selection
+
+The broader scenario suite accepts `--client=lcs` (the default) or
+`--client=claude-code`. LCS keeps its configured agent, readiness check, and HTTP
+MCP schema discovery. Selecting Claude requests stdio discovery and never resolves
+the LCS fixture. Its function-scoped async fixture opens and closes a persistent
+SDK connection in the test's own event loop, with a fresh mock MCP process for
+each scenario.
+
+The shared Claude client now accepts plain tasks as well as explicit skill
+invocations. Its default navigator allowlist is preserved for the primary gate;
+the broader pytest fixture pre-approves tool names discovered from its local MCP
+server. No domain plugins are enabled implicitly. Scenarios that need tools outside
+the active plugin set still need appropriate server configuration. Claude mode
+currently supports mock clusters only and rejects a live-cluster setting.
+
+The navigator table scenario invokes `/navigator` explicitly in Claude mode and
+handles separate requirements, workload, and optional manual `A100-80` input.
+LCS retains its original two-exchange conversation using its server-configured
+instructions. Both paths use the exact table validator and merge their observed
+exchanges through the backend-neutral result interface.
+
+For selected live Claude scenarios with the existing OpenAI environment key:
+
+```bash
+RHOAI_EVAL_EVAL_PROVIDER=openai \
+RHOAI_EVAL_EVAL_MODEL=gpt-5.4-mini \
+uv run --group eval --group claude-check pytest \
+    evals/scenarios/test_tool_discovery.py \
+    evals/scenarios/test_navigator_table_completeness.py \
+    --client=claude-code \
+    --eval-results=evals/results/pytest-claude-code-step8.jsonl -v
+
+# A single scenario can also be selected through Make:
+make eval-scenario SCENARIO=tool_discovery CLIENT=claude-code
+```
+
+`--eval-results` supplies an explicit JSONL path; otherwise the existing recorder
+history path is used. Live records carry the selected backend, observed agent model,
+and packaging phase for explicitly invoked repository skills. Generic tasks have
+no packaging phase. Make adds the Claude dependency group only when that backend
+is selected. It continues to default to LCS.
+
+Step 8 validation passed 155 targeted offline tests, lint/format checks, and targeted
+type checks. Subprocess pytest tests verify conditional discovery, absence of LCS
+requests in Claude mode, separate SDK clients per scenario, and opening/closing
+within the test's event loop. All six scenario modules collect with the Claude
+selector. LCS routing is tested offline; a live LCS stack was not started.
+
+The two selected live pytest scenarios finished with **one pass and one failure**:
+
+| Scenario | Check | Score | Threshold | Outcome |
+|---|---|---|---|---|
+| Navigator table completeness | Exact table validator | — | — | PASS |
+| Navigator table completeness | Multi-turn MCP use | 0.750 | 0.500 | PASS |
+| Navigator table completeness | MCP task completion | 0.600 | 0.250 | PASS |
+| Tool discovery | MCP use | 0.200 | 0.500 | FAIL |
+
+The initial discovery record contains no MCP calls. Its judge reason reports that the
+answer named workbench tools absent from the active server: `list_notebook_images`,
+`create_workbench`, and `get_workbench_url`. These tools exist in the `notebooks`
+plugin, which the default server configuration does not enable. This is a broader
+capability/answer-grounding finding, separate from the passing migration gate.
+Review also identified a test-design mismatch: its fixed task requested a workbench
+without checking whether the server exposed that capability.
+
+The records are saved in `evals/results/pytest-claude-code-step8.jsonl`; a readable
+summary and full judge explanations are in `evals/results/pytest-claude-code-step8.md`.
+Both are ignored by Git and retain the original outcome.
+
+The discovery scenario now derives both the request and expected setup tools from
+the connected server's MCP `list_tools` inventory, the same inventory supplied to
+DeepEval. It does not duplicate the local `RHOAI_MCP_ENABLED_PLUGINS` default: a
+remote server, environment override, unhealthy plugin, or RBAC filter can expose a
+different inventory. The default inventory requests project creation, storage, and
+an S3 connection. A workbench is requested only when `create_workbench` is present.
+Configurations without relevant setup tools or discovery tools skip with an
+explicit reason before any agent query or judge evaluation.
+
+The scenario also requires an actual enabled discovery-tool call, rejects calls to
+unavailable tools and resource-creation calls, and checks that the answer covers
+the requested enabled setup tools. The shared stdio launch configuration explicitly
+forwards `RHOAI_MCP_ENABLED_PLUGINS` overrides; the MCP Python SDK otherwise inherits
+only a small set of system environment variables.
+
+Real stdio discovery verified three configurations: defaults (53 tools, three setup
+capabilities), an explicit configuration with notebooks (22 tools, four setup
+capabilities), and projects plus meta tools (7 tools, project setup only). Evidence
+is saved in `evals/results/discovery-capability-inventory.json`.
+
+The corrected live discovery case passed with MCP Use **0.500**, at the unchanged
+threshold of **0.500**. It called `list_tool_categories` and `suggest_tools` and
+passed the enabled-tool assertions. Its request differs from the original failed
+case, so this is validation of a configuration-appropriate test, not a paired model
+performance comparison. Records are in
+`evals/results/pytest-tool-discovery-enabled-tools.jsonl`; the readable report is
+`evals/results/pytest-tool-discovery-enabled-tools.md`. Server defaults, navigator
+instructions, and judge thresholds are unchanged.
+
+After the capability-aware follow-up, all 170 targeted offline tests pass,
+including default/notebooks-enabled inventories, filtered server inventories,
+unsupported-configuration skips, and explicit plugin-override forwarding. Changed
+Python files pass lint and formatting checks; targeted type checks also pass.
+
 ## Implementation order
 
 | Step | Work | Deliverable |
@@ -435,4 +539,4 @@ field `expected_qps` includes peak headroom and a small-workload capacity floor;
 `expected_rps`. Offline tests disable optional planner GPU discovery and block network
 connections. When running the later mock-cluster workflow checks, also disable the
 planner's independent cluster discovery with `PLANNER_DETECT_CLUSTER_GPUS=false` so
-the mock cluster remains the source of GPU inventory.
+recommendations use the navigator's discovered or manually supplied GPU filter.

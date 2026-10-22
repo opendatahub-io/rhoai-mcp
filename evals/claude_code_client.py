@@ -10,6 +10,7 @@ import asyncio
 import json
 import shutil
 import sys
+from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 from types import TracebackType
@@ -185,7 +186,13 @@ class ClaudeCodeClient:
     exchanges cannot be retried on this client; create a fresh scenario instead.
     """
 
-    def __init__(self, repo_root: Path = REPO_ROOT, timeout: float = 300) -> None:
+    def __init__(
+        self,
+        repo_root: Path = REPO_ROOT,
+        timeout: float = 300,
+        *,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be positive")
         self.repo_root = Path(repo_root).resolve()
@@ -197,7 +204,13 @@ class ClaudeCodeClient:
             system_prompt={"type": "preset", "preset": "claude_code"},
             mcp_servers=cast(dict[str, McpServerConfig], build_mcp_servers()),
             strict_mcp_config=True,
-            allowed_tools=["Skill", *(MCP_PREFIX + name for name in NAVIGATOR_TOOLS)],
+            allowed_tools=[
+                "Skill",
+                *(
+                    MCP_PREFIX + name
+                    for name in (NAVIGATOR_TOOLS if allowed_tools is None else allowed_tools)
+                ),
+            ],
             permission_mode="dontAsk",
         )
         self.initialization: dict[str, Any] = {}
@@ -240,15 +253,15 @@ class ClaudeCodeClient:
         if sdk is not None:
             await sdk.__aexit__(exc_type, exc, traceback)
 
-    async def query(self, task: str, *, skill: str) -> ClaudeCodeResult:
-        """Start with an explicit /command (identical dispatch before and after migration)."""
+    async def query(self, task: str, *, skill: str | None = None) -> ClaudeCodeResult:
+        """Start a plain task, or explicitly dispatch a discovered command/skill."""
         if self._started:
             raise RuntimeError("Scenario already started; use follow_up()")
-        if skill not in self.available_commands:
+        if skill is not None and skill not in self.available_commands:
             result = ClaudeCodeResult(task=task)
             self.last_result = result
             raise ClaudeCodeError(f"Command /{skill} was not discovered", result)
-        return await self._exchange(f"/{skill} {task}")
+        return await self._exchange(f"/{skill} {task}" if skill else task)
 
     async def follow_up(self, reply: str, conversation_id: str) -> ClaudeCodeResult:
         """Continue on the same connection, rejecting IDs from other scenarios."""

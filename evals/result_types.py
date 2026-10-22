@@ -19,6 +19,7 @@ class AgentResult(Protocol):
     final_output: str
     messages: list[dict[str, Any]]
     turns: int
+    conversation_id: str
 
     @property
     def tool_calls(self) -> Sequence[ToolCallResult]: ...
@@ -52,3 +53,35 @@ class ClaudeCodeResult:
     @property
     def tool_names_used(self) -> list[str]:
         return [call.name for call in self.tool_calls]
+
+
+@dataclass
+class CombinedResult:
+    """Observed exchanges from either backend, concatenated within one scenario."""
+
+    task: str
+    final_output: str
+    tool_calls: list[ToolCallResult]
+    messages: list[dict[str, Any]]
+    turns: int
+    conversation_id: str
+
+    @property
+    def tool_names_used(self) -> list[str]:
+        return [call.name for call in self.tool_calls]
+
+
+def combine_results(results: Sequence[AgentResult]) -> CombinedResult:
+    if not results:
+        raise ValueError("At least one exchange is required")
+    ids = {result.conversation_id for result in results}
+    if len(ids) != 1 or not next(iter(ids)):
+        raise ValueError("Exchanges must belong to the same nonempty conversation")
+    return CombinedResult(
+        task=results[0].task,
+        final_output=results[-1].final_output,
+        tool_calls=[call for result in results for call in result.tool_calls],
+        messages=[message for result in results for message in result.messages],
+        turns=sum(result.turns for result in results),
+        conversation_id=results[0].conversation_id,
+    )

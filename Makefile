@@ -181,11 +181,15 @@ eval-live: ## Run all MCP evaluation tests including live cluster
 	$(MAKE) eval-down; \
 	exit $$status
 
-eval-scenario: ## Run a single eval scenario (usage: make eval-scenario SCENARIO=cluster_exploration)
+eval-scenario: CLIENT ?= lcs
+eval-scenario: export SCENARIO_EVAL_CLIENT = $(CLIENT)
+eval-scenario: export SCENARIO_EVAL_NAME = $(SCENARIO)
+eval-scenario: ## Run a scenario (SCENARIO=name CLIENT=lcs|claude-code)
 ifndef SCENARIO
 	$(error SCENARIO is required. Usage: make eval-scenario SCENARIO=cluster_exploration)
 endif
-	uv run --group eval pytest evals/scenarios/test_$(SCENARIO).py -v --tb=short
+	$(if $(and $(filter 1,$(words $(CLIENT))),$(filter lcs claude-code,$(CLIENT))),,$(error CLIENT must be lcs or claude-code))
+	uv run --group eval $(if $(filter claude-code,$(CLIENT)),--group claude-check) pytest "evals/scenarios/test_$$SCENARIO_EVAL_NAME.py" --client "$$SCENARIO_EVAL_CLIENT" -v --tb=short
 
 eval-report: ## Show latest eval run summary
 	uv run --group eval python -m evals.reporting.cli summary

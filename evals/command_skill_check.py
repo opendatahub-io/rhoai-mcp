@@ -54,6 +54,7 @@ USE_CASE = "chatbot_conversational"
 USER_COUNT = 50
 NAMESPACE = "production-models"
 STORAGE_URI = "oci://registry.example.com/mock/model:latest"
+MANUAL_GPU_TYPE = "A100-80"
 SCRIPT = {
     "opening": (
         "I'm building a customer support chatbot for 50 concurrent users. Cost is my top priority. "
@@ -66,6 +67,7 @@ SCRIPT = {
         "and wait for my workload confirmation before fetching recommendations."
     ),
     "workload": "I confirm the workload and all default SLO targets. Please fetch the model recommendations.",
+    "hardware": f"My cluster has {MANUAL_GPU_TYPE} GPUs available. Use that hardware filter for the recommendations.",
     "selection": "I select the {category} recommendation, model_id {model_id}. Please provide the navigator-handoff block.",
     "planning": (
         "Prepare the deployment plan from this navigator handoff in namespace production-models. "
@@ -96,7 +98,7 @@ CHECKS = (
 )
 SCENARIOS = ("navigator", "deployment")
 CONTRACT = {
-    "version": 1,
+    "version": 2,
     "script": SCRIPT,
     "columns": TABLE_COLUMNS,
     "rows": TABLE_ROWS,
@@ -313,8 +315,34 @@ def _gpu_types(inventory: dict[str, Any]) -> list[str]:
             found.add("A100-40")
         else:
             found.update(gpu for gpu in ("H100", "H200", "B200", "L4") if gpu in product)
-    require(found, f"Mock cluster GPU inventory could not be mapped: {products}")
     return sorted(found)
+
+
+def validate_hardware_request(trace: dict[str, Any]) -> None:
+    """Require unavailable inventory and a GPU question before supplying manual input."""
+    require(
+        not _calls(trace, "recommend_model"),
+        "Recommendations occurred before the manual GPU answer",
+    )
+    inventories = _calls(trace, "get_cluster_resources")
+    if inventories:
+        require(
+            not _gpu_types(tool_payload(inventories[-1])),
+            "Manual GPU input requested despite usable cluster inventory",
+        )
+    else:
+        tools = trace.get("initialization", {}).get("tools")
+        require(
+            isinstance(tools, list) and "mcp__rhoai-mcp__get_cluster_resources" not in tools,
+            "Missing evidence that the cluster inventory tool is unavailable",
+        )
+    output = trace["exchanges"][-1]["final_output"]
+    require(
+        "?" in output
+        and re.search(r"\b(?:GPUs?|hardware)\b", output, re.I)
+        and re.search(r"\b(?:which|what|tell|specify|provide|share|confirm)\b", output, re.I),
+        "Navigator did not ask the customer to specify available GPUs",
+    )
 
 
 def _result_precedes_call(trace: dict[str, Any], result_id: str, call_id: str) -> bool:
@@ -335,19 +363,42 @@ def validate_recommendations(
     calls = _calls(trace)
     recommendations = _calls(trace, "recommend_model")
     require(recommendations, "No recommendations after workload confirmation")
-    first_index = calls.index(recommendations[0])
-    inventories = [call for call in calls[:first_index] if call["name"] == "get_cluster_resources"]
-    require(inventories, "Cluster inventory must precede the first recommendation")
-    inventories = [
-        call
-        for call in inventories
-        if _result_precedes_call(trace, call["call_id"], recommendations[0]["call_id"])
+    hardware = [
+        index
+        for index, exchange in enumerate(trace["exchanges"])
+        if exchange.get("label") == "hardware"
     ]
-    require(
-        inventories,
-        "Cluster inventory result must be available before recommendations are requested",
-    )
-    gpus = _gpu_types(tool_payload(inventories[-1]))
+    if hardware:
+        require(len(hardware) == 1, "Expected a single manual GPU answer")
+        index = hardware[0]
+        validate_hardware_request({**trace, "exchanges": trace["exchanges"][:index]})
+        answer = trace["exchanges"][index]
+        require(answer["task"] == SCRIPT["hardware"], "Unexpected manual GPU answer")
+        require(
+            answer["messages"][0] == {"role": "user", "content": SCRIPT["hardware"]},
+            "Manual GPU answer must precede recommendation requests",
+        )
+        gpus = [MANUAL_GPU_TYPE]
+    else:
+        first_index = calls.index(recommendations[0])
+        inventories = [
+            call for call in calls[:first_index] if call["name"] == "get_cluster_resources"
+        ]
+        require(
+            inventories,
+            "Cluster inventory or a manual GPU answer must precede the first recommendation",
+        )
+        inventories = [
+            call
+            for call in inventories
+            if _result_precedes_call(trace, call["call_id"], recommendations[0]["call_id"])
+        ]
+        require(
+            inventories,
+            "Cluster inventory result must be available before recommendations are requested",
+        )
+        gpus = _gpu_types(tool_payload(inventories[-1]))
+        require(gpus, "Cluster inventory has no supported GPU types; manual GPU input is required")
     allow_fallback = False
     for index, call in enumerate(recommendations):
         arguments = call["arguments"]
@@ -359,7 +410,7 @@ def validate_recommendations(
         require(isinstance(gpu_filter, list), "Recommendation omitted explicit GPU filter")
         require(
             sorted(gpu_filter) == gpus or (index > 0 and allow_fallback and gpu_filter == []),
-            f"Recommendation GPU filter does not match inventory/fallback: {gpu_filter}",
+            f"Recommendation GPU filter does not match confirmed hardware/fallback: {gpu_filter}",
         )
         for key, expected in (overrides or {}).items():
             value = arguments.get(key)
@@ -421,7 +472,10 @@ def validate_handoff(
     )
     for key, value in expected.items():
         require(values[key] == value, f"Handoff {key}: expected {value!r}, got {values[key]!r}")
-    require(sorted(values["cluster_gpu_types"]) == gpus, "Handoff GPU types do not match inventory")
+    require(
+        sorted(values["cluster_gpu_types"]) == gpus,
+        "Handoff GPU types do not match confirmed hardware",
+    )
 
 
 class CheckFailure(AssertionError):
@@ -516,6 +570,10 @@ async def _navigator(artifact: dict[str, Any], session: _Session) -> tuple[str, 
     with checking(artifact, "navigator.recommendations"):
         recommendations = await session.send(SCRIPT["workload"], "workload")
         _selection_only(artifact, trace)
+        if not _calls(trace, "recommend_model"):
+            validate_hardware_request(trace)
+            recommendations = await session.send(SCRIPT["hardware"], "hardware")
+            _selection_only(artifact, trace)
         gpus = validate_recommendations(trace)
     with checking(artifact, "navigator.comparison_table"):
         table = validate_comparison_table(recommendations["final_output"])

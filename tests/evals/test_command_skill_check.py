@@ -138,11 +138,14 @@ def tool_messages(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 class FakeClient:
-    def __init__(self, responses: list[Any], session_id: str) -> None:
+    def __init__(self, responses: list[Any], session_id: str, *, inventory_available: bool) -> None:
         self.responses = responses
         self.session_id = session_id
         self.last_result: FakeResult | None = None
-        self.initialization = {"commands": [{"name": name} for name in check.SKILLS]}
+        self.initialization = {
+            "commands": [{"name": name} for name in check.SKILLS],
+            "tools": ["mcp__rhoai-mcp__get_cluster_resources"] if inventory_available else [],
+        }
         self.diagnostics: list[dict[str, Any]] = []
         self.sent: list[str] = []
         self.closed = False
@@ -178,12 +181,17 @@ class FakeClient:
 
 
 class FakeFactory:
-    def __init__(self, responses: list[list[Any]]) -> None:
+    def __init__(self, responses: list[list[Any]], *, inventory_available: bool = True) -> None:
         self.responses = responses
+        self.inventory_available = inventory_available
         self.clients: list[FakeClient] = []
 
     def __call__(self, **_kwargs: Any) -> FakeClient:
-        client = FakeClient(self.responses[len(self.clients)], f"scenario-{len(self.clients)}")
+        client = FakeClient(
+            self.responses[len(self.clients)],
+            f"scenario-{len(self.clients)}",
+            inventory_available=self.inventory_available,
+        )
         self.clients.append(client)
         return client
 
@@ -527,6 +535,77 @@ async def test_complete_synthetic_workflow(repo: Path, ready: bool, storage: boo
         )
         == 4
     )
+
+
+def manual_gpu_responses() -> list[list[FakeResult]]:
+    responses = scripted_responses()
+    responses[0][2].tool_calls.pop(0)  # The inventory tool is unavailable.
+    responses[0].insert(
+        2, FakeResult(final_output="Which GPU types are available in your cluster?")
+    )
+    return responses
+
+
+@pytest.mark.parametrize("inventory", [None, {}, {"gpu_info": {"products": ["Unknown GPU"]}}])
+async def test_manual_gpu_fallback_completes_workflow(repo: Path, inventory: Any) -> None:
+    responses = manual_gpu_responses()
+    if inventory is not None:
+        responses[0][2].tool_calls.append(call("get_cluster_resources", inventory))
+    factory = FakeFactory(responses, inventory_available=inventory is not None)
+    artifact = await check.run_checks(
+        phase="commands", output=repo / "manual.json", repo_root=repo, client_factory=factory
+    )
+    assert artifact["status"] == "passed", artifact["failure"]
+    nav = artifact["scenarios"]["navigator"]["exchanges"]
+    assert [exchange["label"] for exchange in nav] == [
+        "opening",
+        "requirements",
+        "workload",
+        "hardware",
+        "selection",
+    ]
+    assert not any(
+        tool["name"] == "recommend_model" for exchange in nav[:3] for tool in exchange["tool_calls"]
+    )
+    assert factory.clients[0].sent[3] == check.SCRIPT["hardware"]
+    assert nav[3]["tool_calls"][0]["arguments"]["preferred_gpu_types"] == [check.MANUAL_GPU_TYPE]
+    assert check.parse_handoff(nav[-1]["final_output"])[1]["cluster_gpu_types"] == [
+        check.MANUAL_GPU_TYPE
+    ]
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "no-question",
+        "skipped-inventory",
+        "usable-inventory",
+        "early-recommendation",
+        "wrong-filter",
+    ],
+)
+async def test_manual_gpu_fallback_rejects_missing_gate_or_evidence(repo: Path, fault: str) -> None:
+    responses = manual_gpu_responses()
+    if fault == "no-question":
+        responses[0][2].final_output = "Inventory is unavailable."
+    elif fault == "usable-inventory":
+        responses[0][2].tool_calls.append(call("get_cluster_resources", INVENTORY))
+    elif fault == "early-recommendation":
+        responses[0][2].tool_calls.append(responses[0][3].tool_calls[0])
+    elif fault == "wrong-filter":
+        responses[0][3].tool_calls[0]["arguments"]["preferred_gpu_types"] = []
+    factory = FakeFactory(
+        responses, inventory_available=fault in {"skipped-inventory", "usable-inventory"}
+    )
+    artifact = await check.run_checks(
+        phase="commands", output=repo / "manual-failed.json", repo_root=repo, client_factory=factory
+    )
+    assert artifact["checks"]["navigator.recommendations"]["status"] == "failed", artifact[
+        "failure"
+    ]
+    assert artifact["scenarios"]["deployment"]["status"] == "not_run"
+    if fault in {"no-question", "skipped-inventory", "usable-inventory", "early-recommendation"}:
+        assert check.SCRIPT["hardware"] not in factory.clients[0].sent
 
 
 @pytest.mark.parametrize("gate", ["workload", "planning", "storage"])

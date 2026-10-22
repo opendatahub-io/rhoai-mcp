@@ -105,7 +105,7 @@ mcp_servers = {
 }
 ```
 
-The explicit transport and local planner avoid inheriting a remote planner or HTTP transport from local configuration. The empty catalog URL forces bundled benchmark data, and disabling independent planner GPU discovery leaves the mock cluster as the source of inventory. No planner service or container is needed.
+The explicit transport and local planner avoid inheriting a remote planner or HTTP transport from local configuration. The empty catalog URL forces bundled benchmark data, and disabling independent planner GPU discovery leaves hardware discovery to the navigator workflow. The default plugin set does not expose `get_cluster_resources`, so the script supplies manual GPU information when prompted. No planner service or container is needed.
 
 Configure `ClaudeAgentOptions` with `cwd=repo_root`, `setting_sources=["project"]`, `system_prompt={"type": "preset", "preset": "claude_code"}`, and this MCP configuration. Include project settings so repository commands and skills are discovered. Explicitly pre-approve the MCP tools needed across all scripted turns, including deployment, so checks can complete without permission prompts. Workflow confirmation is still supplied as a separate user message and checked independently of tool permissions. See [SDK skill loading and command dispatch](https://code.claude.com/docs/en/agent-sdk/skills).
 
@@ -172,7 +172,7 @@ Use two workflow scenarios: navigator selection through handoff in one SDK sessi
 | Workflow step | Assertions |
 |---|---|
 | Navigator workload gate | Invoke `/navigator` with a support-chatbot use case, 50 users, and cost priority. Confirm requirements as needed. Require `get_use_case_defaults` and `get_expected_rps` with the expected use case/user count. Assert no `recommend_model` call occurs before the scripted workload confirmation. |
-| Navigator recommendations | Confirm the workload. Require cluster inventory before the first recommendation call, and verify use case, user count, GPU filter, and any confirmed SLO overrides. Locate the comparison table and assert the four exact recommendation columns plus the row-label column, eight exact data rows, five cells per row, and non-empty recommendation cells with no unresolved placeholders. An explicit `—` is permitted for a slot with no recommendation. |
+| Navigator recommendations | Confirm the workload. Require usable cluster inventory before the first recommendation call, or, if the tool is unavailable or returns unusable inventory, require a GPU question and wait for the scripted manual answer (`A100-80`). Verify no recommendations occur before that answer, and verify use case, user count, the discovered or manually supplied GPU filter, and any confirmed SLO overrides. Locate the comparison table and assert the four exact recommendation columns plus the row-label column, eight exact data rows, five cells per row, and non-empty recommendation cells with no unresolved placeholders. An explicit `—` is permitted for a slot with no recommendation. |
 | Navigator handoff | Select an available recommendation from that run's actual tool results. Require a parseable `navigator-handoff` block with the documented keys and consistent model/category/workload values. Assert navigator never calls `plan_deployment` or `execute_deployment`. |
 | Deployment approval gate | In a fresh SDK client, invoke `/navigator-deploy` with the captured handoff and the existing mock namespace `production-models`. Require `plan_deployment` with matching handoff values. Assert no `execute_deployment` or runtime creation occurs before the scripted deployment approval. Resolve a requested storage URI with a fixed mock URI before approving. |
 | Deployment continuation | Send explicit `deploy` approval. Require `execute_deployment` with the agreed namespace/configuration and a successful deployment result. Ask for the new service's status in a follow-up and verify the tool targets that same service, proving mock state survives across turns. Accept the reported provisioning state; require endpoint lookup only when the service is Ready. |
@@ -211,9 +211,14 @@ The simple runner needs neither HTTP schema discovery nor an LLM judge. It makes
 
 ### Implemented runner behavior
 
-The navigator script has four user exchanges: initial requirements, explicit
+The navigator script has four or five user exchanges: initial requirements, explicit
 requirements confirmation, explicit workload confirmation using default SLOs,
-and selection of a recommendation found in that run's tool results and table.
+an optional manual GPU answer (`A100-80`) when navigator asks because inventory
+is unavailable, and selection of a recommendation found in that run's tool results and table.
+The manual branch requires evidence from SDK tool discovery or an unusable inventory
+result; it cannot silently replace a skipped discovery step. The same hardware must
+appear in recommendation filters and the handoff. SDK/tool execution errors still fail
+the runner visibly rather than triggering retries.
 Selection prefers the displayed Balanced slot, then other available slots. The
 deployment script uses a fresh client and has three exchanges, or four when a
 missing storage URI needs to be supplied. Storage input explicitly withholds
@@ -231,6 +236,16 @@ and scenarios stay `not_run` after an earlier failure.
 the saved body hashes, descriptions, ordered tools, and scaffold hash against the
 command baseline, and requires every named check and both scenarios to have passed.
 Recommendation identities and assistant prose may differ between phases.
+
+The first live command baseline stopped because `get_cluster_resources` was absent
+and navigator attempted alternative tools. Before establishing a passing baseline,
+the command was updated to ask for manual GPU information when discovery is unavailable.
+The script contract is now version 2; the failed original run is not a migration baseline.
+The updated live command baseline passed all 11 checks, including the manual
+`A100-80` exchange, handoff, deployment approval, execution, and follow-up status.
+Its artifact is `evals/results/workflow-commands.json`; the original failed trace
+is retained separately as `evals/results/workflow-commands-failed-missing-inventory.json`.
+These artifacts are ignored by Git and remain available locally for the paired check.
 
 Offline implementation checks (synthetic conversations, without Claude authentication):
 

@@ -247,6 +247,14 @@ Its artifact is `evals/results/workflow-commands.json`; the original failed trac
 is retained separately as `evals/results/workflow-commands-failed-missing-inventory.json`.
 These artifacts are ignored by Git and remain available locally for the paired check.
 
+The live skill run passed all 11 checks as well, using the same manual `A100-80`
+exchange and separate deployment session. Its complete trace is saved in
+`evals/results/workflow-skills.json`. The paired comparison passed all 31 checks;
+the report is `evals/results/workflow-comparison.txt`. Both navigator bodies,
+descriptions, and ordered tool lists match the command baseline, and the scaffold
+command is unchanged. This completes step 6 and the migration gate for the exercised
+workflows. DeepEval integration remains the separate step 7 follow-up.
+
 Offline implementation checks (synthetic conversations, without Claude authentication):
 
 ```bash

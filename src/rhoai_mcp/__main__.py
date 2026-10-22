@@ -19,7 +19,7 @@ def _has_auth_error(exc: BaseException) -> bool:
     """Check if an exception is or contains an AuthenticationError.
 
     Handles both direct AuthenticationError and ExceptionGroup wrappers
-    (from anyio task groups) on Python 3.10+.
+    (from anyio task groups) on Python 3.11+.
     """
     if isinstance(exc, AuthenticationError):
         return True

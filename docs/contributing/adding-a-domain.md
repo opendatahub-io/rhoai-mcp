@@ -11,7 +11,7 @@ Before starting, read through the `_example` domain at [`src/rhoai_mcp/domains/_
 ## 2. Prerequisites
 
 - Development environment set up per [CONTRIBUTING.md](../../CONTRIBUTING.md)
-- Python 3.10+, `uv` package manager
+- Python 3.11+, `uv` package manager
 - Familiarity with:
   - [pluggy](https://pluggy.readthedocs.io/) hook specifications and implementations
   - Kubernetes Python client patterns (core API and dynamic client)

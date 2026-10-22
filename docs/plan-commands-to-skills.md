@@ -271,6 +271,18 @@ eval-command-skills:
 
 Validate required Make variables with clear usage errors. Move the Makefile's current global Docker/Podman availability error into the targets that actually need a container runtime, so both targets above work without Docker/Podman installed. Direct Python commands remain available independently of Make.
 
+The implemented simple target requires `PHASE=commands` or `PHASE=skills` and an
+explicit `OUTPUT` path. For example:
+
+```bash
+make check-command-skills PHASE=commands OUTPUT=evals/results/workflow-commands.json
+make check-command-skills PHASE=skills OUTPUT=evals/results/workflow-skills.json
+```
+
+The container runtime guard is a prerequisite of container-dependent targets.
+Help, local development, reporting, and the simple workflow-check target remain
+available without Docker or Podman. The DeepEval scoring target is still a later step.
+
 The planned `score_command_skill_traces` module loads the saved artifacts and calls the existing DeepEval conversion/scoring machinery. Use `MCPUseMetric` for single-turn cases, and `MultiTurnMCPUseMetric` / `MCPTaskCompletionMetric` for complete workflow conversations. It requires the existing judge configuration. Future live Claude pytest runs require both `--group claude-check --group eval`; the simple gate requires only `--group claude-check`.
 
 ### Result storage and comparison

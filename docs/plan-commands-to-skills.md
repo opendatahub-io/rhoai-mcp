@@ -1,281 +1,279 @@
-# Plan: Convert Commands to Skills + DeepEval Validation via Claude Code
+# Plan: Navigator Commands to Skills with Claude Code Workflow Checks
 
-## Goal
+## Goal and scope
 
-1. Migrate 3 `.claude/commands/` to agentskills.io `SKILL.md` format
-2. Build a `ClaudeCodeClient` so DeepEval evals run through Claude Code directly (no docker-compose)
-3. Run DeepEval before (commands) and after (skills) to verify behavioral equivalence
+1. Migrate only `navigator.md` and `navigator-deploy.md` to agentskills.io `SKILL.md` format.
+2. Leave `.claude/commands/scaffold-plugin.md` in place and unchanged.
+3. Build a thin Python wrapper around `ClaudeSDKClient`, then use it for simple before/after checks through Claude Code. **Deterministic workflow assertions are the primary migration gate.**
+4. Preserve the before/after conversations so DeepEval can score the same interactions in a later implementation step. DeepEval remains valuable complementary validation, and the existing LCS evaluation path remains available.
 
----
+This is a one-shot migration. Use the available Claude Code installation and model; no special version/model pinning, repeated-trial framework, or statistical equivalence claim is required. Passing the same explicit workflow contract before and after provides functional interchange evidence for the exercised paths, not a guarantee for every possible conversation.
 
-Notice:
+Anthropic documents command files and skills as exposing the same `/name` behavior, with existing commands continuing to work. The migration changes packaging, not the navigator instructions. See [Claude Code skills](https://code.claude.com/docs/en/skills):
+
 > Custom commands have been merged into skills. A file at .claude/commands/deploy.md and a skill at .claude/skills/deploy/SKILL.md both create /deploy and work the same way. Your existing .claude/commands/ files keep working. Skills add optional features: a directory for supporting files, frontmatter to control whether you or Claude invokes them, and the ability for Claude to load them automatically when relevant.
-from https://code.claude.com/docs/en/skills
 
 So a Skill is a functional equivalent of a (old) Command.
 
 ---
 
-## Part 1: Migration — Commands to Skills
+## Part 1: Migration — two navigator commands only
 
 ### Current state
 
-```
+```text
 .claude/commands/
-├── navigator.md          (289 lines, 6 allowed-tools)
-├── navigator-deploy.md   (372 lines, 14 allowed-tools)
-└── scaffold-plugin.md    (793 lines, no allowed-tools)
+├── navigator.md
+├── navigator-deploy.md
+└── scaffold-plugin.md
 ```
 
-### Target state (agentskills.io format)
+### Target state
 
-```
-.claude/skills/
-├── navigator/
-│   └── SKILL.md
-├── navigator-deploy/
-│   └── SKILL.md
-└── scaffold-plugin/
-    └── SKILL.md
-```
-
-### Frontmatter mapping
-
-| Command field | agentskills.io field | Change needed |
-|---|---|---|
-| (filename) | `name` | Add `name:` matching directory name |
-| `description` | `description` | Keep as-is |
-| `allowed-tools` | `allowed-tools` | Keep as-is (in spec, experimental) |
-
-Body content (markdown instructions) requires **no changes** — both formats use free-form markdown.
-
-### Example: navigator.md → navigator/SKILL.md
-
-**Before** (`.claude/commands/navigator.md`):
-```yaml
----
-allowed-tools: mcp__rhoai-mcp__recommend_model ...
-description: Guides customers through LLM model selection for Red Hat OpenShift AI
----
+```text
+.claude/
+├── commands/
+│   └── scaffold-plugin.md          # stays here, unchanged
+└── skills/
+    ├── navigator/
+    │   └── SKILL.md
+    └── navigator-deploy/
+        └── SKILL.md
 ```
 
-**After** (`.claude/skills/navigator/SKILL.md`):
+### Frontmatter and body
+
+| Field | Migration |
+|---|---|
+| `name` | Add `navigator` or `navigator-deploy`, matching the parent directory. |
+| `description` | Preserve the existing description. |
+| `allowed-tools` | Replace comma separators with spaces, preserving the exact tool names and order. |
+| Markdown body | Preserve byte-for-byte after the closing frontmatter delimiter. |
+
+Both migrated skills must have valid YAML, non-empty descriptions, and names satisfying the [Agent Skills specification](https://agentskills.io/specification). Its experimental `allowed-tools` field uses a space-separated string. Claude Code supports that representation too.
+
+Example migrated `navigator/SKILL.md` frontmatter:
+
 ```yaml
 ---
 name: navigator
 description: Guides customers through LLM model selection for Red Hat OpenShift AI
-allowed-tools: mcp__rhoai-mcp__recommend_model ...
+allowed-tools: mcp__rhoai-mcp__recommend_model mcp__rhoai-mcp__get_use_case_defaults mcp__rhoai-mcp__get_expected_rps mcp__rhoai-mcp__list_use_cases mcp__rhoai-mcp__list_data_science_projects mcp__rhoai-mcp__get_cluster_resources
 ---
 ```
 
-### Migration steps
+Record baseline checks before creating either skill. Then create the two skills and remove only the corresponding navigator command files. Keep `.claude/commands/` and `scaffold-plugin.md`. Run after-checks with the old navigator command files absent, so a missing skill cannot silently fall back to its old command.
 
-1. Create `.claude/skills/{navigator,navigator-deploy,scaffold-plugin}/` directories
-2. For each command: copy to `SKILL.md`, add `name:` field to frontmatter
-3. Verify skills appear in Claude Code (`/navigator` etc. still work)
-4. Remove `.claude/commands/` after validation passes
+## Part 2: Shared thin wrapper around ClaudeSDKClient
 
----
+New module: `evals/claude_code_client.py`.
 
-## Part 2: DeepEval via Claude Code (no docker-compose)
+Use the official `claude-agent-sdk` package, whose `ClaudeSDKClient` supports continuing exchanges on a single connection. Let the SDK manage Claude Code and the stdio MCP subprocess; do not implement a second subprocess/JSONL transport or restart Claude Code with `--resume` for each turn. See the [Python SDK reference](https://code.claude.com/docs/en/agent-sdk/python#claudesdkclient).
 
-### Why
-
-The current eval suite flows through lightspeed-stack → llama-stack → rhoai-mcp. This:
-- Requires docker-compose with 3 containers
-- Does **not** test Claude Code commands/skills (Claude Code is not in the loop)
-- Cannot detect behavioral differences from the commands→skills migration
-
-### New architecture
-
-```
-pytest → ClaudeCodeClient → claude -p (subprocess) → Claude Code + skill
-                                                          ↓
-                                              rhoai-mcp (stdio, auto-managed)
-                                                          ↓
-                                              parse stream-json output
-                                                          ↓
-                                              DeepEval MCPToolCall / MCPServer
-                                                          ↓
-                                              MCPUseMetric / MCPTaskCompletionMetric
+```text
+simple workflow runner ─┐
+                       ├─ ClaudeCodeClient → ClaudeSDKClient → Claude Code
+later DeepEval path ───┘                                      ↓
+                                                    rhoai-mcp over stdio
 ```
 
-Claude Code launches rhoai-mcp as a stdio subprocess via MCP config — no separate server process to manage.
+### Dependencies and MCP configuration
 
-**Dependencies**: only a judge LLM API key (Gemini/OpenAI/Anthropic). No containers, no background processes.
+Add a separate optional dependency group, for example:
 
-### ClaudeCodeClient design
+```toml
+[dependency-groups]
+claude-check = ["claude-agent-sdk"]
+```
 
-New file: `evals/claude_code_client.py` (~100-150 lines)
+The simple checks require this group, the repository's runtime dependencies, and Claude authentication. They must not import DeepEval, instantiate `EvalConfig`, or require a judge API key. Keep the existing `eval` dependency group separate.
 
-Analogous to the existing `LCSClient`, but runs `claude -p` instead of calling LCS HTTP:
+Build one shared MCP configuration in Python. Resolve the repository root from the module location, and run the MCP server with the same Python environment as the runner:
 
 ```python
-@dataclass
-class ClaudeCodeResult:
-    """Result of a Claude Code invocation, parallel to LCSResult."""
-    task: str
-    final_output: str
-    tool_calls: list[MCPToolCall]     # from deepeval.test_case
-    messages: list[dict[str, Any]]    # raw stream-json events
-    turns: int = 0
-    session_id: str = ""
-
-class ClaudeCodeClient:
-    """Runs claude -p and parses stream-json output into DeepEval-compatible results."""
-
-    def __init__(self, mcp_config_path: str, working_dir: str, ...):
-        ...
-
-    async def query(self, task: str, skill: str | None = None) -> ClaudeCodeResult:
-        """Run a prompt (optionally prefixed with /skill) through Claude Code."""
-        prompt = f"/skill {skill} {task}" if skill else task
-        # Runs: claude -p <prompt> --output-format stream-json --verbose
-        #       --mcp-config <path> --permission-mode <mode>
-        # Parses JSONL stream:
-        #   - type=assistant, content[].type=tool_use → tool call
-        #   - type=user, content[].type=tool_result → tool result
-        #   - last assistant text block → final_output
-        # Pairs tool_use → tool_result by id to build MCPToolCall(name, args, result)
-        ...
-
-    async def follow_up(self, message: str, session_id: str) -> ClaudeCodeResult:
-        """Continue a conversation (for multi-turn scenarios)."""
-        # Runs: claude -p <message> --resume <session_id> --output-format stream-json --verbose
-        ...
-```
-
-### conftest.py changes
-
-Add a `claude_code_client` fixture alongside the existing `lcs_client`:
-
-```python
-@pytest.fixture(scope="session")
-def claude_code_client(eval_config):
-    """ClaudeCodeClient — Claude Code manages rhoai-mcp via stdio internally."""
-    return ClaudeCodeClient(
-        mcp_config_path="evals/config/claude-code-mcp.json",
-        working_dir=str(Path.cwd()),
-    )
-```
-
-New MCP config file (`evals/config/claude-code-mcp.json`):
-```json
-{
-  "mcpServers": {
+mcp_servers = {
     "rhoai-mcp": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "rhoai-mcp", "--mock-cluster"]
+        "type": "stdio",
+        "command": sys.executable,
+        "args": ["-m", "rhoai_mcp", "--transport", "stdio", "--mock-cluster"],
+        "env": {"RHOAI_MCP_PLANNER_MODE": "local"},
     }
-  }
 }
 ```
 
-Claude Code manages the rhoai-mcp process lifecycle via stdio — it starts automatically when the session begins and stops when it ends. No background process management needed.
+The explicit transport and local planner avoid inheriting a remote planner or HTTP transport from local configuration. The local planner can use its bundled benchmark data; no planner service or container is needed.
 
-### Reusing existing test scenarios
+Configure `ClaudeAgentOptions` with `cwd=repo_root`, `setting_sources=["project"]`, `system_prompt={"type": "preset", "preset": "claude_code"}`, and this MCP configuration. Include project settings so repository commands and skills are discovered. Explicitly pre-approve the MCP tools needed across all scripted turns, including deployment, so checks can complete without permission prompts. Workflow confirmation is still supplied as a separate user message and checked independently of tool permissions. See [SDK skill loading and command dispatch](https://code.claude.com/docs/en/agent-sdk/skills).
 
-The existing scenario tests can be adapted with minimal changes. The key substitution is `lcs_client` → `claude_code_client`:
+### Small result contract, independent of DeepEval
+
+Use plain dataclasses with the attributes consumed by the current scenarios and conversion helpers:
 
 ```python
-# Before (LCS path):
-result = await lcs_client.query(self.TASK)
+@dataclass
+class ClaudeToolCall:
+    name: str                       # MCP schema name, e.g. recommend_model
+    arguments: dict[str, Any]
+    result: Any                     # serializable tool result content
+    call_id: str
+    is_error: bool = False
 
-# After (Claude Code path):
-result = await claude_code_client.query(self.TASK)
-# or, to test with a specific skill:
-result = await claude_code_client.query(self.TASK, skill="navigator")
+@dataclass
+class ClaudeCodeResult:
+    task: str
+    final_output: str
+    tool_calls: list[ClaudeToolCall]
+    messages: list[dict[str, Any]]    # normalized role/content/tool_calls messages
+    turns: int = 0
+    conversation_id: str = ""       # SDK session ID
+
+    @property
+    def tool_names_used(self) -> list[str]:
+        return [call.name for call in self.tool_calls]
 ```
 
-The DeepEval metric scoring is identical — both paths produce `MCPToolCall` objects and feed them into the same `MCPUseMetric` / `MCPTaskCompletionMetric`.
+The wrapper exposes an async context manager and two operations:
 
-### Makefile targets
+```python
+async with ClaudeCodeClient(repo_root=repo_root) as client:
+    first = await client.query(task, skill="navigator")
+    next_turn = await client.follow_up(reply, first.conversation_id)
+```
+
+- `query(task, skill=...)` sends `f"/{skill} {task}"`; invoke the same named command/skill in both phases.
+- `follow_up` sends the reply through the already-connected SDK client and validates the supplied conversation ID. Keep one client alive for an entire scenario and close it afterward. A new scenario gets a fresh client and mock cluster.
+- Collect typed SDK messages through the terminal `ResultMessage`. Pair MCP tool uses/results by ID, normalize the `mcp__rhoai-mcp__` prefix, preserve arguments and result/error content, and retain chronological message order. Built-in tool calls are not MCP calls; keep any diagnostic records separate from the normalized MCP conversation.
+- Return only the current exchange in each result, allowing callers to concatenate exchanges without duplicating history. Use the terminal result for completion/error handling and collect the complete final assistant response. Missing results, execution errors, timeouts, or permission denials fail the check visibly.
+
+Retain command discovery information from SDK initialization. Require the explicitly invoked navigator name to be available, combined with the on-disk source checks below. Neither advertising a name nor successfully calling MCP tools alone proves the workflow contract.
+
+Add focused tests for tool/result pairing, name normalization, current-turn history, and terminal error handling using synthetic SDK messages. No judge or live Claude calls are needed for these adapter tests.
+
+## Part 3: Simple before/after checks — primary migration gate
+
+New runner: `evals/command_skill_check.py`, executed directly as a Python module. This avoids collecting the existing pytest evaluation suite or activating its HTTP fixtures.
+
+Here, **deterministic** describes ordinary assertions over observed outputs and tool traces. Claude responses can vary; the checks do not compare exact prose, full transcripts, exact tool-call counts, or particular recommended model identities between phases.
+
+### Static checks
+
+- In `commands` phase, require the two navigator command files and require their skill replacements to be absent. In `skills` phase, require the two `SKILL.md` files and require their old navigator command files to be absent.
+- Save each baseline command's body hash, description, and ordered tool list. After migration, assert identical bodies/descriptions/tool lists, valid `name` fields, and space-separated `allowed-tools` without commas.
+- Save and compare the hash of `.claude/commands/scaffold-plugin.md`; it must remain unchanged and must not acquire a skill replacement.
+
+### Workflow checks
+
+Use two workflow scenarios: navigator selection through handoff in one SDK session, and deployment from that handoff in a second SDK session. The rows below are steps within those two scenarios, not separate sessions. Use a small fixed script of user messages, shared by both phases. Distinguish requirements confirmation, workload confirmation, model selection, and deployment approval explicitly; do not assume one confirmation satisfies every gate. Allow a short bounded exchange to complete the scripted steps, and report which assertion failed instead of silently retrying until it passes.
+
+| Workflow step | Assertions |
+|---|---|
+| Navigator workload gate | Invoke `/navigator` with a support-chatbot use case, 50 users, and cost priority. Confirm requirements as needed. Require `get_use_case_defaults` and `get_expected_rps` with the expected use case/user count. Assert no `recommend_model` call occurs before the scripted workload confirmation. |
+| Navigator recommendations | Confirm the workload. Require cluster inventory before the first recommendation call, and verify use case, user count, GPU filter, and any confirmed SLO overrides. Locate the comparison table and assert the four exact recommendation columns plus the row-label column, eight exact data rows, five cells per row, and non-empty recommendation cells with no unresolved placeholders. An explicit `—` is permitted for a slot with no recommendation. |
+| Navigator handoff | Select an available recommendation from that run's actual tool results. Require a parseable `navigator-handoff` block with the documented keys and consistent model/category/workload values. Assert navigator never calls `plan_deployment` or `execute_deployment`. |
+| Deployment approval gate | In a fresh SDK client, invoke `/navigator-deploy` with the captured handoff and the existing mock namespace `production-models`. Require `plan_deployment` with matching handoff values. Assert no `execute_deployment` or runtime creation occurs before the scripted deployment approval. Resolve a requested storage URI with a fixed mock URI before approving. |
+| Deployment continuation | Send explicit `deploy` approval. Require `execute_deployment` with the agreed namespace/configuration and a successful deployment result. Ask for the new service's status in a follow-up and verify the tool targets that same service, proving mock state survives across turns. Accept the reported provisioning state; require endpoint lookup only when the service is Ready. |
+
+Keep the table validator independent of DeepEval and test it with malformed/ragged tables. The existing assertion in `test_navigator_table_completeness.py` does not enforce exact cell counts, so copying it unchanged would leave missing columns undetected.
+
+Use the real mock-cluster MCP server and embedded planner for these checks. If the baseline cannot complete a scenario, stop and report the baseline failure; it is not evidence of a migration regression and must not be hidden by loosening the after-checks.
+
+### Saved artifacts and comparison
+
+Each run writes one explicit JSON artifact containing:
+
+- phase (`commands` or `skills`), static metadata/hashes, and named assertion outcomes;
+- each scenario's ordered user/assistant messages, normalized MCP calls with arguments/results/errors, final outputs, turn counts, and conversation IDs;
+- failure details and any partial conversation collected before failure.
+
+The runner's `compare` operation pairs named checks, verifies the body/tool/scaffold invariants, and prints a compact before/after pass/fail table. It exits nonzero on any required failure or missing scenario. Both phases must pass the same workflow assertions. Save the complete normalized traces, not just scores or tool names, so later DeepEval scoring can reuse the evidence.
+
+Planned commands, available after implementing this runner:
+
+```bash
+# BEFORE: navigator commands exist; their skill replacements do not.
+uv run --group claude-check python -m evals.command_skill_check run \
+    --phase commands --output evals/results/workflow-commands.json
+
+# Migrate the two navigator files as described in Part 1, then run AFTER.
+uv run --group claude-check python -m evals.command_skill_check run \
+    --phase skills --output evals/results/workflow-skills.json
+
+# Compare the same assertions and static invariants.
+uv run --group claude-check python -m evals.command_skill_check compare \
+    evals/results/workflow-commands.json evals/results/workflow-skills.json
+```
+
+The simple runner needs neither HTTP schema discovery nor an LLM judge. It makes real Claude calls and uses the user's configured Claude authentication.
+
+## Part 4: Keep DeepEval before/after validation as a later step
+
+Implement this after the simple gate works. The saved command and skill traces are the before/after samples: DeepEval can score them after migration without restoring the old files or rerunning their conversations. The shared wrapper also supports future live evaluation scenarios.
+
+```text
+saved commands/skills traces → conversion helpers → DeepEval metrics
+                                    ↑
+                      schemas from local MCP list_tools over stdio
+```
+
+### Fixtures and schema discovery
+
+The existing `evals/conftest.py::tool_schemas` and `fetch_tool_schemas` use HTTP. For the Claude path, add stdio schema discovery with the MCP Python SDK, reusing the same server launch configuration as the wrapper and setting `StdioServerParameters.cwd` to the repository root. Schema discovery may use a short-lived separate MCP session because it reads tool definitions only. Keep HTTP discovery for the LCS path.
+
+When wiring `--client=claude-code` into the broader pytest suite, route fixtures conditionally so it never requests the LCS health check or HTTP MCP endpoint. Any live SDK fixture must be function-scoped, opened and closed in the test's event loop, with one persistent connection per scenario. Adapt helper annotations/conversions to the shared result attributes rather than assuming the proposed client already returns DeepEval `MCPToolCall` objects. Convert structured results explicitly at this boundary.
+
+### Dependency groups and Makefile
+
+Keep two kinds of targets:
 
 ```makefile
-# Run evals through Claude Code (no containers, no background processes)
-# Claude Code starts/stops rhoai-mcp automatically via stdio MCP config
-eval-claude-code:
-	uv run pytest evals/ -v -m "eval and not live" --client=claude-code
+# Simple primary gate: no DeepEval or judge required.
+check-command-skills:
+	uv run --group claude-check python -m evals.command_skill_check run --phase $(PHASE) --output $(OUTPUT)
 
-eval-claude-code-scenario:
-	uv run pytest evals/scenarios/test_$(SCENARIO).py -v -m eval --client=claude-code
+# Later complementary scoring of the captured before/after traces.
+eval-command-skills:
+	uv run --group eval python -m evals.score_command_skill_traces --before $(BEFORE) --after $(AFTER) --output-dir $(OUTPUT_DIR)
 ```
 
----
+Validate required Make variables with clear usage errors. Move the Makefile's current global Docker/Podman availability error into the targets that actually need a container runtime, so both targets above work without Docker/Podman installed. Direct Python commands remain available independently of Make.
 
-## Part 3: Before/After Evaluation Protocol
+The planned `score_command_skill_traces` module loads the saved artifacts and calls the existing DeepEval conversion/scoring machinery. Use `MCPUseMetric` for single-turn cases, and `MultiTurnMCPUseMetric` / `MCPTaskCompletionMetric` for complete workflow conversations. It requires the existing judge configuration. Future live Claude pytest runs require both `--group claude-check --group eval`; the simple gate requires only `--group claude-check`.
 
-### Prerequisites
+### Result storage and comparison
 
-- rhoai-mcp runs locally with `--mock-cluster`
-- A judge LLM API key configured (e.g., `GEMINI_API_KEY` or `OPENAI_API_KEY`)
-- Claude Code installed and authenticated
+Keep workflow-check artifacts separate from DeepEval JSONL. Do not assume `evals/results/latest.jsonl` exists: the current recorder defaults to `evals/results/eval_history.jsonl`.
 
-### Step 1: Baseline — Run with Commands
+For paired DeepEval scoring, pass explicit recorder paths under the supplied output directory, such as `commands.jsonl` and `skills.jsonl`. Record the actual backend (`claude-code`), phase, and run ID instead of the current hardcoded `lcs` label. Add a backward-compatible optional phase field to the reporting model so existing LCS history remains readable.
 
-Commands are still in `.claude/commands/`. Run the eval suite through Claude Code:
+Use the existing single-file summary interface for each artifact:
 
 ```bash
-# Run all scenarios (rhoai-mcp starts/stops automatically via stdio)
-uv run pytest evals/ -v -m "eval and not live" --client=claude-code
+uv run --group eval python -m evals.score_command_skill_traces \
+    --before evals/results/workflow-commands.json \
+    --after evals/results/workflow-skills.json \
+    --output-dir evals/results/migration-deepeval
 
-# Save results
-cp evals/results/latest.jsonl evals/results/baseline-commands.jsonl
+uv run --group eval python -m evals.reporting summary \
+    --file evals/results/migration-deepeval/commands.jsonl
+uv run --group eval python -m evals.reporting summary \
+    --file evals/results/migration-deepeval/skills.jsonl
 ```
 
-### Step 2: Migrate Commands to Skills
+Have the scoring entrypoint produce a small paired scenario/metric table as well. The existing `evals.reporting compare` groups by backend/model and does not accept two positional files; extending that general-purpose CLI is unnecessary for this migration.
 
-Execute the migration (Part 1 steps).
+DeepEval results supplement the primary assertion gate with a judgment of tool use and task completion. Investigate differences as observed regression evidence, without claiming statistical equivalence or assuming every difference is a discovery failure.
 
-### Step 3: Validation — Run with Skills
+## Implementation order
 
-Skills are now in `.claude/skills/`. Same eval suite, same metrics:
-
-```bash
-# Run all scenarios (same command — only .claude/ layout changed)
-uv run pytest evals/ -v -m "eval and not live" --client=claude-code
-
-# Save results
-cp evals/results/latest.jsonl evals/results/baseline-skills.jsonl
-```
-
-### Step 4: Compare
-
-```bash
-uv run -m evals.reporting compare \
-    evals/results/baseline-commands.jsonl \
-    evals/results/baseline-skills.jsonl
-```
-
-**Expected outcome**: scores should be statistically equivalent. The migration is structural (frontmatter + directory layout), so skill behavior should be identical to command behavior. Any regression indicates an issue with skill discovery or loading, not content.
-
-### Scenarios to prioritize
-
-| Scenario | Tests | Why it matters for this migration |
+| Step | Work | Deliverable |
 |---|---|---|
-| `navigator_table_completeness` | Multi-turn navigator flow | Directly exercises the navigator command/skill |
-| `model_deployment` | Deployment tools | Exercises navigator-deploy adjacent tools |
-| `tool_discovery` | Tool listing/description | Verifies MCP tools are still discoverable |
-| `cluster_exploration` | Cluster overview | General regression check |
+| 1 | Add the optional SDK dependency group and thin persistent-session wrapper. | `pyproject.toml`, normal lockfile update, `evals/claude_code_client.py`, focused adapter tests |
+| 2 | Implement the simple runner, workflow assertions, artifact persistence, and comparison. | `evals/command_skill_check.py`, validator tests |
+| 3 | Make the simple target usable without a container runtime. | Scoped Makefile guard and `check-command-skills` |
+| 4 | Run the command baseline; resolve any baseline/check defect before migration. | `evals/results/workflow-commands.json` |
+| 5 | Move only the two navigator commands to skills; preserve bodies and normalize tool separators. | Two `SKILL.md` files; original scaffold command retained |
+| 6 | Run the skill checks and compare the paired artifacts. | `evals/results/workflow-skills.json`, primary gate report |
+| 7 | Later, add stdio schema discovery, trace-to-DeepEval conversion, phase-aware recording, and paired scoring. | DeepEval before/after report from the saved traces |
+| 8 | Extend the broader live pytest suite to select the shared Claude wrapper when useful. | Conditional fixtures and `--client=claude-code`; existing LCS path retained |
 
-`scaffold-plugin` is interactive/generative (creates files) — harder to score with DeepEval metrics. Validate manually.
-
----
-
-## Implementation Order
-
-| # | Task | Effort | Deliverable |
-|---|---|---|---|
-| 1 | Build `ClaudeCodeClient` | ~150 lines | `evals/claude_code_client.py` |
-| 2 | Add conftest fixture + MCP config | ~30 lines | `evals/conftest.py`, `evals/config/claude-code-mcp.json` |
-| 3 | Add `--client` pytest option to switch between LCS and Claude Code | ~20 lines | `evals/conftest.py` |
-| 4 | Add Makefile targets | ~10 lines | `Makefile` |
-| 5 | Run baseline eval (commands) | ~10 min | `evals/results/baseline-commands.jsonl` |
-| 6 | Migrate commands → skills | ~30 min | `.claude/skills/*/SKILL.md` |
-| 7 | Run validation eval (skills) | ~10 min | `evals/results/baseline-skills.jsonl` |
-| 8 | Compare and document results | ~5 min | comparison report |
-
-### What this does NOT replace
-
-The existing LCS-based eval path (`make eval`) remains for testing the full stack (LCS + llama-stack + rhoai-mcp). The new Claude Code path is complementary — it tests the Claude Code agent experience directly.
+Complete the migration when the static invariants and both workflow runs pass. DeepEval integration is retained as an explicit follow-up deliverable; it does not block the simple migration gate.

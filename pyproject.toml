@@ -51,6 +51,7 @@ packages = ["src/rhoai_mcp"]
 [dependency-groups]
 claude-check = [
     "claude-agent-sdk>=0.2.172",
+    "pyyaml>=6.0",
 ]
 dev = [
     "pytest>=8.0.0",

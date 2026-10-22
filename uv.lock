@@ -2408,6 +2408,7 @@ dependencies = [
 [package.dev-dependencies]
 claude-check = [
     { name = "claude-agent-sdk" },
+    { name = "pyyaml" },
 ]
 dev = [
     { name = "mypy" },
@@ -2436,7 +2437,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-claude-check = [{ name = "claude-agent-sdk", specifier = ">=0.2.172" }]
+claude-check = [
+    { name = "claude-agent-sdk", specifier = ">=0.2.172" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
 dev = [
     { name = "mypy", specifier = ">=1.10.0" },
     { name = "pytest", specifier = ">=8.0.0" },

@@ -55,7 +55,11 @@ def build_mcp_servers() -> dict[str, McpServerConfig]:
             "type": "stdio",
             "command": sys.executable,
             "args": ["-m", "rhoai_mcp", "--transport", "stdio", "--mock-cluster"],
-            "env": {"RHOAI_MCP_PLANNER_MODE": "local"},
+            "env": {
+                "RHOAI_MCP_PLANNER_MODE": "local",
+                "RHOAI_MCP_PLANNER_MODEL_CATALOG_URL": "",
+                "PLANNER_DETECT_CLUSTER_GPUS": "false",
+            },
         }
     }
 

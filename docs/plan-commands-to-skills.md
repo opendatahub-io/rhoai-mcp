@@ -96,12 +96,16 @@ mcp_servers = {
         "type": "stdio",
         "command": sys.executable,
         "args": ["-m", "rhoai_mcp", "--transport", "stdio", "--mock-cluster"],
-        "env": {"RHOAI_MCP_PLANNER_MODE": "local"},
+        "env": {
+            "RHOAI_MCP_PLANNER_MODE": "local",
+            "RHOAI_MCP_PLANNER_MODEL_CATALOG_URL": "",
+            "PLANNER_DETECT_CLUSTER_GPUS": "false",
+        },
     }
 }
 ```
 
-The explicit transport and local planner avoid inheriting a remote planner or HTTP transport from local configuration. The local planner can use its bundled benchmark data; no planner service or container is needed.
+The explicit transport and local planner avoid inheriting a remote planner or HTTP transport from local configuration. The empty catalog URL forces bundled benchmark data, and disabling independent planner GPU discovery leaves the mock cluster as the source of inventory. No planner service or container is needed.
 
 Configure `ClaudeAgentOptions` with `cwd=repo_root`, `setting_sources=["project"]`, `system_prompt={"type": "preset", "preset": "claude_code"}`, and this MCP configuration. Include project settings so repository commands and skills are discovered. Explicitly pre-approve the MCP tools needed across all scripted turns, including deployment, so checks can complete without permission prompts. Workflow confirmation is still supplied as a separate user message and checked independently of tool permissions. See [SDK skill loading and command dispatch](https://code.claude.com/docs/en/agent-sdk/skills).
 
@@ -204,6 +208,36 @@ uv run --group claude-check python -m evals.command_skill_check compare \
 ```
 
 The simple runner needs neither HTTP schema discovery nor an LLM judge. It makes real Claude calls and uses the user's configured Claude authentication.
+
+### Implemented runner behavior
+
+The navigator script has four user exchanges: initial requirements, explicit
+requirements confirmation, explicit workload confirmation using default SLOs,
+and selection of a recommendation found in that run's tool results and table.
+Selection prefers the displayed Balanced slot, then other available slots. The
+deployment script uses a fresh client and has three exchanges, or four when a
+missing storage URI needs to be supplied. Storage input explicitly withholds
+approval; a separate `deploy` message authorizes creation. There are no runner retries.
+
+Artifacts use `schema_version: 1`. The root contains the script contract hash,
+static source metadata, named `checks`, overall status, and failure details.
+Each entry under `scenarios` retains SDK initialization metadata and ordered
+`exchanges`. Each exchange contains its script label, user task, normalized
+messages and MCP calls, final output, turn count, session ID, and separate SDK
+diagnostics. Failed SDK exchanges retain their partial result. Subsequent checks
+and scenarios stay `not_run` after an earlier failure.
+
+`run --phase skills` validates the skill layout and frontmatter. `compare` checks
+the saved body hashes, descriptions, ordered tools, and scaffold hash against the
+command baseline, and requires every named check and both scenarios to have passed.
+Recommendation identities and assistant prose may differ between phases.
+
+Offline implementation checks (synthetic conversations, without Claude authentication):
+
+```bash
+uv run --group claude-check python -m pytest \
+    tests/evals/test_claude_code_client.py tests/evals/test_command_skill_check.py
+```
 
 ## Part 4: Keep DeepEval before/after validation as a later step
 

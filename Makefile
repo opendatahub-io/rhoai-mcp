@@ -40,7 +40,7 @@ endif
 .PHONY: help build build-no-cache run run-http run-stdio run-dev run-token stop logs shell clean info
 .PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
 .PHONY: generate-requirements-cpu
-.PHONY: require-container-runtime check-command-skills
+.PHONY: require-container-runtime check-command-skills eval-command-skills
 
 # =============================================================================
 # Help
@@ -57,7 +57,7 @@ help: ## Show this help message
 	@grep -E '^(dev|install|sync|test|lint|format|check|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Evaluation:"
-	@grep -E '^(eval|eval-live|eval-scenario|eval-report|eval-compare|eval-trend|check-command-skills):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(eval|eval-live|eval-scenario|eval-report|eval-compare|eval-trend|check-command-skills|eval-command-skills):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Container:"
 	@grep -E '^(build|run|stop|logs|shell|clean|info|test-):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -114,6 +114,15 @@ check-command-skills: ## Check navigator workflows (PHASE=commands|skills OUTPUT
 	$(if $(and $(filter 1,$(words $(PHASE))),$(filter commands skills,$(PHASE))),,$(error PHASE must be commands or skills. Usage: make check-command-skills PHASE=commands OUTPUT=path.json))
 	$(if $(strip $(OUTPUT)),,$(error OUTPUT is required. Usage: make check-command-skills PHASE=commands OUTPUT=path.json))
 	uv run --group claude-check python -m evals.command_skill_check run --phase "$$COMMAND_SKILLS_PHASE" --output "$$COMMAND_SKILLS_OUTPUT"
+
+eval-command-skills: export COMMAND_SKILLS_BEFORE = $(BEFORE)
+eval-command-skills: export COMMAND_SKILLS_AFTER = $(AFTER)
+eval-command-skills: export COMMAND_SKILLS_OUTPUT_DIR = $(OUTPUT_DIR)
+eval-command-skills: ## Score saved workflows (BEFORE=commands.json AFTER=skills.json OUTPUT_DIR=path)
+	$(if $(strip $(BEFORE)),,$(error BEFORE is required. Usage: make eval-command-skills BEFORE=commands.json AFTER=skills.json OUTPUT_DIR=path))
+	$(if $(strip $(AFTER)),,$(error AFTER is required. Usage: make eval-command-skills BEFORE=commands.json AFTER=skills.json OUTPUT_DIR=path))
+	$(if $(strip $(OUTPUT_DIR)),,$(error OUTPUT_DIR is required. Usage: make eval-command-skills BEFORE=commands.json AFTER=skills.json OUTPUT_DIR=path))
+	uv run --group eval python -m evals.score_command_skill_traces --before "$$COMMAND_SKILLS_BEFORE" --after "$$COMMAND_SKILLS_AFTER" --output-dir "$$COMMAND_SKILLS_OUTPUT_DIR"
 
 eval-up: build ## Start eval services (rhoai-mcp + llama-stack + LCS)
 	@# Source .env.eval and derive INFERENCE_API_KEY from RHOAI_EVAL_EVAL_API_KEY if not set

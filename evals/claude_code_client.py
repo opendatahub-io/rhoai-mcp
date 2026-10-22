@@ -10,10 +10,10 @@ import asyncio
 import json
 import shutil
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from pathlib import Path
 from types import TracebackType
-from typing import Any
+from typing import Any, cast
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -28,7 +28,9 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import McpServerConfig
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from evals.mcp_config import REPO_ROOT, build_mcp_servers
+from evals.result_types import ClaudeCodeResult, ClaudeToolCall
+
 MCP_PREFIX = "mcp__rhoai-mcp__"
 NAVIGATOR_TOOLS = (
     "recommend_model",
@@ -46,49 +48,6 @@ NAVIGATOR_TOOLS = (
     "plan_deployment",
     "execute_deployment",
 )
-
-
-def build_mcp_servers() -> dict[str, McpServerConfig]:
-    """Shared stdio configuration for workflow runs and later schema discovery."""
-    return {
-        "rhoai-mcp": {
-            "type": "stdio",
-            "command": sys.executable,
-            "args": ["-m", "rhoai_mcp", "--transport", "stdio", "--mock-cluster"],
-            "env": {
-                "RHOAI_MCP_PLANNER_MODE": "local",
-                "RHOAI_MCP_PLANNER_MODEL_CATALOG_URL": "",
-                "PLANNER_DETECT_CLUSTER_GPUS": "false",
-            },
-        }
-    }
-
-
-@dataclass
-class ClaudeToolCall:
-    """One MCP call, paired with its result by SDK tool-use ID."""
-
-    name: str
-    arguments: dict[str, Any]
-    result: Any
-    call_id: str
-    is_error: bool = False
-
-
-@dataclass
-class ClaudeCodeResult:
-    """Only the current user exchange, with messages in observed order."""
-
-    task: str
-    final_output: str = ""
-    tool_calls: list[ClaudeToolCall] = field(default_factory=list)
-    messages: list[dict[str, Any]] = field(default_factory=list)
-    turns: int = 0
-    conversation_id: str = ""
-
-    @property
-    def tool_names_used(self) -> list[str]:
-        return [call.name for call in self.tool_calls]
 
 
 class ClaudeCodeError(RuntimeError):
@@ -236,7 +195,7 @@ class ClaudeCodeClient:
             cli_path=shutil.which("claude"),
             setting_sources=["project"],
             system_prompt={"type": "preset", "preset": "claude_code"},
-            mcp_servers=build_mcp_servers(),
+            mcp_servers=cast(dict[str, McpServerConfig], build_mcp_servers()),
             strict_mcp_config=True,
             allowed_tools=["Skill", *(MCP_PREFIX + name for name in NAVIGATOR_TOOLS)],
             permission_mode="dontAsk",

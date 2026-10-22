@@ -262,7 +262,7 @@ uv run --group claude-check python -m pytest \
     tests/evals/test_claude_code_client.py tests/evals/test_command_skill_check.py
 ```
 
-## Part 4: Keep DeepEval before/after validation as a later step
+## Part 4: DeepEval before/after validation
 
 Implement this after the simple gate works. The saved command and skill traces are the before/after samples: DeepEval can score them after migration without restoring the old files or rerunning their conversations. The shared wrapper also supports future live evaluation scenarios.
 
@@ -303,10 +303,89 @@ make check-command-skills PHASE=skills OUTPUT=evals/results/workflow-skills.json
 ```
 
 The container runtime guard is a prerequisite of container-dependent targets.
-Help, local development, reporting, and the simple workflow-check target remain
-available without Docker or Podman. The DeepEval scoring target is still a later step.
+Help, local development, reporting, and both workflow-check/scoring targets remain
+available without Docker or Podman.
 
-The planned `score_command_skill_traces` module loads the saved artifacts and calls the existing DeepEval conversion/scoring machinery. Use `MCPUseMetric` for single-turn cases, and `MultiTurnMCPUseMetric` / `MCPTaskCompletionMetric` for complete workflow conversations. It requires the existing judge configuration. Future live Claude pytest runs require both `--group claude-check --group eval`; the simple gate requires only `--group claude-check`.
+The implemented `score_command_skill_traces` module loads the saved artifacts and calls the shared DeepEval conversion/scoring machinery. Use `MCPUseMetric` for single-turn cases, and `MultiTurnMCPUseMetric` / `MCPTaskCompletionMetric` for complete workflow conversations. It requires judge configuration. Future live Claude pytest runs require both `--group claude-check --group eval`; the simple gate requires only `--group claude-check`.
+
+### Implemented paired scoring
+
+The scorer first requires passing, compatible primary-gate artifacts, then discovers
+schemas through a short-lived local stdio MCP session using `evals/mcp_config.py`.
+That shared launch configuration and the serializable result types are independent
+of the Claude SDK. Scoring needs only `--group eval`, with no Claude authentication,
+LCS service, HTTP MCP endpoint, or remote planner.
+
+Each complete navigator/deployment conversation is scored once per phase with
+`MultiTurnMCPUseMetric` and `MCPTaskCompletionMetric`. Conversion preserves user
+confirmation turns and matches calls by ID. MCP content is retained, with the
+original structured payload inside the `result` envelope required by DeepEval.
+The older writable MCP-interaction flag and the newer computed property are both
+supported. Existing LCS conversion helper names remain available.
+
+For an OpenAI judge using an existing `OPENAI_API_KEY`:
+
+```bash
+RHOAI_EVAL_EVAL_PROVIDER=openai \
+RHOAI_EVAL_EVAL_MODEL=gpt-5.4-mini \
+make eval-command-skills \
+    BEFORE=evals/results/workflow-commands.json \
+    AFTER=evals/results/workflow-skills.json \
+    OUTPUT_DIR=evals/results/migration-deepeval
+```
+
+The module also accepts `--judge-provider` and `--judge-model` overrides. Other
+judge providers continue to use `EvalConfig` and `.env.eval` as before. The OpenAI
+model used for this run supports structured outputs; see its
+[official model documentation](https://developers.openai.com/api/docs/models/gpt-5.4-mini).
+
+The explicit output directory contains `commands.jsonl`, `skills.jsonl`,
+`comparison.md`, `tool-schemas.json`, and `run.json`. Records carry backend
+`claude-code`, the observed agent model, phase, and a shared scoring run ID. Older
+JSONL records without a phase still load. The manifest records source artifact
+hashes and the judge provider/model; it retains failures alongside any completed
+JSONL records. Existing scoring outputs are rejected, so reruns need a new output
+directory. Metric failures produce the paired report and a nonzero exit status;
+they do not modify the primary-gate artifacts.
+
+Step 7's live paired run used OpenAI `gpt-5.4-mini` via the existing environment
+key. All eight scores passed the existing thresholds (tool use: 0.5; task
+completion: 0.25). The report in `evals/results/migration-deepeval/comparison.md`
+contains:
+
+| Scenario | Metric | Commands | Skills | Delta |
+|---|---|---|---|---|
+| Navigator | Multi-turn MCP use | 0.627 | 0.517 | -0.110 |
+| Navigator | MCP task completion | 0.733 | 0.767 | +0.033 |
+| Deployment | Multi-turn MCP use | 0.637 | 0.750 | +0.113 |
+| Deployment | MCP task completion | 0.750 | 0.833 | +0.083 |
+
+The lower navigator tool-use score was investigated against both traces. The
+recommendation tool names, GPU filters, user counts, and duplicate-removal
+constraints match; the descriptive text differs. DeepEval 4.2.0 decomposes the
+conversation into per-user-interaction tasks without carrying earlier planning
+context into each task. Judge reasons criticize deliberate waits for GPU input
+and approval, and request extra prerequisite/discovery tools outside the scripted
+contract. These limitations affect interpretation of this one-shot score delta;
+the deterministic confirmation and argument checks remain the primary gate.
+No thresholds or workflow instructions were changed to improve judge scores.
+
+The first scoring attempt failed before judge calls because DeepEval required a
+`result` envelope. Its manifest and discovered schemas are preserved separately
+in `evals/results/migration-deepeval-failed-result-envelope/`. Both the failure and
+successful scoring outputs are ignored by Git. Step 8 (live pytest client routing)
+remains separate.
+
+Validation also passed 146 targeted offline tests, lint/format checks, and targeted
+type checks. Real stdio discovery returned 53 schemas, both JSONL files work with
+the existing summary CLI, and the 31 primary comparison checks still pass. The
+scoring Make target rejects missing inputs and works without a container runtime.
+
+```bash
+uv run --group claude-check --group eval python -m pytest \
+    tests/evals/test_claude_code_client.py tests/evals/test_command_skill_check.py \
+    tests/evals/test_score_command_skill_traces.py tests/evals/providers/test_judge.py
+```
 
 ### Result storage and comparison
 

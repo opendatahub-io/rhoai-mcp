@@ -268,6 +268,7 @@ DeepEval results supplement the primary assertion gate with a judgment of tool u
 | Step | Work | Deliverable |
 |---|---|---|
 | 1 | Add the optional SDK dependency group and thin persistent-session wrapper. | `pyproject.toml`, normal lockfile update, `evals/claude_code_client.py`, focused adapter tests |
+| 1a | Complete the existing embedded planner adapter: local reference tools and deployment metadata. | Local defaults/RPS/use-case support, preserved model/GPU metadata, offline integration tests; separate prerequisite commit |
 | 2 | Implement the simple runner, workflow assertions, artifact persistence, and comparison. | `evals/command_skill_check.py`, validator tests |
 | 3 | Make the simple target usable without a container runtime. | Scoped Makefile guard and `check-command-skills` |
 | 4 | Run the command baseline; resolve any baseline/check defect before migration. | `evals/results/workflow-commands.json` |
@@ -277,3 +278,13 @@ DeepEval results supplement the primary assertion gate with a judgment of tool u
 | 8 | Extend the broader live pytest suite to select the shared Claude wrapper when useful. | Conditional fixtures and `--client=claude-code`; existing LCS path retained |
 
 Complete the migration when the static invariants and both workflow runs pass. DeepEval integration is retained as an explicit follow-up deliverable; it does not block the simple migration gate.
+
+Step 1a addresses gaps found before implementing the workflow runner: the reference
+tools originally rejected local mode, and local config generation omitted deployment
+metadata. Use the embedded engine's SLO defaults and token profiles. Its specification
+field `expected_qps` includes peak headroom and a small-workload capacity floor;
+`get_expected_rps` reports this as `peak_rps` and reports average demand separately as
+`expected_rps`. Offline tests disable optional planner GPU discovery and block network
+connections. When running the later mock-cluster workflow checks, also disable the
+planner's independent cluster discovery with `PLANNER_DETECT_CLUSTER_GPUS=false` so
+the mock cluster remains the source of GPU inventory.

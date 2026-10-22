@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from planner import PlannerError
 
 from rhoai_mcp.composites.planner.client import PlannerAPIError
 from rhoai_mcp.composites.planner.local_client import LocalPlannerClient
@@ -134,9 +135,7 @@ class TestLocalPlannerClientInit:
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_import_error(self, mock_planner_cls: MagicMock) -> None:
         """ImportError from sync_model_catalog is mapped to PlannerAPIError."""
-        mock_planner_cls.return_value.sync_model_catalog.side_effect = ImportError(
-            "httpx required"
-        )
+        mock_planner_cls.return_value.sync_model_catalog.side_effect = ImportError("httpx required")
 
         with pytest.raises(PlannerAPIError, match="extra dependency"):
             LocalPlannerClient(model_catalog_url="https://catalog.example.com")
@@ -157,15 +156,39 @@ class TestLocalPlannerClientInit:
         """PlannerError from sync_model_catalog is mapped to PlannerAPIError(502)."""
         from planner import PlannerError
 
-        mock_planner_cls.return_value.sync_model_catalog.side_effect = PlannerError(
-            "unreachable"
-        )
+        mock_planner_cls.return_value.sync_model_catalog.side_effect = PlannerError("unreachable")
 
         with pytest.raises(PlannerAPIError) as exc_info:
             LocalPlannerClient(model_catalog_url="https://catalog.example.com")
 
         assert exc_info.value.status_code == 502
         assert "Model Catalog sync failed" in exc_info.value.detail
+
+
+class TestLocalPlannerReferenceDataErrors:
+    """Reference lookups expose library failures through the existing client contract."""
+
+    # These are synthetic failures injected into a mocked planner. They verify
+    # error translation, not expected behavior in a healthy local/catalog deployment.
+    @pytest.mark.parametrize(
+        "method", ["get_slo_defaults", "get_workload_profile", "get_expected_rps"]
+    )
+    @pytest.mark.parametrize(
+        ("failure", "status"),
+        [(ValueError("bad specification"), 400), (PlannerError("failed"), 502)],
+    )
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_library_error_mapping(
+        self, mock_planner_cls: MagicMock, method: str, failure: Exception, status: int
+    ) -> None:
+        mock_planner_cls.return_value.generate_specification.side_effect = failure
+        client = LocalPlannerClient()
+        arguments: dict[str, str | int] = {"use_case": "chatbot_conversational"}
+        if method == "get_expected_rps":
+            arguments["user_count"] = 50
+        with pytest.raises(PlannerAPIError) as raised:
+            await getattr(client, method)(**arguments)
+        assert raised.value.status_code == status
 
 
 class TestLocalPlannerRecommend:
@@ -322,11 +345,22 @@ class TestLocalPlannerRecommend:
 class TestLocalPlannerGenerateConfig:
     """Tests for LocalPlannerClient.generate_config()."""
 
+    @pytest.mark.parametrize("include_configuration", [True, False])
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    async def test_generate_config_full_flow(self, mock_planner_cls: MagicMock) -> None:
-        """Full generate_config flow returns deployment configs."""
+    async def test_generate_config_full_flow(
+        self, mock_planner_cls: MagicMock, include_configuration: bool
+    ) -> None:
+        """Deployment metadata survives both embedded and fallback configurations."""
         mock_planner = _make_mock_planner()
         mock_planner_cls.return_value = mock_planner
+        rec = mock_planner.generate_recommendations.return_value.model_dump.return_value[
+            "balanced"
+        ][0]
+        rec["model_uri"] = "oci://registry.example.com/models/llama:latest"
+        if include_configuration:
+            rec["configuration"]["model_uri"] = rec["model_uri"]
+        else:
+            rec.pop("configuration")
 
         client = LocalPlannerClient()
         result = await client.generate_config(
@@ -344,6 +378,9 @@ class TestLocalPlannerGenerateConfig:
         assert result.deployment_id == "chatbot-llama-20260322"
         assert result.namespace == "default"
         assert result.model_name == "Llama 3.1 70B"
+        assert result.model_id == rec["model_id"]
+        assert result.model_uri == rec["model_uri"]
+        assert result.gpu_config == rec["gpu_config"]
         assert "inferenceservice" in result.configs
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")

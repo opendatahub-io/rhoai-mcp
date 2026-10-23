@@ -346,7 +346,7 @@ Replace `<RHOAI_MCP_ROUTE>` with the Route URL of your deployment (e.g. `oc get 
 claude mcp add rhoai-mcp \
   --scope project \
   --transport http \
-  --url "https://<RHOAI_MCP_ROUTE>/mcp" \
+  "https://<RHOAI_MCP_ROUTE>/mcp" \
   --header "Authorization: Bearer \${OCP_TOKEN}"
 ```
 

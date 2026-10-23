@@ -163,7 +163,7 @@ pydantic-settings==2.16.0
     #   llm-d-planner
     #   mcp
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
-pyjwt==2.13.0
+pyjwt==2.15.1
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)

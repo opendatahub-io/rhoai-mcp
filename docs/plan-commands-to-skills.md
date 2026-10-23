@@ -515,6 +515,95 @@ including default/notebooks-enabled inventories, filtered server inventories,
 unsupported-configuration skips, and explicit plugin-override forwarding. Changed
 Python files pass lint and formatting checks; targeted type checks also pass.
 
+## Follow-up: Fresh paired evaluation and navigator judge review
+
+After step 8, a second command-versus-skill pair was run with the current harness
+at `899008e`. This provided another observation of the migration workflows after
+the capability-aware discovery changes. Those changes apply to the separate
+discovery scenario; they did not rewrite the navigator instructions or the primary
+workflow contract. Score changes between rounds cannot be attributed specifically
+to that correction.
+
+For the command phase, only the two navigator command files were restored from
+pre-migration commit `85ffcde`, with their skill replacements temporarily absent.
+Their bodies, descriptions, and ordered tool lists were verified equal to the
+committed skills before either run. A `finally` block restored the committed skill
+files and removed the temporary commands before the skill phase. Both phases used
+the same current harness, script contract version 2, Claude `claude-opus-5`, mock
+cluster, embedded local planner, and bundled benchmark data. Full MCP schemas
+matched across command, skill, and judge discovery: all exposed the same 53 tools
+under the default plugin configuration. Each phase ran fresh navigator and
+deployment sessions once, with no retries to improve scores.
+
+Both phases passed all 11 primary assertions, and their paired comparison passed
+all 31 checks. The trace audit additionally found identical ordered MCP tool calls
+and exactly equal arguments in both scenarios. Every called tool was present in
+the enabled inventory. Both navigator traces waited for manual `A100-80` input
+before recommendations; both deployment traces waited for explicit approval before
+execution and checked the created service in the same session.
+
+The new DeepEval round used the same OpenAI `gpt-5.4-mini` judge and unchanged
+thresholds (tool use: 0.500; task completion: 0.250). All eight scores passed:
+
+| Scenario | Metric | Commands | Skills | Delta |
+|---|---|---|---|---|
+| Navigator | Multi-turn MCP use | 0.610 | 0.540 | -0.070 |
+| Navigator | MCP task completion | 0.717 | 0.683 | -0.033 |
+| Deployment | Multi-turn MCP use | 0.690 | 0.857 | +0.167 |
+| Deployment | MCP task completion | 0.917 | 0.883 | -0.033 |
+
+### Interpretation of the lower scores
+
+Navigator tool use decreased in both rounds: -0.110 originally and -0.070 in the
+fresh pair. This is a signal to investigate rather than dismiss as proven judge
+noise, especially because the fresh skill score of 0.540 is only 0.040 above its
+threshold. Navigator and deployment task completion each decreased by 0.033 in
+the fresh pair, but increased in the original pair; their direction has not been
+consistent. Two pairs do not establish normal variability or statistical
+equivalence, and passing thresholds alone does not establish unchanged quality.
+
+The observed calls, arguments, and passing confirmation/deployment gates support
+functional interchange for the exercised workflows. They do not establish equally
+clear prose or equal quality for every conversation. A small answer-quality
+difference remains possible but unproven; the recorded evidence does not justify
+blocking the migration on these score reductions.
+
+Judge explanations retain limitations found in the first round. They criticize
+waiting for GPU details even though the inventory tool is absent and the workflow
+requires asking the user, then waiting for the answer. Both complete traces
+subsequently contain three recommendation calls, explicit model selection, and a
+handoff. Deployment explanations also criticize missing storage and lack of Ready
+status, although both traces supply the mock storage URI before execution and
+accept Unknown/provisioning as the mock workflow's final state. The previously
+investigated per-user-interaction decomposition can lose earlier context or the
+later resolution of an intermediate wait.
+
+The fresh skill navigator explanations additionally say the metrics failed despite
+structured scores of 0.540 and 0.683 exceeding their respective 0.500 and 0.250
+thresholds. The report uses the recorded numeric scores and success flags for
+pass/fail, while preserving the contradictory explanations unchanged. These
+limitations reduce how directly the score deltas diagnose a packaging regression;
+they do not establish that every criticism is invalid.
+
+### Proposed follow-up: Validate the navigator judge against the workflow contract
+
+This review remains pending and is separate from the completed migration gate:
+
+1. Inspect task decomposition and context supplied to the judge using the saved
+   complete conversations. Check that workload confirmation, enabled tool
+   availability, the manual GPU exchange, model selection, and later storage
+   resolution remain visible when their dependent actions are scored.
+2. Review reference examples of required waits alongside actual violations, such
+   as recommendations before hardware input or execution before approval. Verify
+   that the evaluation distinguishes those cases and treats the mock readiness
+   state consistently with the declared contract. Review answer clarity separately
+   from the already-audited MCP calls and arguments.
+3. If a concrete evaluation defect is established, propose a focused correction
+   and rescore the same saved traces with separately recorded evaluator provenance.
+   Preserve the original results and thresholds. If uncertainty remains, use
+   predefined repeated scoring or paired runs to estimate judge or conversation
+   variability; retain every outcome instead of retrying until scores improve.
+
 ## Implementation order
 
 | Step | Work | Deliverable |

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from evals.config import EvalConfig
-from evals.deepeval_helpers import lcs_result_to_conversational_test_case
+from evals.deepeval_helpers import result_to_conversational_test_case
 from evals.metrics.config import create_multi_turn_mcp_use_metric, create_task_completion_metric
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from deepeval.test_case import MCPServer
 
-    from evals.lcs_client import LCSClient, LCSResult
+    from evals.pytest_client import EvalClient
 
 
 @pytest.mark.eval
@@ -36,17 +36,17 @@ class TestTrainingWorkflow:
     async def test_training_workflow(
         self,
         eval_config: EvalConfig,
-        lcs_client: LCSClient,
+        agent_client: EvalClient,
         mcp_server: MCPServer,
-        evaluate_and_record: Callable[[str, LCSResult, list[Any], list[Any]], Any],
+        evaluate_and_record: Callable[..., Any],
     ) -> None:
         """Agent should use training tools to plan and create a job."""
-        result = await lcs_client.query(self.TASK)
+        result = await agent_client.query(self.TASK)
 
         tool_names = result.tool_names_used
         assert len(tool_names) > 0, "Agent should call at least one tool"
 
-        test_case = lcs_result_to_conversational_test_case(result, mcp_server)
+        test_case = result_to_conversational_test_case(result, mcp_server)
 
         metrics = [
             create_multi_turn_mcp_use_metric(eval_config),

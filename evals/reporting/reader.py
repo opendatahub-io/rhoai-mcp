@@ -42,9 +42,7 @@ def load_records(path: str | None = None) -> list[EvalRecord]:
                 agent_backend=env_data.get(
                     "agent_backend", env_data.get("llm_provider", "unknown")
                 ),
-                agent_model=env_data.get(
-                    "agent_model", env_data.get("llm_model", "unknown")
-                ),
+                agent_model=env_data.get("agent_model", env_data.get("llm_model", "unknown")),
                 lcs_url=env_data.get("lcs_url", ""),
                 eval_provider=env_data.get("eval_provider", "unknown"),
                 eval_model=env_data.get("eval_model", "unknown"),
@@ -63,6 +61,7 @@ def load_records(path: str | None = None) -> list[EvalRecord]:
                 tool_names_used=data.get("tool_names_used", []),
                 passed=data.get("passed", False),
                 duration_seconds=data.get("duration_seconds", 0.0),
+                phase=data.get("phase"),
             )
             records.append(record)
         except (json.JSONDecodeError, KeyError, TypeError) as e:

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from functools import cache
+from importlib.resources import files
 from typing import Any
 
 from planner import (
@@ -25,6 +28,23 @@ from rhoai_mcp.composites.planner.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@cache
+def _load_use_case_data() -> dict[str, Any]:
+    """Read reference data shipped with the same library used for recommendations."""
+    try:
+        resource = files("planner.data").joinpath("configuration/usecase_slo_workload.json")
+        return dict(json.loads(resource.read_text(encoding="utf-8"))["use_case_slo_workload"])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise PlannerAPIError(status_code=502, detail="Cannot load planner use-case data") from exc
+
+
+def _use_case_data(use_case: str) -> dict[str, Any]:
+    data = _load_use_case_data()
+    if use_case not in data:
+        raise PlannerAPIError(status_code=400, detail=f"Unknown use_case: {use_case}")
+    return dict(data[use_case])
 
 
 class LocalPlannerClient:
@@ -73,6 +93,84 @@ class LocalPlannerClient:
                 "Set RHOAI_MCP_PLANNER_MODEL_CATALOG_URL for accurate recommendations."
             )
             self._planner.load_bundled_benchmarks()
+
+    async def _reference_specification(
+        self, use_case: str, user_count: int = 1000
+    ) -> DeploymentSpecification:
+        """Use the recommendation engine's defaults, rounding, and capacity floor."""
+        _use_case_data(use_case)
+        if user_count <= 0:
+            raise PlannerAPIError(status_code=400, detail="user_count must be > 0")
+        try:
+            intent = DeploymentIntent(use_case=use_case, user_count=user_count)
+            return await asyncio.to_thread(self._planner.generate_specification, intent)
+        except ValueError as exc:
+            raise PlannerAPIError(status_code=400, detail=str(exc)) from exc
+        except PlannerError as exc:
+            raise PlannerAPIError(status_code=502, detail=str(exc)) from exc
+
+    async def get_slo_defaults(self, use_case: str) -> dict[str, Any]:
+        """Return SLO ranges and the defaults used by embedded recommendations."""
+        spec = await self._reference_specification(use_case)
+        defaults: dict[str, Any] = {
+            "use_case": use_case,
+            "description": _use_case_data(use_case)["description"],
+        }
+        for metric in ("ttft", "itl", "e2e"):
+            target_range = getattr(spec.slo_targets, f"{metric}_range")
+            if target_range is None:
+                raise PlannerAPIError(status_code=502, detail=f"Planner omitted {metric} range")
+            defaults[f"{metric}_ms"] = {
+                "min": target_range.min,
+                "max": target_range.max,
+                "default": getattr(spec.slo_targets, f"{metric}_target_ms"),
+            }
+        return {"success": True, "slo_defaults": defaults}
+
+    async def get_workload_profile(self, use_case: str) -> dict[str, Any]:
+        """Return token sizes and traffic parameters from the embedded library."""
+        spec = await self._reference_specification(use_case)
+        data = _use_case_data(use_case)
+        workload = data["workload"]
+        return {
+            "success": True,
+            "use_case": use_case,
+            "description": data["description"],
+            "workload_profile": {
+                "prompt_tokens": spec.workload_profile.prompt_tokens,
+                "output_tokens": spec.workload_profile.output_tokens,
+                "active_fraction": workload["active_fraction"],
+                "requests_per_active_user_per_min": workload["requests_per_active_user_per_min"],
+            },
+        }
+
+    async def get_expected_rps(self, use_case: str, user_count: int) -> dict[str, Any]:
+        """Return average demand and the peak capacity used by recommendations.
+
+        The library's specification calls peak capacity ``expected_qps``. Keep
+        that value as ``peak_rps`` here, including its small-workload floor,
+        while ``expected_rps`` describes average demand without a capacity buffer.
+        """
+        spec = await self._reference_specification(use_case, user_count)
+        workload = _use_case_data(use_case)["workload"]
+        concurrent = int(user_count * workload["active_fraction"])
+        expected = concurrent * workload["requests_per_active_user_per_min"] / 60
+        return {
+            "success": True,
+            "use_case": use_case,
+            "user_count": user_count,
+            "expected_rps": round(expected, 2),
+            "peak_rps": spec.workload_profile.expected_qps,
+            "expected_concurrent_users": concurrent,
+        }
+
+    async def list_use_cases(self) -> dict[str, Any]:
+        """List the use cases packaged with the embedded planner."""
+        cases = {
+            key: {"description": value["description"]}
+            for key, value in _load_use_case_data().items()
+        }
+        return {"use_cases": cases, "count": len(cases)}
 
     async def recommend(
         self,
@@ -288,6 +386,9 @@ class LocalPlannerClient:
                 deployment_id=bundle.deployment_id,
                 namespace=bundle.namespace,
                 model_name=model_name,
+                model_id=config_obj.model_id,
+                model_uri=config_obj.model_uri,
+                gpu_config=config_obj.gpu_config.model_dump(),
                 configs=bundle.files,
             )
 

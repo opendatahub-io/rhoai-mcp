@@ -474,11 +474,6 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             return {"error": f"Invalid use_case '{use_case}'. Valid values: {valid}"}
 
         client = await _get_client()
-        if isinstance(client, LocalPlannerClient):
-            return {
-                "error": "get_use_case_defaults requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"
-            }
-
         try:
             slo_data = await client.get_slo_defaults(use_case)
             workload_data = await client.get_workload_profile(use_case)
@@ -541,11 +536,6 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             return {"error": "user_count must be > 0"}
 
         client = await _get_client()
-        if isinstance(client, LocalPlannerClient):
-            return {
-                "error": "get_expected_rps requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"
-            }
-
         try:
             data = await client.get_expected_rps(use_case, user_count)
         except PlannerConnectionError:
@@ -580,11 +570,6 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             plus a count.
         """
         client = await _get_client()
-        if isinstance(client, LocalPlannerClient):
-            return {
-                "error": "list_use_cases requires remote planner mode (RHOAI_MCP_PLANNER_MODE=remote)"
-            }
-
         try:
             data = await client.list_use_cases()
         except PlannerConnectionError:

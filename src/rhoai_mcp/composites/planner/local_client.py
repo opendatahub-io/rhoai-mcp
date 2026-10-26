@@ -147,15 +147,15 @@ class LocalPlannerClient:
         """
         spec = await self._reference_specification(use_case, user_count)
         workload = self._get_use_case_data(use_case)["workload"]
-        concurrent = int(user_count * workload["active_fraction"])
+        concurrent = user_count * workload["active_fraction"]
         expected = concurrent * workload["requests_per_active_user_per_min"] / 60
         return {
             "success": True,
             "use_case": use_case,
             "user_count": user_count,
-            "expected_rps": round(expected, 2),
+            "expected_rps": expected,
             "peak_rps": spec.workload_profile.expected_qps,
-            "expected_concurrent_users": concurrent,
+            "expected_concurrent_users": int(concurrent),
         }
 
     async def list_use_cases(self) -> dict[str, Any]:

@@ -518,8 +518,8 @@ class TestLocalPlannerSloAndWorkload:
         assert result["user_count"] == 100
         # 100 * 0.20 = 20 concurrent users
         assert result["expected_concurrent_users"] == 20
-        # 20 * 0.4 / 60 = 0.13
-        assert result["expected_rps"] == 0.13
+        # 20 * 0.4 / 60 = 0.1333...
+        assert result["expected_rps"] == pytest.approx(8 / 60)
         assert result["peak_rps"] == 0.27
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")

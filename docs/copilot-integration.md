@@ -27,8 +27,7 @@ transport, authentication, and capability:
 
 1. **VS Code with GitHub Copilot Chat is the primary integration path.** It supports
    all rhoai-mcp transports (including stdio for local use), exposes tools, resources,
-   and prompts, and asks for confirmation before each tool call. It is the closest
-   equivalent to the Claude Desktop and Claude Code experience.
+   and prompts, and asks for confirmation before each tool call.
 2. **GitHub.com Copilot (cloud agent) can use rhoai-mcp** either as a deployed remote
    server or as a stdio server started on the agent's runner, with important
    limitations: it does not support OAuth-authenticated MCP servers, it ignores
@@ -40,6 +39,12 @@ transport, authentication, and capability:
 4. **Other Microsoft Copilot surfaces** exist but are out of scope for this guide and
    have not been validated with rhoai-mcp.
 
+**Copilot Extensions (GitHub Apps) are not an option.** GitHub retired them on
+November 10, 2025 and recommends MCP servers instead (see the
+[deprecation notice](https://github.blog/changelog/2025-09-24-deprecate-github-copilot-extensions-github-apps/)).
+rhoai-mcp already is an MCP server, so it does not need to be wrapped in an
+extension.
+
 ---
 
 ## Prerequisites
@@ -48,8 +53,7 @@ transport, authentication, and capability:
   a GitHub account that has Copilot access. Agent mode is required for tool use (ask/edits modes can
   chat but cannot call tools).
 - Access to an OpenShift cluster with RHOAI installed, and `oc` or `kubectl` configured.
-- macOS or Linux. The steps in this guide were validated on macOS; running rhoai-mcp
-  locally on Windows has not been tested.
+- Running rhoai-mcp locally has been verified on macOS and Linux only at this time.
 - One of:
   - a local checkout of this repository with [`uv`](https://docs.astral.sh/uv/)
     installed, or
@@ -415,5 +419,8 @@ transport and is rejected with stdio.
 
 - [VS Code documentation: MCP servers](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
 - [GitHub documentation: Use MCP with Copilot](https://docs.github.com/en/copilot/concepts/about-mcp)
+- [GitHub documentation: Extend the Copilot cloud agent with MCP](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/extend-cloud-agent-with-mcp)
+- [GitHub changelog: Deprecating Copilot Extensions built as GitHub Apps](https://github.blog/changelog/2025-09-24-deprecate-github-copilot-extensions-github-apps/)
+- [Microsoft Learn: Extend your agent with MCP (Copilot Studio)](https://learn.microsoft.com/en-us/microsoft-copilot-studio/agent-extend-action-mcp)
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [rhoai-mcp README](../README.md)

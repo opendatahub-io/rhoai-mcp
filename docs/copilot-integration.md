@@ -99,17 +99,25 @@ For development against a local clone, replace the `command` and `args` with:
       "cwd": "/path/to/rhoai-mcp"
 ```
 
+> **Note:** the `git+https://...` source floats with the default branch, and `uvx`
+> may serve a previously cached resolution rather than the latest commit. Pin a tag
+> for reproducible setups, for example
+> `git+https://github.com/opendatahub-io/rhoai-mcp@v0.1.1`.
+
 Then:
 
 1. Log in to your cluster so the server can pick up credentials:
    ```sh
    oc login --server=https://api.cluster.example.com:6443
    ```
-2. Open the Command Palette (**Cmd+Shift+P** / **Ctrl+Shift+P**) and run
-   **MCP: List Servers**. `rhoai-mcp` should appear; if it shows **Stopped**, start it
-   from the `...` menu.
-3. Open Copilot Chat, switch to **Agent** mode, and verify the connection by asking:
+2. Open Copilot Chat, switch to **Agent** mode, and ask:
    *"List my data science projects."*
+
+The server starts on demand with the first chat message; there is no need to start
+it manually. (You can check its state with **MCP: List Servers** from the Command
+Palette. Starting it manually from that view can fail with "Cannot start an MCP
+server before the session runtime has been created" if no chat session exists yet;
+sending a message first avoids the error.)
 
 With the default `RHOAI_MCP_AUTH_MODE=auto`, the server authenticates to the cluster
 using your current kubeconfig (the `oc login` from step 1). No token is written to
@@ -180,6 +188,10 @@ repository; the `${env:...}` substitution reads it from your shell environment.
 > **Note:** VS Code evaluates `${env:...}` when the server starts, so VS Code must be
 > launched with the variable set. If you change the token later, restart the MCP
 > server (**MCP: Restart Server**).
+>
+> On macOS, launch VS Code through the `code` command so it inherits your shell
+> environment. Launching through `open -a "Visual Studio Code"` or from the Dock
+> does not pass `OCP_TOKEN` to VS Code.
 
 ### Talking to your cluster
 
@@ -251,9 +263,12 @@ Copilot Business and Enterprise).
 - **Autonomous execution.** The cloud agent runs tools without asking for
   confirmation. Combined with a static token, this makes tool allowlisting and
   read-only mode strongly recommended (see below).
-- **Code review requires read-only tools.** Copilot code review only invokes
-  tools annotated with `readOnlyHint: true`; mutating tools are excluded
-  automatically.
+- **Code review requires `readOnlyHint`-annotated tools.** Copilot code review only
+  invokes tools whose definitions declare `annotations.readOnlyHint: true`; mutating
+  tools are excluded automatically. Note that current rhoai-mcp releases do not yet
+  annotate their tools, so code review sees no rhoai-mcp tools at all until
+  annotations are added (tracked as a follow-up). The cloud agent and coding agent
+  are not affected by this and can use all tools.
 
 ---
 
@@ -300,9 +315,14 @@ transport and is rejected with stdio.
   autonomous surface, run the server with `RHOAI_MCP_READ_ONLY_MODE=true`. This
   disables all create, update, and delete operations at the tool level while
   still allowing listing and inspection.
-- **Allowlist tools.** Both VS Code and the GitHub.com repository settings let you
-  restrict which tools a server exposes to Copilot. Expose only what the use case
-  needs.
+- **Restrict tools where the platform supports it.** The GitHub.com repository
+  settings for Copilot support allowlisting individual tools; expose only what the
+  use case needs. VS Code has no config-level tool allowlist (`mcp.json` has no
+  supported `tools` field), and its per-session tool selection in the chat UI is a
+  client convenience, not an enforcement boundary. For reliable, client-independent
+  tool restriction, use the server-side controls: `RHOAI_MCP_READ_ONLY_MODE=true`
+  and Kubernetes RBAC on the identity the server (or, with the OIDC overlay, each
+  caller) uses.
 - **Never embed tokens in configuration files.** Use `${env:...}` substitution in
   VS Code `mcp.json`, keep `.env` files out of version control, and do not paste
   credentials into chat.
@@ -322,7 +342,9 @@ transport and is rejected with stdio.
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `rhoai-mcp` shows Stopped in **MCP: List Servers** | VS Code did not detect `mcp.json` | Open VS Code from the directory containing `.vscode/mcp.json`, then reload the window |
+| Manual server start fails with "Cannot start an MCP server before the session runtime has been created" | Start was clicked before any chat session existed | Send an Agent-mode chat message first; the server starts on demand |
 | Tools/list works but cluster calls fail with auth errors | Server has no cluster credentials | Run `oc login`, then restart the MCP server (**MCP: Restart Server**) |
+| Remote route returns 401 in chat after relaunching VS Code | `${env:OCP_TOKEN}` was not set in VS Code's environment (common on macOS when launched via `open -a` or the Dock) | Launch VS Code with the `code` CLI from a shell where `OCP_TOKEN` is exported |
 | "TLS certificate is self-signed" on Model Registry calls | Port-forward presents the service certificate | Set `RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY=true` |
 | Model Registry tools report wrong endpoint or fail discovery | Auto-discovery cannot reach the in-cluster service | Set `RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=manual` and `RHOAI_MCP_MODEL_REGISTRY_URL` to the port-forward or route URL |
 | VS Code asks for sign-in on the MCP server | Server requires OAuth and VS Code attempts the flow | Deployments using static bearer auth: cancel and use the `Authorization` header instead |

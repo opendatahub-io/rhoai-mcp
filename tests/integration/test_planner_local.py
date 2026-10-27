@@ -165,6 +165,29 @@ def test_health_check(local_client: LocalPlannerClient) -> None:
     assert "local" in msg.lower()
 
 
+@pytest.mark.parametrize(
+    ("use_case", "user_count", "expected_rps", "expected_concurrent_users"),
+    [
+        ("chatbot_conversational", 1, 1 / 750, 0),
+        ("chatbot_conversational", 7, 7 / 750, 1),
+        ("research_legal_analysis", 10, 0.0005, 1),
+    ],
+)
+async def test_expected_rps_preserves_small_demand(
+    local_client: LocalPlannerClient,
+    use_case: str,
+    user_count: int,
+    expected_rps: float,
+    expected_concurrent_users: int,
+) -> None:
+    """Fractional active users and small request rates retain their average demand."""
+    result = await local_client.get_expected_rps(use_case, user_count)
+
+    assert result["expected_rps"] == pytest.approx(expected_rps)
+    assert result["expected_concurrent_users"] == expected_concurrent_users
+    assert result["peak_rps"] == 0.1
+
+
 # == High-level client: recommend() ===========================================
 
 

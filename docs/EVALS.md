@@ -17,7 +17,7 @@ This replaces the earlier self-instrumentation approach (`ENABLE_EVALUATION` hoo
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/) package manager
 - An API key for at least one supported LLM provider (for the agent LLM and the DeepEval judge LLM)
 - (Optional) A live OpenShift cluster with RHOAI installed, for live-cluster evals

@@ -10,10 +10,27 @@ from planner import PlannerError
 from rhoai_mcp.composites.planner.client import PlannerAPIError
 from rhoai_mcp.composites.planner.local_client import LocalPlannerClient
 
+_MOCK_USE_CASE_DATA: dict[str, dict[str, object]] = {
+    uc: {"description": f"Mock {uc}", "workload": {
+        "active_fraction": 0.20, "requests_per_active_user_per_min": 0.4,
+        "peak_multiplier": 2.0, "prompt_tokens": 512, "output_tokens": 256,
+    }, "slo_targets": {
+        "ttft_ms": {"min": 100, "max": 500},
+        "itl_ms": {"min": 15, "max": 50},
+        "e2e_ms": {"min": 3940, "max": 13300},
+    }}
+    for uc in [
+        "chatbot_conversational", "code_completion", "code_generation_detailed",
+        "translation", "content_generation", "summarization_short",
+        "document_analysis_rag", "long_document_summarization", "research_legal_analysis",
+    ]
+}
+
 
 def _make_mock_planner() -> MagicMock:
     """Create a mock Planner instance with standard responses."""
     mock = MagicMock()
+    mock._spec_service._traffic_gen._usecase_data = _MOCK_USE_CASE_DATA
 
     mock.generate_specification.return_value.model_dump.return_value = {
         "intent": {
@@ -454,6 +471,121 @@ class TestLocalPlannerGenerateConfig:
             )
 
         assert exc_info.value.status_code == 502
+
+
+class TestLocalPlannerSloAndWorkload:
+    """Tests for LocalPlannerClient SLO/workload/use-case methods."""
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_get_slo_defaults_returns_ranges(self, mock_planner_cls: MagicMock) -> None:
+        """get_slo_defaults returns SLO ranges and defaults from the planner library."""
+        mock_planner = _make_mock_planner()
+        # Set up the spec to return proper slo_targets with ranges
+        spec_mock = MagicMock()
+        spec_mock.slo_targets.ttft_target_ms = 300
+        spec_mock.slo_targets.itl_target_ms = 30
+        spec_mock.slo_targets.e2e_target_ms = 8620
+        spec_mock.slo_targets.ttft_range.min = 100
+        spec_mock.slo_targets.ttft_range.max = 500
+        spec_mock.slo_targets.itl_range.min = 15
+        spec_mock.slo_targets.itl_range.max = 50
+        spec_mock.slo_targets.e2e_range.min = 3940
+        spec_mock.slo_targets.e2e_range.max = 13300
+        mock_planner.generate_specification.return_value = spec_mock
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.get_slo_defaults("chatbot_conversational")
+
+        assert result["success"] is True
+        slo = result["slo_defaults"]
+        assert slo["use_case"] == "chatbot_conversational"
+        assert slo["ttft_ms"]["min"] == 100
+        assert slo["ttft_ms"]["max"] == 500
+        assert slo["ttft_ms"]["default"] == 300
+        assert slo["itl_ms"]["min"] == 15
+        assert slo["e2e_ms"]["max"] == 13300
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_get_slo_defaults_invalid_use_case(self, _mock_planner_cls: MagicMock) -> None:
+        """get_slo_defaults raises PlannerAPIError for unknown use case."""
+        _mock_planner_cls.return_value._spec_service._traffic_gen._usecase_data = (
+            _MOCK_USE_CASE_DATA
+        )
+        client = LocalPlannerClient()
+        with pytest.raises(PlannerAPIError) as exc_info:
+            await client.get_slo_defaults("invalid_use_case")
+        assert exc_info.value.status_code == 400
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_get_workload_profile_returns_tokens(self, mock_planner_cls: MagicMock) -> None:
+        """get_workload_profile returns token sizes and traffic params."""
+        mock_planner = _make_mock_planner()
+        spec_mock = MagicMock()
+        spec_mock.workload_profile.prompt_tokens = 512
+        spec_mock.workload_profile.output_tokens = 256
+        mock_planner.generate_specification.return_value = spec_mock
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.get_workload_profile("chatbot_conversational")
+
+        assert result["success"] is True
+        wp = result["workload_profile"]
+        assert wp["prompt_tokens"] == 512
+        assert wp["output_tokens"] == 256
+        assert wp["active_fraction"] == 0.20
+        assert wp["requests_per_active_user_per_min"] == 0.4
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_get_expected_rps_calculates_traffic(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """get_expected_rps returns calculated RPS and concurrent users."""
+        mock_planner = _make_mock_planner()
+        spec_mock = MagicMock()
+        spec_mock.workload_profile.expected_qps = 0.27
+        mock_planner.generate_specification.return_value = spec_mock
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.get_expected_rps("chatbot_conversational", 100)
+
+        assert result["success"] is True
+        assert result["user_count"] == 100
+        # 100 * 0.20 = 20 concurrent users
+        assert result["expected_concurrent_users"] == 20
+        # 20 * 0.4 / 60 = 0.1333...
+        assert result["expected_rps"] == pytest.approx(8 / 60)
+        assert result["peak_rps"] == 0.27
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_get_expected_rps_invalid_user_count(
+        self, _mock_planner_cls: MagicMock
+    ) -> None:
+        """get_expected_rps raises PlannerAPIError for non-positive user count."""
+        _mock_planner_cls.return_value._spec_service._traffic_gen._usecase_data = (
+            _MOCK_USE_CASE_DATA
+        )
+        client = LocalPlannerClient()
+        with pytest.raises(PlannerAPIError) as exc_info:
+            await client.get_expected_rps("chatbot_conversational", 0)
+        assert exc_info.value.status_code == 400
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_list_use_cases_returns_all(self, _mock_planner_cls: MagicMock) -> None:
+        """list_use_cases returns all use cases from the planner instance data."""
+        _mock_planner_cls.return_value._spec_service._traffic_gen._usecase_data = (
+            _MOCK_USE_CASE_DATA
+        )
+        client = LocalPlannerClient()
+        result = await client.list_use_cases()
+
+        assert result["count"] == 9
+        assert "chatbot_conversational" in result["use_cases"]
+        assert "code_completion" in result["use_cases"]
+        for uc in result["use_cases"].values():
+            assert "description" in uc
 
 
 class TestLocalPlannerHealthCheck:

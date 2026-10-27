@@ -132,7 +132,7 @@ packaging==26.3
 pathspec==1.1.1
     # via hatchling
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
-pluggy==1.6.0
+pluggy==1.7.0
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
@@ -143,7 +143,7 @@ pycparser==3.0
     #   -c constraints-lock.tmp
     #   cffi
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
-pydantic==2.13.5
+pydantic==2.14.1
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
@@ -151,19 +151,19 @@ pydantic==2.13.5
     #   mcp
     #   pydantic-settings
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
-pydantic-core==2.46.5
+pydantic-core==2.50.1
     # via
     #   -c constraints-lock.tmp
     #   pydantic
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
-pydantic-settings==2.15.0
+pydantic-settings==2.16.0
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
     #   llm-d-planner
     #   mcp
     # from https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.6/cpu-ubi9-test/simple/
-pyjwt==2.13.0
+pyjwt==2.15.1
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
@@ -243,6 +243,7 @@ typing-extensions==4.16.0
     #   mcp
     #   pydantic
     #   pydantic-core
+    #   pydantic-settings
     #   referencing
     #   starlette
     #   typing-inspection

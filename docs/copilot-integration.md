@@ -46,8 +46,8 @@ transport, authentication, and capability:
 
 ## Prerequisites
 
-- VS Code with the **GitHub Copilot Chat** extension, signed in with a GitHub account
-  that has Copilot access. Agent mode is required for tool use (ask/edits modes can
+- A current VS Code release with **GitHub Copilot** (chat is built in), signed in with
+  a GitHub account that has Copilot access. Agent mode is required for tool use (ask/edits modes can
   chat but cannot call tools).
 - Access to an OpenShift cluster with RHOAI installed, and `oc` or `kubectl` configured.
 - One of:
@@ -99,9 +99,8 @@ For development against a local clone, replace the `command` and `args` with:
       "cwd": "/path/to/rhoai-mcp"
 ```
 
-> **Note:** the `git+https://...` source floats with the default branch, and `uvx`
-> may serve a previously cached resolution rather than the latest commit. Pin a tag
-> for reproducible setups, for example
+> **Note:** the `git+https://...` source tracks the default branch. For reproducible
+> setups, pin a tag or commit, for example
 > `git+https://github.com/opendatahub-io/rhoai-mcp@v0.1.1`.
 
 Then:
@@ -147,8 +146,7 @@ deploy.
      }
    }
    ```
-3. Start or restart the server from **MCP: List Servers** and use it from Agent mode
-   as above.
+3. VS Code picks up the new entry automatically. Use it from Agent mode as above.
 
 ### Option C: deployed server (remote HTTP)
 
@@ -186,8 +184,8 @@ authentication (the OpenShift OIDC overlay). Without such a deployment, omit the
 repository; the `${env:...}` substitution reads it from your shell environment.
 
 > **Note:** VS Code evaluates `${env:...}` when the server starts, so VS Code must be
-> launched with the variable set. If you change the token later, restart the MCP
-> server (**MCP: Restart Server**).
+> launched with the variable set. Tokens expire, so when you need a fresh one,
+> quit VS Code and relaunch it with the new `OCP_TOKEN`.
 >
 > On macOS, launch VS Code through the `code` command so it inherits your shell
 > environment. Launching through `open -a "Visual Studio Code"` or from the Dock
@@ -252,12 +250,12 @@ Copilot Business and Enterprise).
 
 **Limitations to plan around:**
 
-- **No OAuth.** These surfaces do not support OAuth-authenticated MCP servers.
-  A rhoai-mcp deployment using the OpenShift OIDC overlay (which validates each
-  caller's token) cannot be used here. The server must be deployed without caller
-  OIDC, or fronted by a gateway that accepts a static token you configure in the
-  repository settings. Treat that token as a long-lived credential: scope it
-  narrowly and rotate it.
+- **No OAuth flow.** These surfaces do not support MCP servers that require an
+  interactive OAuth sign-in, so authentication must be a static header. The OpenShift
+  OIDC overlay validates each request's bearer token through Kubernetes TokenReview,
+  so a dedicated ServiceAccount token supplied in a static `Authorization` header
+  should be accepted (this combination has not been tested). Treat that token as a
+  long-lived credential: scope its RBAC narrowly and rotate it.
 - **Tools only.** Resources and prompts exposed by rhoai-mcp are ignored; only
   tools are available.
 - **Autonomous execution.** The cloud agent runs tools without asking for
@@ -290,7 +288,7 @@ avoids the most common configuration mistakes:
 | VS Code, local server | stdio | `auto` or `kubeconfig` (after `oc login`) | None |
 | VS Code, local server | streamable HTTP | `auto` or `kubeconfig` | None |
 | VS Code, deployed server | streamable HTTP | `auto` (in-cluster) | `Authorization` header if OIDC overlay is deployed |
-| GitHub.com Copilot | remote HTTP | `auto` (in-cluster) | Static token in configured headers; OIDC overlay not supported |
+| GitHub.com Copilot | remote HTTP | `auto` (in-cluster) | Static bearer token in configured headers (for example a ServiceAccount token when the OIDC overlay is deployed; untested) |
 | Copilot Studio | remote HTTP | `auto` (in-cluster) | Connector authentication |
 
 Transport selection for the server itself:
@@ -343,7 +341,7 @@ transport and is rejected with stdio.
 |---------|-------|-----|
 | `rhoai-mcp` shows Stopped in **MCP: List Servers** | VS Code did not detect `mcp.json` | Open VS Code from the directory containing `.vscode/mcp.json`, then reload the window |
 | Manual server start fails with "Cannot start an MCP server before the session runtime has been created" | Start was clicked before any chat session existed | Send an Agent-mode chat message first; the server starts on demand |
-| Tools/list works but cluster calls fail with auth errors | Server has no cluster credentials | Run `oc login`, then restart the MCP server (**MCP: Restart Server**) |
+| Tools/list works but cluster calls fail with auth errors | Server has no cluster credentials | Run `oc login`, then reload the VS Code window so the server restarts |
 | Remote route returns 401 in chat after relaunching VS Code | `${env:OCP_TOKEN}` was not set in VS Code's environment (common on macOS when launched via `open -a` or the Dock) | Launch VS Code with the `code` CLI from a shell where `OCP_TOKEN` is exported |
 | "TLS certificate is self-signed" on Model Registry calls | Port-forward presents the service certificate | Set `RHOAI_MCP_MODEL_REGISTRY_SKIP_TLS_VERIFY=true` |
 | Model Registry tools report wrong endpoint or fail discovery | Auto-discovery cannot reach the in-cluster service | Set `RHOAI_MCP_MODEL_REGISTRY_DISCOVERY_MODE=manual` and `RHOAI_MCP_MODEL_REGISTRY_URL` to the port-forward or route URL |

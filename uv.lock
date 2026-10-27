@@ -538,25 +538,6 @@ wheels = [
 ]
 
 [[package]]
-name = "claude-agent-sdk"
-version = "0.2.172"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "jsonschema" },
-    { name = "mcp" },
-    { name = "sniffio" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6a/26/06c543b684df0065e3afdd525bfdf37877cb05e41e4a9185fcbb4b2fdd0b/claude_agent_sdk-0.2.172.tar.gz", hash = "sha256:d20c8f4fd12880821338ddb918418ef0b2f97c10d5806491e7e2eb766b437725", size = 398738, upload-time = "2026-10-22T05:22:08.724Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/7f/d7d10f38b5fe0e669dd51dffac7ec5dc3aa78d8b2748480f188c8039086f/claude_agent_sdk-0.2.172-py3-none-macosx_11_0_arm64.whl", hash = "sha256:8068f84286925cf15240441fee7e698e6a82c3571a80e306f28d251e882496b2", size = 115999146, upload-time = "2026-10-22T05:22:14.218Z" },
-    { url = "https://files.pythonhosted.org/packages/36/ab/5cb79753ae601b091c0af563d733f124b7cf479914ffa1bff081b7950d99/claude_agent_sdk-0.2.172-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:898757e2404290b6f3be48e7e7698fdf9fb1a81ed77b9c21263b0ba506689ab5", size = 121683387, upload-time = "2026-10-22T05:22:18.605Z" },
-    { url = "https://files.pythonhosted.org/packages/2c/c7/02302bde98e27c305f5ddfd64d24ec6d5e08fbd66a6996e76313056cc36b/claude_agent_sdk-0.2.172-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:a56860aec16e95bad73d2ce62d9843152d4e0381885651ef72667adb17eca874", size = 125691281, upload-time = "2026-10-22T05:22:24.099Z" },
-    { url = "https://files.pythonhosted.org/packages/75/93/ea014f37770e8b1f4ade32d961da7d58407a910feab7e619a153a7fdf71d/claude_agent_sdk-0.2.172-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:94c8b9346433654f337bb50f16c51ec690ad73193bd92fb01fd63d81421fe0a6", size = 126061828, upload-time = "2026-10-22T05:22:29.717Z" },
-    { url = "https://files.pythonhosted.org/packages/1c/15/31a7cd64b8d531498d1c110c55a070fe74854148cab77d3ecc462487e371/claude_agent_sdk-0.2.172-py3-none-win_amd64.whl", hash = "sha256:48a0439d390334211e6d6351e69aaa5408d351b77e4eb5d1bf161b205a11963b", size = 129519248, upload-time = "2026-10-22T05:22:34.457Z" },
-]
-
-[[package]]
 name = "click"
 version = "8.3.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1049,8 +1030,8 @@ name = "httpcore2"
 version = "2.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11", marker = "python_full_version < '3.12' or python_full_version >= '3.14' or sys_platform != 'emscripten'" },
-    { name = "truststore", marker = "python_full_version < '3.12' or python_full_version >= '3.14' or sys_platform != 'emscripten'" },
+    { name = "h11" },
+    { name = "truststore" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/be/ad/f4f0e57345f1870f3e8cb624e058d7eca6e5a27d33bcc3311d9b618734cd/httpcore2-2.12.0.tar.gz", hash = "sha256:9293522bba0aa7c4c8e9e3f040c16575bd8868e155a77fa30c7a9085a5eae648", size = 67548, upload-time = "2026-08-18T13:22:08.211Z" }
 wheels = [
@@ -2438,10 +2419,6 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
-claude-check = [
-    { name = "claude-agent-sdk" },
-    { name = "pyyaml" },
-]
 dev = [
     { name = "mypy" },
     { name = "pytest" },
@@ -2454,7 +2431,6 @@ eval = [
     { name = "deepeval" },
     { name = "google-genai" },
     { name = "openai" },
-    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -2470,10 +2446,6 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-claude-check = [
-    { name = "claude-agent-sdk", specifier = ">=0.2.172" },
-    { name = "pyyaml", specifier = ">=6.0" },
-]
 dev = [
     { name = "mypy", specifier = ">=1.10.0" },
     { name = "pytest", specifier = ">=8.0.0" },
@@ -2486,7 +2458,6 @@ eval = [
     { name = "deepeval", specifier = ">=3.7.0" },
     { name = "google-genai", specifier = ">=1.0.0" },
     { name = "openai", specifier = ">=1.0.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]
@@ -2855,8 +2826,8 @@ name = "uvicorn"
 version = "0.52.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click", marker = "python_full_version < '3.12' or python_full_version >= '3.14' or sys_platform != 'emscripten'" },
-    { name = "h11", marker = "python_full_version < '3.12' or python_full_version >= '3.14' or sys_platform != 'emscripten'" },
+    { name = "click" },
+    { name = "h11" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f2/0f/3f86e61397dd33bf2ccf28188c40db6a740658aeebbbf6e7dbc101a1f487/uvicorn-0.52.4.tar.gz", hash = "sha256:73acfee47a0b133c5de13d219492d62d8a31e935f4fe6e41a232451a15379f86", size = 100627, upload-time = "2026-08-19T06:27:41.821Z" }
 wheels = [

@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from functools import cache
-from importlib.resources import files
 from typing import Any
 
 from planner import (
@@ -28,23 +25,6 @@ from rhoai_mcp.composites.planner.models import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-@cache
-def _load_use_case_data() -> dict[str, Any]:
-    """Read reference data shipped with the same library used for recommendations."""
-    try:
-        resource = files("planner.data").joinpath("configuration/usecase_slo_workload.json")
-        return dict(json.loads(resource.read_text(encoding="utf-8"))["use_case_slo_workload"])
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise PlannerAPIError(status_code=502, detail="Cannot load planner use-case data") from exc
-
-
-def _use_case_data(use_case: str) -> dict[str, Any]:
-    data = _load_use_case_data()
-    if use_case not in data:
-        raise PlannerAPIError(status_code=400, detail=f"Unknown use_case: {use_case}")
-    return dict(data[use_case])
 
 
 class LocalPlannerClient:
@@ -400,9 +380,6 @@ class LocalPlannerClient:
                 deployment_id=bundle.deployment_id,
                 namespace=bundle.namespace,
                 model_name=model_name,
-                model_id=config_obj.model_id,
-                model_uri=config_obj.model_uri,
-                gpu_config=config_obj.gpu_config.model_dump(),
                 configs=bundle.files,
             )
 

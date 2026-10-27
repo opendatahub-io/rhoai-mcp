@@ -55,4 +55,3 @@ class EvalRecord:
     tool_names_used: list[str] = field(default_factory=list)
     passed: bool = False
     duration_seconds: float = 0.0
-    phase: str | None = None

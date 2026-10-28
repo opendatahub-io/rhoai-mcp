@@ -57,11 +57,28 @@ class TestRegistry:
             "quay.io/rh-ai-quickstart/peoplemesh-manifest:1.0.0@sha256:" + "a" * 64
         )
 
-    def test_manifest_ref_without_digest_falls_back_to_tag(self) -> None:
-        # A version not recorded in availableManifestVersions has no digest to
-        # pin, so the bare tag is used.
+    def test_manifest_ref_rejects_unlisted_version(self) -> None:
+        # A version the registry does not list has no digest to pin; fetching its
+        # bare tag would return unverified content, so it is refused.
         entry = QuickstartRegistry.from_yaml(REGISTRY_YAML).quickstarts[0]
-        assert entry.manifest_ref("2.0.0") == "quay.io/rh-ai-quickstart/peoplemesh-manifest:2.0.0"
+        with pytest.raises(RHOAIError, match="no digest-pinned manifest for version '2.0.0'"):
+            entry.manifest_ref("2.0.0")
+
+    def test_manifest_ref_rejects_listed_version_without_digest(self) -> None:
+        registry = REGISTRY_YAML.replace(
+            b'        digest: "sha256:' + b"a" * 64 + b'"\n', b""
+        )
+        entry = QuickstartRegistry.from_yaml(registry).quickstarts[0]
+        assert entry.available_manifest_versions[0].digest is None
+        with pytest.raises(RHOAIError, match="no digest-pinned manifest for version '1.0.0'"):
+            entry.manifest_ref("1.0.0")
+
+    def test_manifest_ref_rejects_caller_supplied_digest(self) -> None:
+        # The caller must not be able to choose the digest: the reference is built
+        # only from the registry's own entry, never from caller input.
+        entry = QuickstartRegistry.from_yaml(REGISTRY_YAML).quickstarts[0]
+        with pytest.raises(RHOAIError, match="no digest-pinned manifest"):
+            entry.manifest_ref("1.0.0@sha256:" + "b" * 64)
 
     def test_from_yaml_rejects_non_mapping(self) -> None:
         with pytest.raises(RHOAIError):

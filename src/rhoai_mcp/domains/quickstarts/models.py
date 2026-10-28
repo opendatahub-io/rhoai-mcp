@@ -93,7 +93,8 @@ class QuickstartSummary(QuickstartModel):
             version: Explicit version tag; defaults to ``latest_manifest_version``.
 
         Raises:
-            RHOAIError: If no manifest repository or resolvable version exists.
+            RHOAIError: If no manifest repository or resolvable version exists, or
+                the version is not listed in the registry with a digest.
         """
         if not self.manifest_repo:
             raise RHOAIError(f"quickstart '{self.name}' has no manifestRepo in the registry")
@@ -101,12 +102,13 @@ class QuickstartSummary(QuickstartModel):
         if not resolved:
             raise RHOAIError(f"quickstart '{self.name}' has no version to resolve a manifest")
         entry = next((v for v in self.available_manifest_versions if v.version == resolved), None)
-        # Pin by digest when the registry records one (tag kept for readability;
-        # the digest is what the OCI client verifies). Fall back to the bare tag
-        # for versions not yet digest-pinned.
-        if entry and entry.digest:
-            return f"{self.manifest_repo}:{resolved}@{entry.digest}"
-        return f"{self.manifest_repo}:{resolved}"
+        # Only registry-listed, digest-pinned versions are fetchable. Never splice
+        # caller input into the reference or fetch an unverified tag.
+        if entry is None or not entry.digest:
+            raise RHOAIError(
+                f"quickstart '{self.name}' has no digest-pinned manifest for version '{resolved}'"
+            )
+        return f"{self.manifest_repo}:{entry.version}@{entry.digest}"
 
     def to_dict(self) -> dict[str, Any]:
         """Render a catalog-tile dict for tool responses."""

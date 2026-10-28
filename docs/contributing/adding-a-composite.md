@@ -97,13 +97,13 @@ The `register_tools()` function follows the same pattern as domain tools, but im
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register my composite tools with the MCP server."""
 
     @mcp.tool()
@@ -161,7 +161,7 @@ class MyCompositesPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.composites.my_composite.tools import register_tools
 
         register_tools(mcp, server)

@@ -16,7 +16,7 @@ from rhoai_mcp.hooks import hookimpl
 from rhoai_mcp.plugin import BasePlugin, PluginMetadata
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from rhoai_mcp.server import RHOAIServer
 
@@ -41,7 +41,7 @@ class ClusterCompositesPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.composites.cluster.tools import register_tools
 
         register_tools(mcp, server)
@@ -74,7 +74,7 @@ class TrainingCompositesPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.composites.training.planning import register_tools as reg_planning
         from rhoai_mcp.composites.training.storage import register_tools as reg_storage
         from rhoai_mcp.composites.training.unified import register_tools as reg_unified
@@ -111,13 +111,13 @@ class MetaCompositesPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.composites.meta.tools import register_tools
 
         register_tools(mcp, server)
 
     @hookimpl
-    def rhoai_register_resources(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_resources(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.composites.meta.resources import register_resources
 
         register_resources(mcp, server)
@@ -146,7 +146,7 @@ class PlannerCompositesPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.composites.planner.tools import register_tools
 
         register_tools(mcp, server)

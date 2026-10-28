@@ -51,7 +51,7 @@ rhoai-mcp/
 │       ├── __init__.py
 │       ├── __main__.py          # CLI entry point
 │       ├── config.py            # Configuration (pydantic-settings)
-│       ├── server.py            # FastMCP server
+│       ├── server.py            # MCP server
 │       ├── hooks.py             # Pluggy hook specifications
 │       ├── plugin.py            # Plugin protocol and base class
 │       ├── plugin_manager.py    # Plugin lifecycle management
@@ -118,7 +118,7 @@ Environment variables use `RHOAI_MCP_` prefix. Key settings:
 
 ### Key Dependencies
 
-- `mcp>=1.0.0`: Model Context Protocol (FastMCP)
+- `mcp>=1.0.0`: Model Context Protocol (MCPServer)
 - `kubernetes>=28.1.0`: K8s Python client
 - `pydantic>=2.0.0`: Data validation and settings
 

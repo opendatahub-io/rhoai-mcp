@@ -6,7 +6,7 @@ Optional — only needed if your domain exposes MCP resources
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.{{DOMAIN_NAME}}.client import {{DOMAIN_CLASS}}Client
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_resources(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register {{DOMAIN_NAME}} MCP resources."""
 
     @mcp.resource("rhoai://{{DOMAIN_NAME}}/{namespace}/status")

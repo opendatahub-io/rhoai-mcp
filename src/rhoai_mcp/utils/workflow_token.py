@@ -140,7 +140,7 @@ def workflow_step(
 
             return result
 
-        # Preserve original signature so FastMCP sees the right parameters
+        # Preserve original signature so MCPServer sees the right parameters
         wrapper.__signature__ = inspect.signature(fn)  # type: ignore[attr-defined]
         return wrapper  # type: ignore[return-value]
 

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from rhoai_mcp.hooks import hookimpl
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from rhoai_mcp.clients.base import CRDDefinition
     from rhoai_mcp.server import RHOAIServer
@@ -73,17 +73,17 @@ class BasePlugin:
         return self._metadata
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Register MCP tools. Override in subclass."""
         pass
 
     @hookimpl
-    def rhoai_register_resources(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_resources(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Register MCP resources. Override in subclass."""
         pass
 
     @hookimpl
-    def rhoai_register_prompts(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_prompts(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Register MCP prompts. Override in subclass."""
         pass
 

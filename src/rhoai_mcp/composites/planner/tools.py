@@ -7,7 +7,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.composites.planner.client import (
     CATEGORY_MAP,
@@ -81,7 +81,7 @@ def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any
     return compact
 
 
-def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
+def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register Planner composite tools with the MCP server."""
     _local_client: LocalPlannerClient | None = None
     _local_client_lock = asyncio.Lock()

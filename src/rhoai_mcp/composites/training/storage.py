@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.utils.errors import NotFoundError, ResourceExistsError, RHOAIError
 
@@ -108,7 +108,7 @@ def create_training_pvc(
         }
 
 
-def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
+def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register training storage tools with the MCP server."""
 
     @mcp.tool()

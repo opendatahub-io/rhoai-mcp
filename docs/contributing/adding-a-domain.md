@@ -226,7 +226,7 @@ This is where MCP tools are registered. Key patterns:
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.my_feature.client import MyFeatureClient
 from rhoai_mcp.utils.response import PaginatedResponse, paginate
@@ -235,7 +235,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register widget tools with the MCP server."""
 
     @mcp.tool()
@@ -374,7 +374,7 @@ class MyFeaturePlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.my_feature.tools import register_tools
 
         register_tools(mcp, server)
@@ -420,7 +420,7 @@ For core API domains (no CRDs), override the health check to return a simple suc
 Mirror the source structure under `tests/domains/<name>/`. The standard test approach:
 
 1. **Mock the K8s client** with `unittest.mock.MagicMock`.
-2. **Test tools** by calling them through `FastMCP._tool_manager.call_tool()`.
+2. **Test tools** by calling them through `MCPServer._tool_manager.call_tool()`.
 3. **Test models** by constructing mock K8s objects and calling `from_k8s()`.
 4. **Test the client** by mocking the underlying K8s API calls.
 
@@ -429,14 +429,14 @@ Mirror the source structure under `tests/domains/<name>/`. The standard test app
 
 from unittest.mock import MagicMock
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.my_feature.tools import register_tools
 
 
 class TestListWidgets:
     async def test_returns_paginated_response(self) -> None:
-        mcp = FastMCP("test")
+        mcp = MCPServer("test")
         server = MagicMock()
         server.config.max_list_limit = 100
         server.config.default_list_limit = None

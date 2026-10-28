@@ -5,7 +5,7 @@ import re
 import shlex
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.inference.client import InferenceClient
 from rhoai_mcp.domains.inference.models import InferenceServiceCreate
@@ -181,7 +181,7 @@ MODEL_SIZE_ESTIMATES: dict[tuple[int, int], int] = {
 }
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register model serving tools with the MCP server."""
 
     @mcp.tool()

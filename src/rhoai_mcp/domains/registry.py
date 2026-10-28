@@ -36,7 +36,7 @@ class ProjectsPlugin(BasePlugin):
         super().__init__(
             PluginMetadata(
                 name="projects",
-                version="0.1.0",
+                version="1.0.0",
                 description="Data Science Project management",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=[],
@@ -71,7 +71,7 @@ class NotebooksPlugin(BasePlugin):
         super().__init__(
             PluginMetadata(
                 name="notebooks",
-                version="0.1.0",
+                version="1.0.0",
                 description="Workbench (Kubeflow Notebook) management",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=["Notebook"],
@@ -102,7 +102,7 @@ class InferencePlugin(BasePlugin):
         super().__init__(
             PluginMetadata(
                 name="inference",
-                version="0.1.0",
+                version="1.0.0",
                 description="Model Serving (KServe InferenceService) management",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=["InferenceService"],
@@ -137,7 +137,7 @@ class PipelinesPlugin(BasePlugin):
         super().__init__(
             PluginMetadata(
                 name="pipelines",
-                version="0.1.0",
+                version="1.0.0",
                 description="Data Science Pipelines (DSPA) management",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=["DataSciencePipelinesApplication"],
@@ -168,7 +168,7 @@ class ConnectionsPlugin(BasePlugin):
         super().__init__(
             PluginMetadata(
                 name="connections",
-                version="0.1.0",
+                version="1.0.0",
                 description="Data Connection (S3 secrets) management",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=[],
@@ -197,7 +197,7 @@ class StoragePlugin(BasePlugin):
         super().__init__(
             PluginMetadata(
                 name="storage",
-                version="0.1.0",
+                version="1.0.0",
                 description="Storage (PVC) management",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=[],
@@ -226,7 +226,7 @@ class TrainingPlugin(BasePlugin):
         super().__init__(
             PluginMetadata(
                 name="training",
-                version="0.1.0",
+                version="1.0.0",
                 description="Kubeflow Training Operator integration",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=["TrainJob", "ClusterTrainingRuntime"],
@@ -377,7 +377,7 @@ class ModelRegistryPlugin(BasePlugin):
         super().__init__(
             PluginMetadata(
                 name="model_registry",
-                version="0.1.0",
+                version="1.0.0",
                 description="Model Registry integration",
                 maintainer="rhoai-mcp@redhat.com",
                 requires_crds=[],  # Uses REST API, not CRDs

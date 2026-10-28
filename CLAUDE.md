@@ -161,7 +161,7 @@ Write Pythonic code that follows community conventions:
 
 ## Code Style
 
-- Python 3.10+, line length 100
+- Python 3.11+, line length 100
 - Ruff for linting/formatting (isort included)
 - Mypy with `disallow_untyped_defs=true`
 - Pytest with `asyncio_mode = "auto"`

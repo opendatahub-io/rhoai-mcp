@@ -1,0 +1,124 @@
+name: check-others
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/check-others.yml
+      - .github/scripts/list_rhoai_branches.py
+      - requirements-cpu.txt
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    if: github.repository == 'opendatahub-io/rhoai-mcp'
+    runs-on: ubuntu-latest
+    outputs:
+      branches: ${{ steps.branches.outputs.branches }}
+      latest-version: ${{ steps.branches.outputs.latest-version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Discover RHDS branches
+        id: branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branches=$(python3 .github/scripts/list_rhoai_branches.py)
+          echo "branches=$branches" >> "$GITHUB_OUTPUT"
+          latest_version=$(jq -r 'last // ""' <<< "$branches")
+          echo "latest-version=$latest_version" >> "$GITHUB_OUTPUT"
+
+  check-rhds-branch:
+    needs: discover
+    if: needs.discover.outputs.branches != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJSON(needs.discover.outputs.branches) }}
+    name: check-rhds-branch (${{ matrix.branch }})
+    steps:
+      - name: Check RHDS image in params.env
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ matrix.branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method GET \
+            repos/red-hat-data-services/rhoai-mcp/contents/deploy/kustomize/base/params.env \
+            -f ref="$BRANCH" \
+            -H 'Accept: application/vnd.github.raw+json' > params.env
+
+          expected="registry.redhat.io/rhoai/odh-rhoai-mcp-rhel9:$BRANCH"
+          actual=$(sed -n 's/^RHOAI_MCP_IMAGE=//p' params.env)
+          if [[ "$actual" != "$expected" ]]; then
+            printf '::error::%s: expected RHOAI_MCP_IMAGE=%s; got %s\n' "$BRANCH" "$expected" "$actual"
+            exit 1
+          fi
+          printf '%s: RHOAI_MCP_IMAGE=%s verified\n' "$BRANCH" "$actual"
+
+  check-model-metadata-imageref:
+    needs: discover
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check model metadata artifact URI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST_VERSION: ${{ needs.discover.outputs.latest-version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$LATEST_VERSION" ]]; then
+            echo '::error::No qualifying RHDS release branches found; cannot determine latest version.'
+            exit 1
+          fi
+          gh api --method GET \
+            repos/opendatahub-io/model-metadata-collection/contents/input/mcp_servers/redhat/rhoai-mcp-server.yaml \
+            -H 'Accept: application/vnd.github.raw+json' > rhoai-mcp-server.yaml
+
+          expected="oci://registry.redhat.io/rhoai/odh-rhoai-mcp-rhel9:$LATEST_VERSION"
+          if ! EXPECTED_URI="$expected" yq -e '
+            (.artifacts | length == 1) and (.artifacts[0].uri == strenv(EXPECTED_URI))
+          ' rhoai-mcp-server.yaml > /dev/null; then
+            actual=$(yq -o=json -I=0 '.artifacts' rhoai-mcp-server.yaml)
+            printf '::error::Expected exactly one artifact with uri %s; got artifacts=%s\n' "$expected" "$actual"
+            exit 1
+          fi
+          printf 'artifacts.uri verified: %s\n' "$expected"
+
+  check-requirements-cpu-index:
+    needs: discover
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Check requirements-cpu.txt index URL
+        env:
+          LATEST_VERSION: ${{ needs.discover.outputs.latest-version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$LATEST_VERSION" != rhoai-?* ]]; then
+            echo '::error::Expected a nonempty RHDS release branch starting with rhoai-.'
+            exit 1
+          fi
+          # Branches use 3.6-ea.2; the package index uses 3.6-EA2.
+          version=$(printf '%s' "${LATEST_VERSION#rhoai-}" | tr '[:lower:]' '[:upper:]')
+          version="${version/-EA./-EA}"
+          expected="https://packages.redhat.com/api/pypi/public-rhai/rhoai/$version/cpu-ubi9-test/simple/"
+          actual=$(awk '$1 == "--index-url" { print $2 }' requirements-cpu.txt)
+          if [[ "$actual" != "$expected" ]]; then
+            printf '::error::Expected requirements-cpu.txt --index-url %s; got %s\n' "$expected" "$actual"
+            exit 1
+          fi
+          printf 'requirements-cpu.txt --index-url verified: %s\n' "$actual"

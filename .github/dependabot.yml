@@ -4,3 +4,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    exclude-paths:
+      - "requirements-cpu.txt"  # Generated separately with make generate-requirements-cpu.

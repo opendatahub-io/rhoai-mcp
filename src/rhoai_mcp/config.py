@@ -317,7 +317,16 @@ class RHOAIConfig(BaseSettings):
 
     # Plugin filtering
     enabled_plugins: list[str] | None = Field(
-        default=None,
+        default=[
+            "projects",
+            "connections",
+            "storage",
+            "planner-composites",
+            "model_registry",
+            "inference",
+            "cluster-composites",
+            "meta-composites",
+        ],
         description="List of plugin names to enable (None = all plugins). "
         + "Set via RHOAI_MCP_ENABLED_PLUGINS as comma-separated values.",
     )

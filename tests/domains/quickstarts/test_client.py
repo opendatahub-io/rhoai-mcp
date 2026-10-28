@@ -11,6 +11,7 @@ from rhoai_mcp.domains.quickstarts.client import (
     INSPECTION_ACTIONS,
     INVALID_OPERATION_MESSAGE,
     JOB_CRD,
+    MANAGED_NAMESPACE_ACTIONS,
     NAMESPACE_LABELING_ACTIONS,
     QUICKSTART_NAME_LABEL,
     QUICKSTART_TARGET_NS_LABEL,
@@ -68,6 +69,11 @@ def mock_k8s() -> MagicMock:
     # ownership checks for other actions must be configured explicitly per test.
     k8s.get_namespace.side_effect = NotFoundError("Namespace", "unset")
     return k8s
+
+
+def _installed_labels(quickstart: str) -> dict[str, str]:
+    """Labels on a namespace this tool installed ``quickstart`` into."""
+    return {**RHOAILabels.managed_by_mcp_labels(), QUICKSTART_NAME_LABEL: quickstart}
 
 
 def _namespace_exists(k8s: MagicMock, labels: dict[str, str] | None = None) -> None:
@@ -253,7 +259,7 @@ class TestRunAction:
     ) -> None:
         # The installer gets its own Job name (literal) and namespace (downward
         # API) as additive env, distinct from TARGET_NAMESPACE.
-        _namespace_exists(mock_k8s, RHOAILabels.managed_by_mcp_labels())
+        _namespace_exists(mock_k8s, _installed_labels("peoplemesh"))
         result = client.run_action(name="peoplemesh", action="STATUS")
 
         env = {e["name"]: e for e in _container(mock_k8s)["env"]}
@@ -266,7 +272,7 @@ class TestRunAction:
     ) -> None:
         # A hung installer must not run forever; the Job carries a hard wall-clock
         # cap from config so Kubernetes terminates it and marks it Failed.
-        _namespace_exists(mock_k8s, RHOAILabels.managed_by_mcp_labels())
+        _namespace_exists(mock_k8s, _installed_labels("peoplemesh"))
         client.run_action(name="peoplemesh", action="STATUS")
 
         body = mock_k8s.create.call_args.kwargs["body"]
@@ -278,7 +284,7 @@ class TestRunAction:
         # The installer container gets a guaranteed floor (requests) so it stays
         # schedulable and out of the eviction line, plus generous limits so a long
         # install is not OOM-killed while still capping any runaway.
-        _namespace_exists(mock_k8s, RHOAILabels.managed_by_mcp_labels())
+        _namespace_exists(mock_k8s, _installed_labels("peoplemesh"))
         client.run_action(name="peoplemesh", action="STATUS")
 
         resources = _container(mock_k8s)["resources"]
@@ -316,7 +322,7 @@ class TestRunAction:
     def test_action_without_secret_creates_no_secret(
         self, client: QuickstartsClient, mock_k8s: MagicMock
     ) -> None:
-        _namespace_exists(mock_k8s, RHOAILabels.managed_by_mcp_labels())
+        _namespace_exists(mock_k8s, _installed_labels("peoplemesh"))
         client.run_action(name="peoplemesh", action="STATUS")
         mock_k8s.core_v1.create_namespaced_secret.assert_not_called()
 
@@ -786,7 +792,7 @@ class TestNamespaceOwnership:
         self, client: QuickstartsClient, mock_k8s: MagicMock
     ) -> None:
         # get_namespace raises NotFoundError by default (namespace absent).
-        with pytest.raises(ValidationError, match="managed by this tool"):
+        with pytest.raises(ValidationError, match="installed quickstart 'peoplemesh'"):
             client.run_action(
                 name="peoplemesh",
                 action="UNINSTALL_DELETE_ALL",
@@ -798,7 +804,7 @@ class TestNamespaceOwnership:
         self, client: QuickstartsClient, mock_k8s: MagicMock
     ) -> None:
         _namespace_exists(mock_k8s, {"some": "label"})
-        with pytest.raises(ValidationError, match="managed by this tool"):
+        with pytest.raises(ValidationError, match="installed quickstart 'peoplemesh'"):
             client.run_action(
                 name="peoplemesh",
                 action="UNINSTALL_DELETE_ALL",
@@ -809,7 +815,7 @@ class TestNamespaceOwnership:
     def test_managed_action_allowed_on_managed_namespace(
         self, client: QuickstartsClient, mock_k8s: MagicMock
     ) -> None:
-        _namespace_exists(mock_k8s, RHOAILabels.managed_by_mcp_labels())
+        _namespace_exists(mock_k8s, _installed_labels("peoplemesh"))
         result = client.run_action(
             name="peoplemesh",
             action="UNINSTALL_DELETE_ALL",
@@ -817,6 +823,42 @@ class TestNamespaceOwnership:
         )
         assert result["action"] == "UNINSTALL_DELETE_ALL"
         mock_k8s.create.assert_called_once()
+
+    @pytest.mark.parametrize("action", ["STATUS", "UNINSTALL_DELETE_ALL"])
+    def test_managed_action_rejects_namespace_of_other_quickstart(
+        self, client: QuickstartsClient, mock_k8s: MagicMock, action: str
+    ) -> None:
+        # A namespace this tool installed a *different* quickstart into must not be
+        # handed to this quickstart's installer, which runs as cluster-admin.
+        _namespace_exists(mock_k8s, _installed_labels("maas-code-assistant"))
+        with pytest.raises(ValidationError, match="installed quickstart 'peoplemesh'") as exc:
+            client.run_action(name="peoplemesh", action=action, target_namespace="theirs")
+        # The message must not disclose which quickstart the namespace belongs to.
+        assert "maas-code-assistant" not in str(exc.value)
+        mock_k8s.create.assert_not_called()
+
+    def test_managed_action_rejects_namespace_without_quickstart_name(
+        self, client: QuickstartsClient, mock_k8s: MagicMock
+    ) -> None:
+        # managed-by alone is not enough: the namespace must name its quickstart.
+        _namespace_exists(mock_k8s, RHOAILabels.managed_by_mcp_labels())
+        with pytest.raises(ValidationError, match="installed quickstart 'peoplemesh'"):
+            client.run_action(
+                name="peoplemesh", action="UNINSTALL_DELETE_ALL", target_namespace="unnamed"
+            )
+        mock_k8s.create.assert_not_called()
+
+    @pytest.mark.parametrize("action", sorted(MANAGED_NAMESPACE_ACTIONS))
+    def test_every_managed_action_requires_matching_quickstart(
+        self, client: QuickstartsClient, mock_k8s: MagicMock, action: str
+    ) -> None:
+        # Covers the guarded actions the test manifest does not declare (UPGRADE,
+        # UNINSTALL_KEEP_DATA), which run_action would reject earlier as unsupported.
+        _namespace_exists(mock_k8s, _installed_labels("maas-code-assistant"))
+        with pytest.raises(ValidationError, match="installed quickstart 'peoplemesh'"):
+            client._check_namespace_for_action(action, "theirs", "peoplemesh")
+        _namespace_exists(mock_k8s, _installed_labels("peoplemesh"))
+        client._check_namespace_for_action(action, "ours", "peoplemesh")
 
     def test_install_records_target_namespace_label(
         self, client: QuickstartsClient, mock_k8s: MagicMock
@@ -976,6 +1018,7 @@ class TestInstallerLabeling:
         assert 'oc get namespace "$TARGET_NAMESPACE"' in script
         assert 'oc label namespace "$TARGET_NAMESPACE"' in script
         assert "app.kubernetes.io/managed-by=rhoai-mcp" in script
+        assert "quickstart.redhat.com/name=peoplemesh" in script
         assert "while ! label_ns; do sleep" in script
         assert "labeler=$!" in script
         # ...it starts before the installer runs, so a failed install still leaves
@@ -1009,7 +1052,7 @@ class TestInstallerLabeling:
     def test_non_labeling_action_uses_plain_command(
         self, client: QuickstartsClient, mock_k8s: MagicMock
     ) -> None:
-        _namespace_exists(mock_k8s, RHOAILabels.managed_by_mcp_labels())
+        _namespace_exists(mock_k8s, _installed_labels("peoplemesh"))
         client.run_action(name="peoplemesh", action="STATUS")
         # STATUS neither creates nor owns the namespace, so it runs the installer
         # command unwrapped.

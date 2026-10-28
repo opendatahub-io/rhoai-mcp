@@ -60,8 +60,9 @@ DESTRUCTIVE_ACTIONS = {"UNINSTALL_DELETE_ALL"}
 # so requires explicit confirmation, mirroring the project's delete_* tools.
 UNINSTALL_ACTION_PREFIX = "UNINSTALL_"
 
-# Actions permitted only on a namespace this tool already installed a quickstart
-# into, identified by the managed-by-mcp label on the namespace itself.
+# Actions permitted only on a namespace this tool already installed the *same*
+# quickstart into, identified by the managed-by-mcp and quickstart-name labels on
+# the namespace itself.
 MANAGED_NAMESPACE_ACTIONS = {
     "UNINSTALL_KEEP_DATA",
     "UNINSTALL_DELETE_ALL",
@@ -71,7 +72,8 @@ MANAGED_NAMESPACE_ACTIONS = {
 
 # Actions whose installer Job creates/owns the target namespace. For these the
 # Job command is wrapped with a background watcher that stamps the managed-by-mcp
-# label onto that namespace as soon as it exists (not only on success), so the
+# and quickstart-name labels onto that namespace as soon as it exists (not only on
+# success), so the
 # guarded actions above still recognise it as ours even if the install fails
 # partway. Because the label is written inside the Job, it does not depend on
 # anyone polling the Job's status afterwards.
@@ -199,7 +201,7 @@ class QuickstartsClient:
                 "target_namespace is required (quickstart declares no defaultNamespace)"
             )
         self._validate_namespace_name(ns)
-        self._check_namespace_for_action(action_upper, ns)
+        self._check_namespace_for_action(action_upper, ns, name)
 
         if action_upper == "UPGRADE" and not source_version:
             raise ValidationError("source_version is required for the UPGRADE action")
@@ -484,12 +486,13 @@ class QuickstartsClient:
                 "'kube-' are protected"
             )
 
-    def _check_namespace_for_action(self, action_upper: str, ns: str) -> None:
+    def _check_namespace_for_action(self, action_upper: str, ns: str, name: str) -> None:
         """Enforce per-action rules on whether the target namespace may exist.
 
         INSTALL creates the namespace, so it must not already exist. The
-        data-affecting actions may only touch a namespace this tool installed a
-        quickstart into (identified by the managed-by-mcp label).
+        data-affecting actions may only touch a namespace this tool installed the
+        same quickstart into (managed-by-mcp label plus a matching quickstart-name
+        label), so one quickstart's installer is never run against another's.
         """
         if action_upper == "INSTALL":
             if self._get_namespace_or_none(ns) is not None:
@@ -499,16 +502,17 @@ class QuickstartsClient:
                 )
         elif action_upper in MANAGED_NAMESPACE_ACTIONS:
             existing = self._get_namespace_or_none(ns)
-            managed = existing is not None and RHOAILabels.is_managed_by_mcp(
-                self._namespace_labels(existing)
+            labels = self._namespace_labels(existing) if existing is not None else {}
+            owned = (
+                RHOAILabels.is_managed_by_mcp(labels) and labels.get(QUICKSTART_NAME_LABEL) == name
             )
-            # One message for both "absent" and "not ours" so we never disclose
-            # whether an arbitrary namespace exists on the cluster.
-            if not managed:
+            # One message for "absent", "not ours" and "another quickstart's" so we
+            # never disclose whether a namespace exists or what is installed in it.
+            if not owned:
                 raise ValidationError(
-                    f"target namespace '{ns}' is not a quickstart namespace managed "
-                    f"by this tool; '{action_upper}' is only permitted on namespaces "
-                    "where this MCP server installed a quickstart"
+                    f"target namespace '{ns}' is not a namespace where this MCP server "
+                    f"installed quickstart '{name}'; '{action_upper}' is only permitted "
+                    "there"
                 )
 
     def _get_namespace_or_none(self, ns: str) -> Any:
@@ -606,8 +610,11 @@ class QuickstartsClient:
         }
         command = manifest.deployment.installer.command
         if action_upper in NAMESPACE_LABELING_ACTIONS:
-            # command is guaranteed present (validated in run_action).
-            container["command"] = self._installer_with_labeling(command or [])
+            # command is guaranteed present (validated in run_action). The name label
+            # recorded here is what the ownership check later compares against.
+            container["command"] = self._installer_with_labeling(
+                command or [], labels[QUICKSTART_NAME_LABEL]
+            )
         elif command:
             container["command"] = command
 
@@ -631,9 +638,10 @@ class QuickstartsClient:
         }
 
     @staticmethod
-    def _installer_with_labeling(command: list[str]) -> list[str]:
-        """Wrap the installer command so the target namespace is labeled as ours
-        as soon as it exists — not only after a successful install.
+    def _installer_with_labeling(command: list[str], name: str) -> list[str]:
+        """Wrap the installer command so the target namespace is labeled as ours,
+        and with the quickstart's name, as soon as it exists — not only after a
+        successful install.
 
         The installer creates the target namespace itself partway through its run.
         A background watcher stamps the managed-by-mcp label the moment that
@@ -645,10 +653,11 @@ class QuickstartsClient:
         installer's own exit code is preserved as the container result so the Job
         still reflects success or failure. The namespace is read from
         $TARGET_NAMESPACE (already validated to DNS-1123 characters), so it is
-        safe to reference in the shell.
+        safe to reference in the shell; the quickstart name is shell-quoted.
         """
         installer = " ".join(shlex.quote(part) for part in command)
-        label = f"{RHOAILabels.APP_KUBERNETES_MANAGED_BY}={RHOAILabels.MANAGED_BY_VALUE}"
+        managed = f"{RHOAILabels.APP_KUBERNETES_MANAGED_BY}={RHOAILabels.MANAGED_BY_VALUE}"
+        label = f"{managed} {shlex.quote(f'{QUICKSTART_NAME_LABEL}={name}')}"
         script = (
             "label_ns() {\n"
             '  oc get namespace "$TARGET_NAMESPACE" >/dev/null 2>&1 || return 1\n'

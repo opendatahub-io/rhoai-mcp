@@ -1,0 +1,58 @@
+# agentic-ci configuration for agentic runs on this repository.
+#
+# `sandbox:` is a repo overlay for the agentic-ci sandbox profile (see
+# https://opendatahub-io.github.io/agentic-ci/guides/sandbox-overlay/).
+# Pipelines such as autofix read it from the base branch before the agent
+# runs; the agent cannot change it (a post-agent gate blocks commits
+# touching .agentic-ci/). Overlays may open only the pypi, npm and goproxy
+# egress presets; anything wider is configured centrally by the pipeline.
+#
+# The sandbox image ships Python 3.12, which satisfies requires-python
+# >=3.11 and matches CI (ruff and mypy target py311; CI runs 3.12).
+# Setup installs the project and dev dependency group with uv; every
+# Makefile check target runs through `uv run`, so no extra tooling is
+# needed. The validate steps mirror what CI runs before a merge. Their
+# results are a report for the reviewer — the repo's own CI stays the
+# merge gate.
+
+sandbox:
+  egress:
+    - pypi
+
+  env:
+    # Use the image's Python; never fetch a uv-managed interpreter.
+    UV_PYTHON_DOWNLOADS: "never"
+
+  setup:
+    - name: project-deps
+      timeout: 900
+      run: uv sync --dev
+
+  validate:
+    - {name: lint, kind: lint, run: make lint, timeout: 600}
+    - {name: typecheck, kind: lint, run: make typecheck, timeout: 600}
+    - {name: unit-tests, kind: test, run: make test-unit, timeout: 1200}
+    # Mirror check-requirements-cpu.yml exactly: regenerate and compare
+    # with .github/scripts/check_requirements_drift.py, which tolerates
+    # patch-version drift by design (PR #137) — a plain git diff would
+    # report false drift whenever the lockfile is patch-ahead of the
+    # committed file.
+    - name: requirements-cpu-sync
+      kind: generated
+      run: cp requirements-cpu.txt requirements-cpu.committed.txt && make generate-requirements-cpu && python3 .github/scripts/check_requirements_drift.py requirements-cpu.committed.txt requirements-cpu.txt
+      timeout: 600
+
+  discard_before_download:
+    - requirements-cpu.committed.txt
+
+  skips:
+    - match: "make test-integration"
+      reason: "Requires a live OpenShift cluster with credentials; not reachable from the sandbox"
+    - match: "make eval"
+      reason: "The eval stack runs via docker-compose; no container runtime in the sandbox"
+    - match: "make eval-live"
+      reason: "Eval harness needs docker-compose services plus a live cluster"
+    - match: "make eval-up"
+      reason: "Builds and starts containers; no container runtime in the sandbox"
+    - match: "podman build"
+      reason: "Containerfile builds stay in CI (container-build.yml); no container runtime in the sandbox"

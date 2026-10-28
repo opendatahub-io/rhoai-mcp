@@ -51,6 +51,32 @@ class TestQuickstartPrompts:
         assert "get_quickstart_action_logs" in result
         assert "peoplemesh" in result
 
+    def test_prompt_install_requires_approval_and_confirm(self, mock_mcp: MagicMock) -> None:
+        # run_quickstart_action rejects INSTALL without confirm=True, so the
+        # guidance must say to pass it, and only after the user approves.
+        register_prompts(mock_mcp, MagicMock())
+        prompt = mock_mcp._registered_prompts["deploy-quickstart"]["function"]
+
+        result = prompt(quickstart="peoplemesh")
+
+        assert "confirm=True" in result
+        assert "approval" in result
+
+    def test_prompt_states_which_actions_need_dangerous_operations(
+        self, mock_mcp: MagicMock
+    ) -> None:
+        # Every cluster-changing action needs dangerous operations, not only
+        # UNINSTALL_DELETE_ALL; only CHECK_PRE_REQS and STATUS are exempt.
+        register_prompts(mock_mcp, MagicMock())
+        prompt = mock_mcp._registered_prompts["deploy-quickstart"]["function"]
+
+        result = prompt(quickstart="peoplemesh")
+
+        assert "INSTALL, UPGRADE and all UNINSTALL_* actions" in result
+        assert "dangerous operations" in result
+        assert "CHECK_PRE_REQS" in result and "STATUS" in result
+        assert "additionally destroys data and requires dangerous" not in result
+
     def test_prompt_handles_unknown_quickstart(self, mock_mcp: MagicMock) -> None:
         register_prompts(mock_mcp, MagicMock())
         prompt = mock_mcp._registered_prompts["deploy-quickstart"]["function"]

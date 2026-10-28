@@ -184,6 +184,9 @@ class TestSuggestTools:
         assert result["category"] == "quickstarts"
         assert "list_quickstarts" in result["workflow"]
         assert "run_quickstart_action" in result["workflow"]
+        # INSTALL is rejected without confirm=True and dangerous operations.
+        assert "confirm=True" in result["explanation"]
+        assert "dangerous operations" in result["explanation"]
 
     def test_suggest_unknown_intent_defaults_to_discovery(
         self, mock_mcp: MagicMock, mock_server: MagicMock

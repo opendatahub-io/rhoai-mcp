@@ -181,8 +181,9 @@ INTENT_PATTERNS = [
         "category": "quickstarts",
         "workflow": ["list_quickstarts", "get_quickstart_manifest", "run_quickstart_action"],
         "explanation": "Quickstart workflow: Use list_quickstarts() to browse the catalog, "
-        "get_quickstart_manifest() to inspect parameters and prerequisites, then "
-        "run_quickstart_action() with action='INSTALL' to deploy. Poll with "
+        "get_quickstart_manifest() to inspect parameters and prerequisites, then, "
+        "after user approval, run_quickstart_action(action='INSTALL', confirm=True) "
+        "to deploy (requires dangerous operations to be enabled). Poll with "
         "get_quickstart_action_status() and get_quickstart_action_logs().",
     },
 ]

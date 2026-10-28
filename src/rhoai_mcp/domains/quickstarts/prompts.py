@@ -71,12 +71,15 @@ def register_prompts(mcp: FastMCP, server: RHOAIServer) -> None:  # noqa: ARG001
    before running anything. For secret/password parameters (type "password"),
    always ask me explicitly — never auto-generate or guess a value.
 
-4. **Run the install** — Use `run_quickstart_action` with:
+4. **Run the install** — First summarise what will be deployed (quickstart,
+   version, target namespace, mode, and the non-secret parameter values) and
+   get my explicit approval. Only then use `run_quickstart_action` with:
    - name="{quickstart or "<chosen name>"}"
    - action="INSTALL"
    - mode="{mode}"
    - target_namespace as appropriate (empty to use the default)
    - parameters={{...the values collected in step 3...}}
+   - confirm=True (never set this without my approval)
    Note the returned `job_name` and `job_namespace` for polling.
 
 5. **Poll to completion** — Use `get_quickstart_action_status` with the returned
@@ -84,8 +87,11 @@ def register_prompts(mcp: FastMCP, server: RHOAIServer) -> None:  # noqa: ARG001
    `termination_message` and `result` in the status, and use
    `get_quickstart_action_logs` for the full installer output.
 
-**Teardown note:** UNINSTALL actions require `confirm=True`;
-`UNINSTALL_DELETE_ALL` additionally destroys data and requires dangerous
-operations to be enabled.
+**Note on cluster-changing actions:** INSTALL, UPGRADE and all UNINSTALL_* actions
+change cluster state. Each requires `confirm=True` after my approval, and
+dangerous operations must be enabled on the server; `UNINSTALL_DELETE_ALL` also
+permanently deletes data. `CHECK_PRE_REQS` and `STATUS` need neither. If the
+server reports that dangerous operations are disabled, tell me rather than
+retrying — it cannot be enabled from here.
 
 Please start with step 1 unless a quickstart is already chosen."""

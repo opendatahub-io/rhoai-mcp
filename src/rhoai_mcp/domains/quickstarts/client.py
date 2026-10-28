@@ -733,9 +733,15 @@ class QuickstartsClient:
         — the caller would see the wrong failure and the Job would be left orphaned
         with no params Secret. Any unexpected error is therefore logged and
         swallowed, like the expected ApiException.
+
+        Background propagation is requested explicitly: by default the API orphans
+        a batch/v1 Job's Pods, which would leave its stuck installer Pod behind
+        with no owner to garbage-collect it.
         """
         try:
-            self._k8s.get_resource(JOB_CRD).delete(name=job_name, namespace=namespace)
+            self._k8s.get_resource(JOB_CRD).delete(
+                name=job_name, namespace=namespace, propagation_policy="Background"
+            )
         except ApiException as exc:
             logger.warning("could not clean up job %s: %s", job_name, exc.reason)
         except Exception:

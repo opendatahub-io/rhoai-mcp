@@ -340,7 +340,11 @@ class TestRunAction:
                 parameters={"keycloak.realm.testUser.password": "s3cret"},
             )
 
-        mock_k8s.get_resource.return_value.delete.assert_called_once()
+        delete = mock_k8s.get_resource.return_value.delete
+        delete.assert_called_once()
+        # Deleting a batch/v1 Job orphans its Pods unless asked otherwise, which
+        # would leave the stuck installer Pod behind with no owner.
+        assert delete.call_args.kwargs["propagation_policy"] == "Background"
 
     def test_secret_failure_surfaces_even_if_cleanup_errors(
         self, client: QuickstartsClient, mock_k8s: MagicMock

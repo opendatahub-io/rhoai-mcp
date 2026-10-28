@@ -44,6 +44,10 @@ _INDEX_MEDIA_TYPES = {
 
 _CHALLENGE_PARAM_RE = re.compile(r'(\w+)="([^"]*)"')
 
+# The digest algorithms the OCI image spec registers, with their exact encoded
+# lengths (lowercase hex). Anything else hashlib happens to support is rejected.
+_DIGEST_RE = re.compile(r"sha256:[a-f0-9]{64}|sha512:[a-f0-9]{128}")
+
 
 def _is_digest(reference: str) -> bool:
     """Whether an OCI reference is a digest (``algo:hex``) rather than a tag.
@@ -59,15 +63,14 @@ def _verify_digest(content: bytes, digest: str) -> None:
     This is the integrity check that makes digest-pinning mean anything on the
     client side: nothing else recomputes the hash of what the registry returned,
     so any mismatch (tampering, corruption, a re-pushed tag resolved elsewhere)
-    must abort the fetch rather than hand back unverified bytes.
+    must abort the fetch rather than hand back unverified bytes. Only the
+    OCI-registered ``sha256`` and ``sha512`` algorithms are accepted; a weak or
+    malformed digest would make the check meaningless.
     """
+    if not _DIGEST_RE.fullmatch(digest):
+        raise OCIError(f"malformed or unsupported content digest {digest!r}")
     algo, _, expected = digest.partition(":")
-    if not algo or not expected:
-        raise OCIError(f"malformed content digest {digest!r}")
-    try:
-        hasher = hashlib.new(algo)
-    except ValueError:
-        raise OCIError(f"unsupported digest algorithm in {digest!r}")
+    hasher = hashlib.new(algo)
     hasher.update(content)
     actual = hasher.hexdigest()
     if actual != expected:

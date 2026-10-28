@@ -301,5 +301,26 @@ class TestDigestVerification:
         monkeypatch.setattr(oci_module.httpx, "Client", lambda *_a, **_k: fake)
 
         # "@sha256:" with no hex is a digest-shaped reference with an empty hash.
-        with pytest.raises(OCIError, match="malformed content digest"):
+        with pytest.raises(OCIError, match="malformed or unsupported content digest"):
             OCIArtifactClient().fetch_layer("quay.io/org/name@sha256:", MANIFEST_MEDIA_TYPE)
+
+    @pytest.mark.parametrize(
+        "digest",
+        [
+            # Algorithms hashlib supports but OCI does not register; md5 and sha1
+            # are collision-broken, so a matching hash would prove nothing.
+            pytest.param("md5:" + hashlib.md5(b"payload").hexdigest(), id="md5"),
+            pytest.param("sha1:" + hashlib.sha1(b"payload").hexdigest(), id="sha1"),
+            # shake_128 previously escaped as a TypeError instead of an OCIError.
+            pytest.param("shake_128:abcd", id="shake_128"),
+            pytest.param(_digest(b"payload").upper().replace("SHA256", "sha256"), id="uppercase"),
+            pytest.param(_digest(b"payload")[:-1], id="wrong-length"),
+        ],
+    )
+    def test_unsupported_or_malformed_digest_rejected(self, digest: str) -> None:
+        with pytest.raises(OCIError, match="malformed or unsupported content digest"):
+            oci_module._verify_digest(b"payload", digest)
+
+    def test_sha512_digest_accepted(self) -> None:
+        # sha512 is a registered OCI algorithm and must keep verifying.
+        oci_module._verify_digest(b"payload", "sha512:" + hashlib.sha512(b"payload").hexdigest())

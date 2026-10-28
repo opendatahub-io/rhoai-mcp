@@ -281,12 +281,18 @@ class QuickstartsClient:
         terminated ``exit_code`` and ``termination_message`` — the actual reason
         the agent needs to decide what to do next — plus the parsed ``result``
         when the message is JSON.
+
+        Only quickstart installer Jobs (carrying both quickstart labels) are
+        reported; any other Job raises the same NotFoundError as a missing one, so
+        this tool cannot be used to inspect unrelated Jobs.
         """
         job = self._k8s.get(JOB_CRD, job_name, namespace)
         data = job.to_dict() if hasattr(job, "to_dict") else dict(job)
         status = data.get("status") or {}
         meta = data.get("metadata") or {}
         labels = meta.get("labels") or {}
+        if not (labels.get(QUICKSTART_NAME_LABEL) and labels.get(QUICKSTART_ACTION_LABEL)):
+            raise NotFoundError(JOB_CRD.kind, job_name, namespace)
 
         succeeded = int(status.get("succeeded") or 0)
         failed = int(status.get("failed") or 0)
@@ -343,7 +349,7 @@ class QuickstartsClient:
         """
         try:
             pods = self._k8s.core_v1.list_namespaced_pod(
-                namespace=namespace, label_selector=f"job-name={job_name}"
+                namespace=namespace, label_selector=self._installer_pod_selector(job_name)
             ).items
         except ApiException as exc:
             logger.debug("could not read termination details for job %s: %s", job_name, exc)
@@ -358,6 +364,17 @@ class QuickstartsClient:
         if terminated is None:
             return None, None
         return getattr(terminated, "exit_code", None), getattr(terminated, "message", None)
+
+    @staticmethod
+    def _installer_pod_selector(job_name: str) -> str:
+        """Label selector for a quickstart installer Job's Pods.
+
+        Besides the Job name, the Pods must carry both quickstart labels (they
+        inherit them from the Job's pod template), so Pods belonging to unrelated
+        Jobs are never matched. The labels are matched by key only, which keeps
+        the log read free of a Job lookup and so of any extra RBAC.
+        """
+        return f"job-name={job_name},{QUICKSTART_NAME_LABEL},{QUICKSTART_ACTION_LABEL}"
 
     @staticmethod
     def _pod_creation_key(pod: Any) -> tuple[bool, Any]:
@@ -387,7 +404,7 @@ class QuickstartsClient:
         """Return logs from the installer pod for a Job."""
         try:
             pods = self._k8s.core_v1.list_namespaced_pod(
-                namespace=namespace, label_selector=f"job-name={job_name}"
+                namespace=namespace, label_selector=self._installer_pod_selector(job_name)
             ).items
         except ApiException as exc:
             if exc.status == 404:

@@ -13,6 +13,7 @@ from rhoai_mcp.domains.quickstarts.client import (
     JOB_CRD,
     MANAGED_NAMESPACE_ACTIONS,
     NAMESPACE_LABELING_ACTIONS,
+    QUICKSTART_ACTION_LABEL,
     QUICKSTART_NAME_LABEL,
     QUICKSTART_TARGET_NS_LABEL,
     UNINSTALL_ACTION_PREFIX,
@@ -124,7 +125,7 @@ def _rbac_k8s(
 
     def get(_crd: Any, _name: str, _ns: str) -> Any:
         gate(("batch", "jobs", "get"))
-        return SimpleNamespace(to_dict=lambda: (job_dict or {}))
+        return SimpleNamespace(to_dict=lambda: job_dict or {})
 
     def get_namespace(ns: str) -> Any:
         gate(("", "namespaces", "get"))
@@ -161,16 +162,22 @@ def _declared(tool_name: str) -> set[tuple[str, str, str]]:
     """The exact RBAC triples a tool declares in permissions.py."""
     from rhoai_mcp.domains.permissions import QUICKSTARTS_PERMISSIONS
 
-    return {
-        (p["apiGroup"], p["resource"], p["verb"])
-        for p in QUICKSTARTS_PERMISSIONS[tool_name]
-    }
+    return {(p["apiGroup"], p["resource"], p["verb"]) for p in QUICKSTARTS_PERMISSIONS[tool_name]}
+
+
+# Labels every quickstart installer Job (and its Pods) carries.
+_QS_JOB_LABELS = {QUICKSTART_NAME_LABEL: "peoplemesh", QUICKSTART_ACTION_LABEL: "install"}
+
+
+def _installer_selector(job_name: str) -> str:
+    """The label selector the client uses to find a quickstart Job's Pods."""
+    return f"job-name={job_name},{QUICKSTART_NAME_LABEL},{QUICKSTART_ACTION_LABEL}"
 
 
 def _failed_job_with_pod() -> tuple[dict[str, Any], Any]:
     """A failed Job plus the installer pod carrying the real exit code/reason."""
     job_dict = {
-        "metadata": {"uid": "u1", "labels": {QUICKSTART_NAME_LABEL: "peoplemesh"}},
+        "metadata": {"uid": "u1", "labels": dict(_QS_JOB_LABELS)},
         "status": {"failed": 1, "conditions": [{"type": "Failed", "status": "True"}]},
     }
     terminated = SimpleNamespace(exit_code=2, message='{"status": "prerequisites_failed"}')
@@ -476,7 +483,12 @@ class TestStatusAndLogs:
         # The Job label stores the action in lower case; status must report it in
         # the same upper-case form run_action returns, so callers can compare them.
         mock_k8s.get.return_value.to_dict.return_value = {
-            "metadata": {"labels": {"quickstart.redhat.com/action": "check_pre_reqs"}},
+            "metadata": {
+                "labels": {
+                    QUICKSTART_NAME_LABEL: "peoplemesh",
+                    QUICKSTART_ACTION_LABEL: "check_pre_reqs",
+                }
+            },
             "status": {"succeeded": 1},
         }
         mock_k8s.core_v1.list_namespaced_pod.return_value.items = []
@@ -491,7 +503,7 @@ class TestStatusAndLogs:
         # A prerequisites failure: Job counters say "Failed", but the installer's
         # termination-log carries the real reason and a non-zero exit code.
         mock_k8s.get.return_value.to_dict.return_value = {
-            "metadata": {"uid": "u1", "labels": {QUICKSTART_NAME_LABEL: "peoplemesh"}},
+            "metadata": {"uid": "u1", "labels": dict(_QS_JOB_LABELS)},
             "status": {"failed": 1, "conditions": [{"type": "Failed", "status": "True"}]},
         }
         message = '{"status": "prerequisites_failed", "missing": ["gpu-operator"]}'
@@ -516,7 +528,7 @@ class TestStatusAndLogs:
         # Still running (or pod already GC'd): the richer detail degrades to None
         # rather than failing the status call.
         mock_k8s.get.return_value.to_dict.return_value = {
-            "metadata": {},
+            "metadata": {"labels": dict(_QS_JOB_LABELS)},
             "status": {"active": 1},
         }
         mock_k8s.core_v1.list_namespaced_pod.return_value.items = []
@@ -527,6 +539,45 @@ class TestStatusAndLogs:
         assert status["exit_code"] is None
         assert status["termination_message"] is None
         assert status["result"] is None
+
+    @pytest.mark.parametrize(
+        "labels",
+        [
+            pytest.param({QUICKSTART_ACTION_LABEL: "install"}, id="missing-name"),
+            pytest.param({QUICKSTART_NAME_LABEL: "peoplemesh"}, id="missing-action"),
+            pytest.param({}, id="unlabelled"),
+        ],
+    )
+    def test_get_action_status_rejects_non_quickstart_job(
+        self, client: QuickstartsClient, mock_k8s: MagicMock, labels: dict[str, str]
+    ) -> None:
+        # A Job without both quickstart labels is not one of ours. It is reported
+        # exactly like a missing Job, so callers cannot probe unrelated Jobs.
+        mock_k8s.get.return_value.to_dict.return_value = {
+            "metadata": {"labels": labels},
+            "status": {"succeeded": 1},
+        }
+
+        with pytest.raises(NotFoundError) as exc_info:
+            client.get_action_status("some-job", "openshift-quickstarts")
+
+        assert str(exc_info.value) == str(NotFoundError("Job", "some-job", "openshift-quickstarts"))
+        mock_k8s.core_v1.list_namespaced_pod.assert_not_called()
+
+    def test_get_action_status_selects_only_quickstart_pods(
+        self, client: QuickstartsClient, mock_k8s: MagicMock
+    ) -> None:
+        mock_k8s.get.return_value.to_dict.return_value = {
+            "metadata": {"labels": dict(_QS_JOB_LABELS)},
+            "status": {"succeeded": 1},
+        }
+        mock_k8s.core_v1.list_namespaced_pod.return_value.items = []
+
+        client.get_action_status("qs-x", "openshift-quickstarts")
+
+        mock_k8s.core_v1.list_namespaced_pod.assert_called_once_with(
+            namespace="openshift-quickstarts", label_selector=_installer_selector("qs-x")
+        )
 
     def test_get_action_logs(self, client: QuickstartsClient, mock_k8s: MagicMock) -> None:
         pod = MagicMock()
@@ -541,7 +592,7 @@ class TestStatusAndLogs:
         assert logs["logs"] == "installer log output"
         mock_k8s.core_v1.list_namespaced_pod.assert_called_once_with(
             namespace="openshift-quickstarts",
-            label_selector="job-name=qs-peoplemesh-install-abc",
+            label_selector=_installer_selector("qs-peoplemesh-install-abc"),
         )
 
     def test_get_action_logs_no_pods(self, client: QuickstartsClient, mock_k8s: MagicMock) -> None:
@@ -693,9 +744,7 @@ class TestStatusAndLogs:
         same drift the status path was vulnerable to.
         """
         declared = _declared("get_quickstart_action_logs")
-        pod = SimpleNamespace(
-            metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0")
-        )
+        pod = SimpleNamespace(metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0"))
         k8s = _rbac_k8s(declared, pods=[pod], pod_log="installer output")
         client = QuickstartsClient(k8s, mock_config, oci=mock_oci)
 
@@ -715,9 +764,7 @@ class TestStatusAndLogs:
         prober what they lack.
         """
         declared = {("", "pods", "list")}  # pods/log:get withheld
-        pod = SimpleNamespace(
-            metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0")
-        )
+        pod = SimpleNamespace(metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0"))
         k8s = _rbac_k8s(declared, pods=[pod])
         client = QuickstartsClient(k8s, mock_config, oci=mock_oci)
 

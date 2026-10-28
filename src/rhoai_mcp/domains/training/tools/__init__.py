@@ -12,12 +12,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
+def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register domain-specific training tools with the MCP server.
 
     This function delegates to the individual tool submodules to register
@@ -25,7 +25,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
     registered separately via the composites registry.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The MCPServer instance.
         server: The RHOAIServer instance providing configuration and K8s access.
     """
     from rhoai_mcp.domains.training.tools import (

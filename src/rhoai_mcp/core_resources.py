@@ -6,14 +6,14 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from rhoai_mcp.server import RHOAIServer
 
 logger = logging.getLogger(__name__)
 
 
-def register_core_resources(mcp: FastMCP, server: RHOAIServer) -> None:
+def register_core_resources(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register core MCP resources for cluster information."""
     from rhoai_mcp.clients.base import CRDs
 

@@ -22,7 +22,7 @@ from rhoai_mcp.hooks import hookimpl
 from rhoai_mcp.plugin import BasePlugin, PluginMetadata
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from rhoai_mcp.clients.base import CRDDefinition
     from rhoai_mcp.server import RHOAIServer
@@ -43,13 +43,13 @@ class ProjectsPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.projects.tools import register_tools
 
         register_tools(mcp, server)
 
     @hookimpl
-    def rhoai_register_resources(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_resources(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.projects.resources import register_resources
 
         register_resources(mcp, server)
@@ -78,7 +78,7 @@ class NotebooksPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.notebooks.tools import register_tools
 
         register_tools(mcp, server)
@@ -109,7 +109,7 @@ class InferencePlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.inference.tools import register_tools
 
         register_tools(mcp, server)
@@ -144,7 +144,7 @@ class PipelinesPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.pipelines.tools import register_tools
 
         register_tools(mcp, server)
@@ -175,7 +175,7 @@ class ConnectionsPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.connections.tools import register_tools
 
         register_tools(mcp, server)
@@ -204,7 +204,7 @@ class StoragePlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.storage.tools import register_tools
 
         register_tools(mcp, server)
@@ -233,7 +233,7 @@ class TrainingPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.training.tools import register_tools
 
         register_tools(mcp, server)
@@ -269,7 +269,7 @@ class PromptsPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_prompts(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_prompts(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.prompts.prompts import register_prompts
 
         register_prompts(mcp, server)
@@ -302,7 +302,7 @@ class ModelRegistryPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.model_registry.tools import register_tools
 
         register_tools(mcp, server)
@@ -381,7 +381,7 @@ class ExamplePlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains._example.tools import register_tools
 
         register_tools(mcp, server)

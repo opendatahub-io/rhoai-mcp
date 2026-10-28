@@ -11,7 +11,7 @@ rhoai-mcp/
 │       ├── __init__.py
 │       ├── __main__.py       # CLI entry point
 │       ├── config.py         # Configuration
-│       ├── server.py         # FastMCP server
+│       ├── server.py         # MCP server
 │       ├── plugin.py         # Plugin protocol
 │       ├── hooks.py          # Pluggy hook specifications
 │       ├── plugin_manager.py # Plugin lifecycle management

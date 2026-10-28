@@ -3,7 +3,7 @@
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
@@ -192,7 +192,7 @@ def _filter_tools_by_check(
     return [t for t in tool_names if t in allowed or t not in governed]
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register meta tools with the MCP server."""
 
     @mcp.tool()

@@ -205,7 +205,7 @@ class {DOMAIN_CLASS}Client:
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.{DOMAIN_NAME}.client import {DOMAIN_CLASS}Client
 from rhoai_mcp.utils.response import PaginatedResponse, paginate
@@ -214,7 +214,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register {DOMAIN_NAME} tools with the MCP server."""
 
     @mcp.tool()
@@ -339,7 +339,7 @@ Optional -- only needed if your domain exposes MCP resources
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.{DOMAIN_NAME}.client import {DOMAIN_CLASS}Client
 
@@ -347,7 +347,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_resources(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register {DOMAIN_NAME} MCP resources."""
 
     @mcp.resource("rhoai://{DOMAIN_NAME}/{namespace}/status")
@@ -514,7 +514,7 @@ class TestGet{RESOURCE_CLASS}:
 
 from unittest.mock import MagicMock
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.{DOMAIN_NAME}.tools import register_tools
 
@@ -524,7 +524,7 @@ class TestRegisterTools:
 
     def test_registers_expected_tools(self) -> None:
         """register_tools should add list and get tools."""
-        mcp = FastMCP("test")
+        mcp = MCPServer("test")
         server = MagicMock()
         register_tools(mcp, server)
 
@@ -569,13 +569,13 @@ class {RESOURCE_CLASS}Summary(BaseModel):
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register {DOMAIN_NAME} composite tools with the MCP server."""
 
     @mcp.tool()
@@ -630,7 +630,7 @@ Create these files under `tests/composites/{DOMAIN_NAME}/`:
 
 from unittest.mock import MagicMock
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.composites.{DOMAIN_NAME}.tools import register_tools
 
@@ -640,7 +640,7 @@ class TestRegisterTools:
 
     def test_registers_expected_tools(self) -> None:
         """register_tools should add the summary tool."""
-        mcp = FastMCP("test")
+        mcp = MCPServer("test")
         server = MagicMock()
         register_tools(mcp, server)
 
@@ -679,7 +679,7 @@ class {DOMAIN_CLASS}Plugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.{DOMAIN_NAME}.tools import register_tools
 
         register_tools(mcp, server)
@@ -705,7 +705,7 @@ If the domain has MCP resources, also add:
 
 ```python
     @hookimpl
-    def rhoai_register_resources(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_resources(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.domains.{DOMAIN_NAME}.resources import register_resources
 
         register_resources(mcp, server)
@@ -737,7 +737,7 @@ class {DOMAIN_CLASS}CompositesPlugin(BasePlugin):
         )
 
     @hookimpl
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         from rhoai_mcp.composites.{DOMAIN_NAME}.tools import register_tools
 
         register_tools(mcp, server)

@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.projects.client import ProjectClient
 
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_resources(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register project-level MCP resources."""
 
     @mcp.resource("rhoai://projects/{name}/status")

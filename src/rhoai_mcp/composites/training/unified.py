@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.cluster.client import ClusterClient
 from rhoai_mcp.domains.training.client import TrainingClient
@@ -47,7 +47,7 @@ TrainingAction = Literal[
 ]
 
 
-def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
+def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register the unified training tool with the MCP server."""
 
     @mcp.tool()

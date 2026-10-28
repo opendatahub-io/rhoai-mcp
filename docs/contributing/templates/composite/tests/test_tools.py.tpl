@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.composites.{{DOMAIN_NAME}}.tools import register_tools
 
@@ -12,7 +12,7 @@ class TestRegisterTools:
 
     def test_registers_expected_tools(self) -> None:
         """register_tools should add the summary tool."""
-        mcp = FastMCP("test")
+        mcp = MCPServer("test")
         server = MagicMock()
         register_tools(mcp, server)
 

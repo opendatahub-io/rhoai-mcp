@@ -354,6 +354,24 @@ class TestRunAction:
 
         mock_k8s.get_resource.return_value.delete.assert_called_once()
 
+    def test_job_without_uid_refuses_unowned_secret(
+        self, client: QuickstartsClient, mock_k8s: MagicMock
+    ) -> None:
+        # Without the Job's UID the params Secret cannot be owned by the Job, so it
+        # would never be garbage-collected and its plaintext credentials would
+        # persist. The action must fail closed: no Secret, and the Job removed.
+        mock_k8s.create.return_value.to_dict.return_value = {"metadata": {}}
+
+        with pytest.raises(RHOAIError, match="unowned parameters Secret"):
+            client.run_action(
+                name="peoplemesh",
+                action="install",
+                parameters={"keycloak.realm.testUser.password": "s3cret"},
+            )
+
+        mock_k8s.core_v1.create_namespaced_secret.assert_not_called()
+        mock_k8s.get_resource.return_value.delete.assert_called_once()
+
     def test_declared_permissions_cover_install_code_path(
         self, mock_config: SimpleNamespace, mock_oci: MagicMock
     ) -> None:
@@ -888,6 +906,33 @@ class TestSupplyChainAllowlist:
             client.get_registry()
         assert str(exc.value) == INVALID_OPERATION_MESSAGE
         oci.fetch_layer.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "manifest_repo",
+        [
+            # ".." passes a plain prefix check, but the HTTP client collapses it, so
+            # the fetch would actually hit quay.io/evil/peoplemesh-manifest.
+            pytest.param("quay.io/rh-ai-quickstart/../evil/peoplemesh-manifest", id="dot-dot"),
+            pytest.param("quay.io/rh-ai-quickstart/%2e%2e/evil/manifest", id="percent-encoded"),
+            pytest.param("quay.io/rh-ai-quickstart/PeopleMesh-Manifest", id="uppercase"),
+            pytest.param("quay.io/rh-ai-quickstart//peoplemesh-manifest", id="empty-segment"),
+        ],
+    )
+    def test_invalid_repository_name_blocked(
+        self, mock_k8s: MagicMock, mock_config: SimpleNamespace, manifest_repo: str
+    ) -> None:
+        # A repository name outside the OCI distribution grammar is never treated
+        # as an allowlist match, even when it starts with an allowed prefix.
+        registry = REGISTRY_YAML.replace(
+            b'manifestRepo: "quay.io/rh-ai-quickstart/peoplemesh-manifest"',
+            f'manifestRepo: "{manifest_repo}"'.encode(),
+        )
+        client, oci = self._client_with(mock_k8s, mock_config, registry_yaml=registry)
+        with pytest.raises(ValidationError) as exc:
+            client.get_manifest("peoplemesh")
+        assert str(exc.value) == INVALID_OPERATION_MESSAGE
+        # The registry fetch happened; the manifest fetch must not have.
+        oci.fetch_layer.assert_called_once()
 
     def test_unparseable_ref_blocked(
         self, mock_k8s: MagicMock, mock_config: SimpleNamespace

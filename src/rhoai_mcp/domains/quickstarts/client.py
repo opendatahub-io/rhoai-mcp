@@ -91,6 +91,12 @@ _MAX_NAME_LEN = 63
 _MAX_NAMESPACE_LEN = 63
 # Kubernetes namespaces must be a DNS-1123 label.
 _NAMESPACE_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+# OCI distribution-spec repository name: lowercase path components joined by
+# '.', '_', '__' or '-'. Rejects '..' and URL-significant characters, which the
+# HTTP client would otherwise resolve to a path outside an allowlisted prefix.
+_OCI_REPO_RE = re.compile(
+    r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*"
+)
 
 
 def _stringify(value: Any) -> str:
@@ -426,14 +432,17 @@ class QuickstartsClient:
         and run as cluster-admin. Only references whose ``registry/repository``
         falls under an allowlisted prefix are permitted. Matching is on whole path
         segments (trailing-slash boundary), so a sibling namespace such as
-        ``quay.io/rh-ai-quickstart-evil/`` cannot pass by shared prefix. Any
-        rejection surfaces a generic message and logs the real reference
-        server-side only.
+        ``quay.io/rh-ai-quickstart-evil/`` cannot pass by shared prefix, and a
+        repository name outside the OCI grammar (e.g. containing ``..``) is never a
+        match. Any rejection surfaces a generic message and logs the real
+        reference server-side only.
         """
         try:
             parsed = parse_ref(ref)
-            candidate = f"{parsed.registry}/{parsed.repository}"
+            candidate: str | None = f"{parsed.registry}/{parsed.repository}"
         except OCIError:
+            candidate = None
+        if candidate is not None and not _OCI_REPO_RE.fullmatch(parsed.repository):
             candidate = None
 
         if candidate is not None:
@@ -672,13 +681,19 @@ class QuickstartsClient:
         Job is deleted so it does not linger unable to start.
         """
         uid = self._resource_uid(created_job)
+        if not uid:
+            # Without the Job's UID the Secret can't be owned by it, so it would
+            # outlive the Job with plaintext parameters. Fail closed instead.
+            self._delete_job_quietly(job_name, namespace)
+            raise RHOAIError(
+                f"could not determine UID of job '{job_name}'; refusing to create an "
+                "unowned parameters Secret"
+            )
         metadata: dict[str, Any] = {
             "name": secret_name,
             "namespace": namespace,
             "labels": labels,
-        }
-        if uid:
-            metadata["ownerReferences"] = [
+            "ownerReferences": [
                 {
                     "apiVersion": "batch/v1",
                     "kind": "Job",
@@ -687,7 +702,8 @@ class QuickstartsClient:
                     "controller": True,
                     "blockOwnerDeletion": True,
                 }
-            ]
+            ],
+        }
         body = {
             "apiVersion": "v1",
             "kind": "Secret",

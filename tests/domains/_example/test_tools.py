@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains._example.tools import register_tools
 
@@ -12,7 +12,7 @@ class TestRegisterTools:
 
     def test_registers_list_and_get(self) -> None:
         """register_tools should add list_example_items and get_example_item."""
-        mcp = FastMCP("test")
+        mcp = MCPServer("test")
         server = MagicMock()
         register_tools(mcp, server)
 
@@ -26,7 +26,7 @@ class TestListExampleItems:
 
     async def test_returns_paginated_response(self) -> None:
         """Tool returns paginated response with items."""
-        mcp = FastMCP("test")
+        mcp = MCPServer("test")
         server = MagicMock()
         server.config.max_list_limit = 100
         server.config.default_list_limit = None
@@ -47,7 +47,7 @@ class TestListExampleItems:
 
         # Call the tool via the MCP tool manager
         result = await mcp._tool_manager.call_tool("list_example_items", {"namespace": "ns"})
-        # call_tool returns the dict directly in this FastMCP version
+        # call_tool returns the dict directly in this MCPServer version
         assert result["total"] == 1
         assert len(result["items"]) == 1
         assert result["items"][0]["name"] == "item-1"
@@ -58,7 +58,7 @@ class TestGetExampleItem:
 
     async def test_returns_single_item(self) -> None:
         """Tool returns single example item details."""
-        mcp = FastMCP("test")
+        mcp = MCPServer("test")
         server = MagicMock()
         server.k8s = MagicMock()
 

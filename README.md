@@ -26,7 +26,7 @@ An MCP (Model Context Protocol) server that enables AI agents to interact with R
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Runtime** | Python 3.11+ | Core language |
-| **MCP Framework** | FastMCP 1.0+ | Model Context Protocol server |
+| **MCP Framework** | MCPServer 2.0+ | Model Context Protocol server |
 | **Kubernetes Client** | kubernetes-python 28.1+ | Cluster API interactions |
 | **Data Validation** | Pydantic 2.0+ | Type-safe models and settings |
 | **HTTP Client** | httpx 0.27+ | Async HTTP requests |
@@ -810,7 +810,7 @@ uv run mypy src/rhoai_mcp
 ┌─────────────────────────────────────────────────────────────────┐
 │                MCP Transport Layer (stdio/SSE/HTTP)             │
 ├─────────────────────────────────────────────────────────────────┤
-│  FastMCP Server (server.py)                                     │
+│  MCPServer (server.py)                                            │
 │  - Tool registration     - Resource registration                │
 │  - Prompt registration   - Lifecycle management                 │
 ├───────────────────┬─────────────────────┬───────────────────────┤

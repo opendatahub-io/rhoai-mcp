@@ -138,7 +138,7 @@ def mock_server(mock_k8s_client: MagicMock) -> MagicMock:
 
 @pytest.fixture
 def mock_mcp() -> MagicMock:
-    """Create a mock FastMCP server that captures tool registrations."""
+    """Create a mock MCPServer that captures tool registrations."""
     mock = MagicMock()
     registered_tools = {}
 

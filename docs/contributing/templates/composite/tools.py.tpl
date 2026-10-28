@@ -2,13 +2,13 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register {{DOMAIN_NAME}} composite tools with the MCP server."""
 
     @mcp.tool()

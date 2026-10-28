@@ -10,7 +10,7 @@ import pytest
 
 @pytest.fixture
 def mock_mcp() -> MagicMock:
-    """Create a mock FastMCP that captures prompt registrations.
+    """Create a mock MCPServer that captures prompt registrations.
 
     The mock captures all @mcp.prompt() decorated functions so tests
     can verify prompts were registered and call them directly.

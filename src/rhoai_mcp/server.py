@@ -1,4 +1,4 @@
-"""FastMCP server definition for RHOAI with pluggy-based plugin system."""
+"""MCP server definition for RHOAI with pluggy-based plugin system."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic import SecretStr
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -71,7 +71,7 @@ class RHOAIServer:
     def __init__(self, config: RHOAIConfig | None = None) -> None:
         self._config = config or get_config()
         self._k8s_client: K8sClient | None = None
-        self._mcp: FastMCP | None = None
+        self._mcp: MCPServer | None = None
         self._plugin_manager: PluginManager | None = None
 
     @property
@@ -118,7 +118,7 @@ class RHOAIServer:
         return self._k8s_client
 
     @property
-    def mcp(self) -> FastMCP:
+    def mcp(self) -> MCPServer:
         """Get the MCP server instance.
 
         Raises:
@@ -227,7 +227,7 @@ class RHOAIServer:
         """Create the lifespan context manager for MCP sessions.
 
         Note: K8s connection is established eagerly in create_mcp(), not here.
-        FastMCP's lifespan runs per MCP client session (inside Server.run()),
+        MCPServer's lifespan runs per MCP client session (inside Server.run()),
         not at ASGI app startup. Putting K8s connect here would block the
         /health endpoint until the first MCP client connects.
         """
@@ -278,8 +278,8 @@ class RHOAIServer:
             self._k8s_client = None
         logger.info("RHOAI MCP server shut down")
 
-    def create_mcp(self) -> FastMCP:
-        """Create and configure the FastMCP server."""
+    def create_mcp(self) -> MCPServer:
+        """Create and configure the MCPServer."""
         # Create plugin manager
         self._plugin_manager = PluginManager()
 
@@ -297,7 +297,7 @@ class RHOAIServer:
         self.startup()
 
         # Create MCP server with lifespan
-        mcp = FastMCP(
+        mcp = MCPServer(
             name="rhoai-mcp",
             instructions="MCP server for Red Hat OpenShift AI - enables AI agents to "
             "interact with RHOAI environments including workbenches, "
@@ -327,7 +327,7 @@ class RHOAIServer:
 
         return mcp
 
-    def _setup_auth(self, mcp: FastMCP) -> None:
+    def _setup_auth(self, mcp: MCPServer) -> None:
         """Configure token validation middleware and metadata endpoint."""
         from rhoai_mcp.auth.metadata import build_protected_resource_metadata
         from rhoai_mcp.auth.oidc import OIDCValidator
@@ -421,11 +421,11 @@ class RHOAIServer:
 
         logger.info("Authentication enabled")
 
-    def _install_tool_filtering(self, mcp: FastMCP) -> None:
+    def _install_tool_filtering(self, mcp: MCPServer) -> None:
         """Patch lowlevel request handlers to enforce per-user RBAC filtering.
 
-        FastMCP registers protocol handlers via closures at setup time.
-        Monkey-patching methods on the FastMCP instance has no effect because
+        MCPServer registers protocol handlers via closures at setup time.
+        Monkey-patching methods on the MCPServer instance has no effect because
         the lowlevel server's request_handlers dict still holds the original
         closures. We must wrap the handlers in that dict directly.
         """
@@ -503,13 +503,13 @@ class RHOAIServer:
         lowlevel.request_handlers[mcp_types.CallToolRequest] = filtered_call_handler
         logger.info("Tool-level RBAC filtering installed (request_handlers patched)")
 
-    def _register_core_resources(self, mcp: FastMCP) -> None:
+    def _register_core_resources(self, mcp: MCPServer) -> None:
         """Register core MCP resources for cluster information."""
         from rhoai_mcp.core_resources import register_core_resources
 
         register_core_resources(mcp, self)
 
-    def _register_health_endpoint(self, mcp: FastMCP) -> None:
+    def _register_health_endpoint(self, mcp: MCPServer) -> None:
         """Register /health endpoint for Kubernetes liveness/readiness probes."""
 
         @mcp.custom_route("/health", methods=["GET"])
@@ -556,7 +556,7 @@ def get_server() -> RHOAIServer:
     return _server
 
 
-def create_server(config: RHOAIConfig | None = None) -> FastMCP:
+def create_server(config: RHOAIConfig | None = None) -> MCPServer:
     """Create and return the MCP server instance.
 
     This is the main entry point for creating the server.

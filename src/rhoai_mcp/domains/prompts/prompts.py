@@ -9,16 +9,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_prompts(mcp: FastMCP, server: RHOAIServer) -> None:
+def register_prompts(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register all prompts with the MCP server.
 
     Args:
-        mcp: The FastMCP server instance to register prompts with.
+        mcp: The MCPServer instance to register prompts with.
         server: The RHOAI server instance for accessing configuration.
     """
     from rhoai_mcp.domains.prompts import (

@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from starlette.testclient import TestClient
 
 from rhoai_mcp.server import RHOAIServer
@@ -16,7 +16,7 @@ from rhoai_mcp.server import RHOAIServer
 def health_client() -> Generator[tuple[RHOAIServer, TestClient], Any, None]:
     """Create a server + MCP wired for health-endpoint testing."""
     server = RHOAIServer()
-    mcp = FastMCP(name="test-server")
+    mcp = MCPServer(name="test-server")
     server._mcp = mcp
     server._register_health_endpoint(mcp)
     app = mcp.streamable_http_app()

@@ -14,7 +14,7 @@ class TestMonitoringTools:
 
     @pytest.fixture
     def mock_mcp(self) -> MagicMock:
-        """Create a mock FastMCP server."""
+        """Create a mock MCPServer."""
         mock = MagicMock()
         mock.tool = MagicMock(return_value=lambda f: f)
         return mock

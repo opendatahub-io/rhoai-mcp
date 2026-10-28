@@ -13,7 +13,7 @@ from rhoai_mcp.config import PlannerMode
 
 
 def _make_mock_mcp() -> MagicMock:
-    """Create a mock FastMCP server that captures tool registrations."""
+    """Create a mock MCPServer that captures tool registrations."""
     mock = MagicMock()
     registered_tools: dict = {}
     registered_async_tools: dict = {}

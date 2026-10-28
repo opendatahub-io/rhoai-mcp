@@ -195,7 +195,7 @@ def main() -> int:
 
     # Create and run server
     # Run with appropriate transport
-    # Note: Host/port are set via RHOAI_MCP_HOST/PORT env vars which FastMCP reads
+    # Note: Host/port are set via RHOAI_MCP_HOST/PORT env vars which MCPServer reads
     import os
 
     from rhoai_mcp.server import create_server, get_server

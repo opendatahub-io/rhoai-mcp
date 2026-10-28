@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pluggy
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from rhoai_mcp.clients.base import CRDDefinition
     from rhoai_mcp.plugin import PluginMetadata
@@ -47,38 +47,38 @@ class RHOAIMCPHookSpec:
         raise NotImplementedError
 
     @hookspec
-    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Register MCP tools provided by this plugin.
 
         This hook is called during server startup to register all
         tools (functions) that this plugin provides.
 
         Args:
-            mcp: The FastMCP server instance to register tools with.
+            mcp: The MCPServer instance to register tools with.
             server: The RHOAI server instance for accessing K8s client and config.
         """
 
     @hookspec
-    def rhoai_register_resources(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_resources(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Register MCP resources provided by this plugin.
 
         This hook is called during server startup to register all
         resources (data endpoints) that this plugin provides.
 
         Args:
-            mcp: The FastMCP server instance to register resources with.
+            mcp: The MCPServer instance to register resources with.
             server: The RHOAI server instance for accessing K8s client and config.
         """
 
     @hookspec
-    def rhoai_register_prompts(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def rhoai_register_prompts(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Register MCP prompts provided by this plugin.
 
         This hook is called during server startup to register all
         prompts (workflow guidance templates) that this plugin provides.
 
         Args:
-            mcp: The FastMCP server instance to register prompts with.
+            mcp: The MCPServer instance to register prompts with.
             server: The RHOAI server instance for accessing K8s client and config.
         """
 

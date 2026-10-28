@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.composites.meta.tools import TOOL_CATEGORIES
 
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:  # noqa: ARG001
+def register_resources(mcp: MCPServer, server: "RHOAIServer") -> None:  # noqa: ARG001
     """Register meta resources with the MCP server."""
 
     @mcp.resource("rhoai://tools/categories")

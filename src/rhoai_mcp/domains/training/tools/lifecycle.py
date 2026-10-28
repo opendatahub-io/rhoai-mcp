@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.models import TrainJobStatus
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
+def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register training lifecycle tools with the MCP server."""
 
     @mcp.tool()

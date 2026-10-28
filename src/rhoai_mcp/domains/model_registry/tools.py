@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.model_registry.benchmarks import (
     BenchmarkExtractor,
@@ -94,7 +94,7 @@ def _create_cached_registry_discovery(
     )
 
 
-def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register Model Registry tools with the MCP server."""
 
     async def _get_api_type() -> tuple[str, str, bool]:

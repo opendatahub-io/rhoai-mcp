@@ -195,13 +195,7 @@ def main() -> int:
 
     # Create and run server
     # Run with appropriate transport
-    # Note: Host/port are set via RHOAI_MCP_HOST/PORT env vars which MCPServer reads
-    import os
-
     from rhoai_mcp.server import create_server, get_server
-
-    os.environ.setdefault("UVICORN_HOST", config.host)
-    os.environ.setdefault("UVICORN_PORT", str(config.port))
 
     transport_name: str = config.transport.value
     if config.transport != TransportMode.STDIO:
@@ -211,7 +205,16 @@ def main() -> int:
 
     try:
         mcp = create_server(config)
-        mcp.run(transport=transport_name)  # type: ignore[arg-type]
+        if config.transport == TransportMode.STDIO:
+            mcp.run(transport=transport_name)  # type: ignore[arg-type]
+        else:
+            # v2: host/port come from config (RHOAI_MCP_HOST/PORT env vars or
+            # CLI args) and are passed per-run; MCPServer no longer takes them
+            mcp.run(  # type: ignore[arg-type]
+                transport=transport_name,
+                host=config.host,
+                port=config.port,
+            )
     except BaseException as exc:  # BaseException to catch anyio's BaseExceptionGroup
         if _has_auth_error(exc):
             logger.error(

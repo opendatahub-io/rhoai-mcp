@@ -103,19 +103,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Check requirements-cpu.txt index URL
-        env:
-          LATEST_VERSION: ${{ needs.discover.outputs.latest-version }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$LATEST_VERSION" != rhoai-?* ]]; then
-            echo '::error::Expected a nonempty RHDS release branch starting with rhoai-.'
-            exit 1
-          fi
-          # Branches use 3.6-ea.2; the package index uses 3.6-EA2.
-          version=$(printf '%s' "${LATEST_VERSION#rhoai-}" | tr '[:lower:]' '[:upper:]')
-          version="${version/-EA./-EA}"
-          expected="https://packages.redhat.com/api/pypi/public-rhai/rhoai/$version/cpu-ubi9-test/simple/"
+          expected="https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/"
           actual=$(awk '$1 == "--index-url" { print $2 }' requirements-cpu.txt)
           if [[ "$actual" != "$expected" ]]; then
             printf '::error::Expected requirements-cpu.txt --index-url %s; got %s\n' "$expected" "$actual"

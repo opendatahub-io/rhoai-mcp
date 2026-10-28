@@ -297,14 +297,14 @@ class RHOAIServer:
         self.startup()
 
         # Create MCP server with lifespan
+        # v2: host/port are per-run arguments (passed to run()/app builders),
+        # not MCPServer constructor args
         mcp = MCPServer(
             name="rhoai-mcp",
             instructions="MCP server for Red Hat OpenShift AI - enables AI agents to "
             "interact with RHOAI environments including workbenches, "
             "model serving, pipelines, and data connections.",
             lifespan=self._create_lifespan(),
-            host=self._config.host,
-            port=self._config.port,
         )
 
         # Store reference

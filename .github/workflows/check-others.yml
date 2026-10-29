@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/check-others.yml
       - .github/scripts/list_rhoai_branches.py
+      - Makefile
       - requirements-cpu.txt
   schedule:
     - cron: "23 6 * * *"

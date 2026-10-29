@@ -95,7 +95,6 @@ jobs:
           printf 'artifacts.uri verified: %s\n' "$expected"
 
   check-requirements-cpu-index:
-    needs: discover
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -106,7 +105,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected="https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/"
+          expected=$(sed -n 's/^PYPI_INDEX_URL ?= //p' Makefile)
+          if [[ -z "$expected" ]]; then
+            echo '::error::PYPI_INDEX_URL not found in Makefile'
+            exit 1
+          fi
           actual=$(awk '$1 == "--index-url" { print $2 }' requirements-cpu.txt)
           if [[ "$actual" != "$expected" ]]; then
             printf '::error::Expected requirements-cpu.txt --index-url %s; got %s\n' "$expected" "$actual"

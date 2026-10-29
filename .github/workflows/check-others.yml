@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/check-others.yml
       - .github/scripts/list_rhoai_branches.py
+      - Makefile
       - requirements-cpu.txt
   schedule:
     - cron: "23 6 * * *"
@@ -95,7 +96,6 @@ jobs:
           printf 'artifacts.uri verified: %s\n' "$expected"
 
   check-requirements-cpu-index:
-    needs: discover
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -103,19 +103,14 @@ jobs:
         with:
           persist-credentials: false
       - name: Check requirements-cpu.txt index URL
-        env:
-          LATEST_VERSION: ${{ needs.discover.outputs.latest-version }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$LATEST_VERSION" != rhoai-?* ]]; then
-            echo '::error::Expected a nonempty RHDS release branch starting with rhoai-.'
+          expected=$(sed -n 's/^PYPI_INDEX_URL ?= //p' Makefile)
+          if [[ -z "$expected" ]]; then
+            echo '::error::PYPI_INDEX_URL not found in Makefile'
             exit 1
           fi
-          # Branches use 3.6-ea.2; the package index uses 3.6-EA2.
-          version=$(printf '%s' "${LATEST_VERSION#rhoai-}" | tr '[:lower:]' '[:upper:]')
-          version="${version/-EA./-EA}"
-          expected="https://packages.redhat.com/api/pypi/public-rhai/rhoai/$version/cpu-ubi9-test/simple/"
           actual=$(awk '$1 == "--index-url" { print $2 }' requirements-cpu.txt)
           if [[ "$actual" != "$expected" ]]; then
             printf '::error::Expected requirements-cpu.txt --index-url %s; got %s\n' "$expected" "$actual"

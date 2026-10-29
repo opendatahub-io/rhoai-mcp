@@ -1,5 +1,6 @@
 """Tests for QuickstartsClient."""
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -1130,3 +1131,131 @@ class TestActionClassification:
 
     def test_inspection_actions_are_never_uninstall(self) -> None:
         assert not any(a.startswith(UNINSTALL_ACTION_PREFIX) for a in INSPECTION_ACTIONS)
+
+
+# Values that must never reach the logs: a secret parameter value and the kind of
+# RBAC detail an API error body carries.
+_LEAKED_PASSWORD = "s3cret-Passw0rd"
+_LEAKED_BODY = 'User \\"system:serviceaccount:team-a:alice-bot\\" cannot list pods'
+
+
+def _api_error(status: int) -> Any:
+    """An ApiException whose reason, headers and body all carry sensitive data."""
+    from kubernetes.client import ApiException
+
+    resp = SimpleNamespace(
+        status=status,
+        reason=f"Forbidden {_LEAKED_PASSWORD}",
+        data=f'{{"message": "{_LEAKED_BODY}", "password": "{_LEAKED_PASSWORD}"}}'.encode(),
+        getheaders=lambda: {"Authorization": f"Bearer {_LEAKED_PASSWORD}"},
+    )
+    return ApiException(http_resp=resp)
+
+
+class TestLogSanitization:
+    """Logs carry only fixed text, identifiers, exception type and HTTP status.
+
+    Exception text (reason, headers, response body) can contain secrets and RBAC
+    detail, and DEBUG logging is reachable via --log-level DEBUG, so none of it
+    may be written to the logs.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _debug_logs(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG, logger="rhoai_mcp.domains.quickstarts.client")
+
+    @staticmethod
+    def _assert_sanitized(caplog: pytest.LogCaptureFixture, status: int | None) -> None:
+        text = caplog.text
+        assert caplog.records, "expected the failure to be logged"
+        assert _LEAKED_PASSWORD not in text
+        assert "alice-bot" not in text
+        assert "Bearer" not in text
+        if status is not None:
+            assert f"HTTP {status}" in text
+        assert all(record.exc_info is None for record in caplog.records)
+
+    def test_termination_details_failure_logs_no_exception_text(
+        self, client: QuickstartsClient, mock_k8s: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mock_k8s.get.return_value.to_dict.return_value = {
+            "metadata": {"labels": dict(_QS_JOB_LABELS)},
+            "status": {"failed": 1},
+        }
+        mock_k8s.core_v1.list_namespaced_pod.side_effect = _api_error(403)
+
+        client.get_action_status("qs-x", "openshift-quickstarts")
+
+        self._assert_sanitized(caplog, 403)
+
+    @pytest.mark.parametrize("status", [403, 500])
+    def test_pod_list_failure_logs_no_exception_text(
+        self,
+        client: QuickstartsClient,
+        mock_k8s: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+        status: int,
+    ) -> None:
+        mock_k8s.core_v1.list_namespaced_pod.side_effect = _api_error(status)
+
+        with pytest.raises(RHOAIError):
+            client.get_action_logs("qs-x", "openshift-quickstarts")
+
+        self._assert_sanitized(caplog, status)
+
+    def test_log_read_failure_logs_no_exception_text(
+        self, client: QuickstartsClient, mock_k8s: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        pod = SimpleNamespace(metadata=SimpleNamespace(name="pod-x", creation_timestamp="t0"))
+        mock_k8s.core_v1.list_namespaced_pod.return_value.items = [pod]
+        mock_k8s.core_v1.read_namespaced_pod_log.side_effect = _api_error(403)
+
+        client.get_action_logs("qs-x", "openshift-quickstarts")
+
+        self._assert_sanitized(caplog, 403)
+
+    def test_cleanup_api_failure_logs_no_exception_text(
+        self, client: QuickstartsClient, mock_k8s: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mock_k8s.core_v1.create_namespaced_secret.side_effect = RuntimeError("secret create failed")
+        mock_k8s.get_resource.return_value.delete.side_effect = _api_error(409)
+
+        with pytest.raises(RuntimeError):
+            client.run_action(
+                name="peoplemesh",
+                action="install",
+                parameters={"keycloak.realm.testUser.password": _LEAKED_PASSWORD},
+            )
+
+        self._assert_sanitized(caplog, 409)
+
+    def test_cleanup_unexpected_failure_logs_type_only(
+        self, client: QuickstartsClient, mock_k8s: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # An arbitrary exception's message may carry anything, including the
+        # password being written; only its type may be logged, with no traceback.
+        mock_k8s.core_v1.create_namespaced_secret.side_effect = RuntimeError("secret create failed")
+        mock_k8s.get_resource.return_value.delete.side_effect = KeyError(_LEAKED_PASSWORD)
+
+        with pytest.raises(RuntimeError):
+            client.run_action(
+                name="peoplemesh",
+                action="install",
+                parameters={"keycloak.realm.testUser.password": _LEAKED_PASSWORD},
+            )
+
+        self._assert_sanitized(caplog, None)
+        assert "KeyError" in caplog.text
+
+    def test_caller_supplied_identifier_cannot_forge_log_lines(
+        self, client: QuickstartsClient, mock_k8s: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # job_name comes from the tool caller; a newline in it must be escaped so
+        # it cannot inject a fake log entry.
+        mock_k8s.core_v1.list_namespaced_pod.side_effect = _api_error(500)
+
+        with pytest.raises(RHOAIError):
+            client.get_action_logs("qs-x\nERROR forged entry", "openshift-quickstarts")
+
+        assert all("\n" not in record.getMessage() for record in caplog.records)
+        assert "\\nERROR forged entry" in caplog.text

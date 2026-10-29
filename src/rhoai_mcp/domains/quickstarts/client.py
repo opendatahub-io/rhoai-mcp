@@ -108,6 +108,17 @@ def _stringify(value: Any) -> str:
     return str(value)
 
 
+def _error_summary(exc: Exception) -> str:
+    """A log-safe description of ``exc``: its type and HTTP status, nothing else.
+
+    An exception's text can carry its reason, response headers and body — RBAC
+    detail, tokens, even parameter values — so none of it is logged.
+    """
+    status = getattr(exc, "status", None)
+    name = type(exc).__name__
+    return f"{name} (HTTP {status})" if isinstance(status, int) else name
+
+
 class QuickstartsClient:
     """Client for quickstart catalog discovery and deployment actions."""
 
@@ -352,7 +363,9 @@ class QuickstartsClient:
                 namespace=namespace, label_selector=self._installer_pod_selector(job_name)
             ).items
         except ApiException as exc:
-            logger.debug("could not read termination details for job %s: %s", job_name, exc)
+            logger.debug(
+                "could not read termination details for job %r: %s", job_name, _error_summary(exc)
+            )
             return None, None
         if not pods:
             return None, None
@@ -413,10 +426,10 @@ class QuickstartsClient:
                 # Make a permission denial indistinguishable from the benign "no
                 # pod" case below, so its presence can't tell a prober they lack
                 # pods:list. Log the real reason server-side only.
-                logger.debug("forbidden listing pods for job %s: %s", job_name, exc)
+                logger.debug("forbidden listing pods for job %r: %s", job_name, _error_summary(exc))
                 raise NotFoundError("Pod", f"job-name={job_name}", namespace)
-            # Don't echo the API reason to the caller; log it server-side instead.
-            logger.debug("failed to list pods for job %s: %s", job_name, exc)
+            # Don't echo the API reason to the caller; log only its type and status.
+            logger.debug("failed to list pods for job %r: %s", job_name, _error_summary(exc))
             raise RHOAIError(f"failed to list pods for job '{job_name}'")
         if not pods:
             raise NotFoundError("Pod", f"job-name={job_name}", namespace)
@@ -431,7 +444,7 @@ class QuickstartsClient:
         except ApiException as exc:
             # Don't echo the API reason (a 403 would announce the permission gap);
             # keep a generic placeholder and log the detail server-side.
-            logger.debug("could not read logs for pod %s: %s", pod_name, exc)
+            logger.debug("could not read logs for pod %r: %s", pod_name, _error_summary(exc))
             logs = "<logs unavailable>"
 
         return {
@@ -748,8 +761,8 @@ class QuickstartsClient:
         Cleanup must never raise: it runs while the original Secret-creation error
         is still in flight, so any exception escaping here would replace that error
         — the caller would see the wrong failure and the Job would be left orphaned
-        with no params Secret. Any unexpected error is therefore logged and
-        swallowed, like the expected ApiException.
+        with no params Secret. Any unexpected error is therefore logged (type and
+        status only) and swallowed, like the expected ApiException.
 
         Background propagation is requested explicitly: by default the API orphans
         a batch/v1 Job's Pods, which would leave its stuck installer Pod behind
@@ -760,9 +773,10 @@ class QuickstartsClient:
                 name=job_name, namespace=namespace, propagation_policy="Background"
             )
         except ApiException as exc:
-            logger.warning("could not clean up job %s: %s", job_name, exc.reason)
-        except Exception:
-            logger.exception("unexpected error cleaning up job %s", job_name)
+            logger.warning("could not clean up job %r: %s", job_name, _error_summary(exc))
+        except Exception as exc:
+            # Type only, no traceback: arbitrary exception text may carry secrets.
+            logger.warning("unexpected error cleaning up job %r: %s", job_name, _error_summary(exc))
 
     @staticmethod
     def _resource_uid(resource: Any) -> str | None:

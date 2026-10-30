@@ -474,7 +474,7 @@ Start VS Code with the token in the environment:
 OCP_TOKEN=$(oc whoami -t) code .
 ```
 
-The `headers` block is only needed when the deployment enforces caller authentication (OpenShift OIDC overlay). See [`docs/copilot-integration.md`](docs/copilot-integration.md) for the full guide, including local stdio, security guidance, and the GitHub.com Copilot (cloud agent) integration.
+The `headers` block is needed as the rhoai-mcp cluster deployment enforces caller authentication ([OpenShift OIDC overlay](deploy/kustomize/overlays/openshift-oidc/README.md)). See [`docs/copilot-integration.md`](docs/copilot-integration.md) for the full guide, including local stdio, security guidance, and the GitHub.com Copilot (cloud agent) integration.
 
 ## Local usage with agent harness
 

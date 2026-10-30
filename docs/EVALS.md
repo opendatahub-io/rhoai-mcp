@@ -291,7 +291,7 @@ class TestMyScenario:
             )
 ```
 
-2. If the scenario needs mock data that doesn't exist yet, add resources to `create_default_cluster_state()` in `src/rhoai_mcp/mock_k8s/cluster_state.py`.
+2. If the scenario needs mock data that doesn't exist yet, add resources to `create_default_cluster_state()` in `src/rhoai_mcp/mock_k8s/cluster_state.py`. Rebuild the evaluation server image and recreate its container to load the updated mock data before running the scenario.
 
 3. Run the new scenario:
 
@@ -554,7 +554,7 @@ Ensure `RHOAI_EVAL_LLM_API_KEY` and `RHOAI_EVAL_EVAL_API_KEY` are set in `.env.e
 NotFoundError: <resource type> '<name>' not found
 ```
 
-The agent asked for a resource that doesn't exist in the mock cluster state. If this is expected for your scenario, add the resource to `create_default_cluster_state()` in `src/rhoai_mcp/mock_k8s/cluster_state.py`.
+The agent asked for a resource that doesn't exist in the mock cluster state. If this is expected for your scenario, add the resource to `create_default_cluster_state()` in `src/rhoai_mcp/mock_k8s/cluster_state.py`. Rebuild the evaluation server image and recreate its container to load the updated mock data before rerunning the scenario.
 
 ### Agent reaches max turns
 

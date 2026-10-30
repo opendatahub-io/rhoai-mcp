@@ -450,6 +450,32 @@ exec printf 'Bearer %s\n' "$(oc whoami -t)"
 
 Note: the [`!` prefix in headers](https://github.com/nicobailon/pi-mcp-adapter#server-options) tells Pi to execute the script and use its stdout as the header value.
 
+### GitHub Copilot (VS Code)
+
+`.vscode/mcp.json` (workspace) or user profile `mcp.json`:
+
+```json
+{
+  "servers": {
+    "rhoai-mcp": {
+      "type": "http",
+      "url": "https://<RHOAI_MCP_ROUTE>/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:OCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Start VS Code with the token in the environment:
+
+```sh
+OCP_TOKEN=$(oc whoami -t) code .
+```
+
+The `headers` block is needed as the rhoai-mcp cluster deployment enforces caller authentication ([OpenShift OIDC overlay](deploy/kustomize/overlays/openshift-oidc/README.md)). See [`docs/copilot-integration.md`](docs/copilot-integration.md) for the full guide, including local stdio, security guidance, and the GitHub.com Copilot (cloud agent) integration.
+
 ## Local usage with agent harness
 
 ### Local usage with Claude Code

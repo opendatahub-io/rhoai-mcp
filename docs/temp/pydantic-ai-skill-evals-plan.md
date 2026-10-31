@@ -7,8 +7,8 @@ small Pydantic AI agent that wires `rhoai-mcp` over **stdio** and exposes the tw
 agentskills.io skills in `.claude/skills/`. **Six matrix cells: 2 skills × 3 models**
 (OpenAI, EnMaaS/GLM, EnMaaS/DeepSeek), with **2 scenarios per skill = 12 conversations**
 per full sweep. Start with one model before expanding the matrix. Keep both MCP metrics
-and one skill-fidelity judge per skill. Persist transcripts for debugging; OTel is
-planned. EvalHub orchestration is a follow-on, not designed here.
+and one skill-fidelity judge per skill. Persisted transcripts are the scoring input, so
+the same path re-scores them offline; OTel is planned. EvalHub orchestration is a follow-on, not designed here.
 
 ---
 
@@ -107,10 +107,9 @@ Three verified gotchas for whoever adapts that module:
   instructions in the fidelity transcript without counting them as MCP interactions.
 - **DeepEval test cases do not directly round-trip through JSON.** `model_dump()` works, but
   `model_validate()` fails twice: `MCPServer` is not a pydantic model so nested dicts never
-  rehydrate, and the validator rejects dict-shaped `mcp_tools_called`. Build the objects
-  from the live run, not from serialized test cases. Since we do not re-score offline
-  (§3.6), this stays a warning against a tempting shortcut rather than a constraint the
-  design has to work around.
+  rehydrate, and the validator rejects dict-shaped `mcp_tools_called`. So never persist
+  DeepEval objects — persist the native Pydantic AI messages, which do round-trip, and
+  rebuild the DeepEval objects from them (§3.6).
 
 ### 1.4 The stdio server is self-contained — verified locally
 
@@ -297,8 +296,9 @@ typed MCP content, structured results, and error flags when building DeepEval ob
 capture these at the MCP call boundary if native message normalization loses them.
 
 Test mixed harness/MCP calls, out-of-order parallel returns, failed calls, and multi-turn
-history without duplicates before running paid evaluations. The native persisted history
-remains the source; the shared representation and DeepEval objects are derived views.
+history without duplicates before running paid evaluations. The persisted artifact is the
+scoring input (§3.6); the shared representation and DeepEval objects are derived views, so
+these same adapter tests also cover save/load fidelity.
 
 ### 2.3 Model matrix
 
@@ -481,7 +481,8 @@ DeepEval's structured JSON export as a companion report (§1.6).
 `EnvironmentRecord.agent_model` already exists and is left empty by the LCS recorder;
 populate it, with `agent_backend="pydantic-ai"`. Extend records with `skill`, `golden_id`,
 `skills_loaded`, `outcome`, `error_stage`/diagnostics, named deterministic-check results,
-an `attempt_id`, an artifact path, and optional `trace_id` (§3.6). Keep the skill and
+an `attempt_id`, a `scoring_id` (a re-score reuses the `attempt_id`), an artifact path,
+and optional `trace_id` (§3.6). Keep the skill and
 scenario hashes, effective model/judge settings, and rubric version with the artifact
 so the comparison configuration is recoverable.
 
@@ -525,20 +526,24 @@ attempt under `evals/results/<run_id>/<attempt_id>/`, including partial failed a
 - MCP tool schemas from the same server session, and any captured MCP result/error
   records needed to preserve information lost by native normalization (§2.2).
 - Scenario/checkpoint definition, check results, effective agent/judge configuration,
-  skill/scenario hashes, rubric version, dependency versions, and failure diagnostics.
-  Exclude credentials from configuration snapshots.
+  skill/scenario hashes, rubric version, dependency versions, `trace_id` when tracing is
+  on (§4), and failure diagnostics. Exclude credentials from configuration snapshots.
+  Keeping `trace_id` in the artifact lets a re-score — which runs no agent and so has no
+  trace of its own — point back at the original attempt's trace.
 
 Use Pydantic AI's native JSON serialization and `ModelMessagesTypeAdapter` for reloading;
 see [storing and loading messages](https://pydantic.dev/docs/ai/core-concepts/message-history/#storing-and-loading-messages-to-json).
 
-**Artifacts are for human inspection, not for re-scoring.** DeepEval objects are built
-from the live in-memory run, never rebuilt from a persisted artifact. When a rubric
-changes, re-run the agent. This keeps the artifact a plain debugging record — no
-reconstruction path to keep faithful, no scoring records to link back to earlier
-attempts, no artifact database or replay engine. Reloading needs to produce something
-readable, not something scoreable. An offline re-score path can be added later if rubric
-iteration proves expensive enough to justify it; nothing here forecloses that.
-DeepEval's JSON report is supplementary (§1.6).
+**The artifact is the scoring input — in the live run too.** Every attempt goes agent →
+write artifact → load artifact → adapt → score. That is one scoring path rather than two,
+and a lossy artifact then fails the live run instead of being discovered months later.
+Re-scoring is the same path minus the agent, which is what makes rubric calibration (§3.3)
+and table-checker work (§3.1) a controlled comparison on frozen transcripts instead of on
+a fresh conversation each time.
+
+Explicit non-goals: no artifact database, no agent replay, no provenance graph beyond the
+shared `attempt_id`, no artifact migration — a stale-schema artifact fails to load and is
+re-run. DeepEval's JSON report stays supplementary (§1.6).
 
 **OTel (planned, §4):** use native `Instrumentation(settings=InstrumentationSettings(...))`
 with our own `TracerProvider`, `BatchSpanProcessor`, and `OTLPSpanExporter`. Set
@@ -612,8 +617,9 @@ fallback. Carry over permission mappings. Test default, training-only, and combi
 configurations and retain the all-plugin collision check. No skill or contract changes.
 
 **Phase 2 — both skills, one model, deterministic checks.** Build the runner, artifact
-save path, corrected shared adapter, stdio fixtures, checkpoints, and the `recorder.py`
-/ `reader.py` changes only (§3.5). Delete the stale `turn._mcp_interaction = True`
+save/load path, corrected shared adapter, stdio fixtures, checkpoints, and the
+`recorder.py` / `reader.py` changes only (§3.5). Scoring reads the artifact from the
+start, so the single path costs nothing to adopt here. Delete the stale `turn._mcp_interaction = True`
 workaround. Start with one scenario per skill against `openai-gpt4o`, then add the
 vague-requirements and handoff/withheld-consent cases. Verify that failures and partial
 transcripts are recorded before pytest assertions, that branch checks actually execute
@@ -627,7 +633,8 @@ the Phase 0 probe and expand to the full sweep — 6 cells and **12 conversation
 three models qualified. Only now extend `comparison.py` and the CLI (§3.5), against real
 multi-model records. Verify that routing failures, missing scores, and errors are
 reported without biasing comparisons. New targets: `make eval-skills` (one-model
-default, model selection via environment) and `make eval-skills-matrix`, plus an
+default, model selection via environment), `make eval-skills-matrix`, and
+`make eval-rescore` (re-judge saved artifacts while calibrating rubrics), plus an
 explicit dry-run option for deterministic-only iterations.
 
 **Phase 4 — trace viewing.** Add native OTel provider/exporter setup and a local

@@ -412,13 +412,16 @@ def check_navigator(
         f"called forbidden tools: {violations}" if violations else "",
     )
 
-    check_recommendation_table(transcript.final_output, report)
+    # Search the whole conversation: a phase-gated skill emits the table in
+    # its Phase 3 message and then keeps talking, so it is not in final_output.
+    emitted = transcript.assistant_text
+    check_recommendation_table(emitted, report)
 
     if not expect_handoff:
         report.add("navigator_handoff_present", "unexercised", "golden stops before handoff")
         report.add("navigator_handoff_complete", "unexercised", "golden stops before handoff")
     else:
-        handoff = parse_handoff(transcript.final_output)
+        handoff = parse_handoff(emitted)
         report.check("navigator_handoff_present", handoff is not None)
         if handoff is None:
             report.add("navigator_handoff_complete", "n/a", "no handoff block to parse")
@@ -473,10 +476,22 @@ def check_navigator_deploy(
             not writes,
             f"wrote despite withheld consent: {sorted({c.name for c in writes})}" if writes else "",
         )
-        for name in ("deploy_writes_after_approval", "deploy_plan_shown_before_approval"):
+        for name in (
+            "deploy_writes_after_approval",
+            "deploy_plan_shown_before_approval",
+            "deploy_execution_reached",
+        ):
             report.add(name, "n/a", "consent was withheld in this golden")
     else:
         report.add("deploy_no_writes_without_consent", "n/a", "consent is given in this golden")
+        # Without this, an approved-deployment golden passes having never
+        # deployed: every ordering check below is satisfied vacuously when no
+        # write happens at all.
+        report.check(
+            "deploy_execution_reached",
+            bool(execute_calls),
+            f"consent given but execute_deployment was never called; used {used}",
+        )
         if approval_turn_index is None:
             report.add(
                 "deploy_writes_after_approval",

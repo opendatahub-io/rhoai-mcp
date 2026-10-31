@@ -140,8 +140,43 @@ class TestConversationalTestCase:
         (turn,) = [t for t in case.turns if t.mcp_tools_called]
         result = turn.mcp_tools_called[0].result
         assert isinstance(result, CallToolResult)
-        assert result.structuredContent == {"recommendations": [{"model": "llama-3.1-8b"}]}
         assert result.isError is False
+
+    def test_structured_content_is_wrapped_under_a_result_key(
+        self, history: list[Any], mcp_server: MCPServer
+    ) -> None:
+        """DeepEval indexes ``structuredContent["result"]`` with no fallback.
+
+        Passing the raw tool result through unwrapped reads as more faithful but
+        makes every MCP metric raise ``KeyError: 'result'`` before the judge is
+        called — a failure invisible to dry runs, which never score.
+        """
+        case = transcript_to_conversational_test_case(from_pydantic_ai(history), mcp_server)
+
+        (turn,) = [t for t in case.turns if t.mcp_tools_called]
+        structured = turn.mcp_tools_called[0].result.structuredContent
+
+        assert structured is not None
+        assert structured["result"] == {"recommendations": [{"model": "llama-3.1-8b"}]}
+
+    def test_deepeval_can_render_the_interaction_text(
+        self, history: list[Any], mcp_server: MCPServer
+    ) -> None:
+        """End-to-end guard: run DeepEval's own renderer over our turns.
+
+        This is the exact call that failed in the first judged run, so asserting
+        against the library rather than our own expectation is what keeps the
+        contract honest across DeepEval upgrades.
+        """
+        from deepeval.metrics.mcp.utils import turn_mcp_interaction_text
+
+        case = transcript_to_conversational_test_case(from_pydantic_ai(history), mcp_server)
+        (turn,) = [t for t in case.turns if t.mcp_tools_called]
+
+        rendered = turn_mcp_interaction_text(turn)
+
+        assert "recommend_model" in rendered
+        assert "llama-3.1-8b" in rendered
 
     def test_mcp_interaction_flag_is_derived_not_assigned(
         self, history: list[Any], mcp_server: MCPServer

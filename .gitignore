@@ -214,3 +214,6 @@ evals/results/
 .env.eval
 
 .deepeval
+.deepeval-cache.json
+.deepeval_telemetry.txt
+temp_test_run_data.json

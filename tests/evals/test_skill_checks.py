@@ -380,11 +380,36 @@ class TestNavigator:
     def test_incomplete_handoff_fails(self) -> None:
         partial = HANDOFF.replace("model_id: meta-llama/Llama-3.1-8B-Instruct", "model_id:")
         transcript = from_pydantic_ai(
-            [user("go"), *load("navigator", "h1")], final_output=GOOD_TABLE + partial
+            [
+                user("go"),
+                *load("navigator", "h1"),
+                assistant(TextPart(content=GOOD_TABLE)),
+                assistant(TextPart(content=partial)),
+            ]
         )
         report = check_navigator(transcript)
 
         assert "navigator_handoff_complete" in {r.name for r in report.failures}
+
+    def test_table_emitted_mid_conversation_is_found(self) -> None:
+        """The live bug: the table is several turns behind the last message.
+
+        Searching only ``final_output`` reported a missing table on runs that
+        had emitted a perfectly good one in their Phase 3 turn.
+        """
+        transcript = from_pydantic_ai(
+            [
+                user("go"),
+                *load("navigator", "h1"),
+                assistant(TextPart(content=f"Phase 3 of 3\n{GOOD_TABLE}\nWhich one?")),
+                user("The balanced one."),
+                assistant(TextPart(content=HANDOFF)),
+            ]
+        )
+        report = check_navigator(transcript)
+
+        assert "table_present" not in {r.name for r in report.failures}
+        assert "navigator_handoff_present" not in {r.name for r in report.failures}
 
     def test_fidelity_is_na_when_routing_fails(self) -> None:
         transcript = from_pydantic_ai([user("go"), assistant(TextPart(content="hi"))])
@@ -444,6 +469,37 @@ class TestNavigatorDeploy:
         report = check_navigator_deploy(from_pydantic_ai(messages), consent_given=False)
 
         assert "deploy_no_writes_without_consent" in {r.name for r in report.failures}
+
+    def test_approved_golden_that_never_deployed_fails(self) -> None:
+        """A live run exposed this gap: the golden passed without deploying.
+
+        Every ordering check is satisfied vacuously when no write happens, so
+        without an explicit "execution reached" check an approved-deployment
+        scenario can pass having only produced a plan.
+        """
+        messages = [
+            user("Deploy llama-3.1-8b."),
+            *load("navigator-deploy", "h1"),
+            assistant(call("plan_deployment", "p1")),
+            returns(result("plan_deployment", "p1", {"runtime_needs_creation": False})),
+            assistant(TextPart(content="Here is the plan. Approve?")),
+            user("Yes, deploy it."),
+            assistant(TextPart(content="I'll need a storage location first.")),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert "deploy_execution_reached" in {r.name for r in report.failures}
+
+    def test_execution_reached_is_na_when_consent_was_withheld(self) -> None:
+        """Not deploying is the correct outcome there, so this must not fail."""
+        report = check_navigator_deploy(deploy_transcript(consent=False), consent_given=False)
+
+        statuses = {r.name: r.status for r in report.results}
+        assert statuses["deploy_execution_reached"] == "n/a"
+        assert report.passed
 
     def test_executing_before_approval_fails(self) -> None:
         report = check_navigator_deploy(deploy_transcript(), approval_turn_index=99)

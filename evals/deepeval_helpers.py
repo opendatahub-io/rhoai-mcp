@@ -155,12 +155,18 @@ def _record_to_mcp_tool_call(record: ToolCallRecord) -> MCPToolCall:
     since ``MultiTurnMCPUseMetric`` scores arguments as well as tool choice.
     """
     structured = record.structured_result
+    payload = structured if structured is not None else record.result_text
     return MCPToolCall(
         name=record.name,
         args=record.arguments,
         result=CallToolResult(
             content=[TextContent(type="text", text=record.result_text or "")],
-            structuredContent=structured if isinstance(structured, dict) else None,
+            # DeepEval reads ``structuredContent["result"]`` unconditionally
+            # (metrics/mcp/utils.py: no .get(), no fallback), so the payload
+            # must be wrapped under that key or every MCP metric raises
+            # KeyError before the judge is even called. Passing the raw tool
+            # result straight through looks more faithful but breaks scoring.
+            structuredContent={"result": payload},
             isError=record.is_error,
         ),
     )

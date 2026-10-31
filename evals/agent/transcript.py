@@ -200,6 +200,18 @@ class AgentTranscript:
         return [c for c in self.tool_calls if c.kind == "harness"]
 
     @property
+    def assistant_text(self) -> str:
+        """Every assistant message joined, in order.
+
+        Checks that look for emitted artefacts — the recommendation table, the
+        handoff block — must search this rather than :attr:`final_output`. A
+        phase-gated skill emits the table in its Phase 3 message and then keeps
+        talking, so by the end of the conversation the table is several turns
+        behind the last message.
+        """
+        return "\n".join(t.content for t in self.turns if t.role == "assistant" and t.content)
+
+    @property
     def tool_names_used(self) -> list[str]:
         """Normalised MCP tool names, in first-call order, deduplicated."""
         seen: dict[str, None] = {}

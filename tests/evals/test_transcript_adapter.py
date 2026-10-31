@@ -486,6 +486,69 @@ class TestMultiTurnStructure:
 # --------------------------------------------------------------------------- #
 
 
+class TestMidConversationCheckpoints:
+    """The transcript's primary consumer: gating a scripted reply mid-run.
+
+    ``runner.Checkpoint`` is ``Callable[[AgentTranscript], str | None]``, invoked
+    before each scripted reply against the history so far. These tests exercise
+    that contract on *partial* histories, which is the state a checkpoint
+    actually sees and the state a DeepEval test case cannot represent.
+    """
+
+    def _partial(self) -> list[Any]:
+        """Mid-conversation: skill loaded, workload tools called, nothing else."""
+        return [
+            user("I need an LLM for support."),
+            assistant(load_call("navigator", "h1")),
+            returns(load_return("h1"), delivered("navigator", SKILL_BODY)),
+            assistant(TextPart(content="Phase 1 of 3 - what matters most?")),
+            user("Speed, then cost."),
+            assistant(call("get_use_case_defaults", "a1", use_case="chat")),
+            returns(result("get_use_case_defaults", "a1", {"use_case": "chat"})),
+            assistant(TextPart(content="Phase 2 of 3 - confirm this profile?")),
+        ]
+
+    def test_checkpoint_can_assert_the_expected_skill_was_routed_to(self) -> None:
+        def expect_skill(t: Any) -> str | None:
+            return None if "navigator" in t.skills_loaded else "navigator not loaded"
+
+        assert expect_skill(from_pydantic_ai(self._partial())) is None
+
+    def test_checkpoint_can_detect_a_forbidden_tool_has_not_run_yet(self) -> None:
+        """The consent gate: refuse to send an affirmative if a write already ran."""
+
+        def no_premature_deploy(t: Any) -> str | None:
+            banned = {"execute_deployment", "plan_deployment"}
+            used = banned.intersection(t.tool_names_used)
+            return f"deployment tool ran before approval: {sorted(used)}" if used else None
+
+        assert no_premature_deploy(from_pydantic_ai(self._partial())) is None
+
+    def test_checkpoint_fails_closed_when_a_forbidden_tool_did_run(self) -> None:
+        history = [*self._partial(), assistant(call("execute_deployment", "x1"))]
+
+        def no_premature_deploy(t: Any) -> str | None:
+            return "execute_deployment ran" if "execute_deployment" in t.tool_names_used else None
+
+        assert no_premature_deploy(from_pydantic_ai(history)) == "execute_deployment ran"
+
+    def test_checkpoint_sees_the_delivered_skill_body_mid_run(self) -> None:
+        assert from_pydantic_ai(self._partial()).skill_body("navigator") == SKILL_BODY
+
+    def test_transcript_of_a_not_yet_started_conversation_is_usable(self) -> None:
+        """A checkpoint must not explode before the first reply.
+
+        This is the case a DeepEval ConversationalTestCase cannot represent at
+        all -- it rejects an empty turn list with a TypeError.
+        """
+        empty = from_pydantic_ai([])
+
+        assert empty.turns == []
+        assert empty.skills_loaded == []
+        assert empty.tool_names_used == []
+        assert empty.skill_body() is None
+
+
 class TestArtifactRoundTrip:
     """The artifact is the scoring input, so a lossy artifact must fail here."""
 
@@ -533,14 +596,27 @@ class TestArtifactRoundTrip:
             attempt_id="att-1",
             run_id="run-1",
             tool_schemas=[schema],
-            skill_catalog={"navigator": "Guides customers..."},
             metadata={"golden_id": "navigator-happy-path", "agent_model": "openai-sol"},
         )
         reloaded = AttemptArtifact.load(artifact.save(tmp_path))
 
         assert reloaded.metadata["golden_id"] == "navigator-happy-path"
-        assert reloaded.skill_catalog == {"navigator": "Guides customers..."}
         assert [t.name for t in reloaded.mcp_tools()] == ["recommend_model"]
+
+    def test_catalog_survives_without_being_stored_separately(self, tmp_path: Any) -> None:
+        """The catalog rides inside messages.json and is derived on load.
+
+        Storing it as its own artifact field would let the two copies disagree.
+        """
+        history = [
+            ModelRequest(parts=[UserPromptPart(content="I need an LLM."), catalog_part(CATALOG)]),
+            assistant(TextPart(content="Phase 1 of 3")),
+        ]
+        artifact = AttemptArtifact.from_messages(history, attempt_id="att-4", run_id="run-1")
+
+        reloaded = AttemptArtifact.load(artifact.save(tmp_path))
+
+        assert "navigator-deploy" in reloaded.transcript().skill_catalog
 
     def test_partial_failed_attempt_is_still_persistable(self, tmp_path: Any) -> None:
         """Checkpoint failures save a partial transcript rather than nothing."""

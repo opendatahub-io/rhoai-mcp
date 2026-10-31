@@ -108,6 +108,16 @@ class ConversationResult:
 
 #: A checkpoint inspects the transcript so far and returns an error string if the
 #: expected state was not reached, or ``None`` to allow the script to continue.
+#:
+#: It receives an :class:`~evals.agent.transcript.AgentTranscript` — our own
+#: view — rather than a DeepEval ``ConversationalTestCase``, because it runs
+#: **mid-conversation**, before the run is finished and before any test case is
+#: built. A DeepEval case cannot serve here: it rejects an empty turn list, and
+#: it drops the call IDs and harness (``load_capability``) calls a checkpoint
+#: needs in order to assert which skill was loaded and which tools have run.
+#:
+#: Checkpoints are rebuilt from the cumulative history on every turn, so they
+#: are read-only and must stay cheap: no I/O, no judge calls.
 Checkpoint = Callable[[AgentTranscript], str | None]
 
 

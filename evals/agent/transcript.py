@@ -8,8 +8,10 @@ live run instead of being discovered months later.
 Two representations exist here:
 
 ``AgentTranscript``
-    The framework-neutral contract the DeepEval adapter and the deterministic
-    checks consume. The LCS path can be adapted onto the same shape.
+    Our own framework-neutral view, consumed **mid-conversation** by scripted
+    checkpoints as well as afterwards by the DeepEval adapter and the
+    deterministic checks. See the class docstring for why a DeepEval
+    ``ConversationalTestCase`` cannot serve this role.
 ``AttemptArtifact``
     What is written to disk: the *native* Pydantic AI message history (which
     round-trips through JSON, unlike DeepEval objects) plus the MCP tool schemas
@@ -144,7 +146,36 @@ class TranscriptTurn:
 
 @dataclass
 class AgentTranscript:
-    """Framework-neutral view of one conversation."""
+    """Framework-neutral view of one conversation. Our construct, not a library type.
+
+    **Primary consumer: mid-conversation checkpoints.** Each scripted reply in
+    :mod:`evals.agent.runner` is gated on a ``Callable[[AgentTranscript], str | None]``
+    evaluated *before* the reply is sent, so the script can refuse to send a
+    generic "yes" into an unexpected state (plan §2.1). At that moment the
+    conversation is still running and no DeepEval case exists, so checkpoints
+    need a cheap read-only view of "what has happened so far".
+
+    **Why a DeepEval ``ConversationalTestCase`` cannot play this role:**
+
+    - It rejects an empty turn list, so it cannot represent a conversation that
+      has not started, or one a harness error ended before any message.
+    - ``MCPToolCall`` carries only ``name``/``args``/``result`` — no call ID and
+      no turn index, so call attribution cannot be re-derived or verified.
+    - Harness calls are deliberately excluded from ``mcp_tools_called``, so the
+      §3.1 routing checks (which ``load_capability`` calls succeeded, in what
+      order) have nothing to read.
+    - Instructions are not part of its model at all, so the delivered skill body
+      and the routing catalog are unrepresentable.
+
+    The other reason this type exists is deduplication of the *risky* logic:
+    without it, every deterministic check would re-implement call/return matching by ID
+    and harness-vs-MCP discrimination — precisely the code that produced the
+    known adapter bugs. Centralising it means a fix lands everywhere at once.
+
+    Note the "shared with the LCS path" rationale in plan §2.2 is currently
+    aspirational: ``evals/lcs_client.py`` still has its own shape and nothing
+    converts it. The two reasons above stand on their own.
+    """
 
     task: str
     final_output: str
@@ -501,8 +532,10 @@ class AttemptArtifact:
     messages_json: bytes
     """Native Pydantic AI history, serialised with ``ModelMessagesTypeAdapter``."""
     tool_schemas: list[dict[str, Any]] = field(default_factory=list)
-    skill_catalog: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+    # No separate skill-catalog field: the catalog the model routed from is an
+    # InstructionBaselinePart inside messages_json, and AgentTranscript derives
+    # it on load. Storing it twice would let the copies disagree.
     task: str = ""
     final_output: str = ""
     schema_version: int = ARTIFACT_SCHEMA_VERSION
@@ -520,7 +553,6 @@ class AttemptArtifact:
         task: str = "",
         final_output: str = "",
         tool_schemas: list[Tool] | None = None,
-        skill_catalog: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AttemptArtifact:
         """Capture an attempt. Safe to call on a partial/failed conversation."""
@@ -531,7 +563,6 @@ class AttemptArtifact:
             run_id=run_id,
             messages_json=ModelMessagesTypeAdapter.dump_json(messages),
             tool_schemas=[t.model_dump(mode="json") for t in (tool_schemas or [])],
-            skill_catalog=dict(skill_catalog or {}),
             metadata=dict(metadata or {}),
             task=task,
             final_output=final_output,
@@ -554,7 +585,6 @@ class AttemptArtifact:
                     "task": self.task,
                     "final_output": self.final_output,
                     "tool_schemas": self.tool_schemas,
-                    "skill_catalog": self.skill_catalog,
                     "metadata": self.metadata,
                 },
                 indent=2,
@@ -583,7 +613,6 @@ class AttemptArtifact:
             run_id=meta["run_id"],
             messages_json=(directory / "messages.json").read_bytes(),
             tool_schemas=meta.get("tool_schemas", []),
-            skill_catalog=meta.get("skill_catalog", {}),
             metadata=meta.get("metadata", {}),
             task=meta.get("task", ""),
             final_output=meta.get("final_output", ""),

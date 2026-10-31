@@ -7,8 +7,8 @@ small Pydantic AI agent that wires `rhoai-mcp` over **stdio** and exposes the tw
 agentskills.io skills in `.claude/skills/`. **Six matrix cells: 2 skills × 3 models**
 (OpenAI, EnMaaS/GLM, EnMaaS/DeepSeek), with **2 scenarios per skill = 12 conversations**
 per full sweep. Start with one model before expanding the matrix. Keep both MCP metrics
-and one skill-fidelity judge per skill. Persist transcripts for debugging and offline
-re-scoring; OTel is optional. EvalHub orchestration is a follow-on, not designed here.
+and one skill-fidelity judge per skill. Persist transcripts for debugging; OTel is
+planned. EvalHub orchestration is a follow-on, not designed here.
 
 ---
 
@@ -107,9 +107,10 @@ Three verified gotchas for whoever adapts that module:
   instructions in the fidelity transcript without counting them as MCP interactions.
 - **DeepEval test cases do not directly round-trip through JSON.** `model_dump()` works, but
   `model_validate()` fails twice: `MCPServer` is not a pydantic model so nested dicts never
-  rehydrate, and the validator rejects dict-shaped `mcp_tools_called`. Build the objects,
-  including typed MCP results, from persisted native history and tool schemas instead.
-  This is an adapter constraint, not a reason to give up offline re-scoring (§3.6).
+  rehydrate, and the validator rejects dict-shaped `mcp_tools_called`. Build the objects
+  from the live run, not from serialized test cases. Since we do not re-score offline
+  (§3.6), this stays a warning against a tempting shortcut rather than a constraint the
+  design has to work around.
 
 ### 1.4 The stdio server is self-contained — verified locally
 
@@ -184,7 +185,8 @@ Extract the existing response-building implementation into a shared helper. Let
 execution order. This preserves training-only users without duplicating the handler or
 the registered name.
 
-Carry the existing `nodes:list` permission mapping into `CLUSTER_PERMISSIONS` in
+Carry the existing `nodes:list` permission mapping — currently at
+`domains/permissions.py:145` — into `CLUSTER_PERMISSIONS` in
 `composites/permissions.py`, retaining it for the training fallback. Test default,
 training-only, and combined/all-plugin configurations: exactly one tool, the same
 response shape, and the appropriate permission mapping in each.
@@ -244,7 +246,7 @@ next scenario. Fetch tool schemas from this same connection; the skill fixtures 
 override the existing HTTP/SSE schema-discovery fixtures instead of requiring LCORE.
 See the [MCP lifecycle docs](https://pydantic.dev/docs/ai/mcp/client/#usage).
 
-**OTel is optional** (§3.6). When enabled, use Pydantic AI's native instrumentation with
+**OTel is planned but never a prerequisite** (§3.6). When enabled, use Pydantic AI's native instrumentation with
 our own provider/exporter, not `DeepEvalInstrumentationSettings`. The latter owns a
 global tracer provider and Confident AI exporter. Avoiding it keeps scoring independent
 of the Pydantic AI tracing integration (§1.3).
@@ -371,9 +373,11 @@ calling the right tool with a different selection is not success.
 
 These are hard checks independent of judge scores. Collect named check results and
 failure details before asserting in pytest, so a failed check cannot erase the attempt
-from the saved results (§3.5). Seed the runtime-creation branch in the initial suite;
-explicitly mark unvisited failure branches as unexercised, rather than counting a
-conditional assertion as coverage. Add targeted storage/runtime-failure scenarios later.
+from the saved results (§3.5). Record which conditional branches each attempt actually
+visited and mark the rest unexercised, rather than counting a conditional assertion as
+coverage — with a fixed mock state (§3.4) several branches will stay unexercised, and
+that must be visible rather than silently read as passing. Targeted storage- and
+runtime-failure scenarios need mock-state control and are out of scope here.
 
 ### 3.2 `allowed-tools` as a reported dimension, not a gate
 
@@ -441,11 +445,21 @@ Start with **2 goldens per skill**:
 |---|---|
 | navigator: happy path | Confirm workload, show recommendations, confirm selection, emit handoff |
 | navigator: vague requirements | Ask for missing intent/scale before proceeding; then complete the flow |
-| navigator-deploy: approved deployment | Full chosen-model flow; seed a namespace with a runtime template but no instantiated runtime to exercise creation before deployment |
+| navigator-deploy: approved deployment | Full chosen-model flow through plan, approval, and execution against the default mock state |
 | navigator-deploy: handoff with consent withheld | Consume a complete handoff, skip redundant workload/recommendation phases, show the plan, and honor a final "hold off" reply without writes |
 
-The handoff case uses a fixed valid fixture, so it does not depend on a preceding
-navigator run. Verify its mock state and branch preconditions before the model starts.
+**Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
+`create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding
+hook, no env var, and no scenario file. That state already contains both a
+`ServingRuntime` and a `vllm-runtime-template`
+(`mock_k8s/cluster_state.py:360-399`), so the `runtime_needs_creation` branch is
+probably unreachable from it. Record which branch each golden actually took and mark
+the unvisited one unexercised (§3.1) rather than adding a seeding mechanism to reach
+it. Adding state control is a separate decision, to be made only if the unexercised
+branches turn out to matter.
+
+The handoff case uses a fixed valid fixture supplied in the scripted conversation, so it
+depends on neither a preceding navigator run nor any mock-state change.
 Start with one scenario per skill and one model, then expand to all four scenarios and
 three models: **2 skills × 2 goldens × 3 models = 12 conversations**. Repeated attempts
 multiply this count and each gets its own record and artifact.
@@ -471,7 +485,7 @@ an `attempt_id`, an artifact path, and optional `trace_id` (§3.6). Keep the ski
 scenario hashes, effective model/judge settings, and rubric version with the artifact
 so the comparison configuration is recoverable.
 
-**Update all relevant reporting modules**, not just dataclasses and type annotations:
+**In Phase 2, change only the write and read paths** — not the comparison layer:
 
 - `recorder.py`: capture agent execution as well as scoring time, save partial artifacts
   and one summary for every attempt, and handle missing/error metric values. Persist
@@ -479,20 +493,27 @@ so the comparison configuration is recoverable.
   judge scores. An empty metric list must not make a judged attempt pass automatically.
 - `reader.py`: explicitly load the new fields and provide defaults for older LCS records;
   it currently selects known fields and would otherwise discard the new metadata.
-- `comparison.py` and CLI: compare matching skill/golden sets and fixed judge/rubric
-  configurations within a selected sweep. Do not pool unrelated scenarios or arbitrary
-  recent records into a model ranking. Averages must show sample counts and leave missing
-  values `n/a`, rather than substituting `0.0` as the current comparison does.
-- Show routing success, overall pass rate, errors, and per-metric means separately.
-  Conditional judged quality must show its coverage denominator. Overall pass requires
-  successful routing, all hard checks, and all required metrics passing; absent required
-  scores cannot produce a pass. Dry runs report deterministic results separately.
+
+Getting these two right is what makes the data trustworthy later; a correct record can
+always be re-read, while a lossy one cannot be recovered. Overall pass requires
+successful routing, all hard checks, and all required metrics passing; absent required
+scores cannot produce a pass. Dry runs are recorded as such.
+
+**Defer `comparison.py` and the CLI to Phase 3**, when a matrix exists to compare. One
+model and a handful of conversations are read directly from the JSONL and the
+per-attempt artifacts; a cross-model ranking view built before there are cross-model
+results is speculative work. When it does land it must: compare matching skill/golden
+sets and fixed judge/rubric configurations within a selected sweep; refuse to pool
+unrelated scenarios or arbitrary recent records into a ranking; show sample counts and
+leave missing values `n/a` rather than substituting `0.0` as the current comparison
+does; and report routing success, pass rate, errors, and per-metric means separately,
+with a coverage denominator on conditional judged quality.
 
 Retain the LCS reporting behavior through backward-compatible defaults. The new
-`make eval-skills` entry point selects a coherent sweep; existing `make eval-compare`
-needs the reporting changes above before it can compare this matrix correctly.
+`make eval-skills` entry point selects a coherent sweep. Existing `make eval-compare`
+keeps working on LCS records and is not extended to this matrix until Phase 3.
 
-### 3.6 Debugging and offline re-scoring
+### 3.6 Debugging artifacts
 
 **The baseline is a saved transcript, not a running collector.** Write one artifact per
 attempt under `evals/results/<run_id>/<attempt_id>/`, including partial failed attempts:
@@ -509,18 +530,17 @@ attempt under `evals/results/<run_id>/<attempt_id>/`, including partial failed a
 
 Use Pydantic AI's native JSON serialization and `ModelMessagesTypeAdapter` for reloading;
 see [storing and loading messages](https://pydantic.dev/docs/ai/core-concepts/message-history/#storing-and-loading-messages-to-json).
-Rebuild the shared transcript and typed `MCPServer` / `MCPToolCall` / `CallToolResult`
-objects from this artifact. Re-scoring must not restart the MCP server, re-execute tools,
-or call the agent model. It invokes only the judge and saves a new scoring record linked
-to the original attempt, with the new rubric/judge configuration. The comparison view
-selects one scoring configuration instead of counting re-scores as new agent attempts.
 
-This makes the skill-wording loop inspectable without paying for a new agent trajectory
-each time a rubric changes. A skill-body change still requires a fresh agent attempt.
-Keep the initial save/load/re-score path small; no artifact database or generic replay
-engine is needed. DeepEval's JSON report is supplementary (§1.6).
+**Artifacts are for human inspection, not for re-scoring.** DeepEval objects are built
+from the live in-memory run, never rebuilt from a persisted artifact. When a rubric
+changes, re-run the agent. This keeps the artifact a plain debugging record — no
+reconstruction path to keep faithful, no scoring records to link back to earlier
+attempts, no artifact database or replay engine. Reloading needs to produce something
+readable, not something scoreable. An offline re-score path can be added later if rubric
+iteration proves expensive enough to justify it; nothing here forecloses that.
+DeepEval's JSON report is supplementary (§1.6).
 
-**Optional OTel:** use native `Instrumentation(settings=InstrumentationSettings(...))`
+**OTel (planned, §4):** use native `Instrumentation(settings=InstrumentationSettings(...))`
 with our own `TracerProvider`, `BatchSpanProcessor`, and `OTLPSpanExporter`. Set
 `OTEL_EXPORTER_OTLP_ENDPOINT` for the exporter and flush/shut down the provider at the
 end of the run. The environment variable **alone does not configure exporting**. Follow
@@ -528,8 +548,8 @@ the [raw OTel setup](https://pydantic.dev/docs/ai/integrations/logfire/#otel-wit
 
 When enabled, explicitly select the instrumentation format supported by the locked
 version (the initial proposal uses `version=5`) and `include_content=True`. The adapter
-and re-scoring path consume native messages, not version-sensitive span attributes.
-Verify the following in an optional trace spike:
+and scoring path consume native messages, not version-sensitive span attributes.
+Verify the following in the trace spike:
 
 | Attribute / span | What it answers |
 |---|---|
@@ -564,12 +584,23 @@ existing `mcp` dependency alone does not provide it. Resolve compatible versions
 `uv.lock` and record the tested versions; do not rely on open-ended constraints as
 evidence of compatibility. Keep tracing SDK/exporter dependencies optional.
 
+Remove the leftover untracked `evals/pydantic_ai/` spike directory (stale `.venv`,
+caches, and orphaned bytecode) so it does not collide with the `evals/agent/` and
+`evals/skills/` layout in §2.2.
+
+**Probe tool-calling fidelity across candidate models here, not in Phase 3.** A short
+curl or one-off script against each candidate endpoint — multi-turn OpenAI-style tool
+calling with a non-trivial argument shape — decides which models enter the matrix. The
+point is to establish the roster on evidence rather than to shrink it: a candidate that
+cannot reliably emit tool calls produces `model_failure` rows that say nothing about the
+skills, so it is better excluded knowingly than discovered mid-sweep. Record which
+candidates passed, which failed and how, and keep the matrix at every model that passed.
+
 *Acceptance:* one agent/model connects over stdio, loads a skill, makes a
-`recommend_model` call, and continues a second turn within the same agent context. Save
-and reload its native history, tool schemas, and captured MCP result information; build
-typed DeepEval objects with the call on the correct turn. Prove this without a collector
-and without re-executing tools during reconstruction. A full phase-gated skill flow is
-not required for this connectivity/adapter spike.
+`recommend_model` call, and continues a second turn within the same agent context. Build
+typed DeepEval objects from that live run with the call attributed to the correct turn.
+Separately, save the attempt artifact and reload it into a readable transcript (§3.6).
+A full phase-gated skill flow is not required for this connectivity/adapter spike.
 
 Skipping DeepEval's tracing integration avoids that integration's compatibility table;
 it does not remove our own adapter and dependency compatibility obligations. Re-run the
@@ -580,28 +611,30 @@ register `get_cluster_resources` once, with cluster ownership and a training-onl
 fallback. Carry over permission mappings. Test default, training-only, and combined
 configurations and retain the all-plugin collision check. No skill or contract changes.
 
-**Phase 2 — both skills, one model, deterministic checks.** Build the runner, native
-artifact save/load path, corrected shared adapter, stdio fixtures, checkpoints, and
-reporting changes. Delete the stale `turn._mcp_interaction = True` workaround. Start
-with one scenario per skill against `openai-gpt4o`, then add the vague-requirements and
-handoff/withheld-consent cases. Verify that failures and partial transcripts are recorded
-before pytest assertions, that branch checks actually execute, and that the reader
-retains new metadata. No judge cost yet; dry-run records identify this mode explicitly.
+**Phase 2 — both skills, one model, deterministic checks.** Build the runner, artifact
+save path, corrected shared adapter, stdio fixtures, checkpoints, and the `recorder.py`
+/ `reader.py` changes only (§3.5). Delete the stale `turn._mcp_interaction = True`
+workaround. Start with one scenario per skill against `openai-gpt4o`, then add the
+vague-requirements and handoff/withheld-consent cases. Verify that failures and partial
+transcripts are recorded before pytest assertions, that branch checks actually execute
+and report unexercised branches honestly, and that the reader retains new metadata.
+No judge cost yet; dry-run records identify this mode explicitly.
 
-**Phase 3 — all required metrics, then three models.** On the one-model path, add
-**`MultiTurnMCPUseMetric`, `MCPTaskCompletionMetric`, and the relevant
-`ConversationalGEval` rubric**. Verify offline re-scoring with a saved artifact and a
-new scoring configuration. Then add EnMaaS credentials/tool-calling probes and expand
-to the 6-cell, **12-conversation** sweep. Verify that routing failures, missing scores,
-and errors are reported without biasing comparisons. New targets: `make eval-skills`
-(one-model default, model selection via environment) and `make eval-skills-matrix`.
-Provide an explicit dry-run option for deterministic-only iterations and a re-score
-entry point that consumes an artifact without rerunning the agent.
+**Phase 3 — all required metrics, then the full model roster.** On the one-model path,
+add **`MultiTurnMCPUseMetric`, `MCPTaskCompletionMetric`, and the relevant
+`ConversationalGEval` rubric**. Then wire EnMaaS credentials for the models that passed
+the Phase 0 probe and expand to the full sweep — 6 cells and **12 conversations** if all
+three models qualified. Only now extend `comparison.py` and the CLI (§3.5), against real
+multi-model records. Verify that routing failures, missing scores, and errors are
+reported without biasing comparisons. New targets: `make eval-skills` (one-model
+default, model selection via environment) and `make eval-skills-matrix`, plus an
+explicit dry-run option for deterministic-only iterations.
 
-**Optional follow-on — trace viewing.** Add native OTel provider/exporter setup and a
-local collector. Acceptance: one conversation trace contains the skill-loading result,
-MCP arguments and results, and correlation IDs matching its saved record. This is not
-a prerequisite for any phase above.
+**Phase 4 — trace viewing.** Add native OTel provider/exporter setup and a local
+collector. Acceptance: one conversation trace contains the skill-loading result, MCP
+arguments and results, and correlation IDs matching its saved record. Planned work, but
+sequenced last deliberately: no phase above depends on it, and an unavailable collector
+must never prevent transcript capture or normal evaluation runs (§3.6).
 
 LCORE stays as-is throughout. Deciding its fate is a separate conversation once this path
 has produced some signal.
@@ -628,15 +661,17 @@ shim rather than a rewrite.
 
 ## 6. Open questions
 
-1. **EnMaaS specifics** — exact `base_url` and model identifiers for GLM and DeepSeek, and
-   does each handle OpenAI-style tool calling well enough? Tool-calling fidelity varies a
-   lot across hosted builds; worth a short curl probe before Phase 3.
+1. **Which models can actually tool-call?** — exact `base_url` and model identifiers for
+   GLM and DeepSeek, and whether each handles OpenAI-style tool calling well enough.
+   Tool-calling fidelity varies a lot across hosted builds. The Phase 0 probe answers
+   this and sets the roster; the matrix stays at three models unless the probe gives a
+   concrete reason to drop one.
 2. **Judge model** — keep `gemini-2.5-flash` on Vertex, or something stronger for the
    GEval rubrics? A weak judge on a nuanced rubric adds noise.
-3. **Optional trace viewer** — start without one. If trace viewing proves useful,
-   `otel-tui` is an option documented by Pydantic. Verify generic OTLP support before
-   choosing MLflow or another collector; their integration versions and deployment
-   requirements do not need to block the transcript-based first iteration.
+3. **Which trace collector** — `otel-tui` is an option documented by Pydantic and the
+   cheapest place to start. Verify generic OTLP support before choosing MLflow or
+   another collector; their integration versions and deployment requirements must not
+   block the transcript-based phases, which is why this is Phase 4.
 4. **Skill descriptions are now tested artifacts.** In discovery mode the model sees only
    `name` + `description`, and ours are a confusable pair — "LLM model selection" vs.
    "deploys a *chosen* LLM model". If routing fails, the fix may be a frontmatter edit

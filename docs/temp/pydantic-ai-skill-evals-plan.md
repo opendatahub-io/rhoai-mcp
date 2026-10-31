@@ -2,11 +2,13 @@
 
 **Status:** proposal · **Date:** 2026-10-31 · **Scope:** first iteration, deliberately small
 
-Complement/Replace the LightSpeed Core (LCORE) compose stack that `evals/` currently needs with a
+Complement the LightSpeed Core (LCORE) compose stack that `evals/` currently needs with a
 small Pydantic AI agent that wires `rhoai-mcp` over **stdio** and exposes the two
-agentskills.io skills in `.claude/skills/`. **Six evaluations: 2 skills × 3 models**
-(OpenAI, EnMaaS/GLM, EnMaaS/DeepSeek). EvalHub orchestration is noted at the end as a
-follow-on, not designed here.
+agentskills.io skills in `.claude/skills/`. **Six matrix cells: 2 skills × 3 models**
+(OpenAI, EnMaaS/GLM, EnMaaS/DeepSeek), with **2 scenarios per skill = 12 conversations**
+per full sweep. Start with one model before expanding the matrix. Keep both MCP metrics
+and one skill-fidelity judge per skill. Persist transcripts for debugging and offline
+re-scoring; OTel is optional. EvalHub orchestration is a follow-on, not designed here.
 
 ---
 
@@ -14,28 +16,25 @@ follow-on, not designed here.
 
 ### 1.1 Pydantic AI is the right framework
 
-[DeepEval's integrations](https://deepeval.com/integrations) cover LangChain, Pydantic AI,
-OpenAI Agents, LangGraph, AgentCore, Strands, Google ADK, LlamaIndex and CrewAI. Pydantic
-AI wins on four axes at once; nothing else wins on more than two:
+Pydantic AI fits the required agent loop without introducing a graph or workflow engine:
 
 | Criterion | Verdict |
 |---|---|
-| First-class DeepEval integration | Yes — verified in the installed `deepeval 4.3.1` (`deepeval.integrations.pydantic_ai`) |
+| Works with existing DeepEval metrics | Yes — build MCP test cases from the transcript; the tracing integration is not needed (§1.3) |
 | MCP client over stdio | Yes — `MCPToolset(StdioTransport(...))`, first-party |
 | Loads agentskills.io skills from `.claude/skills` | Yes — official `Skills` capability, no parsing code needed |
 | Swap model incl. OpenAI-compatible third parties | Yes — `OpenAIProvider(base_url=…, api_key=…)`, one line |
 | Fit with this codebase | Excellent — repo is already pydantic + pydantic-settings throughout |
 
-Rejected: **OpenAI Agents SDK** (OpenAI-shaped, more friction pointing at EnMaaS),
-**LangGraph / CrewAI** (abstractions we would not use — contradicts the KISS and
-minimal-dependencies rules in `CLAUDE.md`), **LlamaIndex / Strands / Google ADK** (no
-advantage here).
+Keep pytest and DeepEval rather than adding another evaluation framework. Native skill
+loading avoids maintaining a custom skill parser or discovery tool. There is no need for
+a broader framework comparison before proving this small path works.
 
 ### 1.2 Skills load natively — and discovery is the default
 
-[`pydantic-ai-harness[skills]`](https://pydantic.dev/docs/ai/harness/skills/) (v0.64.0,
-official) reads SKILL.md libraries straight off the filesystem, with `.claude/skills`
-named in its own conventional-locations example:
+The official [`pydantic-ai-harness[skills]`](https://pydantic.dev/docs/ai/harness/skills/)
+reads SKILL.md libraries from explicitly configured directories such as `.claude/skills`;
+it does not automatically scan conventional locations:
 
 ```python
 from pydantic_ai import Agent
@@ -43,8 +42,8 @@ from pydantic_ai.capabilities import LocalWorkspace
 from pydantic_ai_harness import Skills
 
 agent = Agent(
-    'anthropic:claude-opus-5-5',
-    capabilities=[LocalWorkspace('.'), Skills('.agents/skills')],
+    'openai:gpt-4o',
+    capabilities=[LocalWorkspace('.'), Skills('.claude/skills')],
 )
 ```
 
@@ -78,33 +77,39 @@ verified: importing the whole scoring path loads **zero** `pydantic_ai` modules.
 []
 ```
 
-That removes the one sharp version coupling in this stack — DeepEval ↔ Pydantic AI existed
-*only* through `deepeval.integrations.pydantic_ai`, and it is the coupling with a narrow
-published compat table and a silent failure mode
+That avoids the integration-specific DeepEval ↔ Pydantic AI version coupling, which has
+a narrow published compat table and a silent failure mode
 ([#3145](https://github.com/confident-ai/deepeval/issues/3145), where a message-shape
 mismatch made tool calls vanish from evaluations without error).
 
 **The remaining pin to watch is `mcp`.** DeepEval validates by isinstance against
 `mcp.types` — *"must be a list of 'MCPToolCall' with result of type 'CallToolResult' from
 mcp.types"* — and Pydantic AI depends on `mcp` via fastmcp. So both sides pin the same
-protocol SDK: `deepeval ← mcp → fastmcp ← pydantic-ai`. That is a far better seam than the
-old one: a conflict surfaces as a visible dependency or type error, not as silently
-missing tool calls.
+protocol SDK: `deepeval ← mcp → fastmcp ← pydantic-ai`. Dependency and type conflicts can
+surface visibly here, but that does **not** prove the transcript adapter is faithful.
+Contract tests must also catch silently missing or misattributed calls.
 
-**Reuse:** `evals/deepeval_helpers.py` already does the manual construction for
-`LCSResult`. Feed it a Pydantic AI transcript instead and it works, along with
-`evals/metrics/config.py`, `evals/providers/*` and `evals/reporting/*`.
+**Reuse with changes:** keep the metric factories and judge providers. Adapt
+`evals/deepeval_helpers.py` to a shared transcript contract, but fix its call association
+and preserve the additional skill-loading turns. Update reporting explicitly (§3.5).
 
-Two verified gotchas for whoever retypes that module:
+Three verified gotchas for whoever adapts that module:
 
 - **`Turn._mcp_interaction` is now a derived read-only property** in deepeval 4.3.1. The
   workaround at `deepeval_helpers.py:127-129` (`turn._mcp_interaction = True`) raises
   `AttributeError: property '_mcp_interaction' of 'Turn' object has no setter`. Delete it
    — the property already derives `True` whenever `mcp_tools_called` is non-empty.
-- **DeepEval test cases do not round-trip through JSON.** `model_dump()` works, but
+- **Call association currently uses list position.** The loop at
+  `deepeval_helpers.py:100-119` consumes one entry from `result.tool_calls` for every
+  assistant tool call. A local probe with `load_capability` followed by `recommend_model`
+  attached the recommendation to the skill-loading turn. Match calls and returns by
+  **call ID**, and distinguish harness tools from MCP tools. Retain skill-loading
+  instructions in the fidelity transcript without counting them as MCP interactions.
+- **DeepEval test cases do not directly round-trip through JSON.** `model_dump()` works, but
   `model_validate()` fails twice: `MCPServer` is not a pydantic model so nested dicts never
   rehydrate, and the validator rejects dict-shaped `mcp_tools_called`. Build the objects,
-  do not try to reload them.
+  including typed MCP results, from persisted native history and tool schemas instead.
+  This is an adapter constraint, not a reason to give up offline re-scoring (§3.6).
 
 ### 1.4 The stdio server is self-contained — verified locally
 
@@ -168,27 +173,41 @@ wired; it simply is not surfaced as a tool. Registering a thin `@mcp.tool()` wra
 - no change to the stability contract
 - a fix for every consumer of the default plugin set, not just the evals
 
-Keep the training-domain registration as-is so nothing regresses for servers that enable
-`training`; the two can coexist, since the plugin sets are disjoint by default. Worth a
-test asserting the tool is reachable under the *default* plugin configuration — that is
-the condition that actually broke.
+**Register the name exactly once in every plugin configuration.** Unconditionally
+registering it in both places would break `test_no_tool_name_collisions()` in
+`tests/integration/test_tool_registration.py` when all plugins are enabled. Default
+plugin sets do not guarantee mutual exclusion.
 
-### 1.6 DeepEval writes almost nothing useful to disk
+Extract the existing response-building implementation into a shared helper. Let
+`cluster-composites` own registration when enabled; retain a training-only fallback when
+`cluster-composites` is absent. Determine ownership from the loaded plugin set, not hook
+execution order. This preserves training-only users without duplicating the handler or
+the registered name.
 
-Verified against 4.3.1, because it determines where debugging information comes from:
+Carry the existing `nodes:list` permission mapping into `CLUSTER_PERMISSIONS` in
+`composites/permissions.py`, retaining it for the training fallback. Test default,
+training-only, and combined/all-plugin configurations: exactly one tool, the same
+response shape, and the appropriate permission mapping in each.
 
-- `DisplayConfig.file_output_dir` accepts **`md` or `html` only** — `file_type="json"`
-  raises `ValueError` — and the export is gated behind `print_results=True`
-  (`deepeval/evaluate/evaluate.py:311`).
-- The artifact is a rendered console report: input, final output, metric scores,
-  thresholds, judge reasons. **No tool arguments, no tool results, no intermediate turns.**
-- `.deepeval/` holds no run history; `CacheConfig` exists to skip re-running identical
-  metric/test-case pairs, not for inspection.
-- `evaluate()` returns an `EvaluationResult` in memory. Richer inspection is designed to
-  go to Confident AI, their hosted platform.
+### 1.6 DeepEval has structured local exports; native transcripts fill the MCP gap
 
-So a bad score on its own gives you a number and the judge's prose. Everything about *how
-the conversation got there* has to come from the OTel trace (§3.6).
+Verified against installed **4.3.1** and the
+[local-storage docs](https://deepeval.com/docs/evaluation-local-backend-storage):
+
+- **`DisplayConfig(results_folder=...)` saves structured JSON test runs**, including
+  scores, reasons, and conversation turns. It is separate from the older rendered
+  HTML/Markdown `file_output_dir` interface and its `print_results` gate.
+- The default JSON backend also keeps a rolling `.deepeval/.latest_run_full.json`.
+  SQLite is available, but adds no value for this iteration. `CacheConfig` serves a
+  different purpose: avoiding repeated metric work.
+- **The legacy MCP fields used here are omitted by that export.** A local probe showed
+  `mcp_tools_called` disappearing when converted to the exported API turn representation.
+  A DeepEval JSON report alone is therefore insufficient to reconstruct our MCP case.
+
+Keep our JSONL summary for comparisons. Save the native Pydantic AI message history and
+the MCP tool-schema snapshot as the durable input to the adapter (§3.6). DeepEval's JSON
+export is a useful additional report for scored attempts, not the source of truth for
+agent trajectories. None of this requires a collector or a hosted service.
 
 ---
 
@@ -205,39 +224,47 @@ agent = Agent(
     capabilities=[
         LocalWorkspace('.'),
         Skills('.claude/skills'),                              # both skills in the catalog
-        Instrumentation(settings=InstrumentationSettings(version=5)),
     ],
     toolsets=[MCPToolset(StdioTransport(
         command='uv', args=['run', 'rhoai-mcp', '--transport', 'stdio', '--mock-cluster'],
     ))],
 )
-result = await agent.run("I need an LLM for our customer support bot, about 50 agents.")
+async with agent:                                             # one server per conversation
+    result = await agent.run("I need an LLM for our customer support bot, about 50 agents.")
+    # Check the expected checkpoint before sending the next scripted reply.
+    # Continue within this context, using message_history=result.all_messages().
 ```
 
-**Use Pydantic AI's native instrumentation, not `DeepEvalInstrumentationSettings`.** The
-latter is a real DeepEval class (`deepeval.integrations.pydantic_ai.instrumentator`) and
-subclasses `InstrumentationSettings`, so it would drop in — but its constructor *"creates
-a `TracerProvider` … sets the global tracer provider"* and exposes no parameter for
-supplying your own provider or exporter. Its OTLP exporter is Confident AI's, authenticated
-with an `x-confident-api-key` header. If we want spans in our own collector we have to own
-the pipeline, and it will not hand it over. Skipping it also drops the DeepEval ↔
-Pydantic AI version coupling (§1.3).
+Resolve the workspace and subprocess working directory from the repository root rather
+than the caller's current directory. Keep the MCP connection open across **all turns**
+of a conversation with `async with agent:`. Without an explicit context, toolsets open
+and close as needed; a stdio server can restart between runs and lose mock-cluster state.
+Start a fresh server for each scenario/model attempt so deployments do not leak into the
+next scenario. Fetch tool schemas from this same connection; the skill fixtures must
+override the existing HTTP/SSE schema-discovery fixtures instead of requiring LCORE.
+See the [MCP lifecycle docs](https://pydantic.dev/docs/ai/mcp/client/#usage).
 
-Pin `version=5` explicitly rather than inheriting the default: versions 2–4 are deprecated
-and warn, and **version 6 is opt-in and changes message role structure for tool results**.
-Anything parsing these spans is version-sensitive. (`Instrumentation(settings=...)` in
-`capabilities` requires pydantic-ai ≥ 1.95; older 1.x used `Agent(instrument=...)`.)
+**OTel is optional** (§3.6). When enabled, use Pydantic AI's native instrumentation with
+our own provider/exporter, not `DeepEvalInstrumentationSettings`. The latter owns a
+global tracer provider and Confident AI exporter. Avoiding it keeps scoring independent
+of the Pydantic AI tracing integration (§1.3).
 
-Export OTLP with the standard `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable — the
-collector is a deployment choice, not a code dependency (§3.6).
+Expose the complete default MCP tool set, including the GPU-inventory fix in §1.5; do
+not filter tools to the expected skill. This tests discovery from a natural-language
+request with both skills available.
 
-This is the production path for a chat assistant: not many type `/navigator`, instead they typically describe
-a problem. All 53 tools are exposed — the agent cannot know which skill's allowlist
-applies before it has chosen one.
+Both skills are phase-gated, so use **scripted replies with checkpoints**. Each scenario
+step defines the expected state before its reply: relevant tool calls or their absence,
+required output structure, and the confirmation being requested. Check those properties
+without demanding exact prose. Only then send the associated reply. If a checkpoint
+fails, stop the script, save the partial transcript, and record the failure; do not send
+a generic "yes" that could approve an unrelated action.
 
-Both skills are phase-gated and wait for the customer, so drive them with **canned
-scripted replies** threaded through `message_history=result.all_messages()`. Deterministic
-and reproducible, which matters when the point is comparing three models.
+Thread history through `message_history=result.all_messages()`. When aggregating,
+either use the final cumulative history or append each run's `new_messages()`; do not
+concatenate successive `all_messages()` snapshots and duplicate earlier turns. Apply
+explicit request/tool-call limits and a conversation timeout, preserving partial history
+on failure. Fixed scripts and `temperature=0` reduce variation; model outputs still vary.
 
 ### 2.2 Layout
 
@@ -246,20 +273,30 @@ evals/
 ├── agent/
 │   ├── models.py        # AgentModelSpec: openai | enmaas-glm | enmaas-deepseek
 │   ├── runner.py        # build Agent + Skills + MCPToolset(stdio); drive scripted turns
-│   └── transcript.py    # pydantic-ai messages → Transcript (in-memory; not persisted)
+│   └── transcript.py    # save/load native history + schemas; adapt to shared transcript
 ├── skills/
-│   ├── goldens.py       # scenarios + scripted user replies
+│   ├── conftest.py      # stdio agent/session and schemas; override HTTP/LCS fixtures
+│   ├── goldens.py       # scenarios + checkpoints + scripted user replies
 │   ├── test_navigator.py
 │   └── test_navigator_deploy.py
-├── deepeval_helpers.py  # REUSED — retyped LCSResult → Transcript protocol
-├── metrics/, providers/, reporting/   # REUSED as-is
+├── deepeval_helpers.py  # shared conversion; call-ID matching and typed MCP results
+├── metrics/, providers/ # reuse MCP metric factories and judge providers; add GEval rubrics
+├── reporting/          # extend recorder, reader, models, and comparison handling
+├── results/            # JSONL summaries + per-attempt transcript/report artifacts
 └── scenarios/, lcs_client.py          # existing LCORE path, untouched
 ```
 
-The only change to existing code: `deepeval_helpers.py` and `reporting/recorder.py` are
-typed against `LCSResult`. Introduce a `Transcript` protocol (`task`, `final_output`,
-`tool_calls`, `messages`, `turns`, `tool_names_used`) that both satisfy, and retype those
-two modules. Both backends then share one set of helpers.
+Introduce a small shared transcript contract (`task`, `final_output`, `tool_calls`,
+`messages`, `turns`, `tool_names_used`) and tool-call records containing call IDs, names,
+arguments, results, and error information. Adapt Pydantic AI's message parts to it; keep
+the LCS path compatible. This includes behavioral adapter fixes (§1.3), not only type
+annotations. Match parallel calls and returns by ID and preserve message order. Preserve
+typed MCP content, structured results, and error flags when building DeepEval objects;
+capture these at the MCP call boundary if native message normalization loses them.
+
+Test mixed harness/MCP calls, out-of-order parallel returns, failed calls, and multi-turn
+history without duplicates before running paid evaluations. The native persisted history
+remains the source; the shared representation and DeepEval objects are derived views.
 
 ### 2.3 Model matrix
 
@@ -286,9 +323,13 @@ class AgentModelSpec:
 is OpenAI-compatible, so all three are the same code path — only the tuple changes.
 
 Selected by `RHOAI_EVAL_AGENT_MODELS` (comma-separated) to parametrise pytest, so CI can
-run one model per job. Set `temperature=0` on all three. **Hold the judge model fixed**
-across them, via the existing `RHOAI_EVAL_EVAL_*` settings and `create_judge_llm()` — if
-the judge moves with the agent the comparison means nothing.
+run one model per job. Set `temperature=0` where supported and record effective settings;
+do not silently fall back to different settings. **Hold the judge model fixed**
+across them, via the existing `RHOAI_EVAL_EVAL_*` settings and `create_judge_llm()`.
+Record the requested model identifier, provider-reported version when available, and
+endpoint identity without credentials. One sweep is a smoke comparison, not evidence of
+stable model rankings; use explicit repeated attempts for stronger conclusions rather
+than automatically retrying failures until they pass.
 
 ---
 
@@ -298,37 +339,61 @@ the judge moves with the agent the comparison means nothing.
 
 Read straight off the transcript.
 
-**Routing** — did it load the right skill? Record `skills_loaded` (ordered) and whether
-the expected one was loaded. This is a *precondition*, not a quality score: if the wrong
-skill loaded, record the run as `routing_failure` and leave the judged metrics `n/a`
-rather than `0`. Scoring "never loaded navigator" as "followed navigator badly" would be
-misleading and unactionable.
+**Routing** — record successful `load_capability` calls in order, whether the expected
+skill was loaded, and any unintended skill loads. If routing fails, record
+`routing_failure` and fail the overall attempt. Leave skill-fidelity scoring `n/a` with
+a reason; report routing success across **all attempts**, not just those that reach a
+judge. MCP metrics still run wherever their transcript requirements are met (§3.3).
 
 **Navigator** — `get_use_case_defaults` and `get_expected_rps` called; `recommend_model`
 called at least once and not before the workload profile is confirmed; the output table
-has the 4 columns and 8 rows from the skill template with no empty cells (reuse
-`_assert_table_completeness()` from the existing scenario verbatim); a
-`<!-- navigator-handoff … -->` block is emitted and parses.
+has exactly the 4 recommendation columns (plus the row-label column) and 8 named data
+rows from the skill template, with a value or explicit `—` in every cell and no
+unreplaced `[value]` placeholders; a `<!-- navigator-handoff … -->` block is emitted
+after the customer's choice, parses, and agrees with the confirmed workload and selected
+recommendation. `plan_deployment`, `execute_deployment`, and deployment writes through
+other tools must never be called by this skill.
 
-**Navigator-deploy** — `plan_deployment` is reached; `execute_deployment` is not called
-before the scripted `"deploy"` turn; `create_serving_runtime` precedes it when
-`runtime_needs_creation` is true.
+**Strengthen the table checker rather than copying it verbatim.** The current helper in
+`evals/scenarios/test_navigator_table_completeness.py` accepts rows with only one
+recommendation cell. Validate one comparison table's exact headers, row labels, and cell
+counts; do not mix it with earlier workload tables. Add malformed-table examples to
+exercise those checks.
+
+**Navigator-deploy** — `plan_deployment` is reached; the plan is shown before requesting
+deployment approval; neither `execute_deployment` nor runtime creation occurs before
+the scripted affirmative reply. When `runtime_needs_creation` is true, successful
+`create_serving_runtime` must precede execution. An absent confirmation, an unresolved
+storage URI, or failed runtime creation must prevent deployment. The withheld-consent
+scenario must have zero deployment writes even after the final user reply. Check that
+execution parameters match the reviewed plan and the confirmed model/configuration;
+calling the right tool with a different selection is not success.
+
+These are hard checks independent of judge scores. Collect named check results and
+failure details before asserting in pytest, so a failed check cannot erase the attempt
+from the saved results (§3.5). Seed the runtime-creation branch in the initial suite;
+explicitly mark unvisited failure branches as unexercised, rather than counting a
+conditional assertion as coverage. Add targeted storage/runtime-failure scenarios later.
 
 ### 3.2 `allowed-tools` as a reported dimension, not a gate
 
 The field is optional per the agentskills spec and unimplemented by the harness, so we do
 not filter on it. Instead, record per run: tools called, and which of them fall outside
-the loaded skill's declared `allowed-tools`. Reported as a number, not an assertion.
+the loaded skill's declared `allowed-tools`. Normalize Claude's
+`mcp__rhoai-mcp__<name>` spelling to the server tool name, and report harness tools such
+as `load_capability` separately. General allowlist deviations are observations; explicit
+workflow boundaries and consent requirements remain hard checks (§3.1).
 
 Worth having because the skill bodies do make real boundary claims — `navigator` ends with
 "Do not attempt to plan or execute a deployment" — and because comparing declared
 allowlists against the server's actual tool list is exactly what surfaced §1.5. Add one
-cheap no-LLM unit test asserting every `allowed-tools` entry resolves to a real tool; that
-would have caught the drift the day it landed.
+cheap no-LLM unit test asserting every `allowed-tools` entry resolves to a real tool
+under the default plugin configuration; that would have caught the drift the day it landed.
 
 ### 3.3 Judged metrics
 
-Built from the transcript via the existing `deepeval_helpers.py`:
+**Both MCP metrics remain required in the scored evaluation suite**, alongside one
+skill-specific GEval. Build their inputs through the corrected shared adapter:
 
 | Metric | Why |
 |---|---|
@@ -340,72 +405,151 @@ The two GEval rubrics are what answer the original question, "is the use case as
 in the skill actually being delivered":
 
 - **`navigator-fidelity`** — announces phases; waits at each gate; tables not raw JSON;
-  asks about GPU inventory rather than inventing it; hands off instead of deploying.
+  discovers GPU inventory or asks when unavailable; hands off instead of deploying.
 - **`navigator-deploy-fidelity`** — surfaces plan `issues`/`warnings` before asking; never
   deploys without an explicit yes; explains failures instead of silently retrying.
 
-Keep the existing `mcp_use_threshold` / `task_completion_threshold` knobs. Calibrate
-thresholds against the strongest model once there is data — do not guess up front.
+Run both MCP metrics on every attempt whose captured transcript satisfies their input
+requirements, including routing failures and failed deterministic checks. Do not skip
+them to reduce cost or replace them with GEval. If a metric cannot run on an empty or
+incomplete trajectory, record `n/a` and its specific missing precondition. Judge errors
+are errors, not zero scores. Skill fidelity is conditional on successful routing, and
+its rubric receives the expected skill document and full relevant conversation,
+including loaded instructions.
 
-### 3.4 The matrix — 6 runs
+Make scenario intent explicit in the scripted user messages and case scenario/context:
+honoring a user's decision to withhold deployment is successful completion of that
+scenario. Validate this interpretation with the MCP task-completion judge during
+calibration. Hard consent checks still decide whether the workflow was followed,
+regardless of the judge's interpretation.
+
+Keep the existing `mcp_use_threshold` / `task_completion_threshold` knobs. Calibrate
+thresholds against reviewed passing and failing examples with a fixed judge, not only
+against whichever agent model scores highest. Report every metric separately; avoid a
+combined number that could hide a workflow violation.
+
+### 3.4 The matrix — 6 cells, 12 conversations per sweep
 
 | | OpenAI gpt-4o | EnMaaS GLM | EnMaaS DeepSeek |
 |---|---|---|---|
 | **navigator** | run | run | run |
 | **navigator-deploy** | run | run | run |
 
-Start with **2 goldens per skill** (happy path, vague-requirements path). Each run emits
-one `EvalRecord` per (skill, golden, model), so `make eval-compare` works immediately.
+Start with **2 goldens per skill**:
 
-Expect the smaller models to fail routing or the phase gates. That is a *result*, not a
-harness bug. Keep three outcomes distinguishable in the record: `harness_error` (crash,
-timeout, auth), `routing_failure`, and a normal scored run.
+| Golden | Purpose |
+|---|---|
+| navigator: happy path | Confirm workload, show recommendations, confirm selection, emit handoff |
+| navigator: vague requirements | Ask for missing intent/scale before proceeding; then complete the flow |
+| navigator-deploy: approved deployment | Full chosen-model flow; seed a namespace with a runtime template but no instantiated runtime to exercise creation before deployment |
+| navigator-deploy: handoff with consent withheld | Consume a complete handoff, skip redundant workload/recommendation phases, show the plan, and honor a final "hold off" reply without writes |
+
+The handoff case uses a fixed valid fixture, so it does not depend on a preceding
+navigator run. Verify its mock state and branch preconditions before the model starts.
+Start with one scenario per skill and one model, then expand to all four scenarios and
+three models: **2 skills × 2 goldens × 3 models = 12 conversations**. Repeated attempts
+multiply this count and each gets its own record and artifact.
+
+Keep `outcome` distinct from pass/fail: `harness_error` (setup, auth, adapter, or judge
+failure, with `error_stage`), `model_failure` (unrecoverable model-response/argument failure or
+usage-limit exhaustion), `routing_failure`, and an `evaluated` attempt that can pass or
+fail. Record timeouts with their stage and available diagnostics rather than treating
+every timeout as the same failure. Preserve routing and check results even if a later
+judge fails. A model failure is an evaluation result, not automatically a harness bug.
 
 ### 3.5 Reporting
 
-DeepEval computes scores and reasons; **our recorder writes them**.
+DeepEval computes scores and reasons; **our recorder writes comparison summaries**.
 `evals/reporting/recorder.py` already extracts `score` / `success` / `threshold` /
-`reason` per metric and appends a JSONL line — that is the file you will grep, not
-anything DeepEval produces (§1.6).
+`reason` per metric and appends a JSONL line. Keep that path and optionally enable
+DeepEval's structured JSON export as a companion report (§1.6).
 
 `EnvironmentRecord.agent_model` already exists and is left empty by the LCS recorder;
-populate it, with `agent_backend="pydantic-ai"`. Add to `EvalRecord`: `skill`,
-`golden_id`, `skills_loaded`, `outcome`, and **`trace_id`** (§3.6). That is enough for
-`python -m evals.reporting.cli compare` to produce the cross-model table.
+populate it, with `agent_backend="pydantic-ai"`. Extend records with `skill`, `golden_id`,
+`skills_loaded`, `outcome`, `error_stage`/diagnostics, named deterministic-check results,
+an `attempt_id`, an artifact path, and optional `trace_id` (§3.6). Keep the skill and
+scenario hashes, effective model/judge settings, and rubric version with the artifact
+so the comparison configuration is recoverable.
 
-### 3.6 Debugging a bad score
+**Update all relevant reporting modules**, not just dataclasses and type annotations:
 
-Scores come from DeepEval; the trajectory comes from the OTel trace. With
-`include_content=True` (the Pydantic AI default, alongside `include_binary_content=True`),
-the spans carry what the skill-wording loop needs:
+- `recorder.py`: capture agent execution as well as scoring time, save partial artifacts
+  and one summary for every attempt, and handle missing/error metric values. Persist
+  before the final pytest assertion. Preserve results from a dry run without inventing
+  judge scores. An empty metric list must not make a judged attempt pass automatically.
+- `reader.py`: explicitly load the new fields and provide defaults for older LCS records;
+  it currently selects known fields and would otherwise discard the new metadata.
+- `comparison.py` and CLI: compare matching skill/golden sets and fixed judge/rubric
+  configurations within a selected sweep. Do not pool unrelated scenarios or arbitrary
+  recent records into a model ranking. Averages must show sample counts and leave missing
+  values `n/a`, rather than substituting `0.0` as the current comparison does.
+- Show routing success, overall pass rate, errors, and per-metric means separately.
+  Conditional judged quality must show its coverage denominator. Overall pass requires
+  successful routing, all hard checks, and all required metrics passing; absent required
+  scores cannot produce a pass. Dry runs report deterministic results separately.
+
+Retain the LCS reporting behavior through backward-compatible defaults. The new
+`make eval-skills` entry point selects a coherent sweep; existing `make eval-compare`
+needs the reporting changes above before it can compare this matrix correctly.
+
+### 3.6 Debugging and offline re-scoring
+
+**The baseline is a saved transcript, not a running collector.** Write one artifact per
+attempt under `evals/results/<run_id>/<attempt_id>/`, including partial failed attempts:
+
+- Native Pydantic AI message history, preserving tool-call IDs, user replies, intermediate
+  assistant output, tool results, and the `load_capability` result containing the skill
+  body actually delivered. Save the configured skill files/catalog as well, so routing
+  failures still have a record of the descriptions offered to the model.
+- MCP tool schemas from the same server session, and any captured MCP result/error
+  records needed to preserve information lost by native normalization (§2.2).
+- Scenario/checkpoint definition, check results, effective agent/judge configuration,
+  skill/scenario hashes, rubric version, dependency versions, and failure diagnostics.
+  Exclude credentials from configuration snapshots.
+
+Use Pydantic AI's native JSON serialization and `ModelMessagesTypeAdapter` for reloading;
+see [storing and loading messages](https://pydantic.dev/docs/ai/core-concepts/message-history/#storing-and-loading-messages-to-json).
+Rebuild the shared transcript and typed `MCPServer` / `MCPToolCall` / `CallToolResult`
+objects from this artifact. Re-scoring must not restart the MCP server, re-execute tools,
+or call the agent model. It invokes only the judge and saves a new scoring record linked
+to the original attempt, with the new rubric/judge configuration. The comparison view
+selects one scoring configuration instead of counting re-scores as new agent attempts.
+
+This makes the skill-wording loop inspectable without paying for a new agent trajectory
+each time a rubric changes. A skill-body change still requires a fresh agent attempt.
+Keep the initial save/load/re-score path small; no artifact database or generic replay
+engine is needed. DeepEval's JSON report is supplementary (§1.6).
+
+**Optional OTel:** use native `Instrumentation(settings=InstrumentationSettings(...))`
+with our own `TracerProvider`, `BatchSpanProcessor`, and `OTLPSpanExporter`. Set
+`OTEL_EXPORTER_OTLP_ENDPOINT` for the exporter and flush/shut down the provider at the
+end of the run. The environment variable **alone does not configure exporting**. Follow
+the [raw OTel setup](https://pydantic.dev/docs/ai/integrations/logfire/#otel-without-logfire).
+
+When enabled, explicitly select the instrumentation format supported by the locked
+version (the initial proposal uses `version=5`) and `include_content=True`. The adapter
+and re-scoring path consume native messages, not version-sensitive span attributes.
+Verify the following in an optional trace spike:
 
 | Attribute / span | What it answers |
 |---|---|
-| `gen_ai.system_instructions` | **The skill body as actually delivered** |
-| `pydantic_ai.all_messages` | Full conversation, on the agent run span |
+| `gen_ai.system_instructions` | Initial instructions and skill catalog; do not assume the loaded body is here |
+| `load_capability` tool result | **The skill body as actually delivered in discovery mode** |
+| `pydantic_ai.all_messages` | Conversation history on the agent run span |
 | `gen_ai.input.messages` / `gen_ai.output.messages` | Per-turn prompt and completion |
-| Tool spans | Name, arguments, **and return values** |
-| `gen_ai.tool.definitions` | The tool schemas offered to the model |
-| MCP `call_tool` / `list_tools` spans | Which MCP calls were made |
+| Tool spans | Name, arguments, and return values |
+| `gen_ai.tool.definitions` | Tool schemas offered to the model |
 
-Mapped onto the failure modes in §3.1: wrong skill loaded (the `load_capability` span and
-its args), phase gate skipped (ordering of output vs. tool spans), `recommend_model` called
-with bad arguments (tool span args), `gpu_info.products` misread (tool return value), table
-rendered with empty cells (final output message). The first row is the one that makes this
-worth wiring: you read the instructions the model received rather than inferring them.
+The [Skills docs](https://pydantic.dev/docs/ai/harness/skills/#how-it-works) describe
+loading the body as a tool result, rather than injecting it into the initial system
+instructions. Inspect that result when debugging skill delivery.
 
-**Correlate the two systems.** The judge's score and reason are not in the trace. Stamp the
-same `run_id` / `golden_id` on the trace and on the `EvalRecord`, and persist `trace_id` in
-the record, so a bad score is one lookup away from its trajectory instead of a timestamp
-hunt. Cheap, but only if designed in from the start.
-
-**Accepted trade-off: no offline re-scoring.** We do not persist DeepEval test cases, so
-iterating on a `ConversationalGEval` rubric means re-running the agent, not re-judging a
-recording. With six runs against a mock cluster that is affordable; it is recorded here so
-the cost is chosen rather than discovered.
-
-The collector is a deployment choice behind `OTEL_EXPORTER_OTLP_ENDPOINT` — `otel-tui` for
-zero-infra local viewing, MLflow or anything else later, with no code change.
+Create a parent span around the whole multi-turn conversation so one optional
+`trace_id` covers all its agent runs. Stamp `run_id`, `attempt_id`, and `golden_id` on
+that span and the saved record; otherwise separate `agent.run()` calls may produce
+separate traces. Scores and reasons remain in the scoring records. An unavailable
+collector must not prevent transcript capture or normal evaluations. `otel-tui` is a
+local viewing option; other collectors can be evaluated later.
 
 ---
 
@@ -413,36 +557,51 @@ zero-infra local viewing, MLflow or anything else later, with no code change.
 
 Test-first per `CLAUDE.md`.
 
-**Phase 0 — pin and spike (half a day).** Add a `skill-eval` dependency group:
-`pydantic-ai-slim[openai]`, `pydantic-ai-harness[skills]>=0.64,<1`, `deepeval>=4.3,<5`,
-plus the OTLP exporter. One agent, one model, one task, one tool call.
+**Phase 0 — pin and spike.** Add a `skill-eval` dependency group:
+`pydantic-ai-slim[openai,mcp]`, `pydantic-ai-harness[skills]>=0.64,<1`, and
+`deepeval>=4.3,<5`. The `mcp` extra is required for the FastMCP client; the server's
+existing `mcp` dependency alone does not provide it. Resolve compatible versions in
+`uv.lock` and record the tested versions; do not rely on open-ended constraints as
+evidence of compatibility. Keep tracing SDK/exporter dependencies optional.
 
-*Acceptance:* a `recommend_model` call appears in `result.all_messages()`, **and its
-arguments and return value are visible in an exported OTLP span.** The second half is what
-§3.6 depends on, so prove it before building on it.
+*Acceptance:* one agent/model connects over stdio, loads a skill, makes a
+`recommend_model` call, and continues a second turn within the same agent context. Save
+and reload its native history, tool schemas, and captured MCP result information; build
+typed DeepEval objects with the call on the correct turn. Prove this without a collector
+and without re-executing tools during reconstruction. A full phase-gated skill flow is
+not required for this connectivity/adapter spike.
 
-Because we skip DeepEval's instrumentation (§2.1), pydantic-ai needs no ceiling — the
-compat table and #3145 no longer apply. Two pins still matter:
-`pydantic-ai-harness` is a `0.x` that iterates faster than core, and `mcp` is the shared
-seam between DeepEval and Pydantic AI (§1.3). Treat a bump of either as cause to re-run
-this spike.
+Skipping DeepEval's tracing integration avoids that integration's compatibility table;
+it does not remove our own adapter and dependency compatibility obligations. Re-run the
+spike and adapter tests when bumping core/harness, FastMCP, `mcp`, or DeepEval.
 
-**Phase 1 — unblock `get_cluster_resources` via option B (§1.5).** Register a
-`get_cluster_resources` tool in `cluster-composites`, reusing the response shape already
-built in `domains/training/tools/discovery.py`. Test-first: a failing test asserting the
-tool is reachable under the **default** plugin set. No skill or contract changes.
+**Phase 1 — unblock GPU discovery via option B (§1.5).** Extract a shared handler and
+register `get_cluster_resources` once, with cluster ownership and a training-only
+fallback. Carry over permission mappings. Test default, training-only, and combined
+configurations and retain the all-plugin collision check. No skill or contract changes.
 
-**Phase 2 — harness + navigator + one model.** `evals/agent/*`, the `Transcript` retype,
-`test_navigator.py` with the deterministic checks, against `openai-gpt4o`. No judge cost
-yet. Fast feedback.
+**Phase 2 — both skills, one model, deterministic checks.** Build the runner, native
+artifact save/load path, corrected shared adapter, stdio fixtures, checkpoints, and
+reporting changes. Delete the stale `turn._mcp_interaction = True` workaround. Start
+with one scenario per skill against `openai-gpt4o`, then add the vague-requirements and
+handoff/withheld-consent cases. Verify that failures and partial transcripts are recorded
+before pytest assertions, that branch checks actually execute, and that the reader
+retains new metadata. No judge cost yet; dry-run records identify this mode explicitly.
 
-Two fixes land here while retyping `deepeval_helpers.py` (§1.3): delete the stale
-`turn._mcp_interaction = True` workaround, which now raises on 4.3.1, and add the
-`trace_id` / correlation plumbing from §3.6.
+**Phase 3 — all required metrics, then three models.** On the one-model path, add
+**`MultiTurnMCPUseMetric`, `MCPTaskCompletionMetric`, and the relevant
+`ConversationalGEval` rubric**. Verify offline re-scoring with a saved artifact and a
+new scoring configuration. Then add EnMaaS credentials/tool-calling probes and expand
+to the 6-cell, **12-conversation** sweep. Verify that routing failures, missing scores,
+and errors are reported without biasing comparisons. New targets: `make eval-skills`
+(one-model default, model selection via environment) and `make eval-skills-matrix`.
+Provide an explicit dry-run option for deterministic-only iterations and a re-score
+entry point that consumes an artifact without rerunning the agent.
 
-**Phase 3 — judged metrics, second skill, three models.** Adds the GEval rubrics,
-`test_navigator_deploy.py`, EnMaaS credentials, and the 6-cell matrix. New targets:
-`make eval-skills`, `make eval-skills-matrix`.
+**Optional follow-on — trace viewing.** Add native OTel provider/exporter setup and a
+local collector. Acceptance: one conversation trace contains the skill-loading result,
+MCP arguments and results, and correlation IDs matching its saved record. This is not
+a prerequisite for any phase above.
 
 LCORE stays as-is throughout. Deciding its fate is a separate conversation once this path
 has produced some signal.
@@ -474,12 +633,10 @@ shim rather than a rewrite.
    lot across hosted builds; worth a short curl probe before Phase 3.
 2. **Judge model** — keep `gemini-2.5-flash` on Vertex, or something stronger for the
    GEval rubrics? A weak judge on a nuanced rubric adds noise.
-3. **Which local OTel backend?** `otel-tui` is the zero-infra option Pydantic themselves
-   name. MLflow is attractive later because EvalHub provides it automatically — but note
-   MLflow's first-party route is `mlflow.pydantic_ai.autolog()`, a one-directional shim
-   with a `pydantic-ai <= 2.51` ceiling, and **neither DeepEval nor Pydantic AI documents
-   MLflow at all**. Whether MLflow accepts generic OTLP ingest is unverified; confirm
-   before assuming it, since the vanilla-OTLP route is the one that keeps us uncoupled.
+3. **Optional trace viewer** — start without one. If trace viewing proves useful,
+   `otel-tui` is an option documented by Pydantic. Verify generic OTLP support before
+   choosing MLflow or another collector; their integration versions and deployment
+   requirements do not need to block the transcript-based first iteration.
 4. **Skill descriptions are now tested artifacts.** In discovery mode the model sees only
    `name` + `description`, and ours are a confusable pair — "LLM model selection" vs.
    "deploys a *chosen* LLM model". If routing fails, the fix may be a frontmatter edit

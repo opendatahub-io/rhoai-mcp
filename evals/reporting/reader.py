@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 
 from evals.reporting.models import (
+    OUTCOME_EVALUATED,
+    CheckRecord,
     EnvironmentRecord,
     EvalRecord,
     GitRecord,
@@ -42,9 +44,7 @@ def load_records(path: str | None = None) -> list[EvalRecord]:
                 agent_backend=env_data.get(
                     "agent_backend", env_data.get("llm_provider", "unknown")
                 ),
-                agent_model=env_data.get(
-                    "agent_model", env_data.get("llm_model", "unknown")
-                ),
+                agent_model=env_data.get("agent_model", env_data.get("llm_model", "unknown")),
                 lcs_url=env_data.get("lcs_url", ""),
                 eval_provider=env_data.get("eval_provider", "unknown"),
                 eval_model=env_data.get("eval_model", "unknown"),
@@ -63,6 +63,25 @@ def load_records(path: str | None = None) -> list[EvalRecord]:
                 tool_names_used=data.get("tool_names_used", []),
                 passed=data.get("passed", False),
                 duration_seconds=data.get("duration_seconds", 0.0),
+                # Skill-eval fields. Loaded explicitly rather than by **data,
+                # which would choke on unknown keys; defaults keep historical
+                # LCS records readable (plan §3.5).
+                attempt_id=data.get("attempt_id", ""),
+                scoring_id=data.get("scoring_id", ""),
+                skill=data.get("skill", ""),
+                golden_id=data.get("golden_id", ""),
+                skills_loaded=data.get("skills_loaded", []),
+                outcome=data.get("outcome", OUTCOME_EVALUATED),
+                error_stage=data.get("error_stage", ""),
+                error_detail=data.get("error_detail", ""),
+                checks=[CheckRecord(**c) for c in data.get("checks", [])],
+                artifact_path=data.get("artifact_path", ""),
+                trace_id=data.get("trace_id", ""),
+                dry_run=data.get("dry_run", False),
+                agent_seconds=data.get("agent_seconds", 0.0),
+                skill_sha=data.get("skill_sha", ""),
+                scenario_sha=data.get("scenario_sha", ""),
+                rubric_version=data.get("rubric_version", ""),
             )
             records.append(record)
         except (json.JSONDecodeError, KeyError, TypeError) as e:

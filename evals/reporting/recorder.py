@@ -81,6 +81,56 @@ class EvalRecorder:
         return self._git
 
 
+def metric_records_from(eval_result: Any) -> tuple[list[MetricRecord], bool]:
+    """Extract metric records and whether every one of them succeeded.
+
+    A metric that errored has no usable score. It is recorded with
+    ``success=False`` and its error in ``reason`` rather than being silently
+    scored ``0.0``, because a judge error is an error, not a zero (plan §3.3).
+    """
+    records: list[MetricRecord] = []
+    all_passed = True
+    for test_result in eval_result.test_results:
+        for md in test_result.metrics_data:
+            errored = getattr(md, "error", None)
+            success = bool(md.success) and not errored
+            if not success:
+                all_passed = False
+            records.append(
+                MetricRecord(
+                    name=md.name,
+                    # score is None on an errored metric; -1.0 marks "no score"
+                    # distinguishably from a genuine 0.0.
+                    score=float(md.score) if md.score is not None else -1.0,
+                    success=success,
+                    threshold=float(md.threshold) if md.threshold is not None else 0.0,
+                    reason=str(errored) if errored else (md.reason or ""),
+                )
+            )
+    return records, all_passed
+
+
+def overall_passed(
+    *, checks_passed: bool, routing_ok: bool, metrics: list[MetricRecord], dry_run: bool
+) -> bool:
+    """Decide the attempt's verdict (plan §3.5).
+
+    An overall pass requires successful routing, all hard checks, and all
+    required metrics passing. Two cases that must **not** pass:
+
+    - a judged attempt with no metric records at all — an empty metric list is
+      missing evidence, not success;
+    - a dry run, which by definition has no judged evidence.
+    """
+    if not routing_ok or not checks_passed:
+        return False
+    if dry_run:
+        return False
+    if not metrics:
+        return False
+    return all(m.success for m in metrics)
+
+
 def evaluate_and_record(
     recorder: EvalRecorder,
     scenario: str,

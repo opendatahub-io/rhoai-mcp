@@ -99,7 +99,6 @@ async def run_attempt(
     """Execute, persist, score and record one golden/model attempt."""
     attempt_id = uuid.uuid4().hex[:12]
     root = results_root or RESULTS_ROOT
-    dry_run = judge is None
 
     agent_started = time.monotonic()
     result = await run_conversation(
@@ -121,21 +120,80 @@ async def run_attempt(
     artifact_path = artifact.save(root)
 
     # -- re-read it: the artifact is the scoring input, live too ------------- #
+    return score_artifact(
+        artifact_path,
+        golden,
+        config=config,
+        recorder=recorder,
+        judge=judge,
+        spec_id=spec.id,
+        run_outcome=result.outcome,
+        run_error=result.error,
+        run_error_stage=result.error_stage,
+        turns=result.turns_completed,
+        agent_seconds=agent_seconds,
+    )
+
+
+def score_artifact(
+    artifact_path: Path,
+    golden: Golden,
+    *,
+    config: EvalConfig,
+    recorder: EvalRecorder,
+    judge: Any = None,
+    spec_id: str | None = None,
+    run_outcome: str | None = None,
+    run_error: str | None = None,
+    run_error_stage: str | None = None,
+    turns: int | None = None,
+    agent_seconds: float = 0.0,
+) -> AttemptOutcome:
+    """Grade and record a saved attempt.
+
+    **This is the one scoring path.** A live run calls it after writing its
+    artifact; ``eval-rescore`` calls it on an artifact written minutes or weeks
+    ago. Keeping both on this function is what stops live scoring and re-scoring
+    from drifting apart (plan §3.6).
+
+    A re-score reuses the artifact's ``attempt_id`` and mints a fresh
+    ``scoring_id``, so repeated scorings of one agent run stay distinguishable
+    while remaining linked to it (plan §3.5).
+
+    Args:
+        artifact_path: Directory written by :meth:`AttemptArtifact.save`.
+        golden: The scenario definition supplying checks and metadata.
+        config: Eval configuration (thresholds, judge settings).
+        recorder: Destination for the JSONL record.
+        judge: Judge LLM, or ``None`` for a dry run.
+        spec_id: Agent model id. Read from artifact metadata when omitted.
+        run_outcome: Live-run outcome. Read from metadata when omitted, since a
+            re-score did not run an agent and cannot observe one.
+        run_error: Live-run error text, likewise.
+        run_error_stage: Live-run error stage, likewise.
+        turns: Turns completed, likewise.
+        agent_seconds: Agent execution time; zero for a re-score, which ran none.
+    """
     from evals.agent.transcript import AttemptArtifact
 
-    transcript = AttemptArtifact.load(artifact_path).transcript()
+    artifact = AttemptArtifact.load(artifact_path)
+    meta = artifact.metadata
+    transcript = artifact.transcript()
+    dry_run = judge is None
 
     report = golden.grade(transcript)
     routing_ok = golden.skill in transcript.skills_loaded
 
-    outcome = result.outcome
+    outcome = run_outcome if run_outcome is not None else meta.get("outcome", OUTCOME_EVALUATED)
     if outcome == OUTCOME_EVALUATED and not routing_ok:
         outcome = OUTCOME_ROUTING_FAILURE
 
     metrics: list[MetricRecord] = []
     scoring_seconds = 0.0
     if judge is not None:
-        metrics, scoring_seconds = _score(transcript, artifact_path, golden, config, judge, report)
+        metrics, scoring_seconds = _score(
+            transcript, artifact_path, golden.skill, config, judge, report
+        )
 
     passed = overall_passed(
         checks_passed=report.passed,
@@ -145,6 +203,11 @@ async def run_attempt(
     )
 
     outside = tools_outside_allowlist(transcript, golden.allowed_tools())
+    resolved_spec = spec_id or str(meta.get("id") or meta.get("spec_id") or "unknown")
+    error = run_error if run_error is not None else (meta.get("error") or None)
+    error_stage = (
+        run_error_stage if run_error_stage is not None else (meta.get("error_stage") or None)
+    )
 
     record = EvalRecord(
         run_id=recorder.run_id,
@@ -153,7 +216,7 @@ async def run_attempt(
         git=recorder.git,
         environment=EnvironmentRecord(
             agent_backend="pydantic-ai",
-            agent_model=spec.id,
+            agent_model=resolved_spec,
             lcs_url="",
             eval_provider=config.eval_provider.value,
             eval_model=config.eval_model if judge is not None else "",
@@ -162,18 +225,19 @@ async def run_attempt(
             task_completion_threshold=config.task_completion_threshold,
         ),
         metrics=metrics,
-        turns=result.turns_completed,
+        turns=turns if turns is not None else int(meta.get("turns_completed", 0) or 0),
         tool_names_used=transcript.tool_names_used,
         passed=passed,
         duration_seconds=round(scoring_seconds, 2),
-        attempt_id=attempt_id,
+        # Reused, not regenerated: this identifies the agent run being scored.
+        attempt_id=artifact.attempt_id,
         scoring_id=uuid.uuid4().hex[:12],
         skill=golden.skill,
         golden_id=golden.id,
         skills_loaded=transcript.skills_loaded,
         outcome=outcome,
-        error_stage=result.error_stage or "",
-        error_detail=result.error or "",
+        error_stage=error_stage or "",
+        error_detail=error or "",
         checks=[CheckRecord(**c) for c in report.to_list()],
         artifact_path=str(artifact_path),
         dry_run=dry_run,
@@ -186,8 +250,8 @@ async def run_attempt(
 
     return AttemptOutcome(
         golden=golden,
-        spec_id=spec.id,
-        attempt_id=attempt_id,
+        spec_id=resolved_spec,
+        attempt_id=artifact.attempt_id,
         outcome=outcome,
         passed=passed,
         report=report,
@@ -196,8 +260,8 @@ async def run_attempt(
         metrics=metrics,
         routing_ok=routing_ok,
         dry_run=dry_run,
-        error=result.error,
-        error_stage=result.error_stage,
+        error=error,
+        error_stage=error_stage,
         tools_outside_allowlist=outside,
     )
 
@@ -205,6 +269,7 @@ async def run_attempt(
 def _score(
     transcript: AgentTranscript,
     artifact_path: Path,
+    skill: str,
     config: EvalConfig,
     judge: Any,
     report: CheckReport,
@@ -264,4 +329,64 @@ def _score(
         return [], time.monotonic() - started
 
     records, _ = metric_records_from(eval_result)
+    records += _score_fidelity(transcript, schemas, skill, config, judge, report)
     return records, time.monotonic() - started
+
+
+def _score_fidelity(
+    transcript: AgentTranscript,
+    schemas: list[Any],
+    skill: str,
+    config: EvalConfig,
+    judge: Any,
+    report: CheckReport,
+) -> list[MetricRecord]:
+    """Score skill adherence with the per-skill GEval rubric (plan §3.3).
+
+    Scored on a *separate* test case built with ``include_skill_body=True``: the
+    judge cannot assess adherence to a document it has not been shown. The MCP
+    metrics deliberately do not get that case, since the skill body is not part
+    of the trajectory they score.
+
+    Conditional on routing — with no skill loaded there is nothing to adhere to,
+    so the result is ``n/a`` with a reason, never 0.0.
+    """
+    from deepeval import evaluate
+    from deepeval.evaluate.configs import AsyncConfig
+
+    from evals.deepeval_helpers import (
+        build_mcp_server_from_schemas,
+        transcript_to_conversational_test_case,
+    )
+    from evals.skills.rubrics import create_fidelity_metric
+
+    if skill not in transcript.skills_loaded:
+        report.add(
+            "skill_fidelity",
+            "n/a",
+            f"{skill!r} was never loaded; adherence to it is unscoreable",
+        )
+        return []
+
+    metric = create_fidelity_metric(skill, config, model=judge)
+    if metric is None:
+        report.add("skill_fidelity", "n/a", f"no fidelity rubric defined for {skill!r}")
+        return []
+
+    case = transcript_to_conversational_test_case(
+        transcript,
+        build_mcp_server_from_schemas(schemas),
+        include_skill_body=True,
+        skill=skill,
+        annotate_tool_calls=True,
+    )
+    try:
+        result = evaluate(
+            test_cases=[case], metrics=[metric], async_config=AsyncConfig(run_async=False)
+        )
+    except Exception as exc:  # noqa: BLE001
+        report.add("skill_fidelity", "n/a", f"rubric failed: {type(exc).__name__}: {exc}")
+        return []
+
+    records, _ = metric_records_from(result)
+    return records

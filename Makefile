@@ -176,6 +176,26 @@ eval-trend: ## Show eval score trends over time
 	uv run --group eval python -m evals.reporting.cli trend
 
 # =============================================================================
+# Skill evaluations (Pydantic AI agent over stdio; no LCORE/compose needed)
+# =============================================================================
+
+eval-skills: ## Run skill evals, deterministic checks only (no judge cost)
+	uv run --group skill-eval pytest evals/skills -v
+
+eval-skills-judge: ## Run skill evals with judged metrics (costs money)
+	RHOAI_EVAL_SKILL_JUDGE=1 uv run --group skill-eval pytest evals/skills -v
+
+eval-skills-matrix: ## Run skill evals across the full model matrix
+	RHOAI_EVAL_AGENT_MODELS=matrix RHOAI_EVAL_SKILL_JUDGE=1 \
+		uv run --group skill-eval pytest evals/skills -v
+
+eval-rescore: ## Re-score saved artifacts, no agent run (usage: make eval-rescore ARGS="--run <id> --judge")
+	uv run --group skill-eval python -m evals.skills.rescore $(ARGS)
+
+eval-show: ## Print a saved attempt's trajectory (usage: make eval-show ARGS="--attempt <id>")
+	uv run --group skill-eval python -m evals.skills.show $(ARGS)
+
+# =============================================================================
 # Requirements
 # =============================================================================
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -172,12 +173,28 @@ def _record_to_mcp_tool_call(record: ToolCallRecord) -> MCPToolCall:
     )
 
 
+#: Tool arguments are rendered in full up to this length. Truncating silently
+#: made a fidelity judge report the agent's tool calls as "malformed or
+#: truncated" and dock the score for it — the rubric was grading our rendering,
+#: not the agent. When truncation is unavoidable it is now labelled as ours.
+MAX_RENDERED_ARGS = 1500
+
+
+def _render_args(arguments: dict[str, Any]) -> str:
+    """Render tool arguments for a content-only rubric, truncation made explicit."""
+    rendered = json.dumps(arguments, ensure_ascii=False)
+    if len(rendered) <= MAX_RENDERED_ARGS:
+        return rendered
+    return f"{rendered[:MAX_RENDERED_ARGS]}… <args truncated for display, call was complete>"
+
+
 def transcript_to_conversational_test_case(
     transcript: AgentTranscript,
     mcp_server: MCPServer,
     *,
     include_skill_body: bool = False,
     skill: str | None = None,
+    annotate_tool_calls: bool = False,
 ) -> ConversationalTestCase:
     """Build a DeepEval conversational test case from a shared transcript.
 
@@ -237,6 +254,17 @@ def transcript_to_conversational_test_case(
                 for c in source.harness_tool_calls
             )
             content = f"[loaded skill: {loaded}]"
+
+        if annotate_tool_calls and source.mcp_tool_calls:
+            # Render tool calls into the content so a rubric scored on ROLE and
+            # CONTENT can see them. MultiTurnParams.MCP_TOOLS cannot be used for
+            # this: it looks for a case-level attribute that does not exist.
+            rendered = "\n".join(
+                f"[called tool: {c.name}({_render_args(c.arguments)})"
+                + (" -> ERROR]" if c.is_error else "]")
+                for c in source.mcp_tool_calls
+            )
+            content = f"{content}\n{rendered}" if content else rendered
 
         if mcp_tools_called:
             turns.append(Turn(role="assistant", content=content, mcp_tools_called=mcp_tools_called))

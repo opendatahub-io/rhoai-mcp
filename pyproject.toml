@@ -62,6 +62,11 @@ eval = [
     "anthropic>=0.40.0",
     "google-genai>=1.0.0",
 ]
+skill-eval = [
+    "deepeval>=4.3,<5",
+    "pydantic-ai-harness[skills]>=0.64,<1",
+    "pydantic-ai-slim[mcp,openai]>=2.64,<3",
+]
 
 [tool.ruff]
 target-version = "py311"

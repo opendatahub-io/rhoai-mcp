@@ -195,6 +195,21 @@ eval-rescore: ## Re-score saved artifacts, no agent run (usage: make eval-rescor
 eval-show: ## Print a saved attempt's trajectory (usage: make eval-show ARGS="--attempt <id>")
 	uv run --group skill-eval python -m evals.skills.show $(ARGS)
 
+MLFLOW_PORT ?= 5000
+MLFLOW_STORE ?= sqlite:///$(CURDIR)/.mlflow/mlflow.db
+
+mlflow-up: ## Start a local MLflow server (UI + OTLP ingestion at /v1/traces)
+	@mkdir -p $(CURDIR)/.mlflow
+	@echo "MLflow UI:  http://127.0.0.1:$(MLFLOW_PORT)"
+	@echo "OTLP:       http://127.0.0.1:$(MLFLOW_PORT)/v1/traces"
+	uv run --no-project --with mlflow mlflow server \
+		--host 127.0.0.1 --port $(MLFLOW_PORT) --backend-store-uri $(MLFLOW_STORE)
+
+eval-skills-traced: ## Run skill evals exporting OTel traces to the local MLflow
+	RHOAI_EVAL_OTLP_ENDPOINT=http://127.0.0.1:$(MLFLOW_PORT)/v1/traces \
+	RHOAI_EVAL_MLFLOW_EXPERIMENT_ID=$${RHOAI_EVAL_MLFLOW_EXPERIMENT_ID:-0} \
+		uv run --group skill-eval --group trace pytest evals/skills -v
+
 # =============================================================================
 # Requirements
 # =============================================================================

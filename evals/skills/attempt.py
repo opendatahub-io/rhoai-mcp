@@ -95,15 +95,36 @@ async def run_attempt(
     config: EvalConfig,
     judge: Any = None,
     results_root: Path | None = None,
+    tracing: Any = None,
 ) -> AttemptOutcome:
-    """Execute, persist, score and record one golden/model attempt."""
+    """Execute, persist, score and record one golden/model attempt.
+
+    When ``tracing`` is an enabled session, the whole conversation runs inside a
+    single parent span so its turns form one trace, and the resulting trace id
+    is stored on the record and artifact for correlation (plan §3.6).
+    """
+    from evals.agent.tracing import TracingSession, conversation_span, instrumentation
+
     attempt_id = uuid.uuid4().hex[:12]
     root = results_root or RESULTS_ROOT
+    session = tracing if tracing is not None else TracingSession()
 
     agent_started = time.monotonic()
-    result = await run_conversation(
-        spec, golden.script, run_id=recorder.run_id, attempt_id=attempt_id
-    )
+    with conversation_span(
+        session,
+        run_id=recorder.run_id,
+        attempt_id=attempt_id,
+        golden_id=golden.id,
+        model=spec.id,
+    ) as trace_id:
+        result = await run_conversation(
+            spec,
+            golden.script,
+            run_id=recorder.run_id,
+            attempt_id=attempt_id,
+            extra_capabilities=instrumentation(session),
+            trace_id=trace_id,
+        )
     agent_seconds = time.monotonic() - agent_started
 
     # -- persist first, so nothing below can lose the attempt ---------------- #
@@ -114,6 +135,7 @@ async def run_attempt(
             "scenario_sha": golden.scenario_sha(),
             "skill_sha": golden.skill_sha(),
             "rubric_version": RUBRIC_VERSION,
+            "trace_id": result.trace_id,
             **spec.describe(),
         }
     )
@@ -132,6 +154,7 @@ async def run_attempt(
         run_error_stage=result.error_stage,
         turns=result.turns_completed,
         agent_seconds=agent_seconds,
+        trace_id=result.trace_id,
     )
 
 
@@ -148,6 +171,7 @@ def score_artifact(
     run_error_stage: str | None = None,
     turns: int | None = None,
     agent_seconds: float = 0.0,
+    trace_id: str | None = None,
 ) -> AttemptOutcome:
     """Grade and record a saved attempt.
 
@@ -245,6 +269,9 @@ def score_artifact(
         skill_sha=golden.skill_sha(),
         scenario_sha=golden.scenario_sha(),
         rubric_version=RUBRIC_VERSION,
+        # A re-score runs no agent and so has no trace of its own; carrying the
+        # original attempt's id lets it point back at that trace (plan §3.6).
+        trace_id=trace_id if trace_id is not None else str(meta.get("trace_id", "")),
     )
     recorder.write(record)
 

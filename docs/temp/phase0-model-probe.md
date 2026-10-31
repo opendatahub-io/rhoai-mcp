@@ -220,12 +220,17 @@ against the configuration customers actually get. Rationale: exposing a
 contractually-committed tool is a product decision with its own review, and it
 should not ride along inside eval scaffolding.
 
-A complete, tested implementation of option B is preserved at
-[`get-cluster-resources-fix.patch`](./get-cluster-resources-fix.patch) — shared
+A complete, tested implementation of option B was written and verified — shared
 handler, `cluster-composites` ownership with a `training` fallback, permission
 carry-over, a dedup fix in `PluginManager.collect_tool_permissions()`, and 14
-tests. It applied cleanly and took the surface to 54 tools with the agent
-calling the tool itself. Apply with `git apply`.
+tests. It took the default surface to 54 tools, and the agent then called
+`get_cluster_resources` itself instead of asking the customer.
+
+**That implementation no longer exists in the tree.** It was saved as
+`docs/temp/get-cluster-resources-fix.patch`, which was never committed and has
+since been deleted, so the work must be redone when Phase 1 is picked up. The
+design is fully specified in plan §1.5 and summarised above, so this is a rewrite
+of roughly 200 lines, not a redesign.
 
 Two existing tests need adjusting when that patch lands, because the shared-tool
 design intentionally changes what they assert:

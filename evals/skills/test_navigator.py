@@ -33,6 +33,7 @@ async def test_navigator_golden(
     skill_recorder: Any,
     skill_eval_config: Any,
     judge_llm: Any,
+    tracing_session: Any,
 ) -> None:
     """Run one navigator golden and assert only after it has been recorded."""
     outcome = await run_attempt(
@@ -41,6 +42,7 @@ async def test_navigator_golden(
         recorder=skill_recorder,
         config=skill_eval_config,
         judge=judge_llm,
+        tracing=tracing_session,
     )
 
     # Reported, never a gate: allowed-tools is optional per the agentskills spec

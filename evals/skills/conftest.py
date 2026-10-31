@@ -83,6 +83,21 @@ def skill_recorder(skill_eval_config: EvalConfig, skill_run_id: str) -> EvalReco
 
 
 @pytest.fixture(scope="session")
+def tracing_session() -> Any:
+    """OTel tracing, if ``RHOAI_EVAL_OTLP_ENDPOINT`` is set.
+
+    Yields a disabled no-op session otherwise, so tests never branch on it. The
+    teardown flush matters: ``BatchSpanProcessor`` buffers, so without it a
+    short run exits before its spans reach the collector.
+    """
+    from evals.agent.tracing import setup_tracing
+
+    session = setup_tracing()
+    yield session
+    session.shutdown()
+
+
+@pytest.fixture(scope="session")
 def judge_llm(skill_eval_config: EvalConfig) -> Any:
     """The judge, held fixed across agent models (plan §2.3).
 

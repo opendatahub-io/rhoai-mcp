@@ -32,6 +32,7 @@ async def test_navigator_deploy_golden(
     skill_recorder: Any,
     skill_eval_config: Any,
     judge_llm: Any,
+    tracing_session: Any,
 ) -> None:
     """Run one navigator-deploy golden and assert only after recording."""
     outcome = await run_attempt(
@@ -40,6 +41,7 @@ async def test_navigator_deploy_golden(
         recorder=skill_recorder,
         config=skill_eval_config,
         judge=judge_llm,
+        tracing=tracing_session,
     )
 
     if outcome.tools_outside_allowlist:

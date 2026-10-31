@@ -217,3 +217,7 @@ evals/results/
 .deepeval-cache.json
 .deepeval_telemetry.txt
 temp_test_run_data.json
+
+# Local MLflow tracing store (make mlflow-up)
+.mlflow/
+mlruns/

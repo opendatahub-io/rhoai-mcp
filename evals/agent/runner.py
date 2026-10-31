@@ -73,6 +73,8 @@ class ConversationResult:
     error_stage: str | None = None
     turns_completed: int = 0
     elapsed_s: float = 0.0
+    trace_id: str = ""
+    """Links this attempt to its trace, when tracing is on (plan §3.6)."""
     final_output: str = ""
     task: str = ""
 
@@ -89,6 +91,7 @@ class ConversationResult:
             "error_stage": self.error_stage,
             "turns_completed": self.turns_completed,
             "elapsed_s": round(self.elapsed_s, 2),
+            "trace_id": self.trace_id,
         }
         meta.update(metadata or {})
         return AttemptArtifact.from_messages(
@@ -141,6 +144,7 @@ def build_agent(
     *,
     skills_dir: str = DEFAULT_SKILLS_DIR,
     mock_cluster: bool = True,
+    extra_capabilities: list[Any] | None = None,
 ) -> tuple[Any, Any]:
     """Construct the agent and return it with its MCP toolset.
 
@@ -164,6 +168,7 @@ def build_agent(
             # Both skills stay in the catalog: the point is to test discovery
             # from a natural-language request, not to hand over the right one.
             Skills(str(REPO_ROOT / skills_dir)),
+            *(extra_capabilities or []),
         ],
         toolsets=[toolset],
     )
@@ -182,6 +187,8 @@ async def run_conversation(
     tool_calls_limit: int = DEFAULT_TOOL_CALLS_LIMIT,
     turn_timeout_s: float = DEFAULT_TURN_TIMEOUT_S,
     on_turn: Callable[[int, AgentTranscript], Awaitable[None]] | None = None,
+    extra_capabilities: list[Any] | None = None,
+    trace_id: str = "",
 ) -> ConversationResult:
     """Run a scripted conversation and capture everything needed to score it.
 
@@ -214,12 +221,18 @@ async def run_conversation(
         run_id=run_id,
         spec_id=spec.id,
         task=turns[0].prompt if turns else "",
+        trace_id=trace_id,
     )
     limits = UsageLimits(request_limit=request_limit, tool_calls_limit=tool_calls_limit)
     started = time.monotonic()
 
     try:
-        agent, toolset = build_agent(spec, skills_dir=skills_dir, mock_cluster=mock_cluster)
+        agent, toolset = build_agent(
+            spec,
+            skills_dir=skills_dir,
+            mock_cluster=mock_cluster,
+            extra_capabilities=extra_capabilities,
+        )
     except Exception as exc:  # noqa: BLE001 - setup failure is a harness error
         result.outcome = OUTCOME_HARNESS_ERROR
         result.error_stage = "agent_build"

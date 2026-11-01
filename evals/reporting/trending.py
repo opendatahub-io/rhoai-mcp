@@ -31,10 +31,7 @@ def score_trend_report(
     if provider:
         from evals.reporting.formatting import provider_label
 
-        filtered = [
-            r for r in filtered
-            if provider_label(r) == provider
-        ]
+        filtered = [r for r in filtered if provider_label(r) == provider]
     if not filtered:
         parts = []
         if scenario:
@@ -54,8 +51,15 @@ def score_trend_report(
             if m.name not in all_metric_names:
                 all_metric_names.append(m.name)
 
-    headers = ["Date", "Commit", "Scenario", *[truncate(n, 18) for n in all_metric_names],
-               "Turns", "Pass", "Duration"]
+    headers = [
+        "Date",
+        "Commit",
+        "Scenario",
+        *[truncate(n, 18) for n in all_metric_names],
+        "Turns",
+        "Pass",
+        "Duration",
+    ]
     alignments = ["l", "l", "l", *["r"] * len(all_metric_names), "r", "c", "r"]
 
     rows = []

@@ -57,9 +57,11 @@ def format_table(
         return text.ljust(width)
 
     if fmt == "markdown":
-        header_line = "| " + " | ".join(
-            _pad(h, col_widths[i], alignments[i]) for i, h in enumerate(headers)
-        ) + " |"
+        header_line = (
+            "| "
+            + " | ".join(_pad(h, col_widths[i], alignments[i]) for i, h in enumerate(headers))
+            + " |"
+        )
         sep_parts = []
         for i in range(num_cols):
             dash = "-" * col_widths[i]
@@ -72,27 +74,34 @@ def format_table(
         sep_line = "| " + " | ".join(sep_parts) + " |"
         data_lines = []
         for row in rows:
-            padded = [_pad(row[i] if i < len(row) else "", col_widths[i], alignments[i])
-                      for i in range(num_cols)]
+            padded = [
+                _pad(row[i] if i < len(row) else "", col_widths[i], alignments[i])
+                for i in range(num_cols)
+            ]
             data_lines.append("| " + " | ".join(padded) + " |")
         return "\n".join([header_line, sep_line, *data_lines])
 
     # Terminal format with +---+ borders
     border = "+-" + "-+-".join("-" * w for w in col_widths) + "-+"
-    header_line = "| " + " | ".join(
-        _pad(h, col_widths[i], alignments[i]) for i, h in enumerate(headers)
-    ) + " |"
+    header_line = (
+        "| "
+        + " | ".join(_pad(h, col_widths[i], alignments[i]) for i, h in enumerate(headers))
+        + " |"
+    )
     data_lines = []
     for row in rows:
-        padded = [_pad(row[i] if i < len(row) else "", col_widths[i], alignments[i])
-                  for i in range(num_cols)]
+        padded = [
+            _pad(row[i] if i < len(row) else "", col_widths[i], alignments[i])
+            for i in range(num_cols)
+        ]
         data_lines.append("| " + " | ".join(padded) + " |")
 
     return "\n".join([border, header_line, border, *data_lines, border])
 
 
-def format_summary(records: list[EvalRecord], run_id: str | None = None,
-                   fmt: str = "terminal") -> str:
+def format_summary(
+    records: list[EvalRecord], run_id: str | None = None, fmt: str = "terminal"
+) -> str:
     """Format a summary table for a single eval run.
 
     If run_id is None, uses the latest run_id found in records.
@@ -119,8 +128,13 @@ def format_summary(records: list[EvalRecord], run_id: str | None = None,
     provider_info = f"Agent: {provider_label(first)}"
     judge_info = f"Judge: {first.environment.eval_provider}/{first.environment.eval_model}"
 
-    headers = ["Scenario", *[truncate(n, 25) for n in all_metric_names],
-               "Turns", "Pass", "Duration"]
+    headers = [
+        "Scenario",
+        *[truncate(n, 25) for n in all_metric_names],
+        "Turns",
+        "Pass",
+        "Duration",
+    ]
     alignments = ["l", *["r"] * len(all_metric_names), "r", "c", "r"]
 
     rows = []

@@ -569,12 +569,25 @@ The [Skills docs](https://pydantic.dev/docs/ai/harness/skills/#how-it-works) des
 loading the body as a tool result, rather than injecting it into the initial system
 instructions. Inspect that result when debugging skill delivery.
 
-Create a parent span around the whole multi-turn conversation so one optional
-`trace_id` covers all its agent runs. Stamp `run_id`, `attempt_id`, and `golden_id` on
-that span and the saved record; otherwise separate `agent.run()` calls may produce
-separate traces. Scores and reasons remain in the scoring records. An unavailable
-collector must not prevent transcript capture or normal evaluations. `otel-tui` is a
-local viewing option; other collectors can be evaluated later.
+**Amended after the MLflow spike.** The original instruction here was to wrap the
+whole conversation in one parent span so a single `trace_id` covered all its agent
+runs, treating separate traces per `agent.run()` as the failure to avoid. MLflow's
+model is the opposite, and it is the one to follow: *"Each trace in the session
+represents one turn: the user's input and the system's response"*, with turns linked
+by a shared session id. A single-trace conversation makes its root a wrapper span
+carrying no inputs or outputs — a case MLflow's own guidance names — leaving the trace
+list blank and burying each turn's new user message under the cumulative history.
+
+So: wrap **each scripted turn** as its own root span, and group them with
+`session.id`. MLflow scans spans for `session.id` or `gen_ai.conversation.id` and
+takes the first found, so setting `session.id` to the `attempt_id` makes the session
+key the same one the record and artifact already use — correlation is preserved
+without a separate `trace_id`. Stamp `run_id`, `attempt_id`, `golden_id` and the turn
+index on each turn span, and set `mlflow.spanInputs`/`mlflow.spanOutputs` to the
+turn's prompt and reply so the trace list is readable; the agent-run span does not
+supply these, because Pydantic AI puts messages on model-request spans only. Scores
+and reasons remain in the scoring records. An unavailable collector must not prevent
+transcript capture or normal evaluations.
 
 ---
 

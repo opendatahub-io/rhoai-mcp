@@ -73,8 +73,8 @@ class ConversationResult:
     error_stage: str | None = None
     turns_completed: int = 0
     elapsed_s: float = 0.0
-    trace_id: str = ""
-    """Links this attempt to its trace, when tracing is on (plan §3.6)."""
+    trace_session_id: str = ""
+    """MLflow session grouping this attempt's per-turn traces (plan §3.6)."""
     final_output: str = ""
     task: str = ""
 
@@ -91,7 +91,7 @@ class ConversationResult:
             "error_stage": self.error_stage,
             "turns_completed": self.turns_completed,
             "elapsed_s": round(self.elapsed_s, 2),
-            "trace_id": self.trace_id,
+            "trace_session_id": self.trace_session_id,
         }
         meta.update(metadata or {})
         return AttemptArtifact.from_messages(
@@ -188,7 +188,8 @@ async def run_conversation(
     turn_timeout_s: float = DEFAULT_TURN_TIMEOUT_S,
     on_turn: Callable[[int, AgentTranscript], Awaitable[None]] | None = None,
     extra_capabilities: list[Any] | None = None,
-    trace_id: str = "",
+    tracing: Any = None,
+    golden_id: str = "",
 ) -> ConversationResult:
     """Run a scripted conversation and capture everything needed to score it.
 
@@ -215,14 +216,17 @@ async def run_conversation(
     from pydantic_ai.exceptions import UsageLimitExceeded
     from pydantic_ai.usage import UsageLimits
 
+    from evals.agent.tracing import TracingSession, set_turn_output, turn_span
+
+    trace_session = tracing if tracing is not None else TracingSession()
     turns = [ScriptedTurn(prompt=t) if isinstance(t, str) else t for t in script]
     result = ConversationResult(
         attempt_id=attempt_id or uuid.uuid4().hex[:12],
         run_id=run_id,
         spec_id=spec.id,
         task=turns[0].prompt if turns else "",
-        trace_id=trace_id,
     )
+    trace_session.reset()
     limits = UsageLimits(request_limit=request_limit, tool_calls_limit=tool_calls_limit)
     started = time.monotonic()
 
@@ -267,9 +271,21 @@ async def run_conversation(
                         result.error = failure
                         break
 
+                # One trace per turn, per MLflow's conversation model; the
+                # spans are grouped into a session by attempt id (tracing.py).
+                turn_ctx = turn_span(
+                    trace_session,
+                    run_id=run_id,
+                    attempt_id=result.attempt_id,
+                    golden_id=golden_id,
+                    model=spec.id,
+                    turn_index=index,
+                    turn_name=turn.name,
+                    prompt=turn.prompt,
+                )
                 # capture_run_messages keeps the partial history of a run that
                 # raises, so a timeout still yields a saveable transcript.
-                with capture_run_messages() as captured:
+                with turn_ctx as turn_trace, capture_run_messages() as captured:
                     try:
                         async with asyncio.timeout(turn_timeout_s):
                             run = await agent.run(
@@ -296,10 +312,14 @@ async def run_conversation(
                         result.error = f"{type(exc).__name__}: {exc}"
                         break
 
-                # Cumulative history; never concatenate successive snapshots.
-                history = list(run.all_messages())
-                result.final_output = str(run.output or "")
-                result.turns_completed = index + 1
+                    # Cumulative history; never concatenate successive snapshots.
+                    history = list(run.all_messages())
+                    result.final_output = str(run.output or "")
+                    result.turns_completed = index + 1
+                    # Inside the span's scope on purpose: OpenTelemetry silently
+                    # ignores set_attribute on an ended span, so recording the
+                    # reply after the `with` block leaves Outputs empty in the UI.
+                    set_turn_output(turn_trace, result.final_output)
 
                 if on_turn is not None:
                     await on_turn(index, from_pydantic_ai(history, task=result.task))
@@ -311,6 +331,9 @@ async def run_conversation(
     finally:
         result.messages = history
         result.elapsed_s = time.monotonic() - started
+        # Read after the run: the session id is observed from the spans, not
+        # chosen by us (see tracing._SessionCapture).
+        result.trace_session_id = trace_session.mlflow_session_id
 
     return result
 

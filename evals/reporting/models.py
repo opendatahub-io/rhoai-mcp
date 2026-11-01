@@ -100,6 +100,9 @@ class EvalRecord:
     checks: list[CheckRecord] = field(default_factory=list)
     artifact_path: str = ""
     trace_id: str = ""
+    """MLflow session grouping this attempt's per-turn traces. Equal to
+    ``attempt_id`` by construction, since tracing follows MLflow's model of one
+    trace per turn rather than one per conversation (plan §3.6)."""
     dry_run: bool = False
     """True when no judge ran. Such a record carries no metric scores and must
     never be read as a judged pass."""

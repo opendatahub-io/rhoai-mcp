@@ -47,8 +47,12 @@ def provider_comparison_report(
             if m.name not in all_metric_names:
                 all_metric_names.append(m.name)
 
-    headers = ["Agent Backend", *[truncate(n, 20) for n in all_metric_names],
-               "Avg Turns", "Pass Rate"]
+    headers = [
+        "Agent Backend",
+        *[truncate(n, 20) for n in all_metric_names],
+        "Avg Turns",
+        "Pass Rate",
+    ]
     alignments = ["l", *["r"] * len(all_metric_names), "r", "r"]
 
     # Build rows sorted by average score descending

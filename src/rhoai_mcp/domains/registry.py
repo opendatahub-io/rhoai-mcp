@@ -15,6 +15,7 @@ from rhoai_mcp.domains.permissions import (
     NOTEBOOKS_PERMISSIONS,
     PIPELINES_PERMISSIONS,
     PROJECTS_PERMISSIONS,
+    QUICKSTARTS_PERMISSIONS,
     STORAGE_PERMISSIONS,
     TRAINING_PERMISSIONS,
 )
@@ -249,6 +250,88 @@ class TrainingPlugin(BasePlugin):
         return TrainingCRDs.all_crds()
 
 
+# Deployment manifest that provisions the installer Job's namespace, ServiceAccount
+# and RBAC — the one prerequisite users must apply before running actions.
+QUICKSTART_INSTALLER_RBAC_MANIFEST = "deploy/quickstarts/installer-rbac.yaml"
+
+
+class QuickstartsPlugin(BasePlugin):
+    """Plugin for Red Hat AI quickstart discovery and deployment.
+
+    Discovery reads OCI artifacts (registry index + manifests) from Quay;
+    deployment actions create Kubernetes Jobs (batch/v1) that run each
+    quickstart's installer image. No custom CRDs are required.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="quickstarts",
+                version="0.1.0",
+                description="Red Hat AI quickstart discovery and deployment",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=[],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.quickstarts.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_register_prompts(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.quickstarts.prompts import register_prompts
+
+        register_prompts(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return QUICKSTARTS_PERMISSIONS
+
+    @hookimpl
+    def rhoai_health_check(self, server: RHOAIServer) -> tuple[bool, str]:
+        """Verify the installer Job's namespace and ServiceAccount exist.
+
+        These are the one deployment prerequisite users hit before running an
+        action; the message points at the RBAC manifest that provisions them.
+        Only a positively-confirmed absence fails the check — an unreachable or
+        forbidden API degrades gracefully, since discovery works without a
+        cluster and a transient blip should not flap the plugin.
+        """
+        from kubernetes.client import ApiException  # type: ignore[import-untyped]
+
+        from rhoai_mcp.utils.errors import NotFoundError
+
+        namespace = server.config.quickstart_job_namespace
+        service_account = server.config.quickstart_installer_service_account
+        hint = f"apply {QUICKSTART_INSTALLER_RBAC_MANIFEST} to provision it"
+
+        try:
+            server.k8s.get_namespace(namespace)
+        except NotFoundError:
+            return False, f"installer job namespace '{namespace}' is missing — {hint}"
+        except Exception as exc:
+            return True, f"could not verify installer prerequisites: {exc}"
+
+        try:
+            server.k8s.core_v1.read_namespaced_service_account(
+                name=service_account, namespace=namespace
+            )
+        except ApiException as exc:
+            if exc.status == 404:
+                return False, (
+                    f"installer service account '{service_account}' is missing from "
+                    f"namespace '{namespace}' — {hint}"
+                )
+            return True, f"could not verify installer service account: {exc.reason}"
+
+        return True, (
+            f"installer job namespace '{namespace}' and service account '{service_account}' present"
+        )
+
+
 class PromptsPlugin(BasePlugin):
     """Plugin for MCP workflow prompts.
 
@@ -408,6 +491,7 @@ def get_core_plugins() -> list[BasePlugin]:
         ConnectionsPlugin(),
         StoragePlugin(),
         TrainingPlugin(),
+        QuickstartsPlugin(),
         PromptsPlugin(),
         ModelRegistryPlugin(),
     ]

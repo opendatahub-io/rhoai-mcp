@@ -67,8 +67,9 @@ rhoai-mcp/
 │       │   ├── storage/         # PersistentVolumeClaim
 │       │   ├── training/        # Kubeflow Training Operator
 │       │   ├── model_registry/   # Model Registry integration
+│       │   ├── quickstarts/     # Red Hat AI quickstart discovery and deployment
 │       │   ├── prompts/         # MCP workflow prompts (18 prompts)
-│       │   └── registry.py      # Domain plugin registry (9 plugins)
+│       │   └── registry.py      # Domain plugin registry (10 plugins)
 │       └── composites/          # Cross-cutting composite tools
 │           ├── cluster/         # Cluster summaries and exploration
 │           ├── training/        # Training workflow orchestration

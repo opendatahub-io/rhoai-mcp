@@ -1,0 +1,796 @@
+{
+  "date": "2026-11-02",
+  "base_commit": "efad039bd47717d9040ccb63b26970b39c0d4a7d",
+  "required_agent_families": [
+    "GPT",
+    "Anthropic",
+    "GLM",
+    "DeepSeek"
+  ],
+  "matrix": [
+    {
+      "id": "enmaas-sol",
+      "model_name": "gpt-5.6-sol",
+      "base_url": "https://api.enmaas.devshift.net/v1",
+      "api": "responses",
+      "temperature": null,
+      "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+      "extra_settings": {},
+      "agent_backend": "pydantic-ai"
+    },
+    {
+      "id": "enmaas-opus",
+      "model_name": "claude-opus-4-6",
+      "base_url": "https://api.enmaas.devshift.net",
+      "api": "messages",
+      "temperature": null,
+      "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+      "extra_settings": {},
+      "agent_backend": "pydantic-ai"
+    },
+    {
+      "id": "enmaas-glm",
+      "model_name": "rits/zai-org/glm-5-3",
+      "base_url": "https://api.enmaas.devshift.net/v1",
+      "api": "responses",
+      "temperature": null,
+      "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+      "extra_settings": {},
+      "agent_backend": "pydantic-ai"
+    },
+    {
+      "id": "enmaas-deepseek",
+      "model_name": "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "base_url": "https://api.enmaas.devshift.net/v1",
+      "api": "responses",
+      "temperature": null,
+      "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+      "extra_settings": {},
+      "agent_backend": "pydantic-ai"
+    }
+  ],
+  "default_spec_ids": [
+    "enmaas-sol"
+  ],
+  "full_sweep": {
+    "skills": 2,
+    "goldens_per_skill": 2,
+    "models": 4,
+    "conversations": 16,
+    "run_during_this_step": false
+  },
+  "judge": {
+    "provider": "enmaas",
+    "model": "gpt-6.1-sol",
+    "mcp_metric_version": "conversation-v2",
+    "fidelity_version": "v2",
+    "thresholds": {
+      "use": 0.6,
+      "completion": 0.75,
+      "fidelity": 0.8
+    }
+  },
+  "native_anthropic": {
+    "model_name": "claude-opus-4-6",
+    "provider_base_url": "https://api.enmaas.devshift.net",
+    "request_path": "/v1/messages",
+    "pydantic_model": "AnthropicModel",
+    "pydantic_provider": "AnthropicProvider",
+    "key_env": "ENMAAS_KEY",
+    "responses_and_chat_returned_404": true,
+    "messages_connectivity_status": 200,
+    "qualified_probe_version": "v2",
+    "successful_probe": {
+      "probe_version": "v2",
+      "id": "enmaas-opus",
+      "model_name": "claude-opus-4-6",
+      "base_url": "https://api.enmaas.devshift.net",
+      "api": "messages",
+      "extra": {},
+      "passed": true,
+      "checks": {
+        "t1_called_exactly_one_tool": true,
+        "t1_correct_tool": true,
+        "t1_args_valid_json": true,
+        "t1_nested_object_well_formed": true,
+        "t1_enum_respected": true,
+        "t1_enum_array_well_formed": true,
+        "t2_called_second_tool": true,
+        "t2_grounded_in_tool_result": true,
+        "t2_carried_numeric_result": true,
+        "t3_stopped_calling_tools": true,
+        "t3_answered_from_result": true
+      },
+      "notes": [
+        "temperature=0 rejected; using provider default"
+      ],
+      "temperature_zero_supported": false,
+      "error": null,
+      "elapsed_s": 20.85,
+      "turns": [
+        {
+          "turn": 1,
+          "tool_calls": [
+            {
+              "name": "get_use_case_defaults",
+              "arguments": "{\"use_case\": \"chat\", \"concurrency\": {\"peak_users\": 50, \"avg_tokens_per_request\": 800}, \"priorities\": [\"latency\", \"cost\"]}"
+            }
+          ],
+          "content": "\n\nLet me start by looking up the default workload profile for your chat use case so we can see what GPU inventory is available on your cluster."
+        },
+        {
+          "turn": 2,
+          "tool_calls": [
+            {
+              "name": "recommend_model",
+              "arguments": "{\"workload\": {\"use_case\": \"chat\", \"expected_rps\": 4.2}, \"gpu\": {\"product\": \"A100-80\", \"count\": 8}, \"top_k\": 3}"
+            }
+          ],
+          "content": "Your cluster has **8\u00d7 NVIDIA A100 80 GB SXM4 GPUs** available across 2 nodes. Now let me fetch model recommendations for your workload."
+        },
+        {
+          "turn": 3,
+          "tool_calls": [],
+          "content": "Here are the results tailored to your customer-support chatbot:\n\n---\n\n## Cluster Inventory\n| Resource | Details |\n|---|---|\n| **GPUs** | 8\u00d7 NVIDIA A100 80 GB SXM4 |\n| **GPU Nodes** | 2 |\n| **All 8 available** | \u2705 |\n\n## Workload Profile\n| Parameter | Value |\n|---|---|\n| **Use case** | Chat (customer support) |\n| **Peak concurrent agents** | 50 |\n| **Avg tokens / request** | ~800 |\n| **Estimated throughput** | ~4.2 requests/sec |\n| **Optimisation priorities** | 1\ufe0f\u20e3 Latency \u00b7 2\ufe0f\u20e3 Cost |\n\n## Recommended Models\n\n### 1. \ud83e\udd47 Mistral 7B Instruct v0.3 (`mistralai/Mistral-7B-Instruct-v0.3`)\n- **Est. latency:** ~165 ms \u2014 *fastest option*\n- **GPU footprint:** Fits on a **single A100-80**, leaving 7 GPUs free for other workloads.\n- **Why:** Smallest model of the two, which keeps both latency and cost to a minimum. Excellent for structured customer-support Q&A.\n\n### 2. \ud83e\udd48 Llama 3.1 8B Instruct (`meta-llama/Llama-3.1-8B-Instruct`)\n- **Est. latency:** ~180 ms \u2014 still very fast\n- **GPU footprint:** Also fits on a **single A100-80**.\n- **Why:** Slightly larger (8B vs 7B), may produce richer answers for nuanced support queries. Llama 3.1's instruction-tuning is very strong.\n\n---\n\n### My Recommendation\n\nGo with **Mistral 7B Instruct v0.3** if pure latency and cost are king \u2014 it's the snappiest and lightest option. Choose **Llama 3.1 8B Instruct** if you want marginally better response quality for a negligible latency trade-off (~15 ms).\n\nEither model leaves **7 of your 8 GPUs free**, so you could also run a second replica for high availability or reserve capacity for future workloads.\n\nWould you like help with the serving runtime configuration (e.g., vLLM settings, replica count, autoscaling) on OpenShift AI?"
+        }
+      ]
+    }
+  },
+  "probe_protocol_changes": {
+    "version": "v2",
+    "reason": "The old final-answer check only recognized a literal Llama token although the fixture also returns Mistral. v2 accepts either returned model and ordinary name separators; all other checks unchanged.",
+    "messages_replay_fix": "Omit null SDK-only fields when echoing assistant blocks; the gateway rejected toolset_name=null.",
+    "earlier_results_preserved": true
+  },
+  "adapter_spike": {
+    "run_id": "phase0-enmaas-opus-20261102",
+    "attempt_id": "6bbc867e93c6",
+    "outcome": "evaluated",
+    "completed_turns": 5,
+    "elapsed_seconds": 100.06,
+    "tool_schemas": 53,
+    "skill_body_chars": 14467,
+    "checks": {
+      "connected_over_stdio": true,
+      "loaded_skill": true,
+      "received_skill_body": true,
+      "called_recommend_model": true,
+      "continued_turns": true,
+      "built_conversational_case": true,
+      "has_mcp_interactions": true,
+      "typed_tool_results": true,
+      "interaction_flags": true,
+      "skill_load_excluded_from_mcp": true,
+      "recommendation_attributed": true,
+      "fidelity_includes_skill_body": true,
+      "artifact_exists": true,
+      "native_messages_reload": true,
+      "transcript_roundtrip": true,
+      "schemas_roundtrip": true,
+      "skill_body_roundtrip": true,
+      "scoring_case_roundtrip": true
+    },
+    "passed": true,
+    "mcp_calls": 11,
+    "recommend_calls": 8,
+    "tool_errors": [
+      {
+        "call_id": "toolu_vrtx_01JCuq2Q7D8agVfLEFssUFd2",
+        "name": "recommend_model",
+        "raw_name": "recommend_model",
+        "arguments": {
+          "text": "Customer support chatbot for 50 agents, response speed is top priority, then cost",
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "optimization_profile": "optimize_latency"
+        },
+        "kind": "mcp",
+        "turn_index": 7,
+        "result_text": "{\"error\": \"Planner API error\", \"status_code\": 400}",
+        "structured_result": {
+          "error": "Planner API error",
+          "status_code": 400
+        },
+        "outcome": "success",
+        "error": null,
+        "is_error": false
+      },
+      {
+        "call_id": "toolu_vrtx_01EZuQvBXzTr8HR2QySfhJ5b",
+        "name": "recommend_model",
+        "raw_name": "recommend_model",
+        "arguments": {
+          "text": "Customer support chatbot for 50 agents, response speed is top priority, then cost",
+          "use_case": "chatbot_conversational",
+          "user_count": 50
+        },
+        "kind": "mcp",
+        "turn_index": 8,
+        "result_text": "{\"error\": \"Planner API error\", \"status_code\": 400}",
+        "structured_result": {
+          "error": "Planner API error",
+          "status_code": 400
+        },
+        "outcome": "success",
+        "error": null,
+        "is_error": false
+      },
+      {
+        "call_id": "toolu_vrtx_013KQMiqtF4GJrMYK5DBBvcG",
+        "name": "recommend_model",
+        "raw_name": "recommend_model",
+        "arguments": {
+          "text": "Customer support chatbot for 50 agents",
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "max_cost_per_month": 2300
+        },
+        "kind": "mcp",
+        "turn_index": 10,
+        "result_text": "{\"error\": \"Planner API error\", \"status_code\": 400}",
+        "structured_result": {
+          "error": "Planner API error",
+          "status_code": 400
+        },
+        "outcome": "success",
+        "error": null,
+        "is_error": false
+      },
+      {
+        "call_id": "toolu_vrtx_01WaMBxAuw9Vgfduykmn9xr1",
+        "name": "recommend_model",
+        "raw_name": "recommend_model",
+        "arguments": {
+          "text": "Customer support chatbot for 50 agents, fastest possible",
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "ttft_max_ms": 62
+        },
+        "kind": "mcp",
+        "turn_index": 10,
+        "result_text": "{\"error\": \"Planner API error\", \"status_code\": 400}",
+        "structured_result": {
+          "error": "Planner API error",
+          "status_code": 400
+        },
+        "outcome": "success",
+        "error": null,
+        "is_error": false
+      },
+      {
+        "call_id": "toolu_vrtx_01BZgyKu2qqagc4HV2pC8snJ",
+        "name": "recommend_model",
+        "raw_name": "recommend_model",
+        "arguments": {
+          "text": "Customer support chatbot for 50 agents, highest quality",
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "min_quality": 53
+        },
+        "kind": "mcp",
+        "turn_index": 10,
+        "result_text": "{\"error\": \"Planner API error\", \"status_code\": 400}",
+        "structured_result": {
+          "error": "Planner API error",
+          "status_code": 400
+        },
+        "outcome": "success",
+        "error": null,
+        "is_error": false
+      }
+    ],
+    "tools_outside_allowlist": [
+      "explore_cluster"
+    ],
+    "full_skill_golden": false,
+    "judged": false
+  },
+  "evidence": {
+    "catalog": {
+      "captured_at": "2026-11-02T13:24:39.681961+00:00",
+      "endpoint": "https://api.enmaas.devshift.net/v1",
+      "models": [
+        {
+          "id": "gpt-5.3-codex",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5.4",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "owned_by": "openai"
+        },
+        {
+          "id": "rits/zai-org/glm-5-3",
+          "owned_by": "curvebender"
+        },
+        {
+          "id": "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "owned_by": "curvebender"
+        },
+        {
+          "id": "gemini-3.6-flash",
+          "owned_by": "vertex"
+        },
+        {
+          "id": "gemini-3.7-flash",
+          "owned_by": "vertex"
+        },
+        {
+          "id": "gemini-3.8-flash",
+          "owned_by": "vertex"
+        },
+        {
+          "id": "gemini-3.1-pro-preview",
+          "owned_by": "vertex"
+        },
+        {
+          "id": "gpt-6-luna",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-6.1-sol",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-6.1-terra",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-6-sol",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-6-astra",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5.5",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "owned_by": "openai"
+        },
+        {
+          "id": "codex-auto-review",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-4o-mini",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5-mini",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5.4-nano",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "owned_by": "openai"
+        },
+        {
+          "id": "gpt-5.2",
+          "owned_by": "openai"
+        }
+      ]
+    },
+    "sonnet_responses": {
+      "probed_at": "2026-11-02T13:25:28.285767+00:00",
+      "purpose": "Anthropic candidate qualification for the all-EnMaaS matrix",
+      "candidate_source": "https://platform.claude.com/docs/en/models/overview",
+      "result": {
+        "id": "enmaas-claude-sonnet",
+        "model_name": "claude-sonnet-5-5",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "extra": {},
+        "passed": false,
+        "checks": {},
+        "notes": [],
+        "temperature_zero_supported": null,
+        "error": "NotFoundError: Error code: 404",
+        "elapsed_s": 0.73,
+        "turns": []
+      }
+    },
+    "sonnet_chat_legacy_and_gpt_control": {
+      "probed_at": "2026-11-02T13:26:05.031757+00:00",
+      "purpose": "Anthropic route/legacy-ID checks and GPT Responses control through the same EnMaaS endpoint",
+      "results": [
+        {
+          "id": "enmaas-claude-sonnet-chat",
+          "model_name": "claude-sonnet-5-5",
+          "base_url": "https://api.enmaas.devshift.net/v1",
+          "api": "chat",
+          "extra": {},
+          "passed": false,
+          "checks": {},
+          "notes": [],
+          "temperature_zero_supported": null,
+          "error": "NotFoundError: Error code: 404",
+          "elapsed_s": 0.72,
+          "turns": []
+        },
+        {
+          "id": "enmaas-claude-sonnet-4-responses",
+          "model_name": "claude-sonnet-4-20250514",
+          "base_url": "https://api.enmaas.devshift.net/v1",
+          "api": "responses",
+          "extra": {},
+          "passed": false,
+          "checks": {},
+          "notes": [],
+          "temperature_zero_supported": null,
+          "error": "NotFoundError: Error code: 404",
+          "elapsed_s": 0.71,
+          "turns": []
+        },
+        {
+          "id": "enmaas-sol-control",
+          "model_name": "gpt-5.6-sol",
+          "base_url": "https://api.enmaas.devshift.net/v1",
+          "api": "responses",
+          "extra": {},
+          "passed": true,
+          "checks": {
+            "t1_called_exactly_one_tool": true,
+            "t1_correct_tool": true,
+            "t1_args_valid_json": true,
+            "t1_nested_object_well_formed": true,
+            "t1_enum_respected": true,
+            "t1_enum_array_well_formed": true,
+            "t2_called_second_tool": true,
+            "t2_grounded_in_tool_result": true,
+            "t2_carried_numeric_result": true,
+            "t3_stopped_calling_tools": true,
+            "t3_answered_from_result": true
+          },
+          "notes": [
+            "temperature=0 rejected; using provider default"
+          ],
+          "temperature_zero_supported": false,
+          "error": null,
+          "elapsed_s": 7.93,
+          "turns": [
+            {
+              "turn": 1,
+              "tool_calls": [
+                {
+                  "name": "get_use_case_defaults",
+                  "arguments": "{\"use_case\":\"chat\",\"concurrency\":{\"peak_users\":50,\"avg_tokens_per_request\":800},\"priorities\":[\"latency\",\"cost\"]}"
+                }
+              ],
+              "content": ""
+            },
+            {
+              "turn": 2,
+              "tool_calls": [
+                {
+                  "name": "recommend_model",
+                  "arguments": "{\"workload\":{\"use_case\":\"chat\",\"expected_rps\":4.2},\"gpu\":{\"product\":\"A100-80\",\"count\":8},\"top_k\":3}"
+                }
+              ],
+              "content": ""
+            },
+            {
+              "turn": 3,
+              "tool_calls": [],
+              "content": "### Recommended deployment\n\n**Run `mistralai/Mistral-7B-Instruct-v0.3`** on your available **8\u00d7 NVIDIA A100 80GB GPUs**.\n\n- **Estimated latency:** ~165 ms\n- **Expected workload:** ~4.2 requests/second\n- **Why:** Lowest estimated latency among the fitting models, while its smaller size should also support your secondary cost priority.\n\n**Alternative:** `meta-llama/Llama-3.1-8B-Instruct` at ~180 ms "
+            }
+          ]
+        }
+      ]
+    },
+    "opus_responses": {
+      "probed_at": "2026-11-02T13:26:16.181720+00:00",
+      "purpose": "User-selected Anthropic candidate qualification",
+      "result": {
+        "id": "enmaas-opus",
+        "model_name": "claude-opus-4-6",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "extra": {},
+        "passed": false,
+        "checks": {},
+        "notes": [],
+        "temperature_zero_supported": null,
+        "error": "NotFoundError: Error code: 404",
+        "elapsed_s": 0.72,
+        "turns": []
+      }
+    },
+    "opus_chat": {
+      "probed_at": "2026-11-02T13:26:31.758342+00:00",
+      "purpose": "User-selected Anthropic candidate on Chat Completions after Responses returned 404",
+      "result": {
+        "id": "enmaas-opus-chat",
+        "model_name": "claude-opus-4-6",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "chat",
+        "extra": {},
+        "passed": false,
+        "checks": {},
+        "notes": [],
+        "temperature_zero_supported": null,
+        "error": "NotFoundError: Error code: 404",
+        "elapsed_s": 0.67,
+        "turns": []
+      }
+    },
+    "opus_native_connectivity": {
+      "probed_at": "2026-11-02T13:28:50.347293+00:00",
+      "purpose": "Check native Anthropic Messages route after both OpenAI-compatible routes returned 404",
+      "model_name": "claude-opus-4-6",
+      "url": "https://api.enmaas.devshift.net/v1/messages",
+      "status_code": 200,
+      "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_vrtx_011CgeBSih6WjPNMBh1PUB6y\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"OK.\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":11,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":5}}",
+      "elapsed_s": 1.95,
+      "credentials_recorded": false
+    },
+    "opus_initial_messages_tool_probe": [
+      {
+        "id": "enmaas-opus",
+        "model_name": "claude-opus-4-6",
+        "base_url": "https://api.enmaas.devshift.net",
+        "api": "messages",
+        "extra": {},
+        "passed": false,
+        "checks": {
+          "t1_called_exactly_one_tool": true,
+          "t1_correct_tool": true,
+          "t1_args_valid_json": true,
+          "t1_nested_object_well_formed": true,
+          "t1_enum_respected": true,
+          "t1_enum_array_well_formed": true
+        },
+        "notes": [
+          "temperature=0 rejected; using provider default"
+        ],
+        "temperature_zero_supported": false,
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.1.content.1.tool_use.toolset_name: Extra inputs are not permitted'}, 'request_id': 'req_vrtx_011CgeBZX72jNR7sS7iZdj6m'}",
+        "elapsed_s": 3.9,
+        "turns": [
+          {
+            "turn": 1,
+            "tool_calls": [
+              {
+                "name": "get_use_case_defaults",
+                "arguments": "{\"use_case\": \"chat\", \"concurrency\": {\"peak_users\": 50, \"avg_tokens_per_request\": 800}, \"priorities\": [\"latency\", \"cost\"]}"
+              }
+            ],
+            "content": "\n\nLet me start by looking up the default workload profile and available GPU inventory for your chat use case."
+          }
+        ]
+      }
+    ],
+    "opus_original_final_answer_check": [
+      {
+        "id": "enmaas-opus",
+        "model_name": "claude-opus-4-6",
+        "base_url": "https://api.enmaas.devshift.net",
+        "api": "messages",
+        "extra": {},
+        "passed": false,
+        "checks": {
+          "t1_called_exactly_one_tool": true,
+          "t1_correct_tool": true,
+          "t1_args_valid_json": true,
+          "t1_nested_object_well_formed": true,
+          "t1_enum_respected": true,
+          "t1_enum_array_well_formed": true,
+          "t2_called_second_tool": true,
+          "t2_grounded_in_tool_result": true,
+          "t2_carried_numeric_result": true,
+          "t3_stopped_calling_tools": true,
+          "t3_answered_from_result": false
+        },
+        "notes": [
+          "temperature=0 rejected; using provider default"
+        ],
+        "temperature_zero_supported": false,
+        "error": null,
+        "elapsed_s": 20.22,
+        "turns": [
+          {
+            "turn": 1,
+            "tool_calls": [
+              {
+                "name": "get_use_case_defaults",
+                "arguments": "{\"use_case\": \"chat\", \"concurrency\": {\"peak_users\": 50, \"avg_tokens_per_request\": 800}, \"priorities\": [\"latency\", \"cost\"]}"
+              }
+            ],
+            "content": "\n\nLet me start by looking up the default workload profile for your chat use case with those specifics."
+          },
+          {
+            "turn": 2,
+            "tool_calls": [
+              {
+                "name": "recommend_model",
+                "arguments": "{\"workload\": {\"use_case\": \"chat\", \"expected_rps\": 4.2}, \"gpu\": {\"product\": \"A100-80\", \"count\": 8}, \"top_k\": 3}"
+              }
+            ],
+            "content": "Your cluster has **8\u00d7 NVIDIA A100 80 GB SXM4 GPUs** available across 2 nodes. Now let me get model recommendations for your workload."
+          },
+          {
+            "turn": 3,
+            "tool_calls": [],
+            "content": "Here's what I'd recommend for your customer-support chatbot:\n\n---\n\n### Cluster Inventory\n| Resource | Detail |\n|---|---|\n| **GPUs** | 8\u00d7 NVIDIA A100 80 GB SXM4 (2 nodes) |\n| **Available** | All 8 GPUs free |\n\n### Workload Profile\n| Parameter | Value |\n|---|---|\n| **Use case** | Chat (customer support) |\n| **Peak concurrent agents** | 50 |\n| **Avg tokens/request** | 800 |\n| **Expected throughput** "
+          }
+        ]
+      }
+    ],
+    "qualified_v2": [
+      {
+        "probe_version": "v2",
+        "id": "enmaas-sol-resp",
+        "model_name": "gpt-5.6-sol",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "extra": {},
+        "passed": true,
+        "checks": {
+          "t1_called_exactly_one_tool": true,
+          "t1_correct_tool": true,
+          "t1_args_valid_json": true,
+          "t1_nested_object_well_formed": true,
+          "t1_enum_respected": true,
+          "t1_enum_array_well_formed": true,
+          "t2_called_second_tool": true,
+          "t2_grounded_in_tool_result": true,
+          "t2_carried_numeric_result": true,
+          "t3_stopped_calling_tools": true,
+          "t3_answered_from_result": true
+        },
+        "notes": [
+          "temperature=0 rejected; using provider default"
+        ],
+        "temperature_zero_supported": false,
+        "error": null,
+        "elapsed_s": 9.37,
+        "turns": [
+          {
+            "turn": 1,
+            "tool_calls": [
+              {
+                "name": "get_use_case_defaults",
+                "arguments": "{\"use_case\":\"chat\",\"concurrency\":{\"peak_users\":50,\"avg_tokens_per_request\":800},\"priorities\":[\"latency\",\"cost\"]}"
+              }
+            ],
+            "content": ""
+          },
+          {
+            "turn": 2,
+            "tool_calls": [
+              {
+                "name": "recommend_model",
+                "arguments": "{\"workload\":{\"use_case\":\"chat\",\"expected_rps\":4.2},\"gpu\":{\"product\":\"A100-80\",\"count\":8},\"top_k\":3}"
+              }
+            ],
+            "content": ""
+          },
+          {
+            "turn": 3,
+            "tool_calls": [],
+            "content": "### Recommended model\n\n**`mistralai/Mistral-7B-Instruct-v0.3`**\n\n- **Estimated latency:** 165 ms\n- **Capacity target:** ~4.2 requests/second\n- **Hardware:** Available **8\u00d7 NVIDIA A100 80GB GPUs**\n- Best match because **latency is your top priority**, while its smaller size should also help control serving costs.\n\n### Accuracy-oriented alternative\n\n**`meta-llama/Llama-3.1-8B-Instruct`**\n\n- **Estimated latency:** 180 ms\n- Slightly slower, but worth evaluating if its response quality is better on your support conversations.\n\nRun an evaluation on representative support tickets before production deployment, particularly for answer correctness, tone, and escalation behavior."
+          }
+        ]
+      },
+      {
+        "probe_version": "v2",
+        "id": "enmaas-opus",
+        "model_name": "claude-opus-4-6",
+        "base_url": "https://api.enmaas.devshift.net",
+        "api": "messages",
+        "extra": {},
+        "passed": true,
+        "checks": {
+          "t1_called_exactly_one_tool": true,
+          "t1_correct_tool": true,
+          "t1_args_valid_json": true,
+          "t1_nested_object_well_formed": true,
+          "t1_enum_respected": true,
+          "t1_enum_array_well_formed": true,
+          "t2_called_second_tool": true,
+          "t2_grounded_in_tool_result": true,
+          "t2_carried_numeric_result": true,
+          "t3_stopped_calling_tools": true,
+          "t3_answered_from_result": true
+        },
+        "notes": [
+          "temperature=0 rejected; using provider default"
+        ],
+        "temperature_zero_supported": false,
+        "error": null,
+        "elapsed_s": 20.85,
+        "turns": [
+          {
+            "turn": 1,
+            "tool_calls": [
+              {
+                "name": "get_use_case_defaults",
+                "arguments": "{\"use_case\": \"chat\", \"concurrency\": {\"peak_users\": 50, \"avg_tokens_per_request\": 800}, \"priorities\": [\"latency\", \"cost\"]}"
+              }
+            ],
+            "content": "\n\nLet me start by looking up the default workload profile for your chat use case so we can see what GPU inventory is available on your cluster."
+          },
+          {
+            "turn": 2,
+            "tool_calls": [
+              {
+                "name": "recommend_model",
+                "arguments": "{\"workload\": {\"use_case\": \"chat\", \"expected_rps\": 4.2}, \"gpu\": {\"product\": \"A100-80\", \"count\": 8}, \"top_k\": 3}"
+              }
+            ],
+            "content": "Your cluster has **8\u00d7 NVIDIA A100 80 GB SXM4 GPUs** available across 2 nodes. Now let me fetch model recommendations for your workload."
+          },
+          {
+            "turn": 3,
+            "tool_calls": [],
+            "content": "Here are the results tailored to your customer-support chatbot:\n\n---\n\n## Cluster Inventory\n| Resource | Details |\n|---|---|\n| **GPUs** | 8\u00d7 NVIDIA A100 80 GB SXM4 |\n| **GPU Nodes** | 2 |\n| **All 8 available** | \u2705 |\n\n## Workload Profile\n| Parameter | Value |\n|---|---|\n| **Use case** | Chat (customer support) |\n| **Peak concurrent agents** | 50 |\n| **Avg tokens / request** | ~800 |\n| **Estimated throughput** | ~4.2 requests/sec |\n| **Optimisation priorities** | 1\ufe0f\u20e3 Latency \u00b7 2\ufe0f\u20e3 Cost |\n\n## Recommended Models\n\n### 1. \ud83e\udd47 Mistral 7B Instruct v0.3 (`mistralai/Mistral-7B-Instruct-v0.3`)\n- **Est. latency:** ~165 ms \u2014 *fastest option*\n- **GPU footprint:** Fits on a **single A100-80**, leaving 7 GPUs free for other workloads.\n- **Why:** Smallest model of the two, which keeps both latency and cost to a minimum. Excellent for structured customer-support Q&A.\n\n### 2. \ud83e\udd48 Llama 3.1 8B Instruct (`meta-llama/Llama-3.1-8B-Instruct`)\n- **Est. latency:** ~180 ms \u2014 still very fast\n- **GPU footprint:** Also fits on a **single A100-80**.\n- **Why:** Slightly larger (8B vs 7B), may produce richer answers for nuanced support queries. Llama 3.1's instruction-tuning is very strong.\n\n---\n\n### My Recommendation\n\nGo with **Mistral 7B Instruct v0.3** if pure latency and cost are king \u2014 it's the snappiest and lightest option. Choose **Llama 3.1 8B Instruct** if you want marginally better response quality for a negligible latency trade-off (~15 ms).\n\nEither model leaves **7 of your 8 GPUs free**, so you could also run a second replica for high availability or reserve capacity for future workloads.\n\nWould you like help with the serving runtime configuration (e.g., vLLM settings, replica count, autoscaling) on OpenShift AI?"
+          }
+        ]
+      }
+    ]
+  },
+  "validation": {
+    "offline_eval_tests_passed": 280,
+    "ruff": "pass",
+    "format": "pass",
+    "mypy": "pass",
+    "uv_lock": "resolved offline",
+    "full_matrix_collected_cases": 16
+  },
+  "limitations": [
+    "Qualification is a smoke test, not a reliability estimate or judged skill pass.",
+    "GLM and DeepSeek retain historical Phase 0 qualification; no fresh full goldens ran for GPT, Opus, or DeepSeek.",
+    "The adapter spike records planner 400 results and an allowlist deviation; these are not hidden by its connectivity/adapter PASS.",
+    "MCP used mock Kubernetes state, while the bundled planner made optional node probes that returned 401.",
+    "Historical calibration/baseline records are unchanged; the full matrix has not started."
+  ],
+  "provenance": {
+    "raw_local_files_sha256": {
+      "evals/results/enmaas-roster-catalog-20261102.json": "1e1b4adfe0b7a416953d306ca8b71b77bf2334a596d41198b343a265a08ff852",
+      "evals/results/enmaas-anthropic-probe-20261102.json": "8244e7af1248835439e6144bd30437a74562eb314926e742ddffca9d3157153a",
+      "evals/results/enmaas-anthropic-followup-20261102.json": "6683512af55f2925e675c3e2f953893677b47fd89a22e3e1bcd6d603140c594d",
+      "evals/results/enmaas-opus-probe-20261102.json": "940059ca2b1d56e36f0784e2ad842ea8b85b62a7b8c7012230f613522d91d8ab",
+      "evals/results/enmaas-opus-chat-probe-20261102.json": "1ad23bdd1a6b60079588367bca889ed8de5ccce2ac9a3ecdc779ea4c868a38da",
+      "evals/results/enmaas-opus-messages-probe-20261102.json": "00a909d477abf5f2da31532c7385d014062d107a4ab745ff6117eab79110f857",
+      "evals/results/enmaas-opus-messages-tool-probe-20261102.json": "fee43de2727b3a5811bc24cdb5107678f03513817f6adc28b61de45d5a386bc8",
+      "evals/results/enmaas-opus-messages-qualified-20261102.json": "e16cc46ab04264f314c5bf055fec6f05bb2faebb396d456109df2f383d18fb09",
+      "evals/results/enmaas-matrix-qualification-v2-20261102.json": "0d0085073b6299b8642f63cd7477f4be430808ee43bd451a7e532d965848060b"
+    },
+    "native_artifact_sha256": {
+      "evals/results/phase0-enmaas-opus-20261102/6bbc867e93c6/artifact.json": "75dd479127c3bb7ea22a994543bada301b8724caaf63fc0a9e0dc200afba107f",
+      "evals/results/phase0-enmaas-opus-20261102/6bbc867e93c6/messages.json": "6c40aaa3853d8d12851564efa8f1cc441d2ad7b70d5298366060ee3a20c19617"
+    },
+    "source_sha256": {
+      "evals/agent/models.py": "95592bd71129ef83a5057fb1330b8002ef4beaa4f2a4a8d1021b9fd7c2300b84",
+      "evals/agent/probe_tool_calling.py": "545d9bdee9d883e5a10ae48bb1b0822b71f43c015db11718e8d1d68322d9c84b",
+      "evals/agent/spike.py": "d93fdbcbcf19b6f19fed642f85de122b2a2ea83677bc8cfbe15301e8b8774ce2",
+      "tests/evals/test_agent_models.py": "18c980d171a091dcbe7965a951001ff70dfeb5a4ef37e35774058b8b69fe7f61",
+      "pyproject.toml": "7bd8249b534f0c3b7bd8f15eae4ccdc40003af7c55e1d8a008591416489e7aa9",
+      "uv.lock": "a3d44ee1c078635e77c878b38d3449b8696f62c55f8d29fd515aa093b68326ec"
+    },
+    "package_versions": {
+      "pydantic-ai-slim": "2.64.0",
+      "pydantic-ai-harness": "0.64.0",
+      "anthropic": "1.15.0",
+      "openai": "3.39.0",
+      "deepeval": "4.3.1"
+    },
+    "verified_at": "2026-11-02T13:36:29.721231+00:00",
+    "previous_normal_history_sha256": "626b15336f6f792b37e7b980b9ad54c9caa069ab37174f7a919b1b284e80f8ee",
+    "previous_normal_history_unchanged": true,
+    "previous_native_artifact_files_unchanged": 72
+  }
+}

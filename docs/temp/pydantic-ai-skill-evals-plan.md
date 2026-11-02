@@ -1,12 +1,14 @@
 # Plan: Pydantic AI + DeepEval skill evaluations (first iteration)
 
-**Status:** proposal · **Date:** 2026-10-31 · **Scope:** first iteration, deliberately small
+**Status:** implementation plan · **Date:** 2026-10-31 · **Updated:** 2026-11-02
 
 Complement the LightSpeed Core (LCORE) compose stack that `evals/` currently needs with a
 small Pydantic AI agent that wires `rhoai-mcp` over **stdio** and exposes the two
-agentskills.io skills in `.claude/skills/`. **Six matrix cells: 2 skills × 3 models**
-(OpenAI, EnMaaS/GLM, EnMaaS/DeepSeek), with **2 scenarios per skill = 12 conversations**
-per full sweep. Start with one model before expanding the matrix. Keep both MCP metrics
+agentskills.io skills in `.claude/skills/`. **Eight matrix cells: 2 skills × 4 models**
+(GPT, Anthropic Claude, GLM, and DeepSeek), **all through EnMaaS**, with
+**2 scenarios per skill = 16 conversations** per full sweep. GPT and Anthropic are
+required family representatives; GLM and DeepSeek are the two open-weight entries.
+Start with one model before expanding the matrix. Keep both MCP metrics
 and one skill-fidelity judge per skill. Persisted transcripts are the scoring input, so
 the same path re-scores them offline; OTel is planned. EvalHub orchestration is a follow-on, not designed here.
 
@@ -40,9 +42,10 @@ it does not automatically scan conventional locations:
 from pydantic_ai import Agent
 from pydantic_ai.capabilities import LocalWorkspace
 from pydantic_ai_harness import Skills
+from evals.agent.models import get_spec
 
 agent = Agent(
-    'openai:gpt-4o',
+    model=get_spec('enmaas-sol').build(),
     capabilities=[LocalWorkspace('.'), Skills('.claude/skills')],
 )
 ```
@@ -265,14 +268,15 @@ Thread history through `message_history=result.all_messages()`. When aggregating
 either use the final cumulative history or append each run's `new_messages()`; do not
 concatenate successive `all_messages()` snapshots and duplicate earlier turns. Apply
 explicit request/tool-call limits and a conversation timeout, preserving partial history
-on failure. Fixed scripts and `temperature=0` reduce variation; model outputs still vary.
+on failure. Fixed scripts reduce variation; record provider-default sampling and expect
+model outputs to vary (§2.3).
 
 ### 2.2 Layout
 
 ```
 evals/
 ├── agent/
-│   ├── models.py        # AgentModelSpec: openai | enmaas-glm | enmaas-deepseek
+│   ├── models.py        # Planned matrix: enmaas-sol | enmaas-opus | enmaas-glm | enmaas-deepseek
 │   ├── runner.py        # build Agent + Skills + MCPToolset(stdio); drive scripted turns
 │   └── transcript.py    # save/load native history + schemas; adapt to shared transcript
 ├── skills/
@@ -309,25 +313,58 @@ class AgentModelSpec:
     model_name: str
     base_url: str | None
     api_key_env: str
+    api: Literal["chat", "responses"] = "responses"
 
     def build(self) -> Model:
+        if self.api == "messages":
+            return AnthropicModel(
+                self.model_name,
+                provider=AnthropicProvider(
+                    api_key=os.environ[self.api_key_env], base_url=self.base_url
+                ),
+            )
         provider = OpenAIProvider(api_key=os.environ[self.api_key_env], base_url=self.base_url)
-        return OpenAIChatModel(self.model_name, provider=provider)
+        model_class = OpenAIResponsesModel if self.api == "responses" else OpenAIChatModel
+        return model_class(self.model_name, provider=provider)
 ```
 
-| id | `model_name` | `base_url` | key env |
-|---|---|---|---|
-| `openai-gpt4o` | `gpt-4o` | — | `RHOAI_EVAL_OPENAI_API_KEY` |
-| `enmaas-glm` | e.g. `glm-4.6` | `RHOAI_EVAL_ENMAAS_BASE_URL` | `RHOAI_EVAL_ENMAAS_API_KEY` |
-| `enmaas-deepseek` | e.g. `deepseek-v3` | `RHOAI_EVAL_ENMAAS_BASE_URL` | `RHOAI_EVAL_ENMAAS_API_KEY` |
+The required Phase 3 roster is four agent models, all through EnMaaS and using
+`ENMAAS_KEY`. GPT/GLM/DeepSeek use the OpenAI-compatible `/v1/responses` endpoint;
+Claude explicitly uses the native `/v1/messages` endpoint:
 
-[Red Hat MaaS](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html/govern_llm_access_with_models-as-a-service/deploy-and-manage-models-as-a-service_maas)
-is OpenAI-compatible, so all three are the same code path — only the tuple changes.
+| Planned spec id | Family | `model_name` | API / qualification |
+|---|---|---|---|
+| `enmaas-sol` | GPT | `gpt-5.6-sol` | Responses; qualified, rechecked 2026-11-02 |
+| `enmaas-opus` | Anthropic Claude | `claude-opus-4-6` | Native Messages; user-selected, 11/11 probe checks passed |
+| `enmaas-glm` | Open-weight GLM | `rits/zai-org/glm-5-3` | Responses; qualified, goldens exercised |
+| `enmaas-deepseek` | Open-weight DeepSeek | `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017` | Responses; Phase 0 qualified |
+
+Use `OpenAIResponsesModel` with `OpenAIProvider` for GPT/GLM/DeepSeek, and
+`AnthropicModel` with `AnthropicProvider` for Claude; do not rely on model-name
+inference. The Anthropic SDK appends `/v1/messages` itself, so its provider base URL
+is **`https://api.enmaas.devshift.net`**, without `/v1`. The other specs retain
+`https://api.enmaas.devshift.net/v1`. This explicit model/provider pairing follows
+the [Pydantic AI Anthropic configuration](https://pydantic.dev/docs/ai/models/anthropic/).
+
+The OpenAI-compatible `/v1/models` response omits Anthropic, and Opus returned 404
+on Responses/Chat; its native Messages request succeeded. These observations
+establish an API mismatch, not missing model access. The native 11-check probe
+and Pydantic stdio/skill adapter spike are the qualification evidence; see
+[the report](./enmaas-matrix-qualification.md) for results and limits.
+
+`evals/agent/models.py` now selects these four entries for `matrix` and defaults
+to `enmaas-sol` for a one-model run. The skill-eval dependency group includes the
+Anthropic extra. No direct OpenAI or direct Anthropic endpoint belongs in this
+sweep. Historical direct-provider specs remain explicit diagnostics outside the
+default and matrix.
 
 Selected by `RHOAI_EVAL_AGENT_MODELS` (comma-separated) to parametrise pytest, so CI can
-run one model per job. Set `temperature=0` where supported and record effective settings;
-do not silently fall back to different settings. **Hold the judge model fixed**
-across them, via the existing `RHOAI_EVAL_EVAL_*` settings and `create_judge_llm()`.
+run one model per job. Leave temperature unset for every matrix entry and record
+provider-default sampling explicitly, following the qualified Phase 0 configuration.
+Uniform requests do not guarantee uniform provider sampling. Do not silently change
+settings to recover a failed run. **Hold the calibrated judge fixed:** EnMaaS
+`gpt-6.1-sol`, cutoffs 0.60 / 0.75 / 0.80, MCP `conversation-v2`, fidelity `v2`, via
+the existing `RHOAI_EVAL_EVAL_*` settings and `create_judge_llm()`.
 Record the requested model identifier, provider-reported version when available, and
 endpoint identity without credentials. One sweep is a smoke comparison, not evidence of
 stable model rankings; use explicit repeated attempts for stronger conclusions rather
@@ -432,12 +469,12 @@ thresholds against reviewed passing and failing examples with a fixed judge, not
 against whichever agent model scores highest. Report every metric separately; avoid a
 combined number that could hide a workflow violation.
 
-### 3.4 The matrix — 6 cells, 12 conversations per sweep
+### 3.4 The matrix — 8 cells, 16 conversations per complete sweep
 
-| | OpenAI gpt-4o | EnMaaS GLM | EnMaaS DeepSeek |
-|---|---|---|---|
-| **navigator** | run | run | run |
-| **navigator-deploy** | run | run | run |
+| | EnMaaS GPT | EnMaaS Anthropic | EnMaaS GLM | EnMaaS DeepSeek |
+|---|---|---|---|---|
+| **navigator** | 2 goldens | 2 goldens | 2 goldens | 2 goldens |
+| **navigator-deploy** | 2 goldens | 2 goldens | 2 goldens | 2 goldens |
 
 Start with **2 goldens per skill**:
 
@@ -461,7 +498,11 @@ branches turn out to matter.
 The handoff case uses a fixed valid fixture supplied in the scripted conversation, so it
 depends on neither a preceding navigator run nor any mock-state change.
 Start with one scenario per skill and one model, then expand to all four scenarios and
-three models: **2 skills × 2 goldens × 3 models = 12 conversations**. Repeated attempts
+four models: **2 skills × 2 goldens × 4 models = 16 conversations**. A run omitting
+the required Anthropic entry is a partial sweep. Run one model's four goldens per
+reviewable macro step, with the same scoring configuration. Prevent idle sleep for
+local runs (`caffeinate -i` on macOS), disable pytest capture (`-s`) for stdio, and
+disable automatic retries (`--reruns 0`). Repeated attempts
 multiply this count and each gets its own record and artifact.
 
 Keep `outcome` distinct from pass/fail: `harness_error` (setup, auth, adapter, or judge
@@ -633,7 +674,7 @@ configurations and retain the all-plugin collision check. No skill or contract c
 save/load path, corrected shared adapter, stdio fixtures, checkpoints, and the
 `recorder.py` / `reader.py` changes only (§3.5). Scoring reads the artifact from the
 start, so the single path costs nothing to adopt here. Delete the stale `turn._mcp_interaction = True`
-workaround. Start with one scenario per skill against `openai-gpt4o`, then add the
+workaround. Start with one scenario per skill against `enmaas-sol`, then add the
 vague-requirements and handoff/withheld-consent cases. Verify that failures and partial
 transcripts are recorded before pytest assertions, that branch checks actually execute
 and report unexercised branches honestly, and that the reader retains new metadata.
@@ -642,8 +683,13 @@ No judge cost yet; dry-run records identify this mode explicitly.
 **Phase 3 — all required metrics, then the full model roster.** On the one-model path,
 add **`MultiTurnMCPUseMetric`, `MCPTaskCompletionMetric`, and the relevant
 `ConversationalGEval` rubric**. Then wire EnMaaS credentials for the models that passed
-the Phase 0 probe and expand to the full sweep — 6 cells and **12 conversations** if all
-three models qualified. Only now extend `comparison.py` and the CLI (§3.5), against real
+the Phase 0 probe and adapter spike and expand to the required full sweep — 8 cells
+and **16 conversations** across GPT, Anthropic, GLM, and DeepSeek, all via EnMaaS.
+Anthropic uses the explicitly qualified native Messages configuration (§2.3); do
+not silently omit the family or switch its provider. The runtime matrix is aligned
+with the four-model roster. Keep the calibrated EnMaaS judge and scoring settings
+fixed. Only then extend
+`comparison.py` and the CLI (§3.5), against real
 multi-model records. Verify that routing failures, missing scores, and errors are
 reported without biasing comparisons. New targets: `make eval-skills` (one-model
 default, model selection via environment), `make eval-skills-matrix`, and
@@ -681,13 +727,15 @@ shim rather than a rewrite.
 
 ## 6. Open questions
 
-1. **Which models can actually tool-call?** — exact `base_url` and model identifiers for
-   GLM and DeepSeek, and whether each handles OpenAI-style tool calling well enough.
-   Tool-calling fidelity varies a lot across hosted builds. The Phase 0 probe answers
-   this and sets the roster; the matrix stays at three models unless the probe gives a
-   concrete reason to drop one.
-2. **Judge model** — keep `gemini-2.5-flash` on Vertex, or something stronger for the
-   GEval rubrics? A weak judge on a nuanced rubric adds noise.
+1. **Anthropic through EnMaaS — API resolved** — user-selected `claude-opus-4-6`
+   works on native Messages and passes the tool-calling probe. Configure
+   `AnthropicModel`/`AnthropicProvider` explicitly, using the EnMaaS root base URL.
+   GPT, Anthropic, GLM, and DeepSeek are the required four-model roster. Qualification
+   is a connectivity/tool-use smoke test, not a passing four-golden result.
+   [Probe evidence](./enmaas-matrix-qualification.md).
+2. **Judge model — resolved** — calibrated EnMaaS `gpt-6.1-sol` is fixed across agent
+   families, with the reviewed cutoffs and versions in §2.3. See
+   [judge calibration](./judge-calibration.md).
 3. **Which trace collector** — `otel-tui` is an option documented by Pydantic and the
    cheapest place to start. Verify generic OTLP support before choosing MLflow or
    another collector; their integration versions and deployment requirements must not

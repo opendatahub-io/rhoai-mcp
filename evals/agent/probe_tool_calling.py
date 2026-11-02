@@ -1,4 +1,4 @@
-"""Phase 0 probe: multi-turn OpenAI-style tool-calling fidelity across candidate models.
+"""Phase 0 probe: multi-turn tool-calling fidelity across candidate models.
 
 Decides which models enter the skill-eval matrix. See
 ``docs/temp/pydantic-ai-skill-evals-plan.md`` §4 (Phase 0) and §6 open question 1.
@@ -28,12 +28,14 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 ENMAAS_BASE_URL = "https://api.enmaas.devshift.net/v1"
+PROBE_VERSION = "v2"  # Final prose may name either returned model, with readable separators.
 
 
 # --------------------------------------------------------------------------- #
@@ -55,12 +57,12 @@ class Candidate:
     model_name: str
     base_url: str | None
     api_key_env: str
-    api: str = "chat"  # "chat" | "responses"
+    api: str = "chat"  # "chat" | "responses" | "messages"
     extra: dict[str, Any] = field(default_factory=dict)
 
 
 CANDIDATES: tuple[Candidate, ...] = (
-    # --- Direct OpenAI, cost-efficient tier (the user's preferred default) ---
+    # --- Historical direct-OpenAI diagnostics, outside the current matrix ---
     # Responses API: the route OpenAI directs reasoning models to for tool use.
     Candidate("openai-sol-resp", "gpt-5.6-sol", OPENAI_BASE_URL, "OPENAI_API_KEY", "responses"),
     # Chat Completions with reasoning disabled: the only way this family tool-calls
@@ -94,6 +96,13 @@ CANDIDATES: tuple[Candidate, ...] = (
         "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
         ENMAAS_BASE_URL,
         "ENMAAS_KEY",
+    ),
+    Candidate(
+        "enmaas-opus",
+        "claude-opus-4-6",
+        "https://api.enmaas.devshift.net",
+        "ENMAAS_KEY",
+        "messages",
     ),
 )
 
@@ -228,7 +237,16 @@ RECOMMEND_RESULT = {
     ]
 }
 
-EXPECTED_MODEL_TOKEN = "Llama-3.1-8B"
+
+def answer_references_result(content: str) -> bool:
+    """Accept either fixture model, including its ordinary display name."""
+    normalized = re.sub(r"[^a-z0-9]", "", content.casefold())
+    for recommendation in RECOMMEND_RESULT["recommendations"]:
+        # Namespace and instruction/version suffixes need not appear in prose.
+        name = str(recommendation["model"]).rsplit("/", 1)[-1].casefold().split("-instruct")[0]
+        if re.sub(r"[^a-z0-9]", "", name) in normalized:
+            return True
+    return False
 
 
 # --------------------------------------------------------------------------- #
@@ -255,6 +273,7 @@ class ProbeResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "probe_version": PROBE_VERSION,
             "id": self.candidate.id,
             "model_name": self.candidate.model_name,
             "base_url": self.candidate.base_url,
@@ -277,7 +296,7 @@ class ProbeResult:
 
 @dataclass
 class NormCall:
-    """A tool call normalised across the Chat Completions and Responses APIs."""
+    """A tool call normalised across Chat, Responses, and Messages APIs."""
 
     id: str
     name: str
@@ -363,6 +382,54 @@ class _ResponsesDriver:
         self._input.append({"type": "function_call_output", "call_id": call.id, "output": payload})
 
 
+class _MessagesDriver:
+    """Drive native Anthropic Messages, including paired tool-use/results."""
+
+    def __init__(self, client: Any, candidate: Candidate, result: ProbeResult) -> None:
+        self._client = client
+        self._candidate = candidate
+        self._result = result
+        self._messages: list[dict[str, Any]] = [{"role": "user", "content": USER_PROMPT}]
+
+    async def send(self) -> tuple[list[NormCall], str]:
+        kwargs = {
+            "model": self._candidate.model_name,
+            "system": SYSTEM_PROMPT,
+            "messages": self._messages,
+            "max_tokens": 4096,
+            "tools": [
+                {
+                    "name": tool["function"]["name"],
+                    "description": tool["function"]["description"],
+                    "input_schema": tool["function"]["parameters"],
+                }
+                for tool in TOOLS
+            ],
+            **self._candidate.extra,
+        }
+        response = await _with_temperature_zero(self._client.messages.create, kwargs, self._result)
+        self._messages.append(
+            {
+                "role": "assistant",
+                "content": [block.model_dump(exclude_none=True) for block in response.content],
+            }
+        )
+        calls = [
+            NormCall(id=block.id, name=block.name, arguments=json.dumps(block.input))
+            for block in response.content
+            if block.type == "tool_use"
+        ]
+        return calls, "\n".join(block.text for block in response.content if block.type == "text")
+
+    def add_tool_result(self, call: NormCall, payload: str) -> None:
+        self._messages.append(
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": call.id, "content": payload}],
+            }
+        )
+
+
 async def _with_temperature_zero(create: Any, kwargs: dict[str, Any], result: ProbeResult) -> Any:
     """Call the endpoint, degrading from ``temperature=0`` only if it is rejected.
 
@@ -392,14 +459,24 @@ async def probe(candidate: Candidate, timeout: float = 300.0) -> ProbeResult:
         result.error = f"missing env var {candidate.api_key_env}"
         return result
 
-    client = AsyncOpenAI(
-        api_key=api_key, base_url=candidate.base_url, timeout=timeout, max_retries=1
-    )
-    driver: Any = (
-        _ResponsesDriver(client, candidate, result)
-        if candidate.api == "responses"
-        else _ChatDriver(client, candidate, result)
-    )
+    client: Any
+    driver: Any
+    if candidate.api == "messages":
+        from anthropic import AsyncAnthropic
+
+        client = AsyncAnthropic(
+            api_key=api_key, base_url=candidate.base_url, timeout=timeout, max_retries=1
+        )
+        driver = _MessagesDriver(client, candidate, result)
+    else:
+        client = AsyncOpenAI(
+            api_key=api_key, base_url=candidate.base_url, timeout=timeout, max_retries=1
+        )
+        driver = (
+            _ResponsesDriver(client, candidate, result)
+            if candidate.api == "responses"
+            else _ChatDriver(client, candidate, result)
+        )
     start = time.monotonic()
 
     try:
@@ -480,12 +557,12 @@ async def probe(candidate: Candidate, timeout: float = 300.0) -> ProbeResult:
             {
                 "turn": 3,
                 "tool_calls": [{"name": c.name} for c in calls],
-                "content": content[:400],
+                "content": content,
             }
         )
 
         result.checks["t3_stopped_calling_tools"] = len(calls) == 0
-        result.checks["t3_answered_from_result"] = EXPECTED_MODEL_TOKEN.lower() in content.lower()
+        result.checks["t3_answered_from_result"] = answer_references_result(content)
 
     except Exception as exc:  # noqa: BLE001 - the probe's job is to classify failures
         result.error = f"{type(exc).__name__}: {str(exc)[:500]}"

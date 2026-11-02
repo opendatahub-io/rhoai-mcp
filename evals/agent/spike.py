@@ -25,7 +25,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-from evals.agent.models import get_spec
+from evals.agent.models import DEFAULT_SPEC_IDS, get_spec
 from evals.agent.runner import REPO_ROOT, ScriptedTurn, run_conversation
 from evals.agent.transcript import AttemptArtifact
 
@@ -82,7 +82,7 @@ def _check(label: str, ok: bool, detail: str = "") -> bool:
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default="openai-sol", help="agent model spec id")
+    parser.add_argument("--model", default=DEFAULT_SPEC_IDS[0], help="agent model spec id")
     parser.add_argument("--run-id", default="phase0-spike")
     parser.add_argument(
         "--results-root", default=str(RESULTS_ROOT), help="where to write the artifact"

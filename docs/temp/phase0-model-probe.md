@@ -2,12 +2,46 @@
 
 **Date:** 2026-10-31 · **Plan:** [`pydantic-ai-skill-evals-plan.md`](./pydantic-ai-skill-evals-plan.md) §4 Phase 0, §6 Q1
 
-Outcome of the Phase 0 tool-calling probe and the connectivity/adapter spike.
-This file sets the model roster in `evals/agent/models.py`.
+Outcome of the original Phase 0 tool-calling probe and connectivity/adapter spike,
+with the revised Phase 3 roster below. Original measurements remain historical
+evidence; they do not define the current requested provider coverage.
+
+## Current Phase 3 roster (2026-11-02)
+
+The required sweep now has **four agent models, all through EnMaaS** at
+`https://api.enmaas.devshift.net/v1`, using `ENMAAS_KEY`:
+
+| Planned spec | Family | Model ID | Current qualification |
+|---|---|---|---|
+| `enmaas-sol` | GPT | `gpt-5.6-sol` | Responses; 11/11 passed under probe v2 |
+| `enmaas-opus` | Anthropic Claude | `claude-opus-4-6` | Native Messages; user-selected, 11/11 passed under probe v2 |
+| `enmaas-glm` | Open-weight GLM | `rits/zai-org/glm-5-3` | Qualified; full goldens exercised |
+| `enmaas-deepseek` | Open-weight DeepSeek | `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017` | Phase 0 qualified |
+
+This is **2 skills × 2 goldens × 4 models = 16 conversations**. The Anthropic
+entry is required; a three-model run is only a partial sweep. The calibrated
+judge stays EnMaaS `gpt-6.1-sol`, separate from the GPT
+agent. Temperature remains unset for the matrix, recording provider defaults.
+
+The live catalog returned 23 IDs and no Anthropic entries for the available key.
+Opus's OpenAI-compatible 404s were an API mismatch: native Messages succeeded.
+Use explicit `AnthropicModel`/`AnthropicProvider`, with base URL
+`https://api.enmaas.devshift.net` (the SDK adds `/v1/messages`). The 11-check probe
+now supports native Messages. Probe `v2` accepts either returned fixture model in
+the final answer, including readable names; it does not require only a literal
+Llama token when the fixture also returns Mistral. Earlier results are retained.
+The Pydantic stdio adapter spike tests the actual model/provider configuration.
+No direct-provider substitute is part of this sweep. See
+[qualification evidence](./enmaas-matrix-qualification.md) and
+[the revised plan §2.3](./pydantic-ai-skill-evals-plan.md#23-model-matrix).
+
+`models.py` now defaults to `enmaas-sol`, and `matrix` selects GPT, Opus, GLM,
+and DeepSeek through EnMaaS. Direct-provider specs remain diagnostic-only, outside
+the default and matrix. Historical sections below describe the original roster.
 
 ---
 
-## 1. Model roster
+## 1. Original model roster (2026-10-31, historical)
 
 Reproduce with:
 
@@ -30,7 +64,7 @@ tools and answer in prose. All 11 checks must pass.
 | `enmaas-glm` | `rits/zai-org/glm-5-3` | EnMaaS | Chat | **qualified** | 11.3 s |
 | `enmaas-deepseek` | `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017` | EnMaaS | Chat | **qualified** | 25.9 s |
 
-Nothing was excluded. The plan's §6 Q1 worry — that a hosted build might not
+Nothing was excluded from this original probe. The plan's original §6 Q1 worry — that a hosted build might not
 tool-call reliably enough to enter the matrix — did not materialise.
 
 ### 1.0 The API choice is not ours to make
@@ -47,7 +81,7 @@ open decision. It mostly is not. Three independent facts converge on Responses:
 - **EnMaaS serves Responses for every roster model**, including the open-weight
   ones — verified: both return `['reasoning', 'function_call']` output items.
 
-So every matrix cell runs on Responses, matching the library default. Chat
+The original matrix cells were configured on Responses, matching the library default. Chat
 Completions is not a peer alternative; for `gpt-5.6` it is only reachable by
 switching reasoning off, which is a downgrade on a phase-gated task. The
 `openai-sol-chat` spec is retained purely as a diagnostic for isolating a
@@ -71,7 +105,7 @@ So this family offers a choice, not a default:
 - **Chat Completions, `reasoning_effort='none'`** — accepts `temperature=0` and
   is cheaper and faster, but gives up reasoning on a phase-gated multi-step task.
 
-`openai-sol` (Responses, reasoning on) is the matrix default, matching both the
+`openai-sol` (Responses, reasoning on) was the original matrix default, matching both the
 Pydantic AI default and OpenAI's own direction. The Chat variant is reachable for
 a diagnostic run, but it is not a matrix cell:
 
@@ -85,8 +119,8 @@ RHOAI_EVAL_AGENT_MODELS=openai-sol-chat
 models across four owners (`openai`, `curvebender`, `vertex`, plus its own). It
 proxies the same `gpt-5.6-sol` with identical behaviour to the direct endpoint,
 including the same Responses-API requirement — so `enmaas-sol` is kept as a
-control cell: a failure there that does not reproduce on `openai-sol` is a
-gateway problem, not a model problem.
+control cell in the original design. The revised Phase 3 roster promotes
+`enmaas-sol` to the GPT entry and excludes direct OpenAI from the sweep.
 
 The plan's §2.3 placeholders resolve to `rits/zai-org/glm-5-3` and
 `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017`.
@@ -106,7 +140,7 @@ Plan §2.3 says to "set `temperature=0` where supported". Followed literally tha
 pins two matrix cells and leaves the third free, so part of any observed
 difference between `openai-sol` and `enmaas-glm` would be a sampling-config
 artifact rather than a property of the models. **No matrix cell requests a
-temperature**; all three run on provider defaults and are therefore treated
+temperature**; the original three ran on provider defaults and were therefore treated
 alike. This is a deliberate deviation from the literal §2.3 wording, in service
 of its actual intent.
 
@@ -138,7 +172,7 @@ failed.
 uv run --group skill-eval python -m evals.agent.spike --model openai-sol
 ```
 
-All of Phase 0's acceptance criteria pass, on **all four** matrix-relevant models
+All of the original Phase 0's acceptance criteria passed on **all four** then-relevant models
 (`openai-sol`, `enmaas-sol`, `enmaas-glm`, `enmaas-deepseek`): stdio connection,
 skill discovery and loading, `recommend_model` reached, a second turn in the same
 agent context, typed DeepEval objects with correct turn attribution, and an

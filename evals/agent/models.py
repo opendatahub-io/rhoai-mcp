@@ -1,8 +1,8 @@
 """Agent model specifications for the skill-evaluation matrix.
 
 One frozen tuple of ``(api, base_url, api_key_env, model_name)`` per matrix cell.
-Every provider in the roster is OpenAI-compatible, so they all share a single code
-path and only the tuple changes. Keeping the matrix parameterised this way is also
+The matrix uses EnMaaS with OpenAI Responses or native Anthropic Messages,
+selected explicitly by spec. Keeping the matrix parameterised this way is also
 what lets a later EvalHub BYOF adapter map ``JobSpec.model.url`` /
 ``JobSpec.model.name`` straight onto a spec (plan §5).
 
@@ -22,11 +22,13 @@ if TYPE_CHECKING:
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 ENMAAS_BASE_URL = "https://api.enmaas.devshift.net/v1"
+#: The Anthropic SDK appends /v1/messages itself.
+ENMAAS_ANTHROPIC_BASE_URL = "https://api.enmaas.devshift.net"
 
 #: Environment variable selecting which specs to run, comma-separated.
 MODELS_ENV_VAR = "RHOAI_EVAL_AGENT_MODELS"
 
-OpenAIApi = Literal["chat", "responses"]
+AgentApi = Literal["chat", "responses", "messages"]
 
 
 class ModelSpecError(RuntimeError):
@@ -40,15 +42,11 @@ class AgentModelSpec:
     Attributes:
         id: Stable identifier recorded with every eval result.
         model_name: Provider-side model identifier.
-        base_url: OpenAI-compatible endpoint, or ``None`` for the OpenAI default.
+        base_url: Provider endpoint, or ``None`` for the OpenAI default.
         api_key_env: Environment variable holding the credential.
-        api: Which OpenAI API to drive. Every roster entry uses ``responses``,
-            which is not really a local decision: Pydantic AI resolves the
-            ``openai:`` prefix to ``OpenAIResponsesModel`` for every model name,
-            OpenAI directs tool use for the ``gpt-5.6`` family there (Chat
-            Completions rejects function tools unless reasoning is disabled),
-            and EnMaaS serves Responses for its open-weight models too. The
-            field stays configurable only for an endpoint that lacks Responses.
+        api: Explicit wire API. GPT, GLM, and DeepSeek use ``responses``;
+            Claude uses native Anthropic ``messages`` through EnMaaS. ``chat``
+            remains available for diagnostic specs.
         temperature: Requested sampling temperature, or ``None`` to leave it to
             the provider.
 
@@ -73,7 +71,7 @@ class AgentModelSpec:
     model_name: str
     base_url: str | None
     api_key_env: str
-    api: OpenAIApi = "responses"
+    api: AgentApi = "responses"
     temperature: float | None = 0.0
     extra_settings: dict[str, Any] = field(default_factory=dict)
 
@@ -123,6 +121,16 @@ class AgentModelSpec:
 
     def build(self) -> Model:
         """Construct the Pydantic AI model for this spec."""
+        if self.api == "messages":
+            from pydantic_ai.models.anthropic import AnthropicModel
+            from pydantic_ai.providers.anthropic import AnthropicProvider
+
+            return AnthropicModel(
+                self.model_name,
+                provider=AnthropicProvider(api_key=self.api_key, base_url=self.base_url),
+                settings=self.settings(),
+            )
+
         from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
         from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -174,9 +182,7 @@ SPECS: dict[str, AgentModelSpec] = {
             api="responses",
             temperature=None,
         ),
-        # --- EnMaaS proxying the same OpenAI model ---
-        # Control cell: a failure here that does not reproduce on openai-sol is a
-        # gateway problem, not a model problem.
+        # --- EnMaaS GPT representative ---
         AgentModelSpec(
             id="enmaas-sol",
             model_name="gpt-5.6-sol",
@@ -185,12 +191,17 @@ SPECS: dict[str, AgentModelSpec] = {
             api="responses",
             temperature=None,
         ),
-        # --- EnMaaS third-party open-weight models (plan §2.3) ---
-        # Responses, like every other matrix cell: EnMaaS serves these models on
-        # /v1/responses with reasoning, so there is no reason to single them out
-        # onto a different API. These two *do* accept temperature=0, but it is
-        # left unset so every matrix cell is sampled on provider defaults rather
-        # than pinning two cells and not the rest.
+        # --- EnMaaS Anthropic representative, using native Messages ---
+        AgentModelSpec(
+            id="enmaas-opus",
+            model_name="claude-opus-4-6",
+            base_url=ENMAAS_ANTHROPIC_BASE_URL,
+            api_key_env="ENMAAS_KEY",
+            api="messages",
+            temperature=None,
+        ),
+        # --- EnMaaS open-weight representatives, using Responses ---
+        # Leave temperature unset for parity with the GPT/Anthropic entries.
         AgentModelSpec(
             id="enmaas-glm",
             model_name="rits/zai-org/glm-5-3",
@@ -210,11 +221,16 @@ SPECS: dict[str, AgentModelSpec] = {
     )
 }
 
-#: Used when ``RHOAI_EVAL_AGENT_MODELS`` is unset: one model, the cheap default.
-DEFAULT_SPEC_IDS: tuple[str, ...] = ("openai-sol",)
+#: Used when ``RHOAI_EVAL_AGENT_MODELS`` is unset: one EnMaaS GPT model.
+DEFAULT_SPEC_IDS: tuple[str, ...] = ("enmaas-sol",)
 
 #: The full sweep once the one-model path is green (plan §3.4).
-MATRIX_SPEC_IDS: tuple[str, ...] = ("openai-sol", "enmaas-glm", "enmaas-deepseek")
+MATRIX_SPEC_IDS: tuple[str, ...] = (
+    "enmaas-sol",
+    "enmaas-opus",
+    "enmaas-glm",
+    "enmaas-deepseek",
+)
 
 
 def get_spec(spec_id: str) -> AgentModelSpec:

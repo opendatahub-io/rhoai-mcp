@@ -2446,6 +2446,9 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+anthropic = [
+    { name = "anthropic" },
+]
 mcp = [
     { name = "fastmcp-slim", extra = ["client"] },
 ]
@@ -3055,7 +3058,7 @@ eval = [
 skill-eval = [
     { name = "deepeval" },
     { name = "pydantic-ai-harness", extra = ["skills"] },
-    { name = "pydantic-ai-slim", extra = ["mcp", "openai"] },
+    { name = "pydantic-ai-slim", extra = ["anthropic", "mcp", "openai"] },
 ]
 trace = [
     { name = "opentelemetry-exporter-otlp-proto-http" },
@@ -3091,7 +3094,7 @@ eval = [
 skill-eval = [
     { name = "deepeval", specifier = ">=4.3,<5" },
     { name = "pydantic-ai-harness", extras = ["skills"], specifier = ">=0.64,<1" },
-    { name = "pydantic-ai-slim", extras = ["mcp", "openai"], specifier = ">=2.64,<3" },
+    { name = "pydantic-ai-slim", extras = ["anthropic", "mcp", "openai"], specifier = ">=2.64,<3" },
 ]
 trace = [
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.44,<2" },

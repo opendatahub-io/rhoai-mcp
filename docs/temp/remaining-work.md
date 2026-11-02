@@ -13,7 +13,7 @@ Section references (§) are to the parent plan.
 
 | Capability | Entry point |
 |---|---|
-| Model roster set on evidence (7 candidates probed, all qualified) | `evals/agent/probe_tool_calling.py` |
+| Four-model EnMaaS roster aligned; GPT and native Anthropic probes passed | `evals/agent/models.py`, [current qualification](./enmaas-matrix-qualification.md) |
 | Agent over stdio, discovery mode, both skills in the catalog | `evals/agent/runner.py` |
 | Offline runner lifecycle tests, with a dedicated CI job | `tests/evals/test_runner.py`, `.github/workflows/ci.yml` |
 | Shared transcript contract + artifact save/load | `evals/agent/transcript.py` |
@@ -224,8 +224,16 @@ judged assessment; automated GPU discovery remains deferred.
 
 ## 5. Phase 3 leftovers
 
-- **Full sweep.** Only `enmaas-glm` has run goldens. The matrix is 3 models × 4
-  goldens; `make eval-skills-matrix` exists but has never been run.
+- **Full sweep — revised roster.** Only `enmaas-glm` has run goldens. The required
+  roster is **four agents, all through EnMaaS**: GPT (`gpt-5.6-sol`), Anthropic
+  (`claude-opus-4-6`, native Messages), GLM (`rits/zai-org/glm-5-3`), and
+  DeepSeek (`rits/deepseek-ai/DeepSeek-V4.1-Flash-1017`). Four goldens each means
+  **16 conversations**. GPT and Opus passed all 11 checks under probe `v2`;
+  earlier OpenAI-compatible 404s for Opus were an API mismatch. `models.py` now
+  uses EnMaaS GPT as its default and all four EnMaaS specs for `matrix`; Claude
+  is explicitly configured with `AnthropicModel`/`AnthropicProvider`. The SDK
+  base URL is the EnMaaS root for Messages. The full sweep has not run.
+  [Qualification evidence](./enmaas-matrix-qualification.md).
 - **Fresh judged baseline — captured, follow-up needed.** All four goldens ran
   through the normal judged path with fixed judge/cutoffs and fidelity `v2`.
   Run `5ec251e832e4` passed **1/4**: consent withheld passed; navigator happy
@@ -298,9 +306,9 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Full model sweep (§5)** — expand after reviewing the completed check
-   correction and offline replay. Prevent idle sleep for local runs and retain
-   the fixed judge/cutoffs and fidelity `v2`.
+1. **Full model sweep (§5)** — four goldens per model, one model per reviewable
+   step, for 16 conversations. Prevent idle sleep, disable automatic retries, and
+   retain the fixed EnMaaS judge/cutoffs and fidelity `v2`.
 2. **`comparison.py` (§5)** — needs multi-model records to exist first.
 3. **Phase 4 polish (§6)** — nothing depends on it.
 

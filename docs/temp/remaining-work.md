@@ -1,6 +1,6 @@
 # Remaining work: Pydantic AI + DeepEval skill evaluations
 
-**Status:** living checklist · **Updated:** 2026-11-01
+**Status:** living checklist · **Updated:** 2026-11-02
 **Parent plan:** [`pydantic-ai-skill-evals-plan.md`](./pydantic-ai-skill-evals-plan.md)
 **Phase 0 findings:** [`phase0-model-probe.md`](./phase0-model-probe.md)
 
@@ -15,6 +15,7 @@ Section references (§) are to the parent plan.
 |---|---|
 | Model roster set on evidence (7 candidates probed, all qualified) | `evals/agent/probe_tool_calling.py` |
 | Agent over stdio, discovery mode, both skills in the catalog | `evals/agent/runner.py` |
+| Offline runner lifecycle tests, with a dedicated CI job | `tests/evals/test_runner.py`, `.github/workflows/ci.yml` |
 | Shared transcript contract + artifact save/load | `evals/agent/transcript.py` |
 | 23 deterministic checks (routing, table, consent, ordering) | `evals/skills/checks.py` |
 | 4 goldens with checkpoints | `evals/skills/goldens.py` |
@@ -104,22 +105,37 @@ does deliberately).
 
 ## 4. Phase 2 leftovers
 
-### 4.1 `run_conversation` has no tests — highest priority here
+### 4.1 `run_conversation` lifecycle tests — complete
 
-The loop that drives checkpoints, stops the script on failure, and preserves
-partial history on timeout is now load-bearing for every golden, and nothing
-verifies it. Needs a mocked agent.
+Fourteen offline cases now exercise the runner with an in-memory Pydantic AI
+model and a fake tool session. The real agent loop, message capture, timeouts,
+and usage limits run without an LLM provider or MCP subprocess.
 
-Cases worth pinning: checkpoints run *before* the reply and in order; a failed
-checkpoint stops the script and leaves `error_stage` set; a timeout or
-usage-limit breach still yields a saveable partial history; `_extend` does not
-duplicate turns; the MCP session stays open across turns.
+Covered: checkpoints run before replies and in order; a failed checkpoint stops
+the script and records `error_stage`; timeouts, request/tool-call limits, and
+model errors preserve saveable partial history; history is not duplicated or
+truncated; one session retains state across turns; setup/schema failures remain
+saveable harness errors. No runner behavior changed.
 
-### 4.2 `navigator-deploy-approved` is one turn short
+The dedicated offline CI job installs `skill-eval` and `trace` dependencies and
+runs all of `tests/evals`, independently of the paid/live evaluation workflow.
+
+### 4.2 `navigator-deploy-approved` needs a planner fix and a storage reply
 
 It reaches `plan_deployment`, then asks for a storage location and runs out of
 script. The newly added `deploy_execution_reached` check now fails it honestly
 rather than passing a deployment golden that never deployed.
+
+Assessment also found that `LocalPlannerClient.generate_config` omits
+`model_id`, `model_uri`, and `gpu_config` from its result. The saved plan reports
+`ready=false`, no model ID, an unknown GPU type, and no suggested execution
+parameters. Preserve those fields before extending the script; resolve storage
+and present the resolved plan before obtaining deployment approval.
+
+Strengthen the checks alongside the golden: `deploy_execution_reached` currently
+accepts a failed execution result, and `deploy_plan_shown_before_approval` checks
+the tool call's position rather than whether the plan was shown. A synthetic
+blocked plan followed by `deployed=false` currently passes all deploy checks.
 
 ### 4.3 Two §3.1 "agreement" checks are missing
 
@@ -184,14 +200,14 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **`run_conversation` tests (§4.1)** — load-bearing and unverified.
-2. **Deploy golden turn + agreement checks (§4.2, §4.3)** — small, and they
-   close real holes in what the goldens claim to prove.
-3. **Extend calibration (§2)** — add the completed approved deployment and
+1. **Planner result fix, deploy golden, and agreement checks (§4.2, §4.3)** —
+   preserve deployment metadata, complete an approved deployment, and verify
+   plan presentation, successful execution, and agreement with the selection.
+2. **Extend calibration (§2)** — add the completed approved deployment and
    reviewed warning-disclosure examples once the golden reaches execution.
-4. **Full model sweep (§5)** — use the fixed judge and metric versions.
-5. **`comparison.py` (§5)** — needs multi-model records to exist first.
-6. **Phase 4 polish (§6)** — nothing depends on it.
+3. **Full model sweep (§5)** — use the fixed judge and metric versions.
+4. **`comparison.py` (§5)** — needs multi-model records to exist first.
+5. **Phase 4 polish (§6)** — nothing depends on it.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
 outside this branch's current evaluation work by decision.

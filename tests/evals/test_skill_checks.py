@@ -27,6 +27,7 @@ from evals.skills.checks import (  # noqa: E402
     check_navigator_deploy,
     check_recommendation_table,
     check_routing,
+    deployment_review_error,
     find_tables,
     find_user_turn_index,
     parse_handoff,
@@ -423,22 +424,65 @@ class TestNavigator:
 # --------------------------------------------------------------------------- #
 
 
-def deploy_transcript(*, consent: bool = True) -> Any:
+DEPLOY_PLAN = {
+    "ready": True,
+    "model_id": "meta-llama/Llama-3.1-8B-Instruct",
+    "namespace": "production-models",
+    "runtime": "vllm-runtime",
+    "runtime_needs_creation": False,
+    "storage_uri": None,
+    "gpu_count": 1,
+    "gpu_type": "A100-80",
+    "replicas": 1,
+    "issues": None,
+}
+
+DEPLOY_REVIEW = """
+| | |
+|---|---|
+| Model | Llama 3.1 8B (`meta-llama/Llama-3.1-8B-Instruct`) |
+| Namespace | `production-models` |
+| Serving runtime | `vllm-runtime` |
+| Storage | `oci://registry.example.com/models/llama:v1` |
+| GPUs | 1 × A100-80 |
+| Replicas | 1 |
+
+Approve?
+"""
+
+
+def deploy_messages(
+    *,
+    consent: bool = True,
+    plan: dict[str, Any] | None = None,
+    review: str = DEPLOY_REVIEW,
+    execution: Any = None,
+) -> list[Any]:
     """A deploy run: route, plan, show plan, approve, execute."""
     messages = [
         user("Deploy llama-3.1-8b."),
         *load("navigator-deploy", "h1"),
         assistant(call("plan_deployment", "p1")),
-        returns(result("plan_deployment", "p1", {"runtime_needs_creation": False})),
-        assistant(TextPart(content="Here is the plan. Approve?")),
+        returns(result("plan_deployment", "p1", plan if plan is not None else DEPLOY_PLAN)),
+        assistant(TextPart(content=review)),
         user("Yes, deploy it." if consent else "Actually, hold off."),
     ]
     if consent:
         messages += [
             assistant(call("execute_deployment", "e1")),
-            returns(result("execute_deployment", "e1", {"status": "created"})),
+            returns(
+                result(
+                    "execute_deployment",
+                    "e1",
+                    execution if execution is not None else {"deployed": True, "status": "Pending"},
+                )
+            ),
         ]
-    return from_pydantic_ai(messages)
+    return messages
+
+
+def deploy_transcript(*, consent: bool = True) -> Any:
+    return from_pydantic_ai(deploy_messages(consent=consent))
 
 
 class TestNavigatorDeploy:
@@ -499,12 +543,129 @@ class TestNavigatorDeploy:
 
         statuses = {r.name: r.status for r in report.results}
         assert statuses["deploy_execution_reached"] == "n/a"
+        assert statuses["deploy_execution_succeeded"] == "n/a"
         assert report.passed
 
     def test_executing_before_approval_fails(self) -> None:
         report = check_navigator_deploy(deploy_transcript(), approval_turn_index=99)
 
         assert "deploy_writes_after_approval" in {r.name for r in report.failures}
+
+    @pytest.mark.parametrize(
+        "execution",
+        [
+            {"deployed": False, "error": "creation failed"},
+            {"error": "creation denied"},
+            {"status": "created"},
+            {"deployed": True, "error": "conflicting result"},
+            "deployment failed",
+        ],
+    )
+    def test_unsuccessful_execution_is_not_completion(self, execution: Any) -> None:
+        transcript = from_pydantic_ai(deploy_messages(execution=execution))
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert "deploy_execution_succeeded" in {r.name for r in report.failures}
+        assert (
+            next(r for r in report.results if r.name == "deploy_execution_reached").status == "pass"
+        )
+
+    def test_transport_failure_cannot_claim_successful_execution(self) -> None:
+        messages = deploy_messages()
+        messages[-1] = returns(
+            ToolReturnPart(
+                tool_name="execute_deployment",
+                tool_call_id="e1",
+                content={"deployed": True},
+                outcome="failed",
+            )
+        )
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert "deploy_execution_succeeded" in {r.name for r in report.failures}
+
+    def test_missing_approval_cannot_be_counted_as_unexercised(self) -> None:
+        report = check_navigator_deploy(deploy_transcript(), approval_turn_index=None)
+
+        assert {"deploy_writes_after_approval", "deploy_plan_shown_before_approval"} <= {
+            r.name for r in report.failures
+        }
+
+    @pytest.mark.parametrize(
+        "review",
+        [
+            "Here is the plan. Approve?",
+            DEPLOY_REVIEW.replace("oci://registry.example.com/models/llama:v1", "unresolved"),
+            DEPLOY_REVIEW.replace("| GPUs | 1 × A100-80 |\n", ""),
+            DEPLOY_REVIEW.replace("| Replicas | 1 |", "| Replicas | [value] |"),
+        ],
+    )
+    def test_incomplete_review_blocks_checkpoint_and_final_check(self, review: str) -> None:
+        transcript = from_pydantic_ai(deploy_messages(review=review))
+        approval = find_user_turn_index(transcript, "Yes, deploy it.")
+        report = check_navigator_deploy(transcript, approval_turn_index=approval)
+
+        assert deployment_review_error(transcript, before_turn=approval) is not None
+        assert "deploy_plan_shown_before_approval" in {r.name for r in report.failures}
+
+    @pytest.mark.parametrize(
+        "override",
+        [
+            {"ready": False, "issues": ["missing model_id"]},
+            {"ready": True, "issues": ["runtime unavailable"]},
+            {"model_id": None},
+            {"runtime": None},
+        ],
+    )
+    def test_blocked_plan_is_not_ready_for_approval(self, override: dict[str, Any]) -> None:
+        transcript = from_pydantic_ai(deploy_messages(plan={**DEPLOY_PLAN, **override}))
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert "deploy_plan_shown_before_approval" in {r.name for r in report.failures}
+
+    def test_review_after_approval_does_not_satisfy_prior_review(self) -> None:
+        messages = deploy_messages(review="Approve?")
+        messages.append(assistant(TextPart(content=DEPLOY_REVIEW)))
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert "deploy_plan_shown_before_approval" in {r.name for r in report.failures}
+
+    def test_replanning_requires_a_new_review(self) -> None:
+        messages = deploy_messages()
+        messages[-3:-3] = [
+            assistant(call("plan_deployment", "p2")),
+            returns(result("plan_deployment", "p2", DEPLOY_PLAN)),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert "deploy_plan_shown_before_approval" in {r.name for r in report.failures}
+
+    def test_approval_checkpoint_requires_review_and_no_previous_writes(self) -> None:
+        from evals.skills.goldens import DEPLOY_APPROVED, DEPLOY_STORAGE_URI
+
+        storage = next(t for t in DEPLOY_APPROVED.script if t.name == "supply-model-storage")
+        approval = next(t for t in DEPLOY_APPROVED.script if t.name == "approve-deployment")
+        assert DEPLOY_STORAGE_URI in storage.prompt
+        assert DEPLOY_APPROVED.script.index(storage) < DEPLOY_APPROVED.script.index(approval)
+
+        awaiting_approval = from_pydantic_ai(deploy_messages()[:-3])
+        assert approval.checkpoint(awaiting_approval) is None
+        unresolved = from_pydantic_ai(deploy_messages(review="Storage is missing.")[:-3])
+        assert approval.checkpoint(unresolved) is not None
+        assert approval.checkpoint(deploy_transcript()) is not None
 
     def test_unreachable_runtime_branch_is_reported_unexercised(self) -> None:
         """The default mock state already has a runtime, so this cannot fire.

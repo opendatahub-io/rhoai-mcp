@@ -17,7 +17,7 @@ Section references (§) are to the parent plan.
 | Agent over stdio, discovery mode, both skills in the catalog | `evals/agent/runner.py` |
 | Offline runner lifecycle tests, with a dedicated CI job | `tests/evals/test_runner.py`, `.github/workflows/ci.yml` |
 | Shared transcript contract + artifact save/load | `evals/agent/transcript.py` |
-| 23 deterministic checks (routing, table, consent, ordering) | `evals/skills/checks.py` |
+| Deterministic checks (routing, tables, consent, ordering, execution) | `evals/skills/checks.py` |
 | 4 goldens with checkpoints | `evals/skills/goldens.py` |
 | MCP metrics + per-skill fidelity rubrics | `evals/skills/rubrics.py` |
 | Re-score saved artifacts with no agent run | `make eval-rescore` |
@@ -70,9 +70,9 @@ remain failed, unscored metrics rather than disappearing from the verdict.
 
 **Remaining limits:** this is a small, partly correlated corpus, not a population
 error estimate. A valid held-out navigator example touched the fidelity cutoff
-once. A successfully executed approved deployment is still missing (§4.2), and
-warning-disclosure failures need reviewed examples. Completion alone cannot
-detect a hidden unauthorized write; tool-use/fidelity and hard checks remain
+once. The completed approved-deployment example (§4.2) still needs reviewed
+calibration labels, and warning-disclosure failures need reviewed examples.
+Completion alone cannot detect a hidden unauthorized write; tool-use/fidelity and hard checks remain
 required. The legacy LCS/stock metrics need separate calibration.
 
 ---
@@ -120,22 +120,33 @@ saveable harness errors. No runner behavior changed.
 The dedicated offline CI job installs `skill-eval` and `trace` dependencies and
 runs all of `tests/evals`, independently of the paid/live evaluation workflow.
 
-### 4.2 `navigator-deploy-approved` needs a planner fix and a storage reply
+### 4.2 `navigator-deploy-approved` — deployment initiation verified
 
-It reaches `plan_deployment`, then asks for a storage location and runs out of
-script. The newly added `deploy_execution_reached` check now fails it honestly
-rather than passing a deployment golden that never deployed.
+`LocalPlannerClient.generate_config` now preserves `model_id`, `model_uri`, and
+`gpu_config`, matching the remote adapter. Planner unit tests cover both a
+resolved and an absent model URI; integration tests verify the metadata from
+the real bundled planner.
 
-Assessment also found that `LocalPlannerClient.generate_config` omits
-`model_id`, `model_uri`, and `gpu_config` from its result. The saved plan reports
-`ready=false`, no model ID, an unknown GPU type, and no suggested execution
-parameters. Preserve those fields before extending the script; resolve storage
-and present the resolved plan before obtaining deployment approval.
+The seven-turn golden supplies an OCI storage URI before approval and asks for
+the resolved plan. Its approval checkpoint and final check share a requirement:
+the latest plan must be usable, and the assistant must show a complete deployment
+table with resolved storage. Merely calling `plan_deployment` is insufficient.
 
-Strengthen the checks alongside the golden: `deploy_execution_reached` currently
-accepts a failed execution result, and `deploy_plan_shown_before_approval` checks
-the tool call's position rather than whether the plan was shown. A synthetic
-blocked plan followed by `deployed=false` currently passes all deploy checks.
+`deploy_execution_succeeded` requires a successful tool return with
+`deployed=true` and no error. Missing approval, blocked plans, incomplete or late
+reviews, and failed execution have offline regression coverage.
+
+**Evidence (2026-11-02):** `enmaas-glm` completed all seven turns and passed the
+hard checks. Local attempt `cd50985ade10` in run `3151a516815b` records the plan
+as `ready=true`, with the selected model, `vllm-runtime`, and 1 × A100-80. After
+approval, execution used the supplied OCI URI and returned `deployed=true`.
+The mock reports status `Unknown`: this verifies creation of an InferenceService,
+not a ready endpoint. Judging and tracing were disabled; the record remains a
+dry run, not an overall judged pass.
+
+Validation: 381 offline tests passed across evaluations, planner unit/integration
+tests, and the skill allowlist guard; the agent golden also passed. Semantic
+agreement checks remain the next step (§4.3).
 
 ### 4.3 Two §3.1 "agreement" checks are missing
 
@@ -200,11 +211,10 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Planner result fix, deploy golden, and agreement checks (§4.2, §4.3)** —
-   preserve deployment metadata, complete an approved deployment, and verify
-   plan presentation, successful execution, and agreement with the selection.
+1. **Agreement checks (§4.3)** — verify handoff and execution values against
+   the confirmed workload, selected recommendation, and reviewed plan.
 2. **Extend calibration (§2)** — add the completed approved deployment and
-   reviewed warning-disclosure examples once the golden reaches execution.
+   reviewed warning-disclosure examples.
 3. **Full model sweep (§5)** — use the fixed judge and metric versions.
 4. **`comparison.py` (§5)** — needs multi-model records to exist first.
 5. **Phase 4 polish (§6)** — nothing depends on it.

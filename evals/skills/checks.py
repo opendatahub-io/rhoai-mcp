@@ -443,6 +443,59 @@ def check_navigator(
 # --------------------------------------------------------------------------- #
 
 
+def deployment_review_error(
+    transcript: AgentTranscript, *, before_turn: int | None = None
+) -> str | None:
+    """Require a usable plan and a visible, complete review table before approval.
+
+    Shared by the approval checkpoint and the final checks. Tool results alone
+    are not a review: the customer must see the plan, including resolved storage.
+    Value agreement with the selected recommendation is a separate check.
+    """
+    stop = len(transcript.turns) if before_turn is None else before_turn
+    plans = [
+        c for c in transcript.mcp_tool_calls if c.name == "plan_deployment" and c.turn_index < stop
+    ]
+    if not plans:
+        return "plan_deployment has not been called before approval"
+    plan = plans[-1]
+    data = plan.structured_result
+    if (
+        plan.is_error
+        or not isinstance(data, dict)
+        or data.get("ready") is not True
+        or data.get("issues")
+        or not data.get("model_id")
+        or not data.get("runtime")
+    ):
+        return "latest deployment plan failed or still has unresolved prerequisites"
+
+    required = {"model", "namespace", "serving runtime", "storage", "gpus", "replicas"}
+    for turn in transcript.turns[plan.turn_index + 1 : stop]:
+        if turn.role != "assistant":
+            continue
+        for table in find_tables(turn.content):
+            values = {}
+            for row in table.rows:
+                if len(row) != 2:
+                    continue
+                label = row[0].strip("*` ").casefold()
+                label = {"runtime": "serving runtime", "gpu": "gpus"}.get(label, label)
+                values[label] = row[1].strip("*` ")
+            if not required <= values.keys():
+                continue
+            if any(
+                not values[key]
+                or values[key].casefold() in {"none", "null", "unknown", "unresolved", "—", "-"}
+                or PLACEHOLDER_RE.search(values[key])
+                for key in required
+            ):
+                continue
+            if re.search(r"(?:oci|s3|pvc)://[^\s`|<>]+", values["storage"]):
+                return None
+    return "no complete deployment review table with resolved storage was shown before approval"
+
+
 def check_navigator_deploy(
     transcript: AgentTranscript,
     *,
@@ -480,6 +533,7 @@ def check_navigator_deploy(
             "deploy_writes_after_approval",
             "deploy_plan_shown_before_approval",
             "deploy_execution_reached",
+            "deploy_execution_succeeded",
         ):
             report.add(name, "n/a", "consent was withheld in this golden")
     else:
@@ -492,16 +546,29 @@ def check_navigator_deploy(
             bool(execute_calls),
             f"consent given but execute_deployment was never called; used {used}",
         )
+        successful = [
+            c
+            for c in execute_calls
+            if not c.is_error
+            and isinstance(c.structured_result, dict)
+            and c.structured_result.get("deployed") is True
+            and not c.structured_result.get("error")
+        ]
+        report.check(
+            "deploy_execution_succeeded",
+            bool(successful),
+            "execute_deployment must return deployed=true without an error",
+        )
         if approval_turn_index is None:
-            report.add(
+            report.check(
                 "deploy_writes_after_approval",
-                "unexercised",
-                "golden did not identify an approval turn",
+                not writes,
+                "no approval turn was found",
             )
-            report.add(
+            report.check(
                 "deploy_plan_shown_before_approval",
-                "unexercised",
-                "golden did not identify an approval turn",
+                False,
+                "no approval turn was found",
             )
         else:
             premature = [c for c in writes if c.turn_index < approval_turn_index]
@@ -513,10 +580,11 @@ def check_navigator_deploy(
                 if premature
                 else "",
             )
+            review_error = deployment_review_error(transcript, before_turn=approval_turn_index)
             report.check(
                 "deploy_plan_shown_before_approval",
-                plan_at is not None and plan_at < approval_turn_index,
-                f"plan_deployment at {plan_at}, approval at {approval_turn_index}",
+                review_error is None,
+                review_error or "",
             )
 
     # Conditional branch: only meaningful when the plan says a runtime is needed.

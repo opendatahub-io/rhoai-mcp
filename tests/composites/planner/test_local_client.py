@@ -340,10 +340,21 @@ class TestLocalPlannerRecommend:
 class TestLocalPlannerGenerateConfig:
     """Tests for LocalPlannerClient.generate_config()."""
 
+    @pytest.mark.parametrize(
+        "model_uri",
+        ["hf://meta-llama/Llama-3.1-70B-Instruct", None, "oci://registry.example.com/models/llama:v1"],
+    )
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
-    async def test_generate_config_full_flow(self, mock_planner_cls: MagicMock) -> None:
+    async def test_generate_config_full_flow(
+        self, mock_planner_cls: MagicMock, model_uri: str | None
+    ) -> None:
         """Full generate_config flow returns deployment configs."""
         mock_planner = _make_mock_planner()
+        recommendation = mock_planner.generate_recommendations.return_value.model_dump.return_value[
+            "balanced"
+        ][0]
+        recommendation["model_uri"] = model_uri
+        recommendation["configuration"]["model_uri"] = model_uri
         mock_planner_cls.return_value = mock_planner
 
         client = LocalPlannerClient()
@@ -363,7 +374,7 @@ class TestLocalPlannerGenerateConfig:
         assert result.namespace == "default"
         assert result.model_name == "Llama 3.1 70B"
         assert result.model_id == "meta-llama/Llama-3.1-70B-Instruct"
-        assert result.model_uri == "hf://meta-llama/Llama-3.1-70B-Instruct"
+        assert result.model_uri == model_uri
         assert result.gpu_config == {
             "gpu_type": "NVIDIA-H100",
             "gpu_count": 2,

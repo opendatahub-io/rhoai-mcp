@@ -395,7 +395,7 @@ judge. MCP metrics still run wherever their transcript requirements are met (§3
 called at least once and not before the workload profile is confirmed; the output table
 has exactly the 4 recommendation columns (plus the row-label column) and 8 named data
 rows from the skill template, with a value or explicit `—` in every cell and no
-unreplaced `[value]` placeholders; a `<!-- navigator-handoff … -->` block is emitted
+unreplaced `[value]` or `[cluster fit]` placeholders; a `<!-- navigator-handoff … -->` block is emitted
 after the customer's choice, parses, and agrees with the confirmed workload and selected
 recommendation. `plan_deployment`, `execute_deployment`, and deployment writes through
 other tools must never be called by this skill.
@@ -540,7 +540,14 @@ at the user's request; DeepSeek's judge scratch storage was isolated. Treat
 timing as descriptive under concurrent load. There were no reruns, timeouts,
 harness/judge errors, missing scores, or deployment writes. Historical records
 are preserved, and Navigator-deploy remains outside the paid scope.
-The next reviews are the Cluster fit template and comparison/reporting CLI.
+**Subsequent template clarification:** the Cluster fit row now has explicit
+`[cluster fit]` cells in all four recommendation columns, with one fit label per
+column and `—` for a missing recommendation. All 18 existing table-check
+tests pass, and replay preserves every check result in the eight saved
+conversations. The clarified skill hash is `6b84c869d2cc`; no live evaluation
+has used it yet. Keep the completed 7/8 sweep tied to `25392e419e13` when
+building comparison/reporting. No paid call was made for this one-row change.
+The next implementation step is the comparison/reporting CLI.
 [Updated report](./navigator-resweep.md),
 [records](./navigator-resweep-results.json).
 

@@ -360,13 +360,17 @@ remaining work focuses on the Navigator sweep and its comparison:
 
 Found while building; none are scheduled.
 
-- **Skill template ambiguity.** The navigator comparison-table template's
-  `Cluster fit` row shows one value cell followed by three empty cells. It is
-  well-formed (5 cells) but a model copying it literally produces a row the
-  `table_cells_complete` check rejects. The updated sweep now demonstrates this
-  in DeepSeek's vague case `1dd60008ed20`: it is the only overall failure, with
-  all judge scores passing and correct capacity QPS. A small template correction
-  is the next candidate for review; it was not applied during the frozen sweep.
+- **Skill template ambiguity — corrected offline.** Navigator's Cluster fit row
+  now has four explicit `[cluster fit]` cells. The guidance defines exactly one
+  hardware-fit label per column, with `—` for a missing recommendation. The
+  table checker and workflow are unchanged. All 18 existing
+  table-check tests pass; the actual skill template has complete cell structure.
+  Replay of all eight saved conversations preserves every check result, including
+  DeepSeek's original empty-cell failure (`1dd60008ed20`). The completed sweep
+  remains 7/8 under skill `25392e419e13`; the clarified template is
+  `6b84c869d2cc` and has no live result yet. No paid calls were made. Local
+  verification is retained in
+  `evals/results/navigator-cluster-fit-placeholder-20261102-validation.json`.
 - **Allowlist deviations observed, not gated** (§3.2). The deploy run called
   `list_data_connections`, `list_storage` and `prepare_model_deployment`, none
   declared in `navigator-deploy`'s `allowed-tools`.
@@ -380,9 +384,11 @@ Found while building; none are scheduled.
 1. **Review the completed updated sweep (§5)** — 7/8 passed, with all 24 judge
    scores and all eight capacity handoffs passing. The staged Anthropic-first
    run and the remaining six are complete; no additional sweep is pending.
-2. **Cluster fit template (§7)** — review a narrow correction that makes all
-   four cells explicit. The saved DeepSeek failure provides offline evidence;
-   preserve its historical verdict rather than retrying to green.
+2. **Cluster fit template (§7) — correction ready for review.** The explicit
+   Cluster fit cells and per-column guidance pass 18 existing tests and keep
+   the eight saved check reports unchanged.
+   Preserve the frozen 7/8 baseline; any targeted live check of the new skill
+   hash is a separate record.
 3. **Navigator comparison (§5)** — implement `comparison.py` using the completed
    current roster records. Keep historical configurations and deployment
    attempts separate, report sample counts and `n/a`, and disclose the

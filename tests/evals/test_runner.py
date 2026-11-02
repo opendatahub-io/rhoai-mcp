@@ -10,6 +10,7 @@ failure tests exercise the same history-capture path as a live evaluation.
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -139,6 +140,20 @@ async def test_build_agent_delivers_shared_discovery_policy_without_preloading_a
     assert "navigator:" in transcript.skill_catalog
     assert "navigator-deploy:" in transcript.skill_catalog
     assert transcript.skills_loaded == []  # The model must still choose and load a skill.
+
+
+@pytest.mark.parametrize("mock_cluster", [True, False])
+def test_cluster_probe_override_is_scoped_to_the_mock_server(
+    monkeypatch: pytest.MonkeyPatch, mock_cluster: bool
+) -> None:
+    monkeypatch.setenv("PLANNER_DETECT_CLUSTER_GPUS", "true")
+    monkeypatch.setattr(AgentModelSpec, "build", lambda _self: FunctionModel(echo))
+    _agent, toolset = runner.build_agent(SPEC, mock_cluster=mock_cluster)
+    transport = toolset.client.transport
+
+    assert ("--mock-cluster" in transport.args) is mock_cluster
+    assert transport.env == ({"PLANNER_DETECT_CLUSTER_GPUS": "false"} if mock_cluster else None)
+    assert os.environ["PLANNER_DETECT_CLUSTER_GPUS"] == "true"
 
 
 async def test_checkpoints_run_in_order_before_replies_with_cumulative_history(

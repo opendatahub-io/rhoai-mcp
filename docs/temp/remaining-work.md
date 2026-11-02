@@ -27,6 +27,10 @@ not establish that intermittent handoff omissions cannot recur. No further
 paid run or full-roster repeat is scheduled.
 [Correction](./glm-root-cause-correction.md),
 [new validation](./glm-corrected-validation.md).
+Subsequent offline cleanup clarifies rounding/empty-search explanations and
+disables the planner's cluster probe in mock evaluation subprocesses (§5).
+It changes the current skill to `88cbf1008ce0`; model behavior has not been
+revalidated under this newer configuration. Historical scores remain unchanged.
 Navigator-deploy
 sweeps and new deployment-specific work are deferred. Existing deployment
 implementation, offline tests, and historical evidence below are retained.
@@ -361,6 +365,22 @@ judged assessment; automated GPU discovery remains deferred.
   [Validation and limits](./glm-corrected-validation.md),
   [records](./glm-corrected-validation-results.json),
   [quality/usage comparison](./glm-corrected-model-comparison.md).
+- **Offline cleanup — implemented and checked.** Navigator now rounds quality
+  thresholds up (`27.1 + 5` → `33`), limits empty-search conclusions to the
+  tested constraints, and explicitly offers relaxation after an empty duplicate
+  search. The mock evaluation runner passes `PLANNER_DETECT_CLUSTER_GPUS=false`
+  only to its MCP subprocess. Parent state and the live-run transport are
+  unchanged. A real mock MCP subprocess returned four A100 recommendations
+  with zero Kubernetes-config loads, node-list attempts, or network attempts;
+  guards prevent access even if a probe regresses. The new mock/live regression
+  first reproduced the missing override. All **600 offline evaluation/planner
+  tests passed**, with nine live cases deselected; lint, format, types, and skill
+  validation pass. Saved schemas confirm that `33` is valid and fractional
+  `32.1` is rejected in both GLM cases. No model/judge call, rescore, or ordinary
+  record was added. Skill hash is now `88cbf1008ce0`; all scenario hashes are
+  unchanged. New prompt adherence remains untested live. Review this cleanup
+  before deciding on further paid validation. Local verification is in
+  `evals/results/navigator-offline-cleanup-20261102-validation.json`.
 - **Earlier updated sweep — 8/8 recorded, 7/8 passed.** Anthropic, GPT, and GLM passed
   2/2 each; DeepSeek passed 1/2. All eight conversations discovered Navigator,
   completed five turns, and preserved the selected capacity (`0.13` QPS).
@@ -546,10 +566,17 @@ Found while building; none are scheduled.
    probe supports the two-sentence consent clarification. Review the minimal
    code/skill changes and [evidence](./glm-root-cause-correction.md).
 4. **Review the completed corrected GLM pair.** Both Navigator goldens passed
-   under the committed correction; inspect the remaining quality-threshold,
-   explanation, and mock-isolation caveats in the
+   under the committed correction; its original quality-threshold,
+   explanation, and mock-isolation caveats remain recorded in the
    [report](./glm-corrected-validation.md). Primary unconstrained fallback was
-   not needed in these cases. No additional paid run is pending. If a new
+   not needed in these cases. The requested
+   [selected-run comparison](./navigator-selected-model-comparison.md) combines
+   that GLM pair with the earlier three models and labels the different
+   configurations explicitly.
+5. **Review the offline cleanup.** Skill wording and mock-only subprocess
+   isolation are corrected (§5), with 600 passing offline tests. No additional
+   paid run is pending. Future validation must record the newer skill and
+   runner settings; older live results do not validate them. If a new coherent
    four-model comparison is later requested, every model needs the same shared
    configuration. Pi-style effort/cap/penalty/streaming experiments and
    raw-reasoning viewer support remain separate work.

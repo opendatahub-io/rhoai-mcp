@@ -160,7 +160,9 @@ def build_agent(
     if mock_cluster:
         args.append("--mock-cluster")
 
-    toolset = MCPToolset(StdioTransport(command="uv", args=args, cwd=str(REPO_ROOT)))
+    # The embedded planner probes Kubernetes independently of our mock client.
+    env = {"PLANNER_DETECT_CLUSTER_GPUS": "false"} if mock_cluster else None
+    toolset = MCPToolset(StdioTransport(command="uv", args=args, env=env, cwd=str(REPO_ROOT)))
     agent = Agent(
         model=spec.build(),
         instructions=(

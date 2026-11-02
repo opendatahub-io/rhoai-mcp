@@ -17,6 +17,8 @@ the same path re-scores them offline; OTel is planned. EvalHub orchestration is 
 The subsequent GLM API investigation and bounded hardware-consent probe are
 also complete. The separate two-golden GLM validation under the committed
 correction passed 2/2; no further paid run or full-roster repeat is scheduled.
+Offline cleanup after that pair updates Navigator wording and mock subprocess
+isolation; those changes have offline coverage but no fresh live validation.
 Any future comparison retains
 the four-model Navigator-only scope, reviewed in batches of two per model.
 Navigator-deploy sweeps, new deployment
@@ -678,6 +680,24 @@ comparison or treated as proof against intermittent handoff omissions.
 [Validation](./glm-corrected-validation.md),
 [records and provenance](./glm-corrected-validation-results.json),
 [comparison](./glm-corrected-model-comparison.md).
+
+**Subsequent offline cleanup — complete.** Navigator rounds the five-point
+quality increase up to an integer (`27.1 + 5` → `33`), explains an empty search
+within its tested constraints, and explicitly offers relaxation after empty
+duplicate searches. The runner sets `PLANNER_DETECT_CLUSTER_GPUS=false` on
+mock MCP subprocesses only. Regression coverage verifies the mock/live
+transport boundary and unchanged parent state. A real mock MCP subprocess
+returned four A100 recommendations while guarded Kubernetes-config loads,
+node-list calls, and network attempts remained at zero. The broad offline
+suite passed **600 tests, with 9 live tests deselected**, plus lint, format,
+types, and skill validation. Both saved GLM schemas accept threshold 33 and
+reject fractional 32.1; no model, judge, or tool replay corrected the recorded
+arguments. Skill hash is now `88cbf1008ce0`; scenario hashes are unchanged.
+The 66 history records and historical evidence are preserved. New model
+adherence to the wording has not been tested live. Review these changes before
+any further paid validation; the earlier GLM 2/2 result retains skill
+`96cc8596d4dd` and its original runner configuration. Local verification is
+retained in `evals/results/navigator-offline-cleanup-20261102-validation.json`.
 
 **Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
 `create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding

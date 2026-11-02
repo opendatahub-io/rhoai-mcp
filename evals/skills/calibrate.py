@@ -12,11 +12,12 @@ import asyncio
 import copy
 import hashlib
 import json
+import math
 import os
 import statistics
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -125,12 +126,149 @@ HOLDOUT_EXAMPLES = (
     ),
 )
 
+# Fixed-cutoff extension, selected explicitly so the original experiment and
+# its default seven-case corpus remain reproducible. These labels are reviewed
+# before any judge calls; see docs/temp/judge-calibration-extension-review.md.
+EXTENSION_EXAMPLES = (
+    Example(
+        "extension-deploy-approved",
+        "cd50985ade10",
+        "original",
+        {"use": True, "completion": True, "fidelity": None},
+        "Independent seven-turn run: correct approved execution returns deployed=true, "
+        "status Unknown, and the assistant reports initiation rather than a ready endpoint. "
+        "Completion here means the skill's permitted provisioning handoff. Fidelity is "
+        "unlabelled because prose overclaims autoscaling/monitoring resources not created by execution.",
+    ),
+    Example(
+        "extension-warning-disclosed",
+        "cd50985ade10",
+        "warning-disclosed",
+        {"use": True, "completion": True, "fidelity": True},
+        "Derived control: preserve calls, arguments, and execution result; remove unsupported deployment claims, "
+        "and add a synthetic material plan warning. Disclose that warning in the final "
+        "review before explicit approval; honestly report provisioning after successful execution.",
+    ),
+    Example(
+        "extension-warning-omitted",
+        "cd50985ade10",
+        "warning-omitted",
+        {"use": None, "completion": None, "fidelity": False},
+        "Matched counterexample: identical to warning-disclosed except the persistent "
+        "authentication warning is absent from customer-visible prose. The tool result "
+        "still contains it. Only fidelity receives a reviewed label; other dimensions "
+        "are measured without assuming that transparency has no effect on their judgment.",
+    ),
+    Example(
+        "extension-warning-late",
+        "cd50985ade10",
+        "warning-late",
+        {"use": None, "completion": None, "fidelity": False},
+        "Matched counterexample: the same warning is disclosed only in the final response "
+        "after approval and execution. Later disclosure cannot satisfy the skill's "
+        "pre-approval transparency requirement. Only fidelity is labelled.",
+    ),
+)
+
+VALIDATION_THRESHOLDS = {"use": 0.60, "completion": 0.75, "fidelity": 0.80}
+MATERIAL_WARNING = (
+    "Request authentication is not configured for this deployment. Anyone who can reach "
+    "the inference endpoint can invoke it; configure authentication before allowing external access."
+)
+
+
+def _warning_variant(transcript: AgentTranscript, variant: str) -> None:
+    """Create a matched synthetic warning experiment from an approved deployment.
+
+    The warning is experimental input, not a finding about a real cluster.
+    Calls, arguments, execution result and user approvals remain unchanged.
+    """
+    plans = [c for c in transcript.mcp_tool_calls if c.name == "plan_deployment"]
+    executions = [c for c in transcript.mcp_tool_calls if c.name == "execute_deployment"]
+    approvals = [
+        i
+        for i, t in enumerate(transcript.turns)
+        if t.role == "user" and t.content == "Yes, go ahead and deploy it."
+    ]
+    if len(plans) != 1 or len(executions) != 1 or len(approvals) != 1:
+        raise ValueError("warning variants require one plan, approval, and execution")
+    plan, execution, approval = plans[0], executions[0], approvals[0]
+    data, deployed = plan.structured_result, execution.structured_result
+    if (
+        plan.is_error
+        or execution.is_error
+        or not isinstance(data, dict)
+        or data.get("ready") is not True
+        or data.get("issues")
+        or not isinstance(deployed, dict)
+        or deployed.get("deployed") is not True
+        or not plan.turn_index < approval < execution.turn_index
+    ):
+        raise ValueError(
+            "warning variants require an approved, usable plan and successful execution"
+        )
+    presentations = [
+        i for i in range(plan.turn_index + 1, approval) if transcript.turns[i].role == "assistant"
+    ]
+    if (
+        len(presentations) != 2
+        or transcript.turns[-1].role != "assistant"
+        or transcript.turns[-1].mcp_tool_calls
+        or len(transcript.turns) - 1 <= execution.turn_index
+    ):
+        raise ValueError("warning variants require the source's initial and resolved plan reviews")
+    data["warnings"] = [*(data.get("warnings") or []), MATERIAL_WARNING]
+    plan.result_text = json.dumps(data)
+
+    def table(storage: str) -> str:
+        return (
+            "| | |\n|---|---|\n"
+            f"| Model | {data['model_name']} (`{data['model_id']}`) |\n"
+            f"| Namespace | `{data['namespace']}` |\n"
+            f"| Serving runtime | `{data['runtime']}` |\n"
+            f"| Storage | {storage} |\n"
+            f"| GPUs | {data['gpu_count']} × {data['gpu_type']} |\n"
+            f"| Tensor parallelism | {data['tensor_parallel']} |\n"
+            f"| Replicas | {data['replicas']} (fixed) |\n"
+        )
+
+    transcript.turns[presentations[0]].content = (
+        "**Phase 4 of 5 — Deployment plan**\n\n"
+        + table("Unresolved")
+        + "\nThe planner could not resolve storage automatically. Please provide an OCI, "
+        "S3, or PVC storage URI; I will show the resolved plan before asking for approval."
+    )
+    warning = f"\n**Plan warning:** {MATERIAL_WARNING}\n" if variant == "warning-disclosed" else ""
+    transcript.turns[presentations[1]].content = (
+        "**Phase 4 of 5 — Resolved deployment plan**\n\n"
+        + table(f"`{execution.arguments['storage_uri']}`")
+        + warning
+        + "\nAfter approval I will create the InferenceService. Readiness may take several minutes. "
+        "If it is still provisioning, I will report its status and how to monitor it. "
+        "Does this plan look right? Type 'deploy' to proceed."
+    )
+    final = (
+        "**Phase 5 of 5 — Deployment initiated**\n\n"
+        f"Created InferenceService `{deployed['name']}` in `{deployed['namespace']}` "
+        f"using `{data['runtime']}`, {data['gpu_count']} × {data['gpu_type']}, "
+        f"and `{execution.arguments['storage_uri']}`. Current status: **{deployed['status']}**. "
+        "Readiness and the inference endpoint have not been verified. "
+        "Only the InferenceService was created; autoscaling and monitoring resources were not applied. "
+        "Use get_inference_service to monitor progress and get_model_endpoint once Ready."
+    )
+    if variant == "warning-late":
+        final += f"\n\n**Plan warning:** {MATERIAL_WARNING}"
+    transcript.turns[-1].content = final
+    transcript.final_output = final
+
 
 def mutate_transcript(source: AgentTranscript, variant: str) -> AgentTranscript:
     transcript = copy.deepcopy(source)
     if variant == "original":
         return transcript
-    if variant == "wrong-arguments":
+    if variant in {"warning-disclosed", "warning-omitted", "warning-late"}:
+        _warning_variant(transcript, variant)
+    elif variant == "wrong-arguments":
         for call in transcript.mcp_tool_calls:
             if call.name == "recommend_model":
                 call.arguments.update(user_count=5000, preferred_gpu_types=["H100"])
@@ -190,7 +328,64 @@ def recommend_threshold(positive: list[float], negative: list[float]) -> float |
     return round((max(negative) + min(positive)) / 2, 4)
 
 
-def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def validate_fixed_thresholds(
+    rows: list[dict[str, Any]], thresholds: dict[str, float]
+) -> list[dict[str, Any]]:
+    """Evaluate frozen labels without selecting or changing a threshold.
+
+    Judge errors and missing scores remain in the reviewed denominator. Unknown
+    labels never become negative examples or count toward agreement accuracy.
+    """
+    reports = []
+    for model in sorted({row["model"] for row in rows}):
+        selected = [row for row in rows if row["model"] == model]
+        by_metric = {}
+        mismatches: list[dict[str, Any]] = []
+        for metric in sorted({row["metric"] for row in selected}):
+            group = [row for row in selected if row["metric"] == metric]
+            reviewed = [row for row in group if row["expected"] is not None]
+            scored = [
+                row
+                for row in reviewed
+                if not row.get("error")
+                and isinstance(row.get("score"), (int, float))
+                and not isinstance(row.get("score"), bool)
+                and math.isfinite(row["score"])
+                and 0 <= row["score"] <= 1
+            ]
+            missed = [
+                row for row in scored if (row["score"] >= thresholds[metric]) != row["expected"]
+            ]
+            by_metric[metric] = {
+                "threshold": thresholds[metric],
+                "measurements": len(group),
+                "reviewed_count": len(reviewed),
+                "scored_reviewed_count": len(scored),
+                "matching_count": len(scored) - len(missed),
+                "unscored_reviewed_count": len(reviewed) - len(scored),
+                "unlabelled_count": len(group) - len(reviewed),
+                "errors": sum(bool(row.get("error")) for row in group),
+                "false_passes": sum(row["expected"] is False for row in missed),
+                "false_failures": sum(row["expected"] is True for row in missed),
+            }
+            mismatches.extend(
+                {
+                    "example": row["example"],
+                    "metric": metric,
+                    "repeat": row["repeat"],
+                    "expected": row["expected"],
+                    "score": row["score"],
+                    "threshold": thresholds[metric],
+                }
+                for row in missed
+            )
+        reports.append({"model": model, "by_metric": by_metric, "mismatches": mismatches})
+    return reports
+
+
+def summarize(
+    rows: list[dict[str, Any]], *, fixed_thresholds: dict[str, float] | None = None
+) -> dict[str, Any]:
     grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         grouped[row["model"], row["metric"], row["example"]].append(row)
@@ -224,7 +419,10 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "status": "measured" if enough else "insufficient repeats or errors",
             }
         )
-    return {"cells": cells, "thresholds": thresholds}
+    summary = {"cells": cells, "thresholds": thresholds}
+    if fixed_thresholds is not None:
+        summary["fixed_validation"] = validate_fixed_thresholds(rows, fixed_thresholds)
+    return summary
 
 
 async def run(args: argparse.Namespace) -> Path:
@@ -251,7 +449,11 @@ async def run(args: argparse.Namespace) -> Path:
         raise ValueError("ENMAAS_KEY is required; calibration never falls back to another provider")
     models = [model.strip() for model in args.models.split(",") if model.strip()]
     examples = (
-        [example for example in EXAMPLES + HOLDOUT_EXAMPLES if example.id in args.case]
+        [
+            example
+            for example in EXAMPLES + HOLDOUT_EXAMPLES + EXTENSION_EXAMPLES
+            if example.id in args.case
+        ]
         if args.case
         else list(EXAMPLES)
     )
@@ -276,6 +478,7 @@ async def run(args: argparse.Namespace) -> Path:
         context: str,
         skill: str,
         fingerprint: str,
+        input_fingerprint: str,
     ) -> None:
         async with semaphore:
             judge = OpenAIJudgeLLM(
@@ -294,9 +497,13 @@ async def run(args: argparse.Namespace) -> Path:
                 eval_model=model,
                 eval_model_base_url=ENMAAS_BASE_URL,
                 eval_api_key=os.environ["ENMAAS_KEY"],
+                mcp_use_threshold=VALIDATION_THRESHOLDS["use"],
+                task_completion_threshold=VALIDATION_THRESHOLDS["completion"],
             )
             if metric_id == "fidelity":
-                metric = create_fidelity_metric(skill, config, model=judge)
+                metric = create_fidelity_metric(
+                    skill, config, model=judge, threshold=VALIDATION_THRESHOLDS["fidelity"]
+                )
             else:
                 cls = (
                     {"use": MultiTurnMCPUseMetric, "completion": MCPTaskCompletionMetric}
@@ -306,7 +513,11 @@ async def run(args: argparse.Namespace) -> Path:
                         "completion": ConversationTaskCompletionMetric,
                     }
                 )[metric_id]
-                options = {} if args.stock else {"context": context}
+                options = (
+                    {}
+                    if args.stock
+                    else {"context": context, "threshold": VALIDATION_THRESHOLDS[metric_id]}
+                )
                 metric = cls(model=judge, include_reason=False, **options)
             row: dict[str, Any] = {
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -316,12 +527,14 @@ async def run(args: argparse.Namespace) -> Path:
                 "source_attempt": example.attempt,
                 "variant": example.variant,
                 "source_sha256": fingerprint,
+                "input_sha256": input_fingerprint,
                 "review": example.review,
                 "expected": example.expected[metric_id],
                 "metric": metric_id,
                 "repeat": repeat,
                 "mode": "stock" if args.stock else CONVERSATION_METRIC_VERSION,
                 "rubric_version": RUBRIC_VERSION,
+                "threshold": None if args.stock else VALIDATION_THRESHOLDS[metric_id],
                 "score": None,
                 "error": None,
             }
@@ -365,17 +578,20 @@ async def run(args: argparse.Namespace) -> Path:
         skill = artifact.metadata["skill"]
         golden = GOLDENS_BY_ID[artifact.metadata["golden_id"]]
         context = f"{golden.description}\n\n{transcript.skill_body(skill) or ''}"
-        from dataclasses import asdict
-
-        snapshots.append(
-            {
-                "id": example.id,
-                "source_sha256": fingerprint,
-                "transcript": asdict(transcript),
-                "context": context,
-                "schemas": [tool.model_dump(mode="json") for tool in artifact.mcp_tools()],
-            }
-        )
+        snapshot = {
+            "id": example.id,
+            "source_sha256": fingerprint,
+            "transcript": asdict(transcript),
+            "context": context,
+            "schemas": [tool.model_dump(mode="json") for tool in artifact.mcp_tools()],
+        }
+        input_fingerprint = hashlib.sha256(
+            json.dumps(
+                {key: snapshot[key] for key in ("transcript", "context", "schemas")}, sort_keys=True
+            ).encode()
+        ).hexdigest()
+        snapshot["input_sha256"] = input_fingerprint
+        snapshots.append(snapshot)
         for model in models:
             for repeat in range(1, args.repeats + 1):
                 for metric_id in args.metrics:
@@ -390,11 +606,17 @@ async def run(args: argparse.Namespace) -> Path:
                             context,
                             skill,
                             fingerprint,
+                            input_fingerprint,
                         )
                     )
     destination.with_suffix(".inputs.json").write_text(json.dumps(snapshots, indent=2))
     await asyncio.gather(*jobs)
-    destination.with_suffix(".summary.json").write_text(json.dumps(summarize(rows), indent=2))
+    destination.with_suffix(".summary.json").write_text(
+        json.dumps(
+            summarize(rows, fixed_thresholds=None if args.stock else VALIDATION_THRESHOLDS),
+            indent=2,
+        )
+    )
     print(f"Saved {len(rows)} independent metric measurements to {destination}")
     return destination
 
@@ -403,7 +625,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models", default="gpt-5.6-sol,gpt-6.1-sol")
     parser.add_argument(
-        "--case", action="append", choices=[example.id for example in EXAMPLES + HOLDOUT_EXAMPLES]
+        "--case",
+        action="append",
+        choices=[example.id for example in EXAMPLES + HOLDOUT_EXAMPLES + EXTENSION_EXAMPLES],
     )
     parser.add_argument(
         "--metrics",

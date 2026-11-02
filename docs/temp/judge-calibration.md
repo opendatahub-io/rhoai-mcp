@@ -1,6 +1,13 @@
 # EnMaaS judge calibration
 
-**Date:** 2026-11-01 · **Scope:** skill evaluations only · **Status:** initial calibration validated
+**Date:** 2026-11-01 · **Scope:** skill evaluations only · **Status:** initial calibration validated; subsequent extension found gaps
+
+**2026-11-02 extension:** [approved deployment and warning disclosure](./judge-calibration-extension.md)
+added 60 measurements with unchanged cutoffs and matched 20/35 reviewed labels.
+Fidelity's current inputs omit returned warnings, and completion rejects the
+skill-permitted provisioning handoff. Repair those scoring contracts and repeat
+validation before the model matrix. The 115/115 matches below describe the
+original, smaller corpus; they do not establish reliability on these new cases.
 
 Use **`gpt-6.1-sol` through `https://api.enmaas.devshift.net/v1`**. The defaults now
 select the `enmaas` provider, which uses `ENMAAS_KEY` unless
@@ -174,7 +181,8 @@ Source attempts and raw evidence remain local, following the existing ignored
 This is an initial calibration on a small, partly correlated corpus. Five
 judgings estimate judge variation, not agent reliability. The passing navigator
 validation example touches the fidelity threshold once, so that gate has less
-headroom. There is still no reviewed **successfully executed approved
-deployment**, and warning-disclosure failures were not independently validated.
-Fixing that golden and expanding reviewed examples should precede stronger
-release-gating claims. `get_cluster_resources` remains outside this work.
+headroom. The original experiment lacked a reviewed successfully executed
+approved deployment and warning-disclosure cases. The subsequent
+[extension](./judge-calibration-extension.md) adds those examples and identifies
+two scoring-contract gaps that must be addressed before stronger release-gating
+claims. `get_cluster_resources` remains outside this work.

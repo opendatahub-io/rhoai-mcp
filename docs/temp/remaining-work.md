@@ -31,7 +31,7 @@ grouped into a conversation session with full content and attempt correlation.
 
 ---
 
-## 2. Judge calibration — initial calibration complete
+## 2. Judge calibration — extension complete, scoring gaps found
 
 Evidence and limits: [`judge-calibration.md`](./judge-calibration.md), with
 machine-readable repeated scores in
@@ -69,10 +69,22 @@ threshold repaired the overlapping passing/failing scores in the calibration set
 records retain metric versions and the resolved judge endpoint; judge failures
 remain failed, unscored metrics rather than disappearing from the verdict.
 
+**2026-11-02 extension:** the completed deployment and matched warning-disclosure
+controls now have frozen reviewed labels and 60 measurements with unchanged
+judge/rubrics/cutoffs. There were no errors, but only 20/35 reviewed labels
+matched: five omitted-warning false passes and ten provisioning-completion
+false failures. [Report](./judge-calibration-extension.md),
+[frozen review](./judge-calibration-extension-review.md), and
+[repeated scores](./judge-calibration-extension-results.json).
+
+The fidelity input includes tool calls/arguments but omits returned warnings;
+the completion context does not make the skill's accepted provisioning handoff
+explicit enough. Repair these scoring inputs/contracts and revalidate before
+running the full model matrix. No cutoffs, rubrics, or labels were retuned.
+
 **Remaining limits:** this is a small, partly correlated corpus, not a population
 error estimate. A valid held-out navigator example touched the fidelity cutoff
-once. The completed approved-deployment example (§4.2) still needs reviewed
-calibration labels, and warning-disclosure failures need reviewed examples.
+once. Extension labels were reviewed by Codex, without independent human review.
 Completion alone cannot detect a hidden unauthorized write; tool-use/fidelity and hard checks remain
 required. The legacy LCS/stock metrics need separate calibration.
 
@@ -245,9 +257,11 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Extend calibration (§2)** — add the completed approved deployment and
-   reviewed warning-disclosure examples.
-2. **Full model sweep (§5)** — use the fixed judge and metric versions.
+1. **Repair scoring contracts (§2)** — expose returned plan issues/warnings to
+   fidelity, clarify the provisioning completion outcome, version the changed
+   inputs, and replay the frozen calibration/holdout/extension cases.
+2. **Fresh one-model baseline, then full model sweep (§5)** — use the fixed
+   judge and metric versions once the scoring fixes validate.
 3. **`comparison.py` (§5)** — needs multi-model records to exist first.
 4. **Phase 4 polish (§6)** — nothing depends on it.
 

@@ -190,6 +190,23 @@ make run-stdio
 5. Add tests for new functionality
 6. Keep changes focused
 
+## Dependency Updates
+
+Automated dependency PRs are grouped and run on a weekly schedule. The
+configuration lives in [`renovate.json`](renovate.json), which extends the
+shared [opendatahub-io/renovate-config](https://github.com/opendatahub-io/renovate-config)
+preset.
+
+`requirements-cpu.txt` is a generated artifact: it is compiled from
+`pyproject.toml` and `uv.lock` against the Red Hat CPU package index, so no
+dependency bot updates it directly (it is listed in `ignorePaths`).
+
+**Any PR that changes `pyproject.toml` or `uv.lock` (including automated
+dependency PRs) must run `make generate-requirements-cpu` and commit the
+regenerated `requirements-cpu.txt` before merging.** The
+[`check-requirements-cpu`](.github/workflows/check-requirements-cpu.yml)
+workflow regenerates the file and fails on drift.
+
 ## Questions?
 
 For questions, reach out to rhoai-mcp@redhat.com.

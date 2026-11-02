@@ -3,5 +3,8 @@
   "extends": [
     "github>opendatahub-io/renovate-config",
     "github>opendatahub-io/renovate-config//base-images"
+  ],
+  "ignorePaths": [
+    "requirements-cpu.txt"
   ]
 }

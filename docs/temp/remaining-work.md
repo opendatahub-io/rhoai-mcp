@@ -208,9 +208,12 @@ Four named checks cover the two agreement requirements from §3.1:
   with the structured plan and latest visible review before approval. Apply the
   API's optional defaults; do not let a correct first execution hide a wrong second.
 
-The skills deliberately use different traffic sources: navigator handoff QPS
-comes from `get_expected_rps`; deployment plan QPS comes from the selected
-recommendation's specification. Numeric comparisons allow three-decimal QPS
+Navigator's handoff and deployment planning now both preserve QPS from the
+selected recommendation's specification, including the planner's buffer/floor.
+Phase 2 retains average/peak traffic as workload context. The [contract correction](./navigator-handoff-capacity-correction.md)
+replaces the previous average-demand handoff source; its strict check fails on
+missing/invalid capacity or an unrelated offer. Original results remain tied to
+the previous contract. Numeric comparisons allow three-decimal QPS
 rounding, and reject non-finite values. Model-ID case and the planner's `NVIDIA-`
 GPU prefix are normalized. Unknown inventory may be an explicitly empty handoff
 field. A documented unconstrained fallback requires a preceding empty slot.
@@ -230,8 +233,15 @@ judged assessment; automated GPU discovery remains deferred.
 
 ## 5. Phase 3 leftovers
 
-- **Full sweep — revised roster.** Only `enmaas-glm` has run goldens. The required
-  roster is **four agents, all through EnMaaS**: GPT (`gpt-5.6-sol`), Anthropic
+- **Full sweep — 8/8 conversations recorded, 5/8 passed.** GPT and GLM passed
+  2/2 each, DeepSeek 1/2, Anthropic 0/2 under the frozen harness configuration.
+  [Full report](./navigator-sweep.md) and [records](./navigator-sweep-results.json).
+  Seven completed the full script; Anthropic's vague case stopped at the
+  first skill-load checkpoint. There were 23 measured scores, one missing
+  fidelity score (`n/a`, no skill loaded), and no judge errors, timeouts, or
+  deployment writes. The first [GPT batch](./navigator-sweep-gpt.md) and earlier
+  GLM attempts remain historical snapshots. The completed roster is
+  **four agents, all through EnMaaS**: GPT (`gpt-5.6-sol`), Anthropic
   (`claude-opus-4-6`, native Messages), GLM (`rits/zai-org/glm-5-3`), and
   DeepSeek (`rits/deepseek-ai/DeepSeek-V4.1-Flash-1017`). Run only Navigator's
   two goldens per model: **8 conversations**. Navigator-deploy goldens are
@@ -239,10 +249,40 @@ judged assessment; automated GPU discovery remains deferred.
   earlier OpenAI-compatible 404s for Opus were an API mismatch. `models.py` now
   uses EnMaaS GPT as its default and all four EnMaaS specs for `matrix`; Claude
   is explicitly configured with `AnthropicModel`/`AnthropicProvider`. The SDK
-  base URL is the EnMaaS root for Messages. The full sweep has not run.
+  base URL is the EnMaaS root for Messages. Every cell has one live attempt;
+  this is a smoke comparison, not a reliability estimate or model ranking.
   All four skill-eval Make targets now select `evals/skills/test_navigator.py`
   explicitly, with automatic retries disabled.
   [Qualification evidence](./enmaas-matrix-qualification.md).
+- **Anthropic harness correction — implemented; historical validation retained.** The user
+  successfully uses the same Opus model with automatic skill discovery in
+  Claude Code. The shared parser now accepts bold labels, and the Opus spec
+  explicitly enables adaptive thinking. A two-case diagnostic confirmed native
+  thinking but still failed discovery twice. Adding one shared host instruction
+  to load a relevant skill before responding or using domain tools then resolved
+  discovery and completed both five-turn flows, with all six judge scores passing.
+  Both failed the then-current QPS
+  check: peak `0.13` is copied instead of expected `0.06666666666666667`.
+  All 299 offline tests and targeted lint/format/type checks pass. Free replay of
+  the eight original artifacts changes only two formatting-related checks in
+  Anthropic's happy path; its QPS failure remains. Four new Navigator conversations
+  were recorded across two distinct configurations with no automatic reruns.
+  Original sweep records remain unchanged. Review this macro step before changing
+  skill wording or spending on further runs. [Correction and validation](./anthropic-correction.md),
+  [original investigation](./anthropic-harness-investigation.md).
+- **Handoff traffic contract — corrected and verified offline.** Navigator and
+  its strict checker now preserve
+  `specification.traffic_profile.expected_qps` from the successful response for
+  the selected recommendation. The skill explains the buffer/minimum and retains
+  Phase 2's average/peak display. Invalid or missing capacity, failed responses,
+  and unrelated/later offers cannot substitute other traffic sources. All 330
+  offline tests and lint/format/type checks pass. A 12-artifact counterfactual
+  replay changes only the QPS check: three capacity handoffs match, six average
+  handoffs do not, and three partial attempts stay failed. Original verdicts,
+  judge scores, artifacts, and history remain unchanged. Both Navigator scenario
+  hashes and the skill hash now identify the new contract. No paid calls were
+  made. [Correction and validation](./navigator-handoff-capacity-correction.md),
+  [records](./navigator-handoff-capacity-correction-results.json).
 - **Fresh judged baseline — captured, follow-up needed.** All four goldens ran
   through the normal judged path with fixed judge/cutoffs and fidelity `v2`.
   Run `5ec251e832e4` passed **1/4**: consent withheld passed; navigator happy
@@ -268,8 +308,8 @@ judged assessment; automated GPU discovery remains deferred.
   identities and remains dry-run data. [Correction evidence](./precondition-check-fix-results.json).
   The planner's `tuple index out of range` on a cost-slot query is a separate
   observed tool defect.
-- **`comparison.py` + reporting CLI.** Untouched, correctly deferred until
-  multi-model Navigator records exist. Initial reporting covers Navigator's two
+- **`comparison.py` + reporting CLI.** Multi-model Navigator records now exist;
+  first resolve the harness/checker concerns above. Initial reporting covers Navigator's two
   goldens only; deployment reporting is deferred. It must compare only matching
   skill/golden sets under fixed judge, rubric, and metric versions, show sample counts, and
   leave missing values `n/a` rather than substituting `0.0` as the current
@@ -317,12 +357,19 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Navigator-only model sweep (§5)** — two recommendation goldens per model,
-   one model per reviewable step, for 8 conversations. Use
-   `evals/skills/test_navigator.py`; prevent idle sleep, disable automatic retries, and
-   retain the fixed EnMaaS judge/cutoffs and fidelity `v2`.
-2. **Navigator comparison (§5)** — implement `comparison.py` after those records
-   exist, keeping historical deployment attempts outside the new comparison.
+1. **Review the Anthropic harness correction (§5)** — shared discovery policy,
+   explicit adaptive thinking, and bold row-label parsing are implemented and
+   validated. Both fresh flows discover Navigator and finish; original records
+   remain unchanged.
+2. **Review the Navigator handoff contract correction (§5)** — implemented and
+   validated offline with 330 passing tests. A subsequent live validation would
+   run only the two Anthropic Navigator goldens under the new skill/scenario
+   hashes, keeping the judge/cutoffs and discovery/thinking settings fixed.
+   No such live run has started. Preserve the original sweep and keep paid
+   deployment sweeps deferred.
+3. **Navigator comparison (§5)** — the eight planned attempts are complete.
+   Implement `comparison.py` after reviewing the harness findings, keeping
+   different configurations and historical deployment attempts separate.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
 outside this branch's current evaluation work by decision. Navigator-deploy

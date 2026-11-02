@@ -64,6 +64,19 @@ GOOD_TABLE = """
 | Cluster fit | Available ✓ | Available ✓ | — | — |
 """
 
+BOLD_TABLE = """
+| | Balanced | Cost | Performance | Quality |
+|---|---|---|---|---|
+| **Model** | llama-3.1-8b | mistral-7b | llama-3.1-70b | llama-3.1-70b |
+| **GPU** | A100-80 | L4 | H100 | H100 |
+| **TTFT p95** | 180 ms | 240 ms | 95 ms | 110 ms |
+| **E2E p95** | 4.2 s | 6.1 s | 2.8 s | 3.1 s |
+| **Quality score** | 72 | 65 | 88 | 91 |
+| **Cost/month** | $1,200 | $400 | $4,800 | $4,800 |
+| **Meets SLO** | Yes | Yes | Yes | Yes |
+| **Cluster fit** | Available ✓ | Available ✓ | — | — |
+"""
+
 #: A Phase 2 workload table that must never be mistaken for the Phase 3 one.
 WORKLOAD_TABLE = """
 | Workload | Value |
@@ -80,7 +93,7 @@ user_count: 50
 chosen_category: balanced
 prompt_tokens: 512
 output_tokens: 256
-expected_qps: 0.067
+expected_qps: 0.13
 ttft_target_ms: 300
 itl_target_ms: 30
 e2e_target_ms: 8620
@@ -159,6 +172,31 @@ class TestTableParsing:
 
 
 class TestRecommendationTable:
+    @pytest.mark.parametrize("marker", ["**", "__"])
+    def test_bold_row_labels_pass_without_changing_values(self, marker: str) -> None:
+        table = BOLD_TABLE.replace("**", marker)
+        report = CheckReport()
+        check_recommendation_table(table, report)
+
+        assert report.passed, report.failures
+        assert find_tables(table)[0].rows[0][1:] == find_tables(GOOD_TABLE)[0].rows[0][1:]
+
+    @pytest.mark.parametrize(
+        ("old", "new", "failure"),
+        [
+            ("**Model**", "**Models**", "table_rows_exact"),
+            ("**GPU**", "**Model**", "table_rows_exact"),
+            ("| Balanced | Cost |", "| Cost | Balanced |", "table_columns_exact"),
+            ("| Yes | Yes | Yes | Yes |", "| Yes | Yes | Yes |", "table_cells_complete"),
+            ("| 72 | 65 | 88 | 91 |", "| [value] | 65 | 88 | 91 |", "table_no_placeholders"),
+        ],
+    )
+    def test_bold_labels_do_not_hide_invalid_tables(self, old: str, new: str, failure: str) -> None:
+        report = CheckReport()
+        check_recommendation_table(BOLD_TABLE.replace(old, new), report)
+
+        assert failure in {r.name for r in report.failures}
+
     def test_well_formed_table_passes_every_check(self) -> None:
         report = CheckReport()
         check_recommendation_table(GOOD_TABLE, report)

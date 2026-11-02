@@ -11,7 +11,7 @@ import pytest
 pytest.importorskip("pydantic_ai", reason="requires the skill-eval dependency group")
 
 from evals.agent.transcript import AttemptArtifact, from_pydantic_ai  # noqa: E402
-from evals.skills.checks import check_navigator, find_user_turn_index  # noqa: E402
+from evals.skills.checks import check_navigator, find_user_turn_index, parse_handoff  # noqa: E402
 from evals.skills.goldens import (  # noqa: E402
     APPROVE_REPLY,
     CHOOSE_REPLY,
@@ -27,6 +27,7 @@ from evals.skills.goldens import (  # noqa: E402
 from pydantic_ai.messages import TextPart, ToolCallPart, ToolReturnPart  # noqa: E402
 
 from tests.evals.test_skill_checks import (  # noqa: E402
+    BOLD_TABLE,
     DEPLOY_PLAN,
     DEPLOY_REVIEW,
     GOOD_TABLE,
@@ -92,6 +93,7 @@ def workflow(*, deploy: bool = False) -> list[Any]:
                     "use_case": "chatbot_conversational",
                     "user_count": 50,
                     "expected_rps": 0.06666666666666667,
+                    "peak_rps": 0.13,
                 },
             ),
         ),
@@ -183,6 +185,38 @@ def test_complete_workflow_agrees_after_artifact_roundtrip(deploy: bool, tmp_pat
     assert all(c.status == "pass" for c in report.results if "agrees_with" in c.name)
 
 
+@pytest.mark.parametrize("marker", ["**", "__"])
+@pytest.mark.parametrize("mutation", ["none", "qps", "model", "gpu"])
+def test_bold_rows_preserve_selection_and_workload_checks(marker: str, mutation: str) -> None:
+    messages = workflow()
+    table = BOLD_TABLE.replace("**", marker).replace("| A100-80 |", "| 1x A100-80 |")
+    if mutation == "model":
+        table = table.replace("| llama-3.1-8b |", "| other/model |")
+    elif mutation == "gpu":
+        table = table.replace("| 1x A100-80 |", "| 2x H100 |")
+    for message in messages:
+        for part in message.parts:
+            if isinstance(part, TextPart) and "| Balanced |" in part.content:
+                part.content = table
+    if mutation == "qps":
+        messages[-1] = assistant(TextPart(content=HANDOFF.replace("0.13", "0.067")))
+
+    failed = failures(grade(messages))
+    expected = {
+        "none": set(),
+        "qps": {"navigator_handoff_agrees_with_workload"},
+        "model": {
+            "navigator_handoff_agrees_with_selection",
+            "navigator_handoff_agrees_with_workload",
+        },
+        "gpu": {
+            "navigator_handoff_agrees_with_selection",
+            "navigator_handoff_agrees_with_workload",
+        },
+    }
+    assert failed == expected[mutation]
+
+
 @pytest.mark.parametrize(
     "key,value",
     [
@@ -190,7 +224,7 @@ def test_complete_workflow_agrees_after_artifact_roundtrip(deploy: bool, tmp_pat
         ("user_count", "5000"),
         ("prompt_tokens", "2048"),
         ("output_tokens", "1024"),
-        ("expected_qps", "0.13"),
+        ("expected_qps", "0.067"),
         ("expected_qps", "nan"),
         ("ttft_target_ms", "100"),
         ("itl_target_ms", "100"),
@@ -211,6 +245,123 @@ def test_handoff_rejects_wrong_workload_field(key: str, value: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "average,peak,capacity,emitted,passes",
+    [
+        (0.06666666666666667, 0.13, 0.13, 0.13, True),
+        (0.06666666666666667, 0.13, 0.13, 0.067, False),
+        (0.0013333333333333335, 0.1, 0.1, 0.1, True),
+        (0.0013333333333333335, 0.1, 0.1, 0.002667, False),
+        (0.06666666666666667, 0.13, 0.2, 0.2, True),
+        (0.06666666666666667, 0.13, 0.2, 0.13, False),
+    ],
+)
+def test_handoff_copies_selected_capacity_without_recalculating(
+    average: float, peak: float, capacity: float, emitted: float, passes: bool
+) -> None:
+    messages = workflow()
+    tool_part(messages, "get_expected_rps", returned=True).content.update(
+        expected_rps=average, peak_rps=peak
+    )
+    tool_part(messages, "recommend_model", returned=True).content["specification"][
+        "traffic_profile"
+    ]["expected_qps"] = capacity
+    messages[-1] = assistant(
+        TextPart(content=HANDOFF.replace("expected_qps: 0.13", f"expected_qps: {emitted}"))
+    )
+
+    report = grade(messages)
+    assert report.passed is passes
+    assert failures(report) == (set() if passes else {"navigator_handoff_agrees_with_workload"})
+
+
+@pytest.mark.parametrize("handoff_qps", [0.13, 0.067])
+@pytest.mark.parametrize(
+    "source", ["missing-profile", "missing-qps", None, "nan", "inf", 0, -1, True]
+)
+def test_missing_or_invalid_capacity_cannot_use_other_traffic_sources(
+    source: Any, handoff_qps: float
+) -> None:
+    messages = workflow()
+    spec = tool_part(messages, "recommend_model", returned=True).content["specification"]
+    if source == "missing-profile":
+        del spec["traffic_profile"]
+    elif source == "missing-qps":
+        del spec["traffic_profile"]["expected_qps"]
+    else:
+        spec["traffic_profile"]["expected_qps"] = source
+    messages[-1] = assistant(
+        TextPart(content=HANDOFF.replace("expected_qps: 0.13", f"expected_qps: {handoff_qps}"))
+    )
+
+    assert "navigator_handoff_agrees_with_workload" in failures(grade(messages))
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", 0, True])
+def test_capacity_handoff_still_requires_valid_confirmed_average(value: Any) -> None:
+    messages = workflow()
+    tool_part(messages, "get_expected_rps", returned=True).content["expected_rps"] = value
+
+    assert "navigator_handoff_agrees_with_workload" in failures(grade(messages))
+
+
+@pytest.mark.parametrize("failure", ["structured-error", "failed-outcome"])
+def test_failed_recommendation_cannot_supply_handoff_capacity(failure: str) -> None:
+    messages = workflow()
+    returned = tool_part(messages, "recommend_model", returned=True)
+    if failure == "structured-error":
+        returned.content["error"] = "recommendation failed"
+    else:
+        returned.outcome = "failed"
+
+    assert {
+        "navigator_handoff_agrees_with_workload",
+        "navigator_handoff_agrees_with_selection",
+    } <= failures(grade(messages))
+
+
+def test_recommendation_after_choice_cannot_replace_handoff_capacity() -> None:
+    messages = workflow()
+    later = deepcopy(RECOMMENDATION)
+    later["specification"]["traffic_profile"]["expected_qps"] = 9.9
+    messages[-1:-1] = [
+        assistant(
+            call(
+                "recommend_model",
+                "late-capacity",
+                use_case="chatbot_conversational",
+                user_count=50,
+                preferred_gpu_types=["A100-80"],
+            )
+        ),
+        returns(result("recommend_model", "late-capacity", later)),
+    ]
+
+    assert grade(messages).passed
+
+
+@pytest.mark.parametrize("capacity", [0.13, 0.1])
+def test_handoff_capacity_matches_deployment_plan_contract(capacity: float) -> None:
+    navigator = workflow()
+    tool_part(navigator, "recommend_model", returned=True).content["specification"][
+        "traffic_profile"
+    ]["expected_qps"] = capacity
+    navigator[-1] = assistant(
+        TextPart(content=HANDOFF.replace("expected_qps: 0.13", f"expected_qps: {capacity}"))
+    )
+    assert grade(navigator).passed
+    handoff = parse_handoff(navigator[-1].parts[0].content)
+    assert handoff is not None
+
+    deployment = workflow(deploy=True)
+    tool_part(deployment, "recommend_model", returned=True).content["specification"][
+        "traffic_profile"
+    ]["expected_qps"] = capacity
+    tool_part(deployment, "plan_deployment").args["expected_qps"] = float(handoff["expected_qps"])
+
+    assert grade(deployment, deploy=True).passed
+
+
+@pytest.mark.parametrize(
     "old,new",
     [
         (f"model_id: {MODEL_ID}", "model_id: other/model"),
@@ -227,6 +378,7 @@ def test_handoff_rejects_wrong_model_or_category(old: str, new: str) -> None:
 def test_unrelated_later_slot_rerun_does_not_replace_customer_selection() -> None:
     messages = workflow()
     rerun = deepcopy(RECOMMENDATION)
+    rerun["specification"]["traffic_profile"]["expected_qps"] = 9.9
     rerun["recommendations"]["top_balanced"] = {
         "model_id": "other/model",
         "model": "other model",
@@ -576,9 +728,11 @@ def test_latest_handoff_in_one_message_is_the_one_graded() -> None:
 @pytest.mark.parametrize("value", ["nan", "inf", 0, True])
 def test_invalid_numeric_source_cannot_be_copied_into_a_passing_handoff(value: Any) -> None:
     messages = workflow()
-    tool_part(messages, "get_expected_rps", returned=True).content["expected_rps"] = value
+    tool_part(messages, "recommend_model", returned=True).content["specification"][
+        "traffic_profile"
+    ]["expected_qps"] = value
     messages[-1] = assistant(
-        TextPart(content=HANDOFF.replace("expected_qps: 0.067", f"expected_qps: {value}"))
+        TextPart(content=HANDOFF.replace("expected_qps: 0.13", f"expected_qps: {value}"))
     )
 
     assert "navigator_handoff_agrees_with_workload" in failures(grade(messages))

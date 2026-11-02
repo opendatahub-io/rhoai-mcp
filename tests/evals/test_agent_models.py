@@ -67,6 +67,8 @@ async def test_opus_uses_native_messages_and_replays_tool_result(
         body = json.loads(request.content)
         assert body["model"] == "claude-opus-4-6"
         assert "temperature" not in body
+        assert body["thinking"] == {"type": "adaptive"}
+        assert "output_config" not in body  # Effort remains the provider default.
         requests.append(body)
         if len(requests) == 1:
             content = [{"type": "tool_use", "id": "lookup-1", "name": "lookup", "input": {}}]

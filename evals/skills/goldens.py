@@ -242,7 +242,8 @@ NAVIGATOR_HAPPY_PATH = Golden(
     skill="navigator",
     expectation=NAVIGATOR_EXPECTATION,
     description=(
-        "Confirm the workload, show recommendations, confirm a selection, emit the handoff."
+        "Confirm the workload, show recommendations, confirm a selection, and emit a handoff "
+        "that preserves the selected recommendation's capacity."
     ),
     confirmation_reply=CONFIRM_REPLY,
     selection_reply=CHOOSE_REPLY,
@@ -281,7 +282,7 @@ NAVIGATOR_VAGUE_REQUIREMENTS = Golden(
     expectation=NAVIGATOR_EXPECTATION,
     description=(
         "Opening gives neither use case nor scale; the skill must ask before proceeding, "
-        "then complete the flow."
+        "then complete the flow with a handoff that preserves the selected recommendation's capacity."
     ),
     confirmation_reply=CONFIRM_REPLY,
     selection_reply=CHOOSE_REPLY,

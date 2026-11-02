@@ -166,7 +166,16 @@ class MarkdownTable:
 
     @property
     def labels(self) -> list[str]:
-        return [r[0].strip() for r in self.rows if r]
+        return [_row_label(r[0]) for r in self.rows if r]
+
+
+def _row_label(cell: str) -> str:
+    """Compare rendered row names without changing recommendation values."""
+    label = cell.strip()
+    for marker in ("**", "__"):
+        if label.startswith(marker) and label.endswith(marker) and len(label) > 4:
+            return label[2:-2].strip()
+    return label
 
 
 def _split_row(line: str) -> list[str]:
@@ -482,7 +491,7 @@ def _selected_cells(
         if table is None or category.title() not in table.headers:
             continue
         column = table.headers.index(category.title())
-        rows = {row[0]: row for row in table.rows if len(row) > column}
+        rows = {_row_label(row[0]): row for row in table.rows if len(row) > column}
         cells = (
             rows.get("Model", [""] * (column + 1))[column],
             rows.get("GPU", [""] * (column + 1))[column],
@@ -509,7 +518,16 @@ def _check_handoff_agreement(
                 else "no scenario selection expectation supplied",
             )
         return
-    workload, errors = confirmed_workload(transcript, intent, confirmation)
+    workload, workload_errors = confirmed_workload(transcript, intent, confirmation)
+    recommendation, specification, selection_errors = selected_recommendation(
+        transcript,
+        intent,
+        selection,
+        *_selected_cells(transcript, intent.category, selection),
+        after_turn=confirmation,
+    )
+    # Carry the chosen offer's capacity into planning, with no average-demand fallback.
+    workload["expected_qps"] = mapping(specification.get("traffic_profile")).get("expected_qps")
     handoff = None
     if selection is not None and valid_gate(transcript, selection):
         for turn in transcript.turns[selection + 1 :]:
@@ -517,27 +535,20 @@ def _check_handoff_agreement(
                 for block in HANDOFF_RE.finditer(turn.content):
                     handoff = parse_handoff(block.group(0))
     if handoff is None:
-        errors.append("no handoff emitted after the customer's selection")
+        workload_errors.append("no handoff emitted after the customer's selection")
     else:
-        errors += handoff_errors(handoff, workload, intent)
-    report.check(names[0], not errors, "; ".join(errors))
+        workload_errors += handoff_errors(handoff, workload, intent)
+    report.check(names[0], not workload_errors, "; ".join(workload_errors))
 
-    recommendation, specification, errors = selected_recommendation(
-        transcript,
-        intent,
-        selection,
-        *_selected_cells(transcript, intent.category, selection),
-        after_turn=confirmation,
-    )
-    errors += differences(
+    selection_errors += differences(
         mapping(specification.get("traffic_profile")),
         {key: workload.get(key) for key in ("prompt_tokens", "output_tokens")},
     )
-    errors += differences(
+    selection_errors += differences(
         handoff or {},
         {"chosen_category": intent.category, "model_id": recommendation.get("model_id")},
     )
-    report.check(names[1], not errors, "; ".join(errors))
+    report.check(names[1], not selection_errors, "; ".join(selection_errors))
 
 
 @dataclass

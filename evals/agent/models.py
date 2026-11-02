@@ -199,6 +199,8 @@ SPECS: dict[str, AgentModelSpec] = {
             api_key_env="ENMAAS_KEY",
             api="messages",
             temperature=None,
+            # Opus 4.6 leaves thinking off when omitted; match its agentic use.
+            extra_settings={"anthropic_thinking": {"type": "adaptive"}},
         ),
         # --- EnMaaS open-weight representatives, using Responses ---
         # Leave temperature unset for parity with the GPT/Anthropic entries.

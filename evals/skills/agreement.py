@@ -163,6 +163,8 @@ def confirmed_workload(
     }
     errors = differences(traffic, {"use_case": intent.use_case, "user_count": intent.user_count})
     errors += differences(defaults, {"use_case": intent.use_case})
+    if not same("expected_qps", workload["expected_qps"], workload["expected_qps"]):
+        errors.append("confirmed expected traffic must be finite and positive")
     errors += [
         f"confirmed source omitted {key}" for key, value in workload.items() if value is None
     ]
@@ -194,6 +196,7 @@ def selected_recommendation(
             or (after_turn is not None and call.turn_index <= after_turn)
             or call.is_error
             or not isinstance(data, dict)
+            or data.get("error")
         ):
             continue
         recommendation = mapping(data.get("recommendations")).get(slot)
@@ -290,8 +293,8 @@ def plan_selection_errors(
 ) -> list[str]:
     expected = {
         **workload,
-        # Deployment's skill contract takes traffic from the recommendation
-        # specification; navigator's handoff instead uses get_expected_rps.
+        # Both deployment planning and Navigator's handoff preserve the
+        # selected recommendation's capacity target, including its buffer/floor.
         **{
             k: mapping(specification.get("traffic_profile")).get(k)
             for k in ("prompt_tokens", "output_tokens", "expected_qps")

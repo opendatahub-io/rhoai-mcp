@@ -20,8 +20,12 @@ import pytest
 pytest.importorskip("pydantic_ai", reason="requires the skill-eval dependency group")
 
 from evals.agent import runner  # noqa: E402
-from evals.agent.models import get_spec  # noqa: E402
-from evals.agent.transcript import AgentTranscript, AttemptArtifact  # noqa: E402
+from evals.agent.models import MATRIX_SPEC_IDS, AgentModelSpec, get_spec  # noqa: E402
+from evals.agent.transcript import (  # noqa: E402
+    AgentTranscript,
+    AttemptArtifact,
+    from_pydantic_ai,
+)
 from mcp.types import Tool  # noqa: E402
 from pydantic_ai import Agent  # noqa: E402
 from pydantic_ai.messages import (  # noqa: E402
@@ -109,6 +113,32 @@ def install_agent(monkeypatch: pytest.MonkeyPatch) -> Callable[..., tuple[Memory
         return session, build
 
     return install
+
+
+@pytest.mark.parametrize("spec_id", MATRIX_SPEC_IDS)
+async def test_build_agent_delivers_shared_discovery_policy_without_preloading_a_skill(
+    monkeypatch: pytest.MonkeyPatch, spec_id: str
+) -> None:
+    instructions = []
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        instructions.append(info.instructions or "")
+        return echo(messages, info)
+
+    session = MemorySession()
+    monkeypatch.setattr(AgentModelSpec, "build", lambda _self: FunctionModel(respond))
+    monkeypatch.setattr("pydantic_ai.mcp.MCPToolset", lambda *_args, **_kwargs: session)
+    agent, toolset = runner.build_agent(get_spec(spec_id))
+    async with agent:
+        result = await agent.run("Help me choose an LLM.")
+
+    assert toolset is session
+    assert "before responding or calling domain tools" in instructions[0]
+    assert "confirmation gates" in instructions[0]
+    transcript = from_pydantic_ai(result.all_messages())
+    assert "navigator:" in transcript.skill_catalog
+    assert "navigator-deploy:" in transcript.skill_catalog
+    assert transcript.skills_loaded == []  # The model must still choose and load a skill.
 
 
 async def test_checkpoints_run_in_order_before_replies_with_cumulative_history(

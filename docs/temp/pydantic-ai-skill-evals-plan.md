@@ -490,6 +490,42 @@ Run these **two Navigator goldens per model**:
 | navigator: happy path | Confirm workload, show recommendations, confirm selection, emit handoff |
 | navigator: vague requirements | Ask for missing intent/scale before proceeding; then complete the flow |
 
+**Progress:** all **8/8 planned attempts are recorded; 5/8 passed**. GPT and GLM
+passed both goldens, DeepSeek one, and Anthropic neither under the frozen
+configuration. [Full sweep report](./navigator-sweep.md) and
+[records](./navigator-sweep-results.json). There were no timeouts or judge errors;
+Anthropic's vague case stopped after one turn at the skill-load checkpoint, with
+fidelity `n/a`. Earlier batches and GLM attempts remain historical evidence.
+
+**Review before comparison:** the user reports successful automatic discovery
+with the same Opus model in Claude Code. The [harness investigation](./anthropic-harness-investigation.md)
+found omitted native thinking configuration, a catalog/checkpoint contract gap,
+and bold table labels causing two coupled parser failures. These harness
+corrections are now implemented: bold labels are accepted, Opus explicitly uses
+adaptive thinking, and every model receives a shared instruction to load a
+relevant skill before responding or using domain tools. Thinking alone did not
+resolve discovery in a two-case diagnostic; the shared instruction then restored
+discovery and completion of both full scripts, with all six judge scores passing.
+Both emitted peak instead of average QPS and failed the then-current hard
+check. That stage passed all 299 offline tests.
+[Correction and separate live evidence](./anthropic-correction.md). Review this
+macro step before skill-text changes or further paid validation. Original sweep
+records and verdicts remain unchanged; do not pool configurations silently.
+
+**Handoff investigation:** the [offline contract trace](./navigator-handoff-qps-investigation.md)
+shows Navigator's average-demand handoff conflicts with the recommendation and
+deployment API's buffered capacity. Both planner adapters overwrite capacity
+with the handoff value, without restoring the buffer/floor. The [correction](./navigator-handoff-capacity-correction.md)
+is now implemented: the handoff and strict check use the selected successful
+recommendation's `specification.traffic_profile.expected_qps`. Phase 2 still
+displays average/peak traffic. All 330 offline tests pass, including missing or
+invalid source evidence, capacity floors, source provenance, and the planning
+contract. A separate 12-artifact counterfactual replay changes only the QPS
+check; original verdicts and judge scores remain unchanged. Updated Navigator
+skill and scenario hashes identify the new contract. No paid call was made;
+a future live check is a separate two-golden Anthropic Navigator step, not a
+new full matrix or deployment sweep.
+
 **Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
 `create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding
 hook, no env var, and no scenario file. Keep unvisited branches visible rather than
@@ -698,7 +734,9 @@ Review one model's two conversations before progressing to the next model.
 Anthropic uses the explicitly qualified native Messages configuration (§2.3); do
 not silently omit the family or switch its provider. The runtime matrix is aligned
 with the four-model roster. Keep the calibrated EnMaaS judge and scoring settings
-fixed. Then extend `comparison.py` and the CLI (§3.5) for the Navigator records.
+fixed. The first sweep is now complete (8 attempts, 5 passes); review the
+Anthropic harness/checker findings in §3.4 in separate macro steps before
+extending `comparison.py` and the CLI (§3.5) for the Navigator records.
 Report routing failures, missing scores, and errors without biasing comparisons.
 The skill-eval Make targets select `evals/skills/test_navigator.py`; use free
 deterministic replay for checker work. Further paid Navigator-deploy runs and

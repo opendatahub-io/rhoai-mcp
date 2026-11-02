@@ -163,6 +163,11 @@ def build_agent(
     toolset = MCPToolset(StdioTransport(command="uv", args=args, cwd=str(REPO_ROOT)))
     agent = Agent(
         model=spec.build(),
+        instructions=(
+            "When a user's request matches an available skill's description, load that skill "
+            "with `load_capability` before responding or calling domain tools. Follow the "
+            "loaded skill's workflow, including its confirmation gates."
+        ),
         capabilities=[
             LocalWorkspace(str(REPO_ROOT)),
             # Both skills stay in the catalog: the point is to test discovery

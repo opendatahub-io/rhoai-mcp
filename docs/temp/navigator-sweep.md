@@ -109,3 +109,7 @@ no additional paid run or Navigator-deploy sweep is included in these results.
 **Subsequent macro step:** the [Anthropic correction](./anthropic-correction.md)
 records the implementation and four additional diagnostic conversations under
 two separate configurations. They are outside this frozen eight-case sweep.
+
+The later [updated four-model sweep](./navigator-resweep.md) uses the corrected
+host/skill contract and records 7/8 overall passes with all 24 judge scores
+passing. It is separate from the historical results on this page.

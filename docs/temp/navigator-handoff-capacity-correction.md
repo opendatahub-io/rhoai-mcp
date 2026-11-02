@@ -2,6 +2,12 @@
 
 **Date:** 2026-11-02 · **Validation:** offline only
 
+**Subsequent live validation:** the [updated four-model Navigator sweep](./navigator-resweep.md)
+completed all eight conversations with correct capacity handoffs and all 24
+judge scores passing. Seven passed overall; one DeepSeek table-completeness
+failure is unrelated to QPS. The evidence below retains the original offline
+correction's scope and historical status.
+
 Navigator's handoff now preserves the capacity used to generate the customer's
 chosen recommendation. This resolves the [contract inconsistency](./navigator-handoff-qps-investigation.md)
 between the previous average-demand handoff and deployment planning's capacity

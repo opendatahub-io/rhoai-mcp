@@ -490,7 +490,7 @@ Run these **two Navigator goldens per model**:
 | navigator: happy path | Confirm workload, show recommendations, confirm selection, emit handoff |
 | navigator: vague requirements | Ask for missing intent/scale before proceeding; then complete the flow |
 
-**Progress:** all **8/8 planned attempts are recorded; 5/8 passed**. GPT and GLM
+**Historical sweep:** all **8/8 planned attempts are recorded; 5/8 passed**. GPT and GLM
 passed both goldens, DeepSeek one, and Anthropic neither under the frozen
 configuration. [Full sweep report](./navigator-sweep.md) and
 [records](./navigator-sweep-results.json). There were no timeouts or judge errors;
@@ -522,9 +522,27 @@ displays average/peak traffic. All 330 offline tests pass, including missing or
 invalid source evidence, capacity floors, source provenance, and the planning
 contract. A separate 12-artifact counterfactual replay changes only the QPS
 check; original verdicts and judge scores remain unchanged. Updated Navigator
-skill and scenario hashes identify the new contract. No paid call was made;
-a future live check is a separate two-golden Anthropic Navigator step, not a
-new full matrix or deployment sweep.
+skill and scenario hashes identify the new contract. That correction used no
+paid calls.
+
+**Updated sweep complete:** all four EnMaaS models ran again under the shared
+host instruction and corrected handoff contract: **8/8 recorded, 7/8 passed**.
+Anthropic's first pair passed and was reviewed before the remaining six; its
+pair counts toward the eight. GPT and GLM also passed 2/2 each, DeepSeek 1/2.
+All 24 judge scores passed, and every conversation completed all five turns
+with correct capacity QPS. DeepSeek's vague case failed only on three empty
+Cluster fit cells, reproducing the known template ambiguity.
+
+Commit `e59d9e8`, Navigator skill `25392e419e13`, scenario hashes
+`eaa225a67e99` / `f1f282812e97`, 280 source/test/configuration files, and the
+judge/cutoffs/limits stayed fixed. GLM and DeepSeek overlapped for 151.99 seconds
+at the user's request; DeepSeek's judge scratch storage was isolated. Treat
+timing as descriptive under concurrent load. There were no reruns, timeouts,
+harness/judge errors, missing scores, or deployment writes. Historical records
+are preserved, and Navigator-deploy remains outside the paid scope.
+The next reviews are the Cluster fit template and comparison/reporting CLI.
+[Updated report](./navigator-resweep.md),
+[records](./navigator-resweep-results.json).
 
 **Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
 `create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding

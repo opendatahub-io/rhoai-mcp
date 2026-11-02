@@ -9,7 +9,11 @@ Section references (§) are to the parent plan.
 
 **Remaining cost scope:** sweep only Navigator's model-recommendation goldens
 (`navigator-happy-path`, `navigator-vague-requirements`) across four EnMaaS
-models: **8 conversations**, in batches of two per model. Navigator-deploy
+models under the corrected host/skill contract: **8 fresh conversations,
+now complete (7/8 passed)**. Anthropic's first two passed and were reviewed
+before GPT, GLM, and DeepSeek's remaining six. GLM and DeepSeek overlapped at
+the user's request. The Anthropic pair counts toward those eight.
+The earlier eight-case sweep remains historical. Navigator-deploy
 sweeps and new deployment-specific work are deferred. Existing deployment
 implementation, offline tests, and historical evidence below are retained.
 
@@ -233,7 +237,21 @@ judged assessment; automated GPU discovery remains deferred.
 
 ## 5. Phase 3 leftovers
 
-- **Full sweep — 8/8 conversations recorded, 5/8 passed.** GPT and GLM passed
+- **Updated sweep — 8/8 recorded, 7/8 passed.** Anthropic, GPT, and GLM passed
+  2/2 each; DeepSeek passed 1/2. All eight conversations discovered Navigator,
+  completed five turns, and preserved the selected capacity (`0.13` QPS).
+  All 24 judge scores passed. The sole overall failure is DeepSeek's vague
+  case (`1dd60008ed20`): three empty Cluster fit cells fail table completeness.
+  This reproduces the known template ambiguity in §7. Source `e59d9e8`, 280
+  source/test/configuration files, skill/scenario hashes, and scoring settings
+  stayed frozen. Anthropic's first pair was reviewed before the remaining six;
+  GLM and DeepSeek overlapped for 151.99 seconds at the user's request, with
+  isolated DeepSeek judge scratch storage. Timing includes concurrent load.
+  There were no reruns, timeouts, harness/judge errors, missing metrics, or
+  deployment writes. Historical records remain unchanged, and no deployment
+  golden was run. [Updated report](./navigator-resweep.md),
+  [records](./navigator-resweep-results.json).
+- **Historical full sweep — 8/8 conversations recorded, 5/8 passed.** GPT and GLM passed
   2/2 each, DeepSeek 1/2, Anthropic 0/2 under the frozen harness configuration.
   [Full report](./navigator-sweep.md) and [records](./navigator-sweep-results.json).
   Seven completed the full script; Anthropic's vague case stopped at the
@@ -345,8 +363,10 @@ Found while building; none are scheduled.
 - **Skill template ambiguity.** The navigator comparison-table template's
   `Cluster fit` row shows one value cell followed by three empty cells. It is
   well-formed (5 cells) but a model copying it literally produces a row the
-  `table_cells_complete` check rejects. Whether to tighten the skill wording is
-  a judgement call; the goldens will show whether models actually fill it.
+  `table_cells_complete` check rejects. The updated sweep now demonstrates this
+  in DeepSeek's vague case `1dd60008ed20`: it is the only overall failure, with
+  all judge scores passing and correct capacity QPS. A small template correction
+  is the next candidate for review; it was not applied during the frozen sweep.
 - **Allowlist deviations observed, not gated** (§3.2). The deploy run called
   `list_data_connections`, `list_storage` and `prepare_model_deployment`, none
   declared in `navigator-deploy`'s `allowed-tools`.
@@ -357,19 +377,16 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Review the Anthropic harness correction (§5)** — shared discovery policy,
-   explicit adaptive thinking, and bold row-label parsing are implemented and
-   validated. Both fresh flows discover Navigator and finish; original records
-   remain unchanged.
-2. **Review the Navigator handoff contract correction (§5)** — implemented and
-   validated offline with 330 passing tests. A subsequent live validation would
-   run only the two Anthropic Navigator goldens under the new skill/scenario
-   hashes, keeping the judge/cutoffs and discovery/thinking settings fixed.
-   No such live run has started. Preserve the original sweep and keep paid
-   deployment sweeps deferred.
-3. **Navigator comparison (§5)** — the eight planned attempts are complete.
-   Implement `comparison.py` after reviewing the harness findings, keeping
-   different configurations and historical deployment attempts separate.
+1. **Review the completed updated sweep (§5)** — 7/8 passed, with all 24 judge
+   scores and all eight capacity handoffs passing. The staged Anthropic-first
+   run and the remaining six are complete; no additional sweep is pending.
+2. **Cluster fit template (§7)** — review a narrow correction that makes all
+   four cells explicit. The saved DeepSeek failure provides offline evidence;
+   preserve its historical verdict rather than retrying to green.
+3. **Navigator comparison (§5)** — implement `comparison.py` using the completed
+   current roster records. Keep historical configurations and deployment
+   attempts separate, report sample counts and `n/a`, and disclose the
+   GLM/DeepSeek timing overlap.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
 outside this branch's current evaluation work by decision. Navigator-deploy

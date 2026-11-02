@@ -1,0 +1,2486 @@
+{
+  "date": "2026-11-02",
+  "scope": "Updated eight-conversation Navigator sweep; Anthropic first",
+  "frozen_configuration": {
+    "created_at": "2026-11-02T14:59:07.456199+00:00",
+    "purpose": "Corrected Navigator comparison; Anthropic first, then remaining six after review",
+    "source_commit": "e59d9e8149b0568cc119f6e3619bed83a47c66ef",
+    "source_diff": "",
+    "source_sha256": {
+      ".claude/commands/scaffold-plugin.md": "15555ffe675fa7291957ff66eb46fce43f6720938c52ad4960d9eb45258fae21",
+      ".claude/skills/navigator-deploy/SKILL.md": "90d2374830af381098cb76ede6b4dec16d64d5f5558ef88581f3cfcca1ea6fe7",
+      ".claude/skills/navigator/SKILL.md": "25392e419e1398a1c52fe7c06c20ff6dc4171c9375fc4a6f35051d9ccaf9c524",
+      "evals/__init__.py": "52565d05ceda8cd435516efe02a8490e84418b86ff792aafe12b2b16fd0cb8cb",
+      "evals/agent/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "evals/agent/models.py": "84046ae438252ab2d0a60e34458f52a2412f5071b36bd298a9534cecb329edf9",
+      "evals/agent/probe_tool_calling.py": "545d9bdee9d883e5a10ae48bb1b0822b71f43c015db11718e8d1d68322d9c84b",
+      "evals/agent/runner.py": "a5cdae2b327737a53457c31ae33bfc274f3378d4f0dae7f1ac696030961e9878",
+      "evals/agent/spike.py": "d93fdbcbcf19b6f19fed642f85de122b2a2ea83677bc8cfbe15301e8b8774ce2",
+      "evals/agent/tracing.py": "10c94e0f40af4cc4f74b162d2c72f82a5f6ef9efa0f74148369918154d8fc735",
+      "evals/agent/transcript.py": "070bb61d9af98cdd43e377274c3b12b712a70e39a4a755c6d8b733bcfa1715c0",
+      "evals/config.py": "42ced948e9471619097b7e3e3ced125975e7d40da46eb1eef2b663e52b877ff7",
+      "evals/config/lightspeed-stack.yaml": "ae2dd92def39fe998aeb040c032f62e821c6360ea22b231424d54b6a417ec67b",
+      "evals/config/llama-stack-run.yaml": "1aa99b1b6e9c40d3232296e5f36e6f1658f5ce19377e40f3ad7031c7a935d6ac",
+      "evals/conftest.py": "478dae1abb85356dbc83e8c38f1e553f110dc666dd705886d1f197765fa2980a",
+      "evals/deepeval_helpers.py": "98f752a3eac90f7171d8c93e4e43d6396b0db27c2a82039cce21193e8109c09e",
+      "evals/lcs_client.py": "d5b07f8c4a413bcddf57f97797dd193d302839d1fe1d7ae88664255837e68f76",
+      "evals/metrics/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "evals/metrics/config.py": "322c96277766b6326671ea52627670e2554c5dc981c279cc29fd8cf26a28a334",
+      "evals/metrics/conversation.py": "e5b13acc16e157e405cc04fca6319d964b446b78b32ad1e6d4c3aff12052a376",
+      "evals/providers/__init__.py": "a4138b5693c7d1add12dbb8f1789e722c4bcfc058995d59cc12d7836ce927fc8",
+      "evals/providers/factory.py": "d3a14e71eed5f8e8a24ba2f9dac943dc5075cced230dfa04659e3ce5b17b160e",
+      "evals/providers/judge.py": "6ece20aea698c69d29396a3d1d49fb23c2d20b1617faca90f73861383da97e84",
+      "evals/reporting/__init__.py": "6a1f588dacf7859bf14cfdb4829ccdf0c2616be2ef85d2d2d024f1caad9a8128",
+      "evals/reporting/__main__.py": "356f71e8a16c5a11ce4e900921c410af904e8104e81984fa259bc31473a845c4",
+      "evals/reporting/cli.py": "aab77c8d986cf6382ba61c5b70ff5bea060cf28dd5c6d37b7dfe62adde0f67dc",
+      "evals/reporting/comparison.py": "ab4fe0a7a317365e6b490e95e1c2565bb60e5137c63d030e1a5b8e60f94e7c4f",
+      "evals/reporting/formatting.py": "890ebe023542afe0bad0d2176fa9f55732069d303c7dfc0c24b74eebfa0acf6d",
+      "evals/reporting/models.py": "61069c37810f11ca7fcd478b099ded2694cde98ee5aa959547396ea3c3dc943f",
+      "evals/reporting/reader.py": "33c141dcb1903bace4367b618dc5718be798c4ad31dc7fbd7b1d750e65af9459",
+      "evals/reporting/recorder.py": "589778e8e159bc0fe6a48cb9a19c46aace9683485e0b704fd9aafcba590e1065",
+      "evals/reporting/trending.py": "58813de8d7c7af672f8196f0c024463699839106df10146e27de3ccae1cde328",
+      "evals/scenarios/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "evals/scenarios/test_cluster_exploration.py": "f250bf7359c753a63994f8c74b55d03fdcd24a67caf9a4e06c2b6d1086f08b30",
+      "evals/scenarios/test_model_deployment.py": "e566f565a2106221f1a0f2b957ab7ae96746ea4e7619dfdaa7571230f69736d9",
+      "evals/scenarios/test_navigator_table_completeness.py": "84192258151cc518d89939a7f27a6b0c55485164d17487c74300b68e819815cf",
+      "evals/scenarios/test_tool_discovery.py": "6514919328308ad0708299366a2969191b447fd49e4307d3903a7ad918af2acf",
+      "evals/scenarios/test_training_workflow.py": "25c5669ccff3ebff31c1acdef6d901b24696f6d0f5b68eb5c44bead628aefbd1",
+      "evals/scenarios/test_troubleshooting.py": "869ead2109c7b0e41f0e9843153081d43e12e8fa601e80f9935d6ca1697ba882",
+      "evals/skills/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "evals/skills/agreement.py": "1ff61a0ea9925b863950f325dae0b874f744ba2995684c13f346a00434e72e65",
+      "evals/skills/attempt.py": "974fe0094c4848ca41ae1041af4945584f1906213659608576f39f1b164e16fc",
+      "evals/skills/calibrate.py": "99dc15afefeda682c2febd1c6803ef3650e8e87282b023e6f0b7886de4c85fa8",
+      "evals/skills/checks.py": "db8ba95dc039471d7a1a5bb6547a18119114eb063b18c191f53a1a13943960ba",
+      "evals/skills/conftest.py": "4d0e10c7e58c66f7717eab64b22f0ef0dc16733737c36df711e6e630fb36af33",
+      "evals/skills/goldens.py": "9c6c9c29304c79b99fd9f63c3e33c6e39d1b24c1b4d4994f51746b4dee24ff3b",
+      "evals/skills/rescore.py": "fb28677d1297d41606f33809d9c4f09c2a30b8f536761fd02a3e20af7dabc6ff",
+      "evals/skills/rubrics.py": "a3942e4c4cb3897c15d183c009475237242317a28f7a2ce96581c3b96973776a",
+      "evals/skills/show.py": "0f6f9dbe1bd3b8279507e974953ffd63cabf5a4637322375d0cda1d4d9e33d1c",
+      "evals/skills/test_navigator.py": "ae5538b095acb8fce9e3df1befe7aca50c8be14fa9ec7e2ad770cf503c284318",
+      "evals/skills/test_navigator_deploy.py": "650502ebaab3fb1cbd6aa1d653881e3f55f1af81138ca2a1c20cbddbff3b331d",
+      "pyproject.toml": "7bd8249b534f0c3b7bd8f15eae4ccdc40003af7c55e1d8a008591416489e7aa9",
+      "src/rhoai_mcp/__init__.py": "859911ea68b78c295e17c659dcfba25f649523662f5c5530f8bde1340eb14a68",
+      "src/rhoai_mcp/__main__.py": "c8c7e31897f9c7f533ed707b8cc7f6221e0e3cc2dc5bd8b09ceb83f3cb6311a3",
+      "src/rhoai_mcp/auth/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "src/rhoai_mcp/auth/metadata.py": "b5ca95ac3d2e008b2cdcc492c6eabd7bff7a62bf9b0d25511e11dcef1795a915",
+      "src/rhoai_mcp/auth/middleware.py": "4611ba488b5c346b273271410a3c2484e73396761073eb8fe97223b76ed54f88",
+      "src/rhoai_mcp/auth/oidc.py": "ee8d0cd4c74b3971c8d7d8513624afc56a7dfab1f0324b409a1da39e40a68dc9",
+      "src/rhoai_mcp/auth/rbac.py": "3c75ec5929611175ed19f4e86708c651d6bfb60a1316c83c5cb46e30c7e2eeb6",
+      "src/rhoai_mcp/auth/token_review.py": "99155ddf335ae4e52853b49f01acefd6364dc1f48260e2f776e7c19657a4e61c",
+      "src/rhoai_mcp/auth/user_context.py": "e374b74d49655e0416869fa81313a8ad233203b19e4bdd35b23a8ca2ce149da0",
+      "src/rhoai_mcp/clients/__init__.py": "262bf43e91d6e4d29663d4fd427aa50490a02603830e460f79d6a1de548a95d2",
+      "src/rhoai_mcp/clients/base.py": "e1e62344e26ac368304eeb1a48bb41472ac4c9ad1d44c6174a6336c7f477906c",
+      "src/rhoai_mcp/composites/__init__.py": "134aba5f8e0b5427d948cfa38c6926a829a7689bc23ccc156b8b7ebf3819475a",
+      "src/rhoai_mcp/composites/cluster/__init__.py": "38bdbcfc4443ac83cf1b63d8075eeac302cb118b66b65626a09c72570da6b0fe",
+      "src/rhoai_mcp/composites/cluster/models.py": "518c8489b5342a093d8f5ce303e7b74522bc54f6853349ffdaf37d0d34c5b778",
+      "src/rhoai_mcp/composites/cluster/tools.py": "7027bacc8d64a6674498b170b88f23781009f1360e2b8aa6c9cea987c0a88967",
+      "src/rhoai_mcp/composites/meta/__init__.py": "6fb368c628237401573ef93ba45eb23c7266f78e835e46cec2a65402d6395f6d",
+      "src/rhoai_mcp/composites/meta/resources.py": "b4da0f7a04c55a7675ba3412c35c8359a76565051e463cbfc16f478bf7e50461",
+      "src/rhoai_mcp/composites/meta/tools.py": "6040d1c7277d269f6dd756e2eb53c025fcbaa0c243fe2441134a2894917a5bc3",
+      "src/rhoai_mcp/composites/permissions.py": "e0c7e8a305736fcdacc3fbc34e7898cc28eda7e1082ab8e84d380bbcc216e402",
+      "src/rhoai_mcp/composites/planner/__init__.py": "72940485a477738225f5afea8e3dd5935ebc426357fe7a54cb1c532f083440e8",
+      "src/rhoai_mcp/composites/planner/client.py": "aef21c870c056f0a7d6e6dfd82b70616d420fdc2e4e244e0681e47b582ba02dd",
+      "src/rhoai_mcp/composites/planner/local_client.py": "74ce95d93a195aedd0d4ba515427b92e40bb9e2799d1cb12a940f6b95f289e7e",
+      "src/rhoai_mcp/composites/planner/models.py": "1072a94a0ea9d9dd720a1f0fc6d93d2b67b29b2e5d115cc31290242a0602a9c0",
+      "src/rhoai_mcp/composites/planner/tools.py": "68737480aff29bfb65bb3afb75b74599907a7cdc7dc5c19574c8e96112a54bcc",
+      "src/rhoai_mcp/composites/registry.py": "3a76de7a741866f9c0f22d0cd3eb45d2e13c978eb4a14b66833633258dcfee4b",
+      "src/rhoai_mcp/composites/training/__init__.py": "1b7b319cab185042bf7b73f628b03c6a69b311562da569ee3dc1227121a78507",
+      "src/rhoai_mcp/composites/training/planning.py": "44a02046c4f5e5e3606a0405b017665f94490ff984e68cc2e02f682dc5e94204",
+      "src/rhoai_mcp/composites/training/storage.py": "aec8a04b45f013c0bd59194becd656f1561f22d8bae5eb762b5b972d5487e48b",
+      "src/rhoai_mcp/composites/training/unified.py": "0bd23c917f28311fd7948bd06a93ea184c10dfe1228c6eb6be44b6be34df244c",
+      "src/rhoai_mcp/config.py": "e0f657cdbb4d7ebd62f8725fbb528e93bdf5d6e0cc30715e2b9babe15ac9d90e",
+      "src/rhoai_mcp/core_resources.py": "a9899a0252a5f7163e733eb405c8cb6b1132c74f6152bed6ca61e442c9e15eb7",
+      "src/rhoai_mcp/domains/__init__.py": "4abf059ec6d622a63d806bee26d06bbecfdeee1546bd617e481aae5739bbae71",
+      "src/rhoai_mcp/domains/_example/__init__.py": "d6c57074e18e251a87fe3ea42f5b80228e7ffba35422a7f3da14ad86c04218dd",
+      "src/rhoai_mcp/domains/_example/client.py": "9cca847a1a6b4c84f12a767d5a2e8d87b6e362ded0ef1600230b192efa9acd2e",
+      "src/rhoai_mcp/domains/_example/models.py": "b9856355108e52ef98f6dbeea0c4b2996f18a3d516c3834e4c6c3a03232a80d0",
+      "src/rhoai_mcp/domains/_example/tools.py": "72ebb85d3b12c749344232a7efe880459c4c74beb7b7db1023dacc23b338ef8d",
+      "src/rhoai_mcp/domains/connections/__init__.py": "cf2cd9c83148e303c17593816e755a9e1ec1af05f86c03addf59152358eaa2ba",
+      "src/rhoai_mcp/domains/connections/client.py": "4dd4d9359f09d86af126a90b51c46ba1068d5077cb6c46c645a84a51afd0261b",
+      "src/rhoai_mcp/domains/connections/models.py": "bfdf448b185acbe007926c307ec56923d710bb8fae63f27416db3e606ffd8b39",
+      "src/rhoai_mcp/domains/connections/tools.py": "e3d03d5b88f29591560f2a3d3f67d52524504d8ebc7bac66739969f1446542f5",
+      "src/rhoai_mcp/domains/inference/__init__.py": "089439d326735f8a8e9cbebdbf8282b865af4372979ddc83b51be2c918c267b2",
+      "src/rhoai_mcp/domains/inference/client.py": "a9cd1956a4fb455b1f763ab619ed71224046506724bf5924fa81b2bd8cfc31df",
+      "src/rhoai_mcp/domains/inference/crds.py": "1d42cb157c3de94660b5f7553531a765feb3d78099755c3a6b31bbfc36c8a79f",
+      "src/rhoai_mcp/domains/inference/models.py": "62f5fb70b7436ec4d9c25a4b26d2f91acc3b9deec485911c728a58a87e4fda22",
+      "src/rhoai_mcp/domains/inference/tools.py": "26e1ebe8181d7f1051daf438e56a5b926be092ec0caf1471650b9b287040d85b",
+      "src/rhoai_mcp/domains/model_registry/__init__.py": "b64ba40ac118a9e8b99701d4927bf8e517b9fdb6edfbe37b4c81cfacc85f77ce",
+      "src/rhoai_mcp/domains/model_registry/auth.py": "20f391575f4716e9bcfc99e8d641aff45d3d918120cea2a39a147609ee0c2f61",
+      "src/rhoai_mcp/domains/model_registry/benchmarks.py": "fd941a7eca07cca49eb91aa89fbbb70d1d304da8addc71607df1ff2862a95b8c",
+      "src/rhoai_mcp/domains/model_registry/catalog_client.py": "6bddd479cb3a1f0a2c1ea15eb7cb095a0d66a8c83090aaa066771d005f4223ef",
+      "src/rhoai_mcp/domains/model_registry/catalog_models.py": "0acb27c6cadb174baebce37916f6107a6b836a4f0d80d37722d77e611d3d6530",
+      "src/rhoai_mcp/domains/model_registry/client.py": "102e7d2f5c71f5c5dcc641a60b931904296ace32856be4bf122ac0abf95980f4",
+      "src/rhoai_mcp/domains/model_registry/crds.py": "dec219f54ecaa486267d2da63d1fc6e0f7faf7686097bf28d4236c34cb038ade",
+      "src/rhoai_mcp/domains/model_registry/discovery.py": "a05846ebc0d0bd459ada95ad516fd69e318e9f10b7865a98d64a78ef2494da81",
+      "src/rhoai_mcp/domains/model_registry/errors.py": "76ef8ddebd2fc464638e12ccf96f2ebcee0fe4c620bce843d1ed7318ba01552f",
+      "src/rhoai_mcp/domains/model_registry/models.py": "8e3a2ff2acac94820dbff1b644bdb21eba06b07e803fdd4d7cb62d496b658130",
+      "src/rhoai_mcp/domains/model_registry/tools.py": "9c4c7a8a1b0054442069878838ae49514a7b73d099ec1ab3c98090ad2ad63eff",
+      "src/rhoai_mcp/domains/notebooks/__init__.py": "8e94e459eaf26fceca0c1c4d6eddea54c6396a328ca6dc965c3181a8e357e14b",
+      "src/rhoai_mcp/domains/notebooks/client.py": "8ae0f4972fddfb7ef2ff7a2a4ba9e5c8b2ade64e97c12f8c63a806c46c71169e",
+      "src/rhoai_mcp/domains/notebooks/crds.py": "4a813cb99ebf5edc4575105e2e29698aad5c71eddd715338f864260b331332fe",
+      "src/rhoai_mcp/domains/notebooks/models.py": "6d48c62241b77952aa0228e1d0f7eb128ecf1b1a5c252dfdd7a2543cccdb6463",
+      "src/rhoai_mcp/domains/notebooks/tools.py": "ea144ec87b470b23e6d99f7976a682841fca2534fe3b77969154acc5944b2e08",
+      "src/rhoai_mcp/domains/permissions.py": "4eb6a80eeae52de198d836be17b08873be2b8f5b14f7de8d8f861381b155c3c9",
+      "src/rhoai_mcp/domains/pipelines/__init__.py": "98ba14e54dd016e47329c953c1fbca8770d5d27399014f9069565383cbbb75a5",
+      "src/rhoai_mcp/domains/pipelines/client.py": "b30ef960f84683ded16574522d1df06063a6c0f1c77ca51b561f019501738f79",
+      "src/rhoai_mcp/domains/pipelines/crds.py": "fb96840fcc6bb8e08c5a921e14b17a33f443d3f92068bfd618e501178c273a0c",
+      "src/rhoai_mcp/domains/pipelines/models.py": "56de0a5b2c44d016c8affecaaaed30c2f9efdfeedd63989b72372a4804e78658",
+      "src/rhoai_mcp/domains/pipelines/tools.py": "5c8d309e95efa271ddac87665f74b6c3a4e6355ba7c05d653ba933259073c6d7",
+      "src/rhoai_mcp/domains/projects/__init__.py": "9335b75e9a8fd3f3752eeea390067a5fb3320bce36d1c680594d328026f8f212",
+      "src/rhoai_mcp/domains/projects/client.py": "a35ee3d592b8add1ad0e9602e23c3a2c714a9ff2bf0b21609afb8c6372171d33",
+      "src/rhoai_mcp/domains/projects/models.py": "eb451b8be8f5563eddb03f007badc1e8b0bd261dc6ed01a5bb7729fede86bd65",
+      "src/rhoai_mcp/domains/projects/resources.py": "dd08ff04862613d3bad99b63bb288325758be7731b742f01f8777fbc00e58185",
+      "src/rhoai_mcp/domains/projects/tools.py": "415708b65299672e55b38d9adac4eb7c96a9ccc76de03f99d5dd39d9278b572a",
+      "src/rhoai_mcp/domains/prompts/__init__.py": "a986c3a389075a62058f60d6ab7bb9afb2da8753e93f9e5529cbffa2ff61e254",
+      "src/rhoai_mcp/domains/prompts/deployment_prompts.py": "7d7cc8f5f4372345d8080588c5c04bfdd31687222186c78eefff38e5263d37fe",
+      "src/rhoai_mcp/domains/prompts/exploration_prompts.py": "95a9984e4c9dc15fc43449e8f66c6ca926b3a0f6da1b29b15c28c513bc972a6e",
+      "src/rhoai_mcp/domains/prompts/project_prompts.py": "f114385ce3c5f4b89f8c0fa9981e4ef64b2793c44f5f5fd6074f8d407ca73601",
+      "src/rhoai_mcp/domains/prompts/prompts.py": "8c5b85beb34f076ed46a223fdd049e992e068876490fb6a124a8635675589548",
+      "src/rhoai_mcp/domains/prompts/training_prompts.py": "1a26ed0af4d44958a46fb60523acc73410ea87a16ed9bdcbe7d93c925727ca0b",
+      "src/rhoai_mcp/domains/prompts/troubleshooting_prompts.py": "5185c30f721263334de98e1dc640199edafaacb41778380da48cc285a02f59f6",
+      "src/rhoai_mcp/domains/registry.py": "6c48b264fc759f2aec90cb82bd7ff0cd5d4a3ae1ed6444678ba2df532ddef0e3",
+      "src/rhoai_mcp/domains/storage/__init__.py": "853ae8de270eaa9a24d75fc1e63bb4c71522fdfd9f1967f6dbff79f1889a3949",
+      "src/rhoai_mcp/domains/storage/client.py": "38db8b3b86c39216a58e005d91e855edf7dc042cd2b8506fb9cc27853acf3345",
+      "src/rhoai_mcp/domains/storage/models.py": "6f319deae86b29dabdd6a6ca7b24f66ee0e82b4c101339675c98831ee4578b68",
+      "src/rhoai_mcp/domains/storage/tools.py": "04c191433d678b1ef07c58167a50a0cf2c336c37b98e33c62e7b4ae72358309e",
+      "src/rhoai_mcp/domains/training/__init__.py": "00ecc8af790b6189b3fe7526511a363f888917fb5efc4161f4c68871f2822c34",
+      "src/rhoai_mcp/domains/training/client.py": "4c182adc087c02ed5c135dfeb085c71fba420449322055c2f777cba8cec5a01b",
+      "src/rhoai_mcp/domains/training/crds.py": "09c20c3ddbbbf32c3bf4298a3fa773d5ece6d2522b6a49018711a55165f0474e",
+      "src/rhoai_mcp/domains/training/models.py": "1e1c009fb77965090c04e8406115cc971b56cc672f0abe1435ae4778a89760a8",
+      "src/rhoai_mcp/domains/training/tools/__init__.py": "936fb547341fc3d2b87ef396db97ea2a6158a806069fee71b02c2a60fe5ba53c",
+      "src/rhoai_mcp/domains/training/tools/discovery.py": "e37b45c187722a71fa07b2025a9eb6fec4561bbf05c966babbadad82914c0e23",
+      "src/rhoai_mcp/domains/training/tools/lifecycle.py": "73ab7fe1879aa6c46776e90dc3c68ee3d1a0b0fecf5ce89caec55bf82bbf7d3a",
+      "src/rhoai_mcp/domains/training/tools/monitoring.py": "4518b5611d3bccb3815c61b40cd7e0707f6aa17360fb946f4715e8632f7d24b0",
+      "src/rhoai_mcp/domains/training/tools/runtimes.py": "90dda3115f9855c606c946f2bff2abfca9e6940307b9daa8d7d46db8a32a69c2",
+      "src/rhoai_mcp/domains/training/tools/training.py": "1a6ed80de550c06a6045821a98a160d928ce42d6130f6fd0683bd46957209dec",
+      "src/rhoai_mcp/hooks.py": "580e341d297f9aa1b7bf4492cd12ce4f25614c5a19531a86acb186c1026d130c",
+      "src/rhoai_mcp/mock_k8s/__init__.py": "b2344a37a07bba7c1d9243fb62af802dc916b052efd64bfb931b42f3a8a2073f",
+      "src/rhoai_mcp/mock_k8s/cluster_state.py": "b38d768a5403f99017b92b67b045d018d3df268feecf34b2ec3e20e611fe8310",
+      "src/rhoai_mcp/mock_k8s/mock_client.py": "e4c7c93bab149e07dabc82adc0f848658c53fe50b50386fdf4c31a17cd33188e",
+      "src/rhoai_mcp/models/__init__.py": "95657f6920aa1d66eb8f42c335e3cd718c05f17195648a14966fa55dd3f12866",
+      "src/rhoai_mcp/models/common.py": "1a24a2cdceea7cef2b75137393aed2cfb9c1f8f09b441e9198ac60692ccc4b71",
+      "src/rhoai_mcp/plugin.py": "2adcd1dc3e3c64b80c743abcbf86801dab0784cf9e490fd050af2254a54a2641",
+      "src/rhoai_mcp/plugin_manager.py": "1cf451b83c5737c572498fb3e5ac886fa4bf89098181a958c61c307b7c1d16f9",
+      "src/rhoai_mcp/server.py": "ba9d6791bc2a6efd7ff6ff8e98faf995047c406f6ba5de4f1cb45ca92d8780e6",
+      "src/rhoai_mcp/utils/__init__.py": "2bb042491e5a9e113b2c0c538f9f79177c2e8adc3c9d97e6c34a68a4d915b6b4",
+      "src/rhoai_mcp/utils/annotations.py": "a3d15a1f7d7c4c4afccfb9aa2ebe180575ff8a8c831adf86b6654f81523dd0c3",
+      "src/rhoai_mcp/utils/cache.py": "f5c145cb8e4c2dab5cb9aa3a7efcaf9b51d6fdb2977fb944f043455db953de61",
+      "src/rhoai_mcp/utils/errors.py": "87c476666af39e26547b9a1cbeef5995d32f173d8e76d7295aa0811370316b3b",
+      "src/rhoai_mcp/utils/labels.py": "797a9ea8f073189a35996b38a5fd9e864026fa33b82490b1eae5473a53dcac6f",
+      "src/rhoai_mcp/utils/port_forward.py": "3ba9130abcf69b42669548c98c37cfa89e432a4ed8d78176027e7bcaffcd1a27",
+      "src/rhoai_mcp/utils/response.py": "0741921c50d8ea82a3650fc51527740dc4d808aff026e8660020551b7c6df8cd",
+      "src/rhoai_mcp/utils/workflow_token.py": "2bb086d1be454f1a89b96c6f6a6b253ab4ac906c0394d3467afb095f6fd1b6cf",
+      "tests/__init__.py": "85f9402e8b0a69b19f10cfb0dedc22e1c359bbb48ba5eef6f27dce51749764da",
+      "tests/auth/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/auth/test_impersonation.py": "a5c5917676bdbaebabaa2fcd726fd78fa8f964ddba5df392e6748df3f89baa32",
+      "tests/auth/test_metadata.py": "4da895eab2b0a9acce808291d3fc77bf566a8ad3981a6537570a5d8171ab5ba7",
+      "tests/auth/test_middleware.py": "056749738918e372a5726c838a50047f1951534a045a992ca3b1aa311df6f5fd",
+      "tests/auth/test_oidc.py": "9d07e8dda931040a42c1de914828c720f2ee00f30f0603cdf64c010953b7e938",
+      "tests/auth/test_rbac.py": "30e9c0556cd372436d22bcc79618379c8eae1a17fbd9558bb47d2079d822048f",
+      "tests/auth/test_server_oidc.py": "61ebf86dc067b86bb08067b3e412626c5a792dd6932728e7405afe7a92e81fe3",
+      "tests/auth/test_token_review.py": "e58dac8ec1dff890beb3078780252d1fec372e75463cda85fd431da1da97fca7",
+      "tests/auth/test_tool_filtering.py": "0ce7e562d4cd595fa741ed9e61fea276ae432f60dfc2ea2c9245f17aa427d314",
+      "tests/auth/test_tool_permissions.py": "1e721d1c4632490a8476937f7a7142517b8634ef41e7313c0df5c61d62a60fc7",
+      "tests/auth/test_user_context.py": "98b4624d9dfa2df95af3b4243c1b517d26994e80c6ec6ed58e623a388733731f",
+      "tests/auth/test_user_token_client.py": "c00a784f61ceb7906c2359e67704f81eb6f676696944d9dc909223fca28a851d",
+      "tests/composites/__init__.py": "e95e0d90210f2fd90335d281af9689059670a517853b040e19f7f23ffa8757d9",
+      "tests/composites/cluster/__init__.py": "972c40b2c21981a7ee8e0fc96e2048961b9e36fb45269bff184788757ae928e6",
+      "tests/composites/cluster/test_diagnose.py": "01730eeaec31719bc1cb69b10115c75a30cbc757e43ee70db077fdd9b9af30a7",
+      "tests/composites/meta/__init__.py": "87e7e23aa4b952f0e7ffd81825b09b61900f8c9128097a70fc677316b02c38ba",
+      "tests/composites/meta/test_tools.py": "01c4942747956752d89f7bede9278bac2bfb56274e585437b62c165c3d200658",
+      "tests/composites/planner/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/composites/planner/test_client.py": "b62bce2387c85d5795160d073366012b6863b3a83def555ba4c86e5b22b46131",
+      "tests/composites/planner/test_local_client.py": "4ff6472398363c3df2f0c3c84f5897c24ac7e03373b6adb0446b2903cea59d24",
+      "tests/composites/planner/test_models.py": "31e71aafbac577ec259c2de40805fc0a863eb208b8b613f93b0177eb3a04e0a6",
+      "tests/composites/planner/test_plugin.py": "ef460aea2bdac29ef32e7372deaa822b4997978e77121bbf2b57fd904bad9f87",
+      "tests/composites/planner/test_tools.py": "1890bd8b01bf7fdc053c7595b48932dc790bcb0c2b30d8eed7c998d984d80bb7",
+      "tests/composites/test_skill_allowed_tools.py": "2cae8c2476c83b4e2f36faef4fb4c1a2036b59bd03278b773db7ce820c0feaf3",
+      "tests/composites/training/__init__.py": "61ee5adf9b301b393198ce502b9bd880d67c95f00956b91b890ccad88800b0fe",
+      "tests/composites/training/test_unified.py": "68c26241931a62c3d875aa24aef2b210126fea022b0903ce3bae934ca85c8bb2",
+      "tests/conftest.py": "490830457f6530a1f9d6b7ce63bdd58755a26398822010c060ab9c5eede22d88",
+      "tests/deploy/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/deploy/test_kustomize_overlays.py": "dc7836721ce55db554e200d243e6330408c94620e656c8fe82a1537cb1c481a9",
+      "tests/domains/__init__.py": "93e43e9d12c9f53a8eca13bbf0f2a06584f04e2c24581eccf17df7bb00f3114b",
+      "tests/domains/_example/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/domains/_example/test_client.py": "1badb94ef5550c54a70a2bcd5052fff5522632e561430ab2b5584faf68bb78f5",
+      "tests/domains/_example/test_models.py": "fa68fbaf83160ce8d9418daf24c87cdfd705fafd9439fe86006d2e1108f90f68",
+      "tests/domains/_example/test_tools.py": "5eea774d91da574319202b061e571872f7bcae6b37a5f2267808721d668d4d3e",
+      "tests/domains/connections/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/domains/connections/conftest.py": "9b996fa3ca643dcd4114122a62c0b34e5ce6fe6988e6d4d4900fa4292fcda42f",
+      "tests/domains/connections/test_client.py": "fc2130e7c00a4ba311cad6f49cf706d8af442ea1d882fb7768d789b7d8d79bd0",
+      "tests/domains/connections/test_tools.py": "4c8bd66ec90a89485b18f844d4e35eeaa59e620c35b9c6abde917d8421411e8c",
+      "tests/domains/inference/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/domains/inference/test_client.py": "7443a7b6f7521ce73d52c3447205ceda2fa122fcba64f8cf25bbde0e3ad87b5f",
+      "tests/domains/inference/test_tools.py": "2c0703032546464fd2a51c2f4d1e4781c7797ce0480f997a1c26912a8df8ff74",
+      "tests/domains/model_registry/__init__.py": "4de20ef1c0d4e6dc23737f36c7b39eca649538a62b5df19c085d36b51cb951d3",
+      "tests/domains/model_registry/conftest.py": "f404b1ad3073b724f11ba08c15299049636cebfc47dc46a8c1858bd2fef8f05a",
+      "tests/domains/model_registry/test_auth.py": "8ab12dd699d21b4dc05f248314b3a016e405ecbd86c31812273178de9dec0566",
+      "tests/domains/model_registry/test_benchmarks.py": "787fc81b8346f6a267935d5282a1af513a61b372cf885ff18329d8c247c8182e",
+      "tests/domains/model_registry/test_catalog_client.py": "775b270463543b0909b520ef0a8107e29f098959b58e8247211928ed4233cf8d",
+      "tests/domains/model_registry/test_catalog_models.py": "99e0c719ebd2bc3f6b8d7b0ed7fb98416763f5722d1153fe17297a12f4ac7055",
+      "tests/domains/model_registry/test_client.py": "5295e09011c88d8545902bdd2456ac898c616a3fc966a8bd5d6b9227489c12be",
+      "tests/domains/model_registry/test_discovery.py": "192bd823828711e7b684e3a2510669508df935fcd3846c4d05bf7b3cc2df43fd",
+      "tests/domains/model_registry/test_models.py": "bec07682c88a2dfd3cc9bee74a205a864dd422566bf9d7e1ffc23748e667b76a",
+      "tests/domains/model_registry/test_tools.py": "1976e359696e8b402a1d2fa508282b8e7e46c8c890a5b468642284b5e4b335ae",
+      "tests/domains/notebooks/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/domains/notebooks/test_client.py": "0f9ca11b3bed81cd24f32bd4299fe4d3b764bf80d1c078e16cedea207063b51b",
+      "tests/domains/pipelines/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/domains/pipelines/test_client.py": "0274de1682b16b9dd4a5724e7721c0c090df001c4f62a327e5ae5e1708922ee0",
+      "tests/domains/pipelines/test_tools.py": "2425984e5fd29963fc263243b8945c02c69c6d20e2eacda8fc8961bac0da7a57",
+      "tests/domains/projects/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/domains/projects/test_client.py": "fad8b5b939d90ced22faaeaab505f8ea05041862b31f5e7ba95a41ef9cd20d7a",
+      "tests/domains/projects/test_tools.py": "0943583e4ceda9b71bd9a5ddc2e4b0cc7880baf60a886743469483af07b4bfb1",
+      "tests/domains/prompts/__init__.py": "76a2e2bf9dcdc2f0a5b4278d488c976ee8ff20976e0712df98c0381ea7290cee",
+      "tests/domains/prompts/conftest.py": "33d432377b45eb95dc855cb9c7016ddecc3fd8ee2203d26df2fda259f4f53eba",
+      "tests/domains/prompts/test_deployment_prompts.py": "df166efb554b04955df4a1f9835f910e47b4e1c4145ff7a58a9e8d89dc35adba",
+      "tests/domains/prompts/test_exploration_prompts.py": "3642a8bfd01fbfcb3fcb88d8bf62f10af5da961a0f131ea790c1bee1046ef47b",
+      "tests/domains/prompts/test_project_prompts.py": "95e6c5cc9d4b3329cb2f2c04512874887343e3435caa94159a39d3853bb31234",
+      "tests/domains/prompts/test_prompts.py": "5eae7307576620d2a2ec9be9caa35d9ee3b5197031915e6ae52a94943b003fe7",
+      "tests/domains/prompts/test_training_prompts.py": "e0e42f1cc94de08f1668cd1ad8c0de207fdfd1a4b13572c899b95a7009881f74",
+      "tests/domains/prompts/test_troubleshooting_prompts.py": "82aaff55e65e36582238fe0baf336d036b93eb6cbed7ded5b33b375b94b87d0e",
+      "tests/domains/storage/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/domains/storage/test_client.py": "7cc1b3ed13561daed64357b5b0b2bd76bcc6edd663400f09cb9d8b0849ca9038",
+      "tests/domains/storage/test_tools.py": "a8161a217cda0143e1dcbbff51ecc7fbe851342d1aba0254c477ada8cc57403b",
+      "tests/evals/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/evals/providers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/evals/providers/test_judge.py": "d4cf030cdf0cb09882a6fb5f640f6a1f55fee489c0a552829d67f5684aa8373a",
+      "tests/evals/test_agent_models.py": "61e51ea01563865961ada67ac8979a51ba00122192bae3ac5790d8ea62440b4c",
+      "tests/evals/test_conversation_metrics.py": "d1834397338ac721e6b13af3cc95bd25bc15003471100dfbd899166ac9affb34",
+      "tests/evals/test_deepeval_conversion.py": "aff23c85e1ac32bf0b55d728f8a9b1cd7f6b702d09204d732b857f5e9a31eaf2",
+      "tests/evals/test_judge_calibration.py": "39e7202825321d63de7403643c65a036d4415e3d1964e5c4ac78f5dca195933b",
+      "tests/evals/test_reporting_roundtrip.py": "822c7d887733a082f74d39c335641e838209e099cec0f92d2d65b32ee31ac710",
+      "tests/evals/test_runner.py": "e8831cc8946253cc9174f34199bdd62a51e82995cb539cd3bbd585652abb9cbd",
+      "tests/evals/test_skill_agreement.py": "6e3aaa79d915c1866d3dad6a03e57adefe62c4320608d5a2caa13ee30bb3f12c",
+      "tests/evals/test_skill_checks.py": "184f94e81c3e96a40e4e20fe8f9db63735aff046a2f25a6917256c9c2a0a1b95",
+      "tests/evals/test_skill_scoring.py": "9869284cde06ad5a52974c8d110ad44ad9967bf83bf79e439da946822a177cc0",
+      "tests/evals/test_tracing.py": "e1d326f07b797b3c889b90e7c0e77cbb8b9745af4344f68e33a01b5da9538629",
+      "tests/evals/test_transcript_adapter.py": "86d6b5e58c5f558476ea1112fbe93bb6b69c3769342191764c430a6da799328f",
+      "tests/integration/__init__.py": "5806a619d4a9a77c939a05789fdb94472b0df206a9c94ab34ba05da40ec7bd0d",
+      "tests/integration/test_crd_definitions.py": "e4a7f5a3dc03ce3728e03a88b4f58c2ba934c3156f9883236f8423ab3ed49bfb",
+      "tests/integration/test_health_checks.py": "cc45eb3d72ac7d65fd72d5d195c2baf7b571343f59756596e65f2b0ba3b255b1",
+      "tests/integration/test_permissions.py": "4ce37cd0a4086ec47731c1584750a7b07dac6790a4052b1dbe080db68d4410a2",
+      "tests/integration/test_planner_live.py": "2ca085bfc9df74997663759ae009e78ae31d005ffb0541a50959ece8f77b4ac7",
+      "tests/integration/test_planner_local.py": "c1f53e3acfd31e477663acd33925f05b7071ae0e80959f725acf195d4b4f7d07",
+      "tests/integration/test_plugin_discovery.py": "a61173420594e9d9d20f75ac1dbff881ff221377424f6bc9e70ea46470e8f267",
+      "tests/integration/test_tool_registration.py": "3ba27a450e4d9ccb98915e929c8d87a74f6758b46c2b682f20c9db5788ef67e0",
+      "tests/test_ci_check_requirements_drift.py": "83a71563745d0487ec02f4147629eff35c00e98a73bdf36eeefacab4629780d7",
+      "tests/test_ci_list_rhoai_branches.py": "c70a5f18650909d70671d06399146d4a393a184f8ffcc7c935bc19a37abb59fd",
+      "tests/test_config.py": "6b72f540e4bb92c679b47da578874b157fbd58894b8d3042164fc756e75615bf",
+      "tests/test_delete_tool_guard.py": "c4986145801b2786c00cf43d19202486eff42fadfeb8267a70538a14db777c20",
+      "tests/test_health_endpoint.py": "ccbb20694e4f8a62293501de158dc6973141e937ee908ea2cccb32a243f300f1",
+      "tests/test_hooks.py": "e86b32eccb88a9760c686d0694031853f0fe3364969f1d64d39bb54685602248",
+      "tests/test_managed_by_guard.py": "e0186f19858630fdb4e906ade8c70eef018b5a71d1a165c5a6c52455c39f8f02",
+      "tests/test_plugin_manager.py": "63151489fc09c75892d31a6a085aeacf293e4cf8eab451b1faaf2d1348bfd0ac",
+      "tests/test_server_startup.py": "2061fad2089b3fe0966a26e159f114dcebb6c5829855db33f67da5c9bfc627ac",
+      "tests/training/__init__.py": "aaa2d9ae14cc3008f3ec96b3588cfc34550625a088005917aca682c8039ef09f",
+      "tests/training/conftest.py": "55b7b10ad9c749cf83a488147f636b233e2bc7092a10e9c9cda07810cf34ebd9",
+      "tests/training/test_client.py": "227ad5d479d67ebceff5e7d816c9274d4506ecbcc645c7bf6df82fe50c729c57",
+      "tests/training/test_crds.py": "dac373c29827e919b4384ee48fd75a38a73216b6e5109ffe47f87a4fe784d43f",
+      "tests/training/test_models.py": "77015fd65dc2f9fbabc3f0a8c2f82564eca7ed16de9d7ffda9ac77a1735cdba4",
+      "tests/training/tools/__init__.py": "9d9735e218b3f310434cd1e5b881f951da1052365993c3ab70bc2a6b95816c6c",
+      "tests/training/tools/test_discovery.py": "b4f1f05e4595bd8ad8971e7bad6a1c16556e4348c25dfb9d1cd51ee0c7d1cd39",
+      "tests/training/tools/test_lifecycle.py": "427c46f5af38d43e8a6cc789ee95d811e3399032e3bdf55d67db09fef21f3df5",
+      "tests/training/tools/test_monitoring.py": "76b8df9b7a538264fbcdb9ff49f290b0bfc520476883fa185a696a2397160113",
+      "tests/utils/__init__.py": "1a26464457131876ad5ef6fe6297a75e63ccc2297760c4d625e65f51107c22c9",
+      "tests/utils/test_cache.py": "029f453185214ff875f20ab868c2c46b096cd5fbc575a48b42fc61bda10d462e",
+      "tests/utils/test_errors.py": "922f5e3b93d235ad5906bd0d4326c8c5b92ee74f7e31e394e47cd68de5e1a146",
+      "tests/utils/test_response.py": "e2fe94aef004bc3d2ee7c0d9af253c580fe0ed9d1e59de9e09120eff11510665",
+      "tests/utils/test_workflow_token.py": "e6483b8987cd08662c7f13101ed21ec52d5a1fb59d07a974e023f56d481a7c51",
+      "uv.lock": "a3d44ee1c078635e77c878b38d3449b8696f62c55f8d29fd515aa093b68326ec"
+    },
+    "agents": [
+      {
+        "id": "enmaas-sol",
+        "model_name": "gpt-5.6-sol",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "temperature": null,
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "extra_settings": {},
+        "agent_backend": "pydantic-ai"
+      },
+      {
+        "id": "enmaas-opus",
+        "model_name": "claude-opus-4-6",
+        "base_url": "https://api.enmaas.devshift.net",
+        "api": "messages",
+        "temperature": null,
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "extra_settings": {
+          "anthropic_thinking": {
+            "type": "adaptive"
+          }
+        },
+        "agent_backend": "pydantic-ai"
+      },
+      {
+        "id": "enmaas-glm",
+        "model_name": "rits/zai-org/glm-5-3",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "temperature": null,
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "extra_settings": {},
+        "agent_backend": "pydantic-ai"
+      },
+      {
+        "id": "enmaas-deepseek",
+        "model_name": "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "temperature": null,
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "extra_settings": {},
+        "agent_backend": "pydantic-ai"
+      }
+    ],
+    "batch_order": [
+      "enmaas-opus",
+      "enmaas-sol",
+      "enmaas-glm",
+      "enmaas-deepseek"
+    ],
+    "planned_conversations": 8,
+    "automatic_reruns": 0,
+    "scenario_sha": {
+      "navigator-happy-path": "eaa225a67e99",
+      "navigator-vague-requirements": "f1f282812e97"
+    },
+    "skill_sha": {
+      "navigator": "25392e419e13"
+    },
+    "judge": {
+      "provider": "enmaas",
+      "model": "gpt-6.1-sol",
+      "base_url": "https://api.enmaas.devshift.net/v1"
+    },
+    "thresholds": {
+      "use": 0.6,
+      "completion": 0.75,
+      "fidelity": 0.8
+    },
+    "versions": {
+      "mcp": "conversation-v2",
+      "fidelity": "v2"
+    },
+    "limits": {
+      "turn_seconds": 300.0,
+      "requests_per_turn": 30,
+      "tool_calls_per_turn": 40
+    },
+    "execution": {
+      "selected_file": "evals/skills/test_navigator.py",
+      "mock_cluster": true,
+      "tracing": false,
+      "pytest_capture": false,
+      "idle_sleep_prevention": "caffeinate -i"
+    },
+    "packages": {
+      "pydantic-ai-slim": "2.64.0",
+      "pydantic-ai-harness": "0.64.0",
+      "anthropic": "1.15.0",
+      "deepeval": "4.3.1",
+      "llm-d-planner": "0.3.3"
+    },
+    "history_bytes": 172583,
+    "history_records": 46,
+    "history_sha256": "bffb3f239ce81c7c90a38fb47c329d0795848b9fa3f557f2e4d929904101c6af",
+    "old_native_sha256": {
+      "evals/results/3151a516815b/cd50985ade10/messages.json": "bd3b1052035816d952ceb688b019669c5c6b633e3dad2be2b8fb71599fd03d2e",
+      "evals/results/3151a516815b/cd50985ade10/artifact.json": "c156e9e3c5f4e75e87662a057350e9492a39bbfc3921d27577b79a45f2bbb3b3",
+      "evals/results/0d494fc53b7e/b649e936348a/messages.json": "4f87ad3870a399bafe5ef832ddd27218708974b0d0523b44ce1c75f61f333637",
+      "evals/results/0d494fc53b7e/b649e936348a/artifact.json": "e35594731835b59e0f1604ae460f04befa678ec83cff8d6b6c1f74934cd768ef",
+      "evals/results/0d494fc53b7e/5235bc3109f9/messages.json": "b7ac0f076c898c72dd6cad81a0c68f4db5dba38545f573f283df63734723dbeb",
+      "evals/results/0d494fc53b7e/5235bc3109f9/artifact.json": "7054f6f687fdb307192e30cd6a4496a538c7620cef12a05b2f84184e66cfeb49",
+      "evals/results/ed43f69db97e/8a62723db5b2/messages.json": "63c64cee4077d2711b41c14e63c414c68af90479d02807119171acb708d2ef85",
+      "evals/results/ed43f69db97e/8a62723db5b2/artifact.json": "730a3ba6c5b870fe8b3dba488c7704430b842eb80aa83765089928a4677bd248",
+      "evals/results/ed43f69db97e/14cf93ebe349/messages.json": "e831ce8e4aac61c4d630fea850580e15c2447653643047ccce1bfc4bf2fca67e",
+      "evals/results/ed43f69db97e/14cf93ebe349/artifact.json": "6b16d10c8e1a701e5214f8e5ca0063564c650ccb8b12435a751bf49f944fb72d",
+      "evals/results/01ccf87c28d3/477165468821/messages.json": "4b3da88fef64d8c71994675a5e886e6d98e49d9c3bd3a5d548feb2238f8faa9b",
+      "evals/results/01ccf87c28d3/477165468821/artifact.json": "09273bbcb9ee29160ffa1338440aae2e9166b98902930f16e4211f36ceb5f0b6",
+      "evals/results/01ccf87c28d3/593efbe1d2f7/messages.json": "6cf604bd53386a6583b529451b00a6934ab852d297c0bbced419eede595769b9",
+      "evals/results/01ccf87c28d3/593efbe1d2f7/artifact.json": "2a2ba6e574a03e5453d12e681b15bbbe068ac7a47b32c28c7486e81115d1cb13",
+      "evals/results/ac9dc8832cb7/2d200530dc57/messages.json": "df5a293c9ad06b5d09eef730ffeda936c034ae39b2965931634b77551c4430d3",
+      "evals/results/ac9dc8832cb7/2d200530dc57/artifact.json": "9c367ef838bf43c47b11851e2068c7647966b3eee292fe414de85cfd9d566ab0",
+      "evals/results/ac9dc8832cb7/692e6d32458d/messages.json": "1840a658b2569c594a8d42df6ad2d18aa226bc16e8db73e6111eabe98f2f1f6c",
+      "evals/results/ac9dc8832cb7/692e6d32458d/artifact.json": "6f8df9f22cf417d0cdb80adfd085298116ef95fd20605d95ba50368ebdd9132d",
+      "evals/results/ac9dc8832cb7/29f62c1a99a2/messages.json": "7c90db6d5df533c88286051ef7fac3dfd50d9f895d601f0b8bfedd838bc2406b",
+      "evals/results/ac9dc8832cb7/29f62c1a99a2/artifact.json": "0ea282a1bc6d3b12914bdb4d8f1f9d725fca16f635820d5c74dec84e2990277d",
+      "evals/results/176efb61812e/4ea760c43ecb/messages.json": "712d75a88d78f6b0e65e97e94ba67b60df7a02ce8dc1abc937a15aaeba8cff0f",
+      "evals/results/176efb61812e/4ea760c43ecb/artifact.json": "e4e4eca810579c487303d410110aadcc589227e3aa2361e7fa93f7a82fd3b480",
+      "evals/results/176efb61812e/cf884cc3a7cf/messages.json": "bb54d2fed658e71ad803b85d0aac9f171df77e85a30e8ec09e42a0ec9d7a6f99",
+      "evals/results/176efb61812e/cf884cc3a7cf/artifact.json": "3d10ad542d8e52c6b9a5cc41d38505f1d6f6e4f5beada5dc0b7d722865e71412",
+      "evals/results/e2a176adaafe/7caa2026faac/messages.json": "6b6e90222adf1402b1ce4fd5a6d61c84e35897037fe97d75298a0bc72d021895",
+      "evals/results/e2a176adaafe/7caa2026faac/artifact.json": "47009a31b94b63cebfc73edc34a91b1c4c8028e67b63c334fc3028d50ae3f567",
+      "evals/results/e2a176adaafe/c3bc27d9ea42/messages.json": "6bd267a0894e6daa860b83edcfdee83008a75ad3f920b89af4aa20f8a77b496e",
+      "evals/results/e2a176adaafe/c3bc27d9ea42/artifact.json": "d535344d2489fe172afb3ead661aa4a3af725219a5f266622e75888943ece6f6",
+      "evals/results/migration-repeat-20261022/deepeval/run.json": "057f239e247352f105b790cdc28fa3f5dcd2185e1c500dc75d41805debad0e70",
+      "evals/results/migration-repeat-20261022/deepeval/tool-schemas.json": "18cf5a537b83eef341c40099eb6f38bb8f429f5beb0564e41d0bcaab8436021f",
+      "evals/results/5ec251e832e4/2dd3978be1c4/messages.json": "8faa8dd10bad2dad79fe80bb1e12ec3d14b49c21e51cf7b0d8178b88d5d81dc8",
+      "evals/results/5ec251e832e4/2dd3978be1c4/artifact.json": "0ea203c1cdddba94a74f7dde7c761ffbe9ca59bb2c7fd96655fffc2f517a4612",
+      "evals/results/5ec251e832e4/4286a0e2b9ac/messages.json": "0dd74daa23650071e8217e70bfacb4036717513a4f883823b0c1d727cea6b239",
+      "evals/results/5ec251e832e4/4286a0e2b9ac/artifact.json": "492c44ff8554ec34574bfe090d031244cadbb117162e7359598a2816e9e308ea",
+      "evals/results/5ec251e832e4/c59f8ba4d420/messages.json": "bd7f4449fb4ed57a7c8eb5e929bdec2c427ba5332f8b100df03e531117331fd0",
+      "evals/results/5ec251e832e4/c59f8ba4d420/artifact.json": "f296de2c30b0c9b69ff52c03fa343021f988830659288cdc658cf61e84f59df9",
+      "evals/results/5ec251e832e4/fd015b019833/messages.json": "d47fe1e3d63fc03f0f0fd82dcb0602b0b5ef67fa7cb15102f0d39f57ecff44c6",
+      "evals/results/5ec251e832e4/fd015b019833/artifact.json": "fac29cc5dd21a9333c4026cca49376bd9fef071a6e2eb07ff959f5893e710a49",
+      "evals/results/c88c822a3c6f/a3fc0d70abbd/messages.json": "dc405c894ed7f16637c00e44c6100f6b30a5097b286616e7d12756ea88a57a5b",
+      "evals/results/c88c822a3c6f/a3fc0d70abbd/artifact.json": "e22b11845e483066d92a0cea2b65bece1b70bb4f52107e3cd364afad360b7dcf",
+      "evals/results/bb81ab50582e/841518974181/messages.json": "408ed7e4109fb479f25db6a1d824104c652096b25b41252c75a04aca6540b037",
+      "evals/results/bb81ab50582e/841518974181/artifact.json": "ae12da1d410ad1b991977a3e5751458448b2aba3f2d93e5efff2943aa8c9e8b3",
+      "evals/results/bb81ab50582e/0472b7917e09/messages.json": "7aed698c83cbb1c351110d9b92b7d8dfd9af14011ad3352edc4dde906d1de7c9",
+      "evals/results/bb81ab50582e/0472b7917e09/artifact.json": "cf0670825c556fe99f5ec81f1f224d90e8117b962d08ac6e14987f4292807162",
+      "evals/results/3843e98c4417/39d053441a59/messages.json": "39c05458fc21305d3eb653a09d60405239be368d813da515160df7c275628a10",
+      "evals/results/3843e98c4417/39d053441a59/artifact.json": "19545082e0657e7c73c90d85ede89a577db7706b30282edbb0f738aa32f6e93b",
+      "evals/results/d9fb65f18fb3/7b64d71011c2/messages.json": "ce56b16d9fbe3a1bdedb785d9f2257b0e268e86523f3a655bdf2e9773aae40a0",
+      "evals/results/d9fb65f18fb3/7b64d71011c2/artifact.json": "fa5328c000c5002a5a7e5b6e436ee8f7a2d7e6528a846566dc2e07e98965bea6",
+      "evals/results/d664c153681b/73509661b26c/messages.json": "306164b888f1e2f12df308197c029835fc718a909102c2c87b65e4382eb1199f",
+      "evals/results/d664c153681b/73509661b26c/artifact.json": "993cb93a78ee946e04a346e40fce7a5dc3c0c30c236773f51f06e9a0725b2b98",
+      "evals/results/f4deca98cb83/6ab7ac67f1c8/messages.json": "41ed1e26dc8e3a0feb16b83e9742a8c23fefe5f85b793f0c28f72bbe1a922f73",
+      "evals/results/f4deca98cb83/6ab7ac67f1c8/artifact.json": "74293a30882cb6f6451d04f56ecd4e0b7725ab968db5a7be345adb86285085d0",
+      "evals/results/f4deca98cb83/200a9a71d4eb/messages.json": "8cbf8cc9657c36149d248584f92d3f6a6be3dc175d5995eac106dfb938a78e7c",
+      "evals/results/f4deca98cb83/200a9a71d4eb/artifact.json": "54f4256a8aafa3d01c5ffb26d0680533c306665b0441d2cd041339568f55d25e",
+      "evals/results/10959123bc58/2c57f217b5f5/messages.json": "e6a5662084ded8f44650a7db9e057bf9b6d9dc9df3f4b250dd4966d9b8ee1c1f",
+      "evals/results/10959123bc58/2c57f217b5f5/artifact.json": "8c04f85e706a621bc0f16b227eec4780afd4b3fc3d1c5747fece2e25cf02a96c",
+      "evals/results/phase1-verify2/5c54435f2958/messages.json": "082ac7f4fc344bbff88d2f106e6cd0adb9292fdcc97a6b2b318942058953828d",
+      "evals/results/phase1-verify2/5c54435f2958/artifact.json": "478d61dd859374622e4857b2d06f6aa3f31f4c8d91b03ca0549f36ec7f8d73c0",
+      "evals/results/no-server-change/5fc4e75845af/messages.json": "d175f25862f997b0cad0b759f01999a4dbc02e742729f55726a530bce00093fa",
+      "evals/results/no-server-change/5fc4e75845af/artifact.json": "a1904685778101cb4f5f485c8916cb86a17d79e1c3c38f88f15376dbb9dd2a7a",
+      "evals/results/6d4e3c14109a/8e8b7fb28d10/messages.json": "a82c5ede21e53c2b4b8639c1bd1559caa1409bf230cb3606856eef4bde825e20",
+      "evals/results/6d4e3c14109a/8e8b7fb28d10/artifact.json": "1db64f647bb6b968fffcf9cba54c54ed229d87e9d1d4ab99a6608ea9faed5209",
+      "evals/results/6d4e3c14109a/c7b261e66bfb/messages.json": "82db65bb6b84091f82c023fbb37d7dacfb1069945b36cba3b5ce7abd464e10a4",
+      "evals/results/6d4e3c14109a/c7b261e66bfb/artifact.json": "93dfa0b5084fdc4330c180c7808882b0c408383c0b12a7ef956455bf80935d45",
+      "evals/results/66c7f5aeb80c/f3ae04ca26fc/messages.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "evals/results/66c7f5aeb80c/f3ae04ca26fc/artifact.json": "a97e47c7cddaffedd6376cba050b438146d0e388fa23ae360454164a04087fea",
+      "evals/results/66c7f5aeb80c/50821a76cffb/messages.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "evals/results/66c7f5aeb80c/50821a76cffb/artifact.json": "6ce1a4d385500be40ae47cb1b9a9071f1391ca13a80445a3113271489d674ed8",
+      "evals/results/66c7f5aeb80c/6e63d55fe9b1/messages.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "evals/results/66c7f5aeb80c/6e63d55fe9b1/artifact.json": "ad13ed7d014a72fbd721017b4f0a4f94237ab89ed91be415e882dce5ca070c58",
+      "evals/results/66c7f5aeb80c/59288a5a79bc/messages.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "evals/results/66c7f5aeb80c/59288a5a79bc/artifact.json": "9cac589d0297c60aa48211d0520709ad359fc75a40e86ed1ef3ba1196a3616b0",
+      "evals/results/enmaas-check/76973ce6d52b/messages.json": "5d268e77aec4186bd1b77990dbc5f13b320c29e083d133de3416f3e67c0eea33",
+      "evals/results/enmaas-check/76973ce6d52b/artifact.json": "73c552174202880293f87f5f78e7ac5f3ead26a4d2d589955241e2d34e53ea44",
+      "evals/results/enmaas-check/e5c8ebdeec54/messages.json": "afb6960668ca9053f435b54a8021014d6e7a0b092be0d108a5a3c75e5fc23cf4",
+      "evals/results/enmaas-check/e5c8ebdeec54/artifact.json": "03d454a7d4b93d50854b0c497f3c3a9e6c8a45757c473b72f3e09b746f014e56",
+      "evals/results/enmaas-check/0968d98f37e8/messages.json": "d41db6a52430315cbe903baa1dd31d568de470b589c50c7b0c54f53e64519bea",
+      "evals/results/enmaas-check/0968d98f37e8/artifact.json": "3acb038343e44dc152ad1b76487b07e502d786d86dbe64ccdf1c665bc8b6acd5",
+      "evals/results/api-switch/33af5e40d031/messages.json": "95dc1d80d50ed60b0738ebcab5e921a77f18ee42b28fc9bba2d3ead7fef3f8c7",
+      "evals/results/api-switch/33af5e40d031/artifact.json": "5f39c2221fe5a6d0952f9221294b24fc4128d394f310258020b04c1c2252002d",
+      "evals/results/api-switch/fe5731bdc7eb/messages.json": "03d2adf9a33bbb12974b81978482dcd8aca9eef6f37f1712b0694bca4ef34453",
+      "evals/results/api-switch/fe5731bdc7eb/artifact.json": "1974d10de2ab03bb841a295f46481c5a2c3fdadfafd393c546593e02f7fa018f",
+      "evals/results/phase0-enmaas-opus-20261102/6bbc867e93c6/messages.json": "6c40aaa3853d8d12851564efa8f1cc441d2ad7b70d5298366060ee3a20c19617",
+      "evals/results/phase0-enmaas-opus-20261102/6bbc867e93c6/artifact.json": "75dd479127c3bb7ea22a994543bada301b8724caaf63fc0a9e0dc200afba107f",
+      "evals/results/24bc39cb133f/8e01723a8bd4/messages.json": "915498c9282a99d6cf3de4a0c6c0e4e46cf16e88803b728eed203bb99992f99e",
+      "evals/results/24bc39cb133f/8e01723a8bd4/artifact.json": "fdd4bacec5105b2ee7c9135371746c361c102abab1f2f9bd7bd491854f6ff262",
+      "evals/results/b86ddc92ba6e/21b97733cb9a/messages.json": "80de961da9b28a4e9a302970757f63fb5fd81cf89c179320e029a8219e24053f",
+      "evals/results/b86ddc92ba6e/21b97733cb9a/artifact.json": "c3bce2f9e53e287761c00ec8dab89686876b53cb77f0de4cdea2916be6fe5353",
+      "evals/results/b86ddc92ba6e/c13423666b22/messages.json": "a8df896a863bcdb1f61fa76906a6c50d109d05955c054b1cd62b129c22b0027e",
+      "evals/results/b86ddc92ba6e/c13423666b22/artifact.json": "f1cc87a8adaee6e603953bf3f20ddcdd8d394f55d59adf0d4e880eba94e309c1",
+      "evals/results/post-review/65deb2a6d115/messages.json": "738b8bb1a73230e8a4f6d1243e2626aeec6ec283957d79e02bbee27456241d0a",
+      "evals/results/post-review/65deb2a6d115/artifact.json": "47eee9185047f6e82bc5248a52839f12090f61a4690571c8df1381f8ab3b2e70",
+      "evals/results/temp-uniform/9df24721751b/messages.json": "2b0b668e1072bc99cb4f8d23152db82d8ad32f2497fdd09e1c37d8b4c4badb37",
+      "evals/results/temp-uniform/9df24721751b/artifact.json": "dbe838d0cc908b28835dfb9303abc71f3d837f56587c4ee28d7ab7ecda7e4c4e",
+      "evals/results/phase1-verify/92307bbfaee5/messages.json": "5e872c5cfb7be0c0b6a3b990d96f9c9ec9d0b5fbde1997c131011712a3a5a2c0",
+      "evals/results/phase1-verify/92307bbfaee5/artifact.json": "667a1f2a07f21a0262cfa0fa0a671095e38bcede8785ba72f465e2ef9a443128",
+      "evals/results/phase0-spike/0bf63f95555f/messages.json": "bc02cef4c0bc1e6009d6d57ce234011c151129f65cdf0ea393c9da4ea4af2724",
+      "evals/results/phase0-spike/0bf63f95555f/artifact.json": "7f65e3834f8432935c7e1a852031991cbf86e01a924ce11b4d90eb58e1a1b595",
+      "evals/results/05fabd3ca96a/d028cf463e0a/messages.json": "ee07e822db72250d74146d74da0716cac4aefb4909e5b6b6b756cbeb40a99514",
+      "evals/results/05fabd3ca96a/d028cf463e0a/artifact.json": "815830f63456499fa9cb50547b195d147f565249d74d79ed2710b8448b9d773e"
+    },
+    "old_report_sha256": {
+      "docs/temp/navigator-handoff-qps-investigation-results.json": "10e32607ab2015dc9c11b07afbf76e4db00b7a53894b68abcac37294d42b46fb",
+      "docs/temp/gpt-4o-mini-judge-comparison-results.json": "daf8885432df26f6652e8d3bfb3139631dacd767cfd513fdc5a6777620c92002",
+      "docs/temp/glm-baseline-repeat-results.json": "b494e53c6ca8a9dd6ffe4e192bf02b7d17e2364c25817e3b8c515a166ad5d02b",
+      "docs/temp/enmaas-matrix-probe-results.json": "8313bf2dbbb4c76e5e2b680e6bb1e5c3d3eb3eb3e71f2750b6189596b1d7e668",
+      "docs/temp/scoring-fix-validation-results.json": "cf0650c75dc1c476ca5223a4cfbbe4a8af06b9ef402f2146101e331700e802ce",
+      "docs/temp/navigator-sweep-results.json": "5e27b5df435d8a84ae2349fafb34aba4e96afea3b5b082fb445739690042c03f",
+      "docs/temp/judge-calibration-extension-results.json": "f3a6b2fcd5c14fb04be4a448b2d8dfa6ff3a6549c4a04944301ea8c70b9d219e",
+      "docs/temp/anthropic-correction-results.json": "30b3ef2ae1a36b4ef7131a7ed1c1c242981ea4f183316fd0250866a72312b1f6",
+      "docs/temp/navigator-sweep-gpt-results.json": "fb749b54db1a85e564a050daf6538e897b977d0d2e5a6c3b9db12d5ed1565bc5",
+      "docs/temp/navigator-handoff-capacity-correction-results.json": "b33cc36100e2f5547f46b70be223c85085e04785b37fd407a871c37ec08b324a",
+      "docs/temp/precondition-check-fix-results.json": "7df421b980c85aa40d89e0c1881229e04c24e4cda954968bd50a31fde785023e",
+      "docs/temp/judge-calibration-results.json": "a0991ea937b0755bf9b8f13c03323ea57bba930f003eb817c80f4e2db13bfa98",
+      "docs/temp/glm-baseline-results.json": "5b021051aa84ca98e8fc5250efa9ad9d8fd735e2f74bc15395e10021b5793e4d"
+    }
+  },
+  "summary": {
+    "planned_attempts": 8,
+    "recorded_attempts": 8,
+    "pending_attempts": 0,
+    "passed": 7,
+    "routing_passed": 8,
+    "hard_checks_passed": 7,
+    "completed_all_scripted_turns": 8,
+    "metric_measurements": 24,
+    "metric_passes": 24,
+    "missing_metrics": [],
+    "timeouts": 0,
+    "harness_errors": 0,
+    "unscored_metric_errors": 0,
+    "judge_errors": 0,
+    "model_failures": 0,
+    "agent_seconds": 952.16,
+    "scoring_seconds": 289.27,
+    "deployment_writes": 0
+  },
+  "batches": [
+    {
+      "agent": {
+        "id": "enmaas-opus",
+        "model_name": "claude-opus-4-6",
+        "base_url": "https://api.enmaas.devshift.net",
+        "api": "messages",
+        "temperature": null,
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "extra_settings": {
+          "anthropic_thinking": {
+            "type": "adaptive"
+          }
+        },
+        "agent_backend": "pydantic-ai"
+      },
+      "run_id": "376e1d3e3631",
+      "attempts": 2,
+      "passed": 2,
+      "agent_seconds": 188.55,
+      "judge_seconds": 73.28,
+      "pytest_seconds": 262.189,
+      "pytest_exit": 0,
+      "parallel_with_requested": null,
+      "judge_scratch_isolated": false,
+      "judge_cache_folder": ".deepeval",
+      "power_evidence": {
+        "interval_start": "2026-11-02T14:59:07.576973+00:00",
+        "interval_end": "2026-11-02T15:03:31.592295+00:00",
+        "power_events": [],
+        "source": "pmset -g log"
+      },
+      "local_evidence_sha256": {
+        "evals/results/navigator-resweep-enmaas-opus-20261102-power-check.json": "19247f02d1ad723d5434aa598639f5e751b24833a1a7a8e1cfef10bf4fb48d0e",
+        "evals/results/navigator-resweep-enmaas-opus-20261102-end.json": "3b20fb9867bda26d5ea6371c40928ec6309b87f344739708de5d565af327a6ea",
+        "evals/results/navigator-resweep-enmaas-opus-20261102-junit.xml": "62f2c2b5704ea22e84d99c014c155940623cc5d7f5939fe1e508fa4c0388de02",
+        "evals/results/navigator-resweep-enmaas-opus-20261102-pre.json": "4b24ed59a88c4cd1fa496053e42f7c678403e040c2398aa3bfa711d20c3aa573",
+        "evals/results/navigator-resweep-enmaas-opus-20261102-sleep-assertion.json": "b62f65ccec521fe58c667f7354e1e6cfc6026d4d2a20bd3722ffeacd785e7170",
+        "evals/results/navigator-resweep-enmaas-opus-20261102.log": "a2e2f6fb37438d8c3b21f69374ff906cec44528fd64280637386272b64519de2"
+      }
+    },
+    {
+      "agent": {
+        "id": "enmaas-sol",
+        "model_name": "gpt-5.6-sol",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "temperature": null,
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "extra_settings": {},
+        "agent_backend": "pydantic-ai"
+      },
+      "run_id": "355040b39529",
+      "attempts": 2,
+      "passed": 2,
+      "agent_seconds": 108.91,
+      "judge_seconds": 74.77,
+      "pytest_seconds": 183.994,
+      "pytest_exit": 0,
+      "parallel_with_requested": null,
+      "judge_scratch_isolated": false,
+      "judge_cache_folder": ".deepeval",
+      "power_evidence": {
+        "interval_start": "2026-11-02T15:05:12.330167+00:00",
+        "interval_end": "2026-11-02T15:08:18.441623+00:00",
+        "power_events": [],
+        "source": "pmset -g log"
+      },
+      "local_evidence_sha256": {
+        "evals/results/navigator-resweep-enmaas-sol-20261102.log": "049f66fe6688c2c92665d3471b2aaa67a9a48159fdf2f305add81eae1c676831",
+        "evals/results/navigator-resweep-enmaas-sol-20261102-sleep-assertion.json": "b135bcccd6c52ca922c5b69a5a127bce5e3c40ffe0891fdf60c2cce9a5005904",
+        "evals/results/navigator-resweep-enmaas-sol-20261102-end.json": "e64d516acbb0aa4aaf81029daa66e78bb130f81d983b276dded03d4c15d8ea2c",
+        "evals/results/navigator-resweep-enmaas-sol-20261102-junit.xml": "425c23b208444cb6c25e7740046b70c5458e5aa28d1dfec3ce779c344aadbfcc",
+        "evals/results/navigator-resweep-enmaas-sol-20261102-pre.json": "4e4748f2e323085206983d1088d28862fc59de7906f555e5734efad197ce67da",
+        "evals/results/navigator-resweep-enmaas-sol-20261102-power-check.json": "04353d4179a678b6cc6bfa2642732d60cbb724484376eb8cabf9f026d3e5d16f"
+      }
+    },
+    {
+      "agent": {
+        "id": "enmaas-glm",
+        "model_name": "rits/zai-org/glm-5-3",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "temperature": null,
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "extra_settings": {},
+        "agent_backend": "pydantic-ai"
+      },
+      "run_id": "e81dcbcfbb48",
+      "attempts": 2,
+      "passed": 2,
+      "agent_seconds": 564.73,
+      "judge_seconds": 81.59,
+      "pytest_seconds": 646.651,
+      "pytest_exit": 0,
+      "parallel_with_requested": null,
+      "judge_scratch_isolated": false,
+      "judge_cache_folder": ".deepeval",
+      "power_evidence": {
+        "interval_start": "2026-11-02T15:08:35.641643+00:00",
+        "interval_end": "2026-11-02T15:19:24.202795+00:00",
+        "power_events": [],
+        "source": "pmset -g log"
+      },
+      "local_evidence_sha256": {
+        "evals/results/navigator-resweep-enmaas-glm-20261102-sleep-assertion.json": "ea87932d22880e226bf30f165bf7986ded6999642835064195b6f61bb3fc3db3",
+        "evals/results/navigator-resweep-enmaas-glm-20261102-power-check.json": "69f3bad0f1ef1ad433e4e067643a6a92dbe61c546651102d5583190c0793bb35",
+        "evals/results/navigator-resweep-enmaas-glm-20261102-end.json": "18bbdcb96dadb83d7ba37eed2e77dfd028b34de8fa1f943c9b3b013455b1c7a6",
+        "evals/results/navigator-resweep-enmaas-glm-20261102-junit.xml": "752cb1cb11712dfdea82549b37ac4f7380991d29ea3e7d5fe87a8d36c657c73e",
+        "evals/results/navigator-resweep-enmaas-glm-20261102-pre.json": "49864154137a5838f65c07c3cd8f6eec75853be3c96e1c6d6beda6763d7035fb",
+        "evals/results/navigator-resweep-enmaas-glm-20261102.log": "d058a04c3944fa4a113991b12781acf37724215ae5767ff54528fbd8d2a59fb9"
+      }
+    },
+    {
+      "agent": {
+        "id": "enmaas-deepseek",
+        "model_name": "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "api": "responses",
+        "temperature": null,
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "extra_settings": {},
+        "agent_backend": "pydantic-ai"
+      },
+      "run_id": "f7e0a4db9eb2",
+      "attempts": 2,
+      "passed": 1,
+      "agent_seconds": 89.97,
+      "judge_seconds": 59.63,
+      "pytest_seconds": 150.089,
+      "pytest_exit": 1,
+      "parallel_with_requested": "enmaas-glm",
+      "judge_scratch_isolated": true,
+      "judge_cache_folder": "/Users/mmortari/git/rhoai-mcp/evals/results/navigator-resweep-enmaas-deepseek-20261102-deepeval",
+      "power_evidence": {
+        "interval_start": "2026-11-02T15:13:18.097079+00:00",
+        "interval_end": "2026-11-02T15:15:50.084379+00:00",
+        "power_events": [],
+        "source": "pmset -g log"
+      },
+      "local_evidence_sha256": {
+        "evals/results/navigator-resweep-enmaas-deepseek-20261102-junit.xml": "12c9038253a83984c5e13418a7d172e6544194630d5dc92bc2723ecb62e36443",
+        "evals/results/navigator-resweep-enmaas-deepseek-20261102-pre.json": "fae46cf0384317e1a8f9e33fe39f54fd76f77bbfb6df66bdbf413c23aa59a7e1",
+        "evals/results/navigator-resweep-enmaas-deepseek-20261102-power-check.json": "27d6e205a7d060ce332ae8ccce9d4dc8711153ef6698b6f472f57906f9ddda9e",
+        "evals/results/navigator-resweep-enmaas-deepseek-20261102.log": "f78414c28eff1780be46c6a9a020eefb1d094ef6fad91ef8668b03e5cce942c1",
+        "evals/results/navigator-resweep-enmaas-deepseek-20261102-end.json": "bb768de3065db0d76b757b3bc20897fccf5463de776d74af6743afd60882139e",
+        "evals/results/navigator-resweep-enmaas-deepseek-20261102-sleep-assertion.json": "ac601040cb0c88f80348d1dc7fe2e236f1687036d1c5e9a066ddbc6bfb1cdf5b"
+      }
+    }
+  ],
+  "execution_overlaps": [
+    {
+      "agents": [
+        "enmaas-glm",
+        "enmaas-deepseek"
+      ],
+      "seconds": 151.99
+    }
+  ],
+  "records": [
+    {
+      "run_id": "376e1d3e3631",
+      "timestamp": "2026-11-02T15:01:31.311559+00:00",
+      "scenario": "navigator-vague-requirements",
+      "git": {
+        "commit": "e59d9e8",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-opus",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 0.9 because the application largely completed the task correctly: it gathered requirements, used the appropriate tools with valid required arguments, obtained confirmation before requesting recommendations, handled the unavailable inventory tool by requesting GPU details, applied the confirmed A100-80 filter, preserved the selected capacity target, and avoided deployment actions. Minor constraint discrepancies prevented a perfect score: the duplicate-slot cost ceiling should have been $1,788.50 rather than $1,788, and the quality threshold of 32.1 should have been rounded up to 33 to meet the integer schema without weakening the constraint.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.95,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.95 because the application successfully clarified the use case and scale, confirmed workload and GPU details, presented recommendations, and delivered the selected Balanced model’s complete deployment handoff with expected_qps set to 0.13, correctly stopping at that stage. The only minor omission was not explicitly offering to relax constraints for unavailable recommendation slots.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator skill is present, and the assistant announces all three phases, waits for workload confirmation before recommendations, asks about unavailable GPU inventory and waits for the A100-80 answer, and obtains the customer's model choice before handing off to /navigator-deploy. Results use readable prose and markdown tables, and no deployment is planned or executed. Minor specification gaps include no visible pre-flight tool-availability verification and no explicit offer to relax constraints after recommendation slots remain empty.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": true,
+      "duration_seconds": 37.45,
+      "attempt_id": "6293513c587d",
+      "scoring_id": "76d1cea5173c",
+      "skill": "navigator",
+      "golden_id": "navigator-vague-requirements",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "pass",
+          "detail": "every row has a value or an explicit em dash"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/376e1d3e3631/6293513c587d",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 104.64,
+      "skill_sha": "25392e419e13",
+      "scenario_sha": "f1f282812e97",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "376e1d3e3631",
+      "timestamp": "2026-11-02T15:03:31.091494+00:00",
+      "scenario": "navigator-happy-path",
+      "git": {
+        "commit": "e59d9e8",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-opus",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 0.8 because the application largely followed the correct workflow, using appropriate tools, obtaining confirmation and the user's selection, requesting unavailable GPU details, and supplying valid, conversation-grounded arguments without invoking deployment tools outside the selection workflow. However, duplicate-resolution constraints contained rounding errors: the cost ceiling should have been $1,788.50 rather than $1,789, and the integer quality threshold should have been rounded up to 33 to meet the required improvement.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.9 because the application confirmed workload and latency targets, presented recommendations, obtained the user's selection, and delivered a complete handoff for the chosen model with expected_qps of 0.13 without attempting deployment. The evaluation was largely successful, with a minor weakness in characterizing the Performance option's latency advantage as marginal based on first-token time while overlooking its substantially faster displayed end-to-end response time.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator skill is present, and the assistant explicitly announced all three phases, waited for workload/SLO confirmation before requesting recommendations, asked about unavailable GPU inventory, and waited for the model choice before handing off to /navigator-deploy. Results appeared as readable prose and markdown tables, and no deployment was planned or executed. Minor specification gaps include not offering to relax constraints for empty recommendation slots and understating the Performance option’s substantial end-to-end latency improvement despite the customer’s speed-first priority.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": true,
+      "duration_seconds": 35.83,
+      "attempt_id": "9e84339148e4",
+      "scoring_id": "33195eb592f3",
+      "skill": "navigator",
+      "golden_id": "navigator-happy-path",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "pass",
+          "detail": "every row has a value or an explicit em dash"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/376e1d3e3631/9e84339148e4",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 83.91,
+      "skill_sha": "25392e419e13",
+      "scenario_sha": "eaa225a67e99",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "355040b39529",
+      "timestamp": "2026-11-02T15:06:43.698167+00:00",
+      "scenario": "navigator-vague-requirements",
+      "git": {
+        "commit": "e59d9e8",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-sol",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 1.0,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 1.0 because the application followed the authorized recommendation workflow, gathered requirements, used workload and traffic tools, and requested GPU details when inventory data was unavailable. It correctly applied the confirmed use case, 50-user workload, and A100-80 hardware filter, used category-specific refinements, and preserved the selected recommendation’s capacity without unauthorized deployment actions. All tool calls included required arguments with valid types and supported values, including schema-compliant cost, latency, and quality constraints.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.9 because the application largely completed the task: it gathered requirements, confirmed workload targets, provided hardware-filtered recommendations, and delivered the selected balanced model’s handoff with an expected_qps of 0.13 without attempting deployment. Minor shortcomings prevented full credit: it did not fully reconcile the 800-token request with the 512-token workload or offer to relax constraints when recommendation slots were missing.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator skill is present, and the assistant announces all three phases, waits for workload confirmation before recommendations, asks for GPU details when inventory cannot be read, and waits for the customer's model choice before handing off. Results use readable prose and the prescribed markdown table, and the final response directs the customer to /navigator-deploy without planning or executing deployment. Minor deviations include retaining the original Performance result after its refinement failed rather than marking it unavailable, and not explicitly offering constraint relaxation for missing slots.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": true,
+      "duration_seconds": 36.24,
+      "attempt_id": "2b4f92693ff5",
+      "scoring_id": "6f7ba19e3d69",
+      "skill": "navigator",
+      "golden_id": "navigator-vague-requirements",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "pass",
+          "detail": "every row has a value or an explicit em dash"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/355040b39529/2b4f92693ff5",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 53.28,
+      "skill_sha": "25392e419e13",
+      "scenario_sha": "f1f282812e97",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "355040b39529",
+      "timestamp": "2026-11-02T15:08:17.903295+00:00",
+      "scenario": "navigator-happy-path",
+      "git": {
+        "commit": "e59d9e8",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-sol",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 0.95,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 0.95 because the application largely met the evaluation criteria by using appropriate workload and recommendation tools, obtaining confirmations, requesting GPU details when resource discovery was unavailable, and supplying schema-valid arguments grounded in the confirmed requirements. It preserved the selected recommendation’s capacity and stayed within the authorized selection workflow. The only minor defect was setting min_quality to 32 instead of rounding the required 32.1 up to 33 to satisfy the integer schema while preserving the minimum quality constraint.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.95,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.95 because the application confirmed workload and latency targets, recommended models for the user's A100-80 GPUs, obtained the balanced-model selection, and delivered a complete handoff with expected_qps of 0.13 without attempting deployment. The result indicates a pass with one minor omission: it did not explicitly offer to relax constraints for the empty Cost and Quality slots.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The assistant followed the navigator skill’s three announced phases, waited for workload/SLO confirmation before recommendations, and obtained the customer’s model choice before handoff. When inventory access was unavailable, it asked for GPU types and constrained recommendations to the supplied A100-80 hardware. Results used readable prose and markdown tables, and the conversation ended with the required /navigator-deploy handoff without deployment planning or execution. Minor omission: after Cost and Quality returned no distinct options, it explained the gaps but did not offer the prescribed constraint-relaxation question.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": true,
+      "duration_seconds": 38.53,
+      "attempt_id": "e6939d8fabba",
+      "scoring_id": "29aadebf5b02",
+      "skill": "navigator",
+      "golden_id": "navigator-happy-path",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "pass",
+          "detail": "every row has a value or an explicit em dash"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/355040b39529/e6939d8fabba",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 55.63,
+      "skill_sha": "25392e419e13",
+      "scenario_sha": "eaa225a67e99",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "e81dcbcfbb48",
+      "timestamp": "2026-11-02T15:13:10.693667+00:00",
+      "scenario": "navigator-vague-requirements",
+      "git": {
+        "commit": "e59d9e8",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-glm",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 0.95,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 0.95 because the application largely met the evaluation requirements by gathering and confirming workload requirements and SLOs, using the appropriate tools with correctly typed arguments, applying the supplied A100-80 GPU filter, preserving the selected capacity target, and avoiding deployment actions. It also appropriately requested GPU inventory when cluster resource discovery was unavailable. The only minor error was rounding the tightened quality threshold down to 32 instead of up to 33 to satisfy 27.1 + 5; the unexpected H100 recommendation came from the tool response rather than incorrect tool arguments.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.9 because the application largely completed the task correctly: it clarified the use case and scale, confirmed workload targets and GPU type, provided recommendations, and delivered the selected Balanced model’s complete deployment handoff with expected_qps of 0.13 and confirmed latency targets, stopping at the appropriate boundary. Minor inaccuracies reduced the score: it described recommendations as hardware-constrained despite including an H100 option and understated Llama’s cost savings relative to Mistral.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The assistant announced all three phases, waited for workload confirmation before requesting recommendations, asked for GPU types when inventory was unavailable, and waited for the customer's model choice before handing off to /navigator-deploy without planning or executing deployment. Results were readable prose and markdown tables. However, it presented an H100 recommendation despite showing only A100-80-constrained calls, without the required explicit unconstrained fallback, and did not ask whether to relax constraints for the empty Cost and Quality slots.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": true,
+      "duration_seconds": 43.72,
+      "attempt_id": "1e271f5c8836",
+      "scoring_id": "7d169fd626e4",
+      "skill": "navigator",
+      "golden_id": "navigator-vague-requirements",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "pass",
+          "detail": "every row has a value or an explicit em dash"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/e81dcbcfbb48/1e271f5c8836",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 229.71,
+      "skill_sha": "25392e419e13",
+      "scenario_sha": "f1f282812e97",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "e81dcbcfbb48",
+      "timestamp": "2026-11-02T15:19:23.616883+00:00",
+      "scenario": "navigator-happy-path",
+      "git": {
+        "commit": "e59d9e8",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-glm",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 1.0,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 1.0 because the application used the appropriate tools with complete, correctly typed arguments grounded in the confirmed chatbot workload, 50 users, and A100-80 hardware. It requested hardware information when inventory lookup was unavailable, applied tighter constraints to resolve duplicate recommendations, and respected confirmation gates without initiating deployment. The unexpected H100 recommendation originated from the tool despite the correct hardware filter, rather than from an application error.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.9 because the application largely completed the task successfully: it confirmed workload and latency targets, presented recommendations, obtained the user's balanced-model selection, and delivered a complete handoff with expected_qps of 0.13 and the confirmed SLOs and hardware. Minor shortcomings were overly categorical claims about the cheapest and highest-quality options and the lack of an explicit offer to relax constraints for empty recommendation slots.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator skill is present, and the assistant announced all three phases, waited for workload confirmation before recommendations, asked about GPUs when inventory was unavailable, and waited for model selection before handing off to /navigator-deploy without planning or executing deployment. Results were presented in readable prose and markdown tables. However, it reported an H100 performance option from an A100-80-constrained rerun without the required explicit unconstrained fallback call, and did not explicitly offer constraint relaxation for empty slots.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": true,
+      "duration_seconds": 37.87,
+      "attempt_id": "02539ef5343e",
+      "scoring_id": "b87371bd3d3e",
+      "skill": "navigator",
+      "golden_id": "navigator-happy-path",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "pass",
+          "detail": "every row has a value or an explicit em dash"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/e81dcbcfbb48/02539ef5343e",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 335.02,
+      "skill_sha": "25392e419e13",
+      "scenario_sha": "eaa225a67e99",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "f7e0a4db9eb2",
+      "timestamp": "2026-11-02T15:14:29.209137+00:00",
+      "scenario": "navigator-vague-requirements",
+      "git": {
+        "commit": "e59d9e8",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-deepseek",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 1.0,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 1.0 because the application used appropriate workload and traffic tools, waited for confirmation, and requested GPU details when get_cluster_resources was unavailable. Recommendations stayed within the A100-80 selection workflow, and all tool calls used valid, grounded arguments for the confirmed chatbot workload and 50 users. Targeted reruns resolved duplicate slots while correctly applying the $1,788.50 cost ceiling and rounding the quality floor from 32.1 to 33 to satisfy the integer schema.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.9 because the application largely completed the task successfully: it clarified the use case and scale, confirmed the workload, presented recommendations, and delivered a complete handoff for the selected balanced model with expected_qps of 0.13 without attempting deployment. Minor shortcomings were a blank cluster-fit cell in the Performance column and overstating unsuccessful tighter searches as proof of absolute cost and quality limits.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator skill is present and largely followed: the assistant announced all three phases, waited for workload confirmation before recommendations, asked for GPU types when inventory was unavailable, constrained recommendations to the customer's A100-80 GPUs, and waited for the balanced-model selection before handing off to /navigator-deploy without planning or executing deployment. Results were readable prose and markdown tables. Minor deviations include speaking before the required pre-flight check and leaving the Performance column's Cluster fit cell blank despite reporting it as available. Tool responses are not shown, so the handoff's expected_qps provenance cannot be verified.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": false,
+      "duration_seconds": 28.69,
+      "attempt_id": "1dd60008ed20",
+      "scoring_id": "71002e807e19",
+      "skill": "navigator",
+      "golden_id": "navigator-vague-requirements",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "fail",
+          "detail": "'Cluster fit': empty cell(s) at column [2, 3, 4]"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/f7e0a4db9eb2/1dd60008ed20",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 40.8,
+      "skill_sha": "25392e419e13",
+      "scenario_sha": "f1f282812e97",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "f7e0a4db9eb2",
+      "timestamp": "2026-11-02T15:15:49.519733+00:00",
+      "scenario": "navigator-happy-path",
+      "git": {
+        "commit": "e59d9e8",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-deepseek",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 0.8 because the application largely followed the required workflow, using appropriate tools, obtaining confirmation, preserving the confirmed use case, 50-user count, and A100-80 hardware filter, and avoiding deployment actions. However, it missed the quality constraint on the duplicate rerun: min_quality was set to 32, below the required 32.1 threshold, so the integer-only schema required a value of 33.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.9 because the application largely completed the task correctly: it confirmed the workload and targets, presented recommendations, obtained the user's balanced-model selection, and delivered a complete handoff with expected_qps set to 0.13 without attempting deployment. Minor issues prevented a perfect score, including marking empty recommendation slots as available and making overly absolute claims about cost floors and quality ceilings.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator skill instructions are present, and the assistant announced all three phases, waited for workload confirmation before recommendations, asked for GPU types when inventory was unavailable, and waited for the customer's model choice before handing off to /navigator-deploy without planning or executing deployment. Results were presented as prose and markdown tables. Minor specification deviations remain: empty Cost and Quality columns were incorrectly marked 'Available ✓', and the assistant did not explicitly ask whether to relax constraints for those missing options.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": true,
+      "duration_seconds": 30.94,
+      "attempt_id": "fae31aebd41b",
+      "scoring_id": "246d54daa682",
+      "skill": "navigator",
+      "golden_id": "navigator-happy-path",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "pass",
+          "detail": "every row has a value or an explicit em dash"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/f7e0a4db9eb2/fae31aebd41b",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 49.17,
+      "skill_sha": "25392e419e13",
+      "scenario_sha": "eaa225a67e99",
+      "rubric_version": "v2"
+    }
+  ],
+  "case_details": [
+    {
+      "agent_spec": "enmaas-opus",
+      "golden_id": "navigator-vague-requirements",
+      "attempt_id": "6293513c587d",
+      "shared_policy_delivered": true,
+      "capacity_instruction_delivered": true,
+      "thinking_blocks": 8,
+      "skills_loaded": [
+        "navigator"
+      ],
+      "handoff": {
+        "model_id": "meta-llama/llama-3.1-8b-instruct",
+        "use_case": "chatbot_conversational",
+        "user_count": "50",
+        "chosen_category": "balanced",
+        "prompt_tokens": "512",
+        "output_tokens": "256",
+        "expected_qps": "0.13",
+        "ttft_target_ms": "300",
+        "itl_target_ms": "30",
+        "e2e_target_ms": "8620",
+        "cluster_gpu_types": "A100-80"
+      },
+      "traffic_results": [
+        {
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "expected_rps": 0.06666666666666667,
+          "peak_rps": 0.13,
+          "expected_concurrent_users": 10
+        }
+      ],
+      "recommendation_traffic": [
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        }
+      ],
+      "tool_errors": [],
+      "tools_outside_allowlist": [],
+      "deployment_writes": [],
+      "navigator_forbidden_calls": [],
+      "failed_hard_checks": [],
+      "mcp_schema_count": 53,
+      "mcp_schema_sha256": "4ac6815d3b8e8dda9ced455b916ae98cde55fc125e2d442f2d7778e34eb337e6",
+      "native_sha256": {
+        "evals/results/376e1d3e3631/6293513c587d/messages.json": "1f22910a2a2636f52caeb22a0da837653d32f20bf92e8ec87d39506642f4d395",
+        "evals/results/376e1d3e3631/6293513c587d/artifact.json": "97276fbd1e582b1503841b9bb643c19a2be23f8826000c9ed32d35ec5343fa5d"
+      }
+    },
+    {
+      "agent_spec": "enmaas-opus",
+      "golden_id": "navigator-happy-path",
+      "attempt_id": "9e84339148e4",
+      "shared_policy_delivered": true,
+      "capacity_instruction_delivered": true,
+      "thinking_blocks": 7,
+      "skills_loaded": [
+        "navigator"
+      ],
+      "handoff": {
+        "model_id": "meta-llama/llama-3.1-8b-instruct",
+        "use_case": "chatbot_conversational",
+        "user_count": "50",
+        "chosen_category": "balanced",
+        "prompt_tokens": "512",
+        "output_tokens": "256",
+        "expected_qps": "0.13",
+        "ttft_target_ms": "300",
+        "itl_target_ms": "30",
+        "e2e_target_ms": "8620",
+        "cluster_gpu_types": "A100-80"
+      },
+      "traffic_results": [
+        {
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "expected_rps": 0.06666666666666667,
+          "peak_rps": 0.13,
+          "expected_concurrent_users": 10
+        }
+      ],
+      "recommendation_traffic": [
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        }
+      ],
+      "tool_errors": [],
+      "tools_outside_allowlist": [],
+      "deployment_writes": [],
+      "navigator_forbidden_calls": [],
+      "failed_hard_checks": [],
+      "mcp_schema_count": 53,
+      "mcp_schema_sha256": "4ac6815d3b8e8dda9ced455b916ae98cde55fc125e2d442f2d7778e34eb337e6",
+      "native_sha256": {
+        "evals/results/376e1d3e3631/9e84339148e4/messages.json": "fb8d103274ac47220d39a670353508df004d2d7798b9a349ea625af9e69a0b68",
+        "evals/results/376e1d3e3631/9e84339148e4/artifact.json": "b8540a99c98132b5a261bbfbc5b3897a84853a146ea9ebdba8bf2f6d11a8a070"
+      }
+    },
+    {
+      "agent_spec": "enmaas-sol",
+      "golden_id": "navigator-vague-requirements",
+      "attempt_id": "2b4f92693ff5",
+      "shared_policy_delivered": true,
+      "capacity_instruction_delivered": true,
+      "thinking_blocks": 9,
+      "skills_loaded": [
+        "navigator"
+      ],
+      "handoff": {
+        "model_id": "meta-llama/llama-3.1-8b-instruct",
+        "use_case": "chatbot_conversational",
+        "user_count": "50",
+        "chosen_category": "balanced",
+        "prompt_tokens": "512",
+        "output_tokens": "256",
+        "expected_qps": "0.13",
+        "ttft_target_ms": "300",
+        "itl_target_ms": "30",
+        "e2e_target_ms": "8620",
+        "cluster_gpu_types": "A100-80"
+      },
+      "traffic_results": [
+        {
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "expected_rps": 0.06666666666666667,
+          "peak_rps": 0.13,
+          "expected_concurrent_users": 10
+        }
+      ],
+      "recommendation_traffic": [
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        }
+      ],
+      "tool_errors": [
+        {
+          "name": "recommend_model",
+          "call_id": "call_Sa3zcgErfdi4Ho4KQw6ne2s7",
+          "outcome": "success",
+          "error": null,
+          "result": {
+            "error": "Planner API error",
+            "status_code": 502
+          }
+        }
+      ],
+      "tools_outside_allowlist": [],
+      "deployment_writes": [],
+      "navigator_forbidden_calls": [],
+      "failed_hard_checks": [],
+      "mcp_schema_count": 53,
+      "mcp_schema_sha256": "4ac6815d3b8e8dda9ced455b916ae98cde55fc125e2d442f2d7778e34eb337e6",
+      "native_sha256": {
+        "evals/results/355040b39529/2b4f92693ff5/messages.json": "0d26aa39159a8594444c7ae03fddf8e4d2dbc66e77992a8e8fb16a2c3d9133f5",
+        "evals/results/355040b39529/2b4f92693ff5/artifact.json": "0caa69d83f02fa58f04ac5e3a8a2bcf4adeb0dec9506a84bb0f0792312b6d12e"
+      }
+    },
+    {
+      "agent_spec": "enmaas-sol",
+      "golden_id": "navigator-happy-path",
+      "attempt_id": "e6939d8fabba",
+      "shared_policy_delivered": true,
+      "capacity_instruction_delivered": true,
+      "thinking_blocks": 9,
+      "skills_loaded": [
+        "navigator"
+      ],
+      "handoff": {
+        "model_id": "meta-llama/llama-3.1-8b-instruct",
+        "use_case": "chatbot_conversational",
+        "user_count": "50",
+        "chosen_category": "balanced",
+        "prompt_tokens": "512",
+        "output_tokens": "256",
+        "expected_qps": "0.13",
+        "ttft_target_ms": "300",
+        "itl_target_ms": "30",
+        "e2e_target_ms": "8620",
+        "cluster_gpu_types": "A100-80"
+      },
+      "traffic_results": [
+        {
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "expected_rps": 0.06666666666666667,
+          "peak_rps": 0.13,
+          "expected_concurrent_users": 10
+        }
+      ],
+      "recommendation_traffic": [
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        }
+      ],
+      "tool_errors": [],
+      "tools_outside_allowlist": [],
+      "deployment_writes": [],
+      "navigator_forbidden_calls": [],
+      "failed_hard_checks": [],
+      "mcp_schema_count": 53,
+      "mcp_schema_sha256": "4ac6815d3b8e8dda9ced455b916ae98cde55fc125e2d442f2d7778e34eb337e6",
+      "native_sha256": {
+        "evals/results/355040b39529/e6939d8fabba/messages.json": "cb6c6afcf2bfeb1c558c9d2841a23d2116ea778dae28cd2797f46646e318c91e",
+        "evals/results/355040b39529/e6939d8fabba/artifact.json": "a90a27b23e0b5fae0af684496af2533046caff7663b4407c25913c39b180ad36"
+      }
+    },
+    {
+      "agent_spec": "enmaas-glm",
+      "golden_id": "navigator-vague-requirements",
+      "attempt_id": "1e271f5c8836",
+      "shared_policy_delivered": true,
+      "capacity_instruction_delivered": true,
+      "thinking_blocks": 9,
+      "skills_loaded": [
+        "navigator"
+      ],
+      "handoff": {
+        "model_id": "meta-llama/llama-3.1-8b-instruct",
+        "use_case": "chatbot_conversational",
+        "user_count": "50",
+        "chosen_category": "balanced",
+        "prompt_tokens": "512",
+        "output_tokens": "256",
+        "expected_qps": "0.13",
+        "ttft_target_ms": "300",
+        "itl_target_ms": "30",
+        "e2e_target_ms": "8620",
+        "cluster_gpu_types": "A100-80"
+      },
+      "traffic_results": [
+        {
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "expected_rps": 0.06666666666666667,
+          "peak_rps": 0.13,
+          "expected_concurrent_users": 10
+        }
+      ],
+      "recommendation_traffic": [
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        }
+      ],
+      "tool_errors": [],
+      "tools_outside_allowlist": [],
+      "deployment_writes": [],
+      "navigator_forbidden_calls": [],
+      "failed_hard_checks": [],
+      "mcp_schema_count": 53,
+      "mcp_schema_sha256": "4ac6815d3b8e8dda9ced455b916ae98cde55fc125e2d442f2d7778e34eb337e6",
+      "native_sha256": {
+        "evals/results/e81dcbcfbb48/1e271f5c8836/messages.json": "7e85335ea8ba3d31ad53f36e1aea69e519d0c23dd6751f302f47cb492590abb7",
+        "evals/results/e81dcbcfbb48/1e271f5c8836/artifact.json": "4e1ec13b0a038ce03cb9820d2a60a49f4620dc4000fc5152fbe928598a24cb55"
+      }
+    },
+    {
+      "agent_spec": "enmaas-glm",
+      "golden_id": "navigator-happy-path",
+      "attempt_id": "02539ef5343e",
+      "shared_policy_delivered": true,
+      "capacity_instruction_delivered": true,
+      "thinking_blocks": 9,
+      "skills_loaded": [
+        "navigator"
+      ],
+      "handoff": {
+        "model_id": "meta-llama/llama-3.1-8b-instruct",
+        "use_case": "chatbot_conversational",
+        "user_count": "50",
+        "chosen_category": "balanced",
+        "prompt_tokens": "512",
+        "output_tokens": "256",
+        "expected_qps": "0.13",
+        "ttft_target_ms": "300",
+        "itl_target_ms": "30",
+        "e2e_target_ms": "8620",
+        "cluster_gpu_types": "A100-80"
+      },
+      "traffic_results": [
+        {
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "expected_rps": 0.06666666666666667,
+          "peak_rps": 0.13,
+          "expected_concurrent_users": 10
+        }
+      ],
+      "recommendation_traffic": [
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        }
+      ],
+      "tool_errors": [],
+      "tools_outside_allowlist": [],
+      "deployment_writes": [],
+      "navigator_forbidden_calls": [],
+      "failed_hard_checks": [],
+      "mcp_schema_count": 53,
+      "mcp_schema_sha256": "4ac6815d3b8e8dda9ced455b916ae98cde55fc125e2d442f2d7778e34eb337e6",
+      "native_sha256": {
+        "evals/results/e81dcbcfbb48/02539ef5343e/messages.json": "6e3b40149c7d5817312d4297deeb21ec644d36b182d844c1645e10d409f52933",
+        "evals/results/e81dcbcfbb48/02539ef5343e/artifact.json": "21d2ee09fb57a389e444c86df1f33033df6bdc45f501c9d04a69f11b5b30ceb5"
+      }
+    },
+    {
+      "agent_spec": "enmaas-deepseek",
+      "golden_id": "navigator-vague-requirements",
+      "attempt_id": "1dd60008ed20",
+      "shared_policy_delivered": true,
+      "capacity_instruction_delivered": true,
+      "thinking_blocks": 9,
+      "skills_loaded": [
+        "navigator"
+      ],
+      "handoff": {
+        "model_id": "meta-llama/llama-3.1-8b-instruct",
+        "use_case": "chatbot_conversational",
+        "user_count": "50",
+        "chosen_category": "balanced",
+        "prompt_tokens": "512",
+        "output_tokens": "256",
+        "expected_qps": "0.13",
+        "ttft_target_ms": "300",
+        "itl_target_ms": "30",
+        "e2e_target_ms": "8620",
+        "cluster_gpu_types": "A100-80"
+      },
+      "traffic_results": [
+        {
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "expected_rps": 0.06666666666666667,
+          "peak_rps": 0.13,
+          "expected_concurrent_users": 10
+        }
+      ],
+      "recommendation_traffic": [
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        }
+      ],
+      "tool_errors": [],
+      "tools_outside_allowlist": [],
+      "deployment_writes": [],
+      "navigator_forbidden_calls": [],
+      "failed_hard_checks": [
+        {
+          "name": "table_cells_complete",
+          "status": "fail",
+          "detail": "'Cluster fit': empty cell(s) at column [2, 3, 4]"
+        }
+      ],
+      "mcp_schema_count": 53,
+      "mcp_schema_sha256": "4ac6815d3b8e8dda9ced455b916ae98cde55fc125e2d442f2d7778e34eb337e6",
+      "native_sha256": {
+        "evals/results/f7e0a4db9eb2/1dd60008ed20/messages.json": "5cd7ac885a2cfbfe6efbfb5f1d18600e257c7616bd76146c17807a7c9b1d216f",
+        "evals/results/f7e0a4db9eb2/1dd60008ed20/artifact.json": "042ce0a27cb44f80bc6db58be4b7afd6721a61d3b4eb7a6f9844cb3ff1d60367"
+      }
+    },
+    {
+      "agent_spec": "enmaas-deepseek",
+      "golden_id": "navigator-happy-path",
+      "attempt_id": "fae31aebd41b",
+      "shared_policy_delivered": true,
+      "capacity_instruction_delivered": true,
+      "thinking_blocks": 9,
+      "skills_loaded": [
+        "navigator"
+      ],
+      "handoff": {
+        "model_id": "meta-llama/llama-3.1-8b-instruct",
+        "use_case": "chatbot_conversational",
+        "user_count": "50",
+        "chosen_category": "balanced",
+        "prompt_tokens": "512",
+        "output_tokens": "256",
+        "expected_qps": "0.13",
+        "ttft_target_ms": "300",
+        "itl_target_ms": "30",
+        "e2e_target_ms": "8620",
+        "cluster_gpu_types": "A100-80"
+      },
+      "traffic_results": [
+        {
+          "use_case": "chatbot_conversational",
+          "user_count": 50,
+          "expected_rps": 0.06666666666666667,
+          "peak_rps": 0.13,
+          "expected_concurrent_users": 10
+        }
+      ],
+      "recommendation_traffic": [
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        },
+        {
+          "prompt_tokens": 512,
+          "output_tokens": 256,
+          "expected_qps": 0.13
+        }
+      ],
+      "tool_errors": [],
+      "tools_outside_allowlist": [],
+      "deployment_writes": [],
+      "navigator_forbidden_calls": [],
+      "failed_hard_checks": [],
+      "mcp_schema_count": 53,
+      "mcp_schema_sha256": "4ac6815d3b8e8dda9ced455b916ae98cde55fc125e2d442f2d7778e34eb337e6",
+      "native_sha256": {
+        "evals/results/f7e0a4db9eb2/fae31aebd41b/messages.json": "c3c23519cb7d884430791bdf17529dfca66de396fc388c7f145989f55d802b91",
+        "evals/results/f7e0a4db9eb2/fae31aebd41b/artifact.json": "c7d3ed87c0f1bd4816122fc4a92196d21164fb14ea4e7cec8c2e765c7a356853"
+      }
+    }
+  ],
+  "pending_cells": [],
+  "stage_one_review": "Anthropic pair passed under the corrected contract",
+  "provenance": {
+    "source_files_unchanged": 280,
+    "old_native_files_unchanged": 100,
+    "old_json_reports_unchanged": 13,
+    "old_history_prefix_unchanged": true,
+    "global_manifest_sha256": "123d4dad0a1d6f5b3ac5b195faefc35b87c0d8e1d608e4a85577d56a8a592794"
+  },
+  "limitations": [
+    "One attempt per model/golden; no reliability estimate or ranking.",
+    "Pending cells are unattempted, not zero-scored failures.",
+    "Historical sweep and counterfactual replays are excluded.",
+    "Mock cluster state; optional external planner node probes may still be skipped.",
+    "Currency cost is unavailable. No Navigator-deploy golden is included.",
+    "GLM and DeepSeek were scheduled concurrently at user request, with isolated DeepSeek judge scratch storage; timings include concurrent load."
+  ],
+  "verified_at": "2026-11-02T15:23:35.063994+00:00"
+}

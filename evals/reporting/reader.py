@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import fields
 from pathlib import Path
+from typing import Any
 
 from evals.reporting.models import (
-    OUTCOME_EVALUATED,
     CheckRecord,
     EnvironmentRecord,
     EvalRecord,
@@ -18,6 +19,37 @@ from evals.reporting.models import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_RESULTS_PATH = Path(__file__).resolve().parent.parent / "results" / "eval_history.jsonl"
+
+
+def record_from_dict(data: dict[str, Any]) -> EvalRecord:
+    """Read known schema fields, including legacy LCS environment aliases."""
+    if not isinstance(data, dict):
+        raise TypeError("An eval record must be an object")
+    env: dict[str, Any] = data.get("environment", {})
+    if not isinstance(env, dict):
+        raise TypeError("An eval environment must be an object")
+    environment = EnvironmentRecord(
+        agent_backend=env.get("agent_backend") or env.get("llm_provider") or "unknown",
+        agent_model=env.get("agent_model") or env.get("llm_model") or "unknown",
+        lcs_url=env.get("lcs_url", ""),
+        eval_provider=env.get("eval_provider", "unknown"),
+        eval_model=env.get("eval_model", "unknown"),
+        cluster_mode=env.get("cluster_mode", "unknown"),
+        mcp_use_threshold=env.get("mcp_use_threshold", 0.5),
+        task_completion_threshold=env.get("task_completion_threshold", 0.6),
+        eval_model_base_url=env.get("eval_model_base_url", ""),
+    )
+    nested = {"environment", "git", "metrics", "checks"}
+    values = {
+        f.name: data[f.name] for f in fields(EvalRecord) if f.name not in nested and f.name in data
+    }
+    return EvalRecord(
+        **values,
+        environment=environment,
+        git=GitRecord(**data["git"]),
+        metrics=[MetricRecord(**m) for m in data.get("metrics", [])],
+        checks=[CheckRecord(**c) for c in data.get("checks", [])],
+    )
 
 
 def load_records(path: str | None = None) -> list[EvalRecord]:
@@ -38,53 +70,7 @@ def load_records(path: str | None = None) -> list[EvalRecord]:
         if not line:
             continue
         try:
-            data = json.loads(line)
-            env_data = data.get("environment", {})
-            environment = EnvironmentRecord(
-                agent_backend=env_data.get(
-                    "agent_backend", env_data.get("llm_provider", "unknown")
-                ),
-                agent_model=env_data.get("agent_model", env_data.get("llm_model", "unknown")),
-                lcs_url=env_data.get("lcs_url", ""),
-                eval_provider=env_data.get("eval_provider", "unknown"),
-                eval_model=env_data.get("eval_model", "unknown"),
-                cluster_mode=env_data.get("cluster_mode", "unknown"),
-                mcp_use_threshold=env_data.get("mcp_use_threshold", 0.5),
-                task_completion_threshold=env_data.get("task_completion_threshold", 0.6),
-                eval_model_base_url=env_data.get("eval_model_base_url", ""),
-            )
-            record = EvalRecord(
-                run_id=data["run_id"],
-                timestamp=data["timestamp"],
-                scenario=data["scenario"],
-                git=GitRecord(**data["git"]),
-                environment=environment,
-                metrics=[MetricRecord(**m) for m in data.get("metrics", [])],
-                turns=data.get("turns", 0),
-                tool_names_used=data.get("tool_names_used", []),
-                passed=data.get("passed", False),
-                duration_seconds=data.get("duration_seconds", 0.0),
-                # Skill-eval fields. Loaded explicitly rather than by **data,
-                # which would choke on unknown keys; defaults keep historical
-                # LCS records readable (plan §3.5).
-                attempt_id=data.get("attempt_id", ""),
-                scoring_id=data.get("scoring_id", ""),
-                skill=data.get("skill", ""),
-                golden_id=data.get("golden_id", ""),
-                skills_loaded=data.get("skills_loaded", []),
-                outcome=data.get("outcome", OUTCOME_EVALUATED),
-                error_stage=data.get("error_stage", ""),
-                error_detail=data.get("error_detail", ""),
-                checks=[CheckRecord(**c) for c in data.get("checks", [])],
-                artifact_path=data.get("artifact_path", ""),
-                trace_id=data.get("trace_id", ""),
-                dry_run=data.get("dry_run", False),
-                agent_seconds=data.get("agent_seconds", 0.0),
-                skill_sha=data.get("skill_sha", ""),
-                scenario_sha=data.get("scenario_sha", ""),
-                rubric_version=data.get("rubric_version", ""),
-            )
-            records.append(record)
+            records.append(record_from_dict(json.loads(line)))
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             logger.warning(f"Skipping malformed record at line {line_num}: {e}")
     return records

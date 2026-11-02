@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
+from pathlib import Path
 
 from evals.reporting.formatting import format_table, provider_label, truncate
 from evals.reporting.models import EvalRecord
@@ -13,6 +15,10 @@ def provider_comparison_report(
     scenario: str | None = None,
     last_n: int = 10,
     fmt: str = "terminal",
+    *,
+    cohort_path: Path | None = None,
+    run_ids: list[str] | None = None,
+    artifacts_root: Path | None = None,
 ) -> str:
     """Compare eval scores across agent backends/models.
 
@@ -25,6 +31,30 @@ def provider_comparison_report(
         last_n: Use only the last N records per provider group.
         fmt: 'terminal' or 'markdown'.
     """
+    if cohort_path or run_ids:
+        from evals.reporting.skill_comparison import (
+            build_skill_comparison,
+            load_cohort,
+            render_skill_comparison,
+        )
+
+        return render_skill_comparison(
+            build_skill_comparison(
+                records,
+                cohort=load_cohort(cohort_path) if cohort_path else None,
+                run_ids=run_ids,
+                scenario=scenario,
+                last_n=last_n,
+                artifacts_root=artifacts_root,
+            ),
+            fmt=fmt,
+        )
+    if any(r.skill for r in records):
+        raise ValueError("Skill comparisons require an explicit --cohort or --run-id selection")
+    if fmt == "json":
+        raise ValueError("JSON comparison output requires a skill cohort or run IDs")
+    if last_n < 1:
+        raise ValueError("--last must be positive")
     if not records:
         return "No eval records found."
 
@@ -59,10 +89,15 @@ def provider_comparison_report(
     row_data: list[tuple[float, list[str]]] = []
     for key, group in groups.items():
         recent = sorted(group, key=lambda r: r.timestamp)[-last_n:]
-        metric_avgs: dict[str, float] = {}
+        metric_avgs: dict[str, float | None] = {}
         for mn in all_metric_names:
-            scores = [m.score for r in recent for m in r.metrics if m.name == mn]
-            metric_avgs[mn] = sum(scores) / len(scores) if scores else 0.0
+            scores = [
+                m.score
+                for r in recent
+                for m in r.metrics
+                if m.name == mn and math.isfinite(m.score) and 0 <= m.score <= 1
+            ]
+            metric_avgs[mn] = sum(scores) / len(scores) if scores else None
 
         avg_turns = sum(r.turns for r in recent) / len(recent)
         pass_count = sum(1 for r in recent if r.passed)
@@ -72,8 +107,9 @@ def provider_comparison_report(
         total_score = 0.0
         for mn in all_metric_names:
             avg = metric_avgs[mn]
-            total_score += avg
-            row.append(f"{avg:.2f}")
+            if avg is not None:
+                total_score += avg
+            row.append(f"{avg:.2f}" if avg is not None else "n/a")
         row.append(f"{avg_turns:.1f}")
         row.append(pass_rate)
 

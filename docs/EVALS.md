@@ -509,6 +509,46 @@ uv run --group eval python -m evals.reporting.cli compare --scenario cluster_exp
 uv run --group eval python -m evals.reporting.cli trend --provider openai/gpt-4o --last 5 --format markdown
 ```
 
+### Navigator Model Comparison
+
+Navigator comparisons require an explicit frozen sweep or original run IDs;
+the CLI does not combine unrelated skill history. Reporting reads saved scores
+and native agent messages without running models or judges.
+
+```bash
+# Compare the new sequential four-model, eight-conversation Navigator cohort
+make eval-compare ARGS="--cohort docs/temp/navigator-serial-sweep-results.json --artifacts-root evals/results --format markdown --output docs/temp/navigator-serial-model-comparison.md"
+
+# Export the same comparison as JSON
+make eval-compare ARGS="--cohort docs/temp/navigator-serial-sweep-results.json --artifacts-root evals/results --format json --output docs/temp/navigator-serial-model-comparison.json"
+
+# Alternatively, select original run IDs from the JSONL history
+uv run --group eval python -m evals.reporting compare \
+  --run-id c1aed9dbd1c1 --run-id 6427f23f8fe9 \
+  --run-id 934ca554d04f --run-id b77ef7e8878d \
+  --scenario navigator-happy-path --last 1
+```
+
+`--file` selects a different JSONL history; use it with run IDs, not `--cohort`.
+`--artifacts-root` resolves native files as `<root>/<original-run>/<attempt>`
+when recorded absolute paths belong to another checkout. Without native
+artifacts, scores remain visible and usage is `n/a`. `--last` limits attempts
+per model/golden. Selected models must have matching golden sets and sampling
+proportions, source/skill/scenario hashes, judge, rubric, and metric cutoffs;
+each agent's API/settings must remain stable. Dry runs, rescores, and duplicate
+attempts are excluded. Historical verdicts and files remain unchanged.
+
+The report separates tool-use, completion, and fitness (skill fidelity) scores
+from routing, hard checks, and overall passes. It compares user turns, model
+responses, MCP calls/errors, skill loads, agent token usage, and elapsed seconds.
+Means show measured/selected coverage; missing values are `n/a` or JSON `null`.
+Reasoning tokens are included in output, and cached tokens in input. Tokenizers
+and provider accounting differ; SDK price estimates are not billed EnMaaS cost.
+Agent time excludes scoring; total time is their sum per conversation, not
+cohort wall-clock duration. Scheduling overlaps are disclosed when the cohort
+contains them; run-ID selection has no scheduling manifest. A single attempt
+per model/golden is a smoke comparison, not a reliability estimate or ranking.
+
 ### JSONL Record Format
 
 Each line in `eval_history.jsonl` is a self-contained JSON object:

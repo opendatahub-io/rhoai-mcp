@@ -68,11 +68,11 @@ def score_trend_report(
         metric_scores = {m.name: m for m in r.metrics}
         row = [date, r.git.commit, truncate(r.scenario, 20)]
         for mn in all_metric_names:
-            m = metric_scores.get(mn)
-            row.append(f"{m.score:.2f}" if m else "-")
+            metric = metric_scores.get(mn)
+            row.append(f"{metric.score:.2f}" if metric else "-")
         row.append(str(r.turns))
         row.append("Y" if r.passed else "N")
-        row.append(f"{r.duration_seconds:.1f}s")
+        row.append(f"{r.duration_seconds:.1f}s" if r.duration_seconds is not None else "n/a")
         rows.append(row)
 
     # Footer with summary stats

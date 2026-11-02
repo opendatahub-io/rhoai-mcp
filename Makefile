@@ -170,7 +170,7 @@ eval-report: ## Show latest eval run summary
 	uv run --group eval python -m evals.reporting.cli summary
 
 eval-compare: ## Compare eval scores across providers/models
-	uv run --group eval python -m evals.reporting.cli compare
+	uv run --group eval python -m evals.reporting.cli compare $(ARGS)
 
 eval-trend: ## Show eval score trends over time
 	uv run --group eval python -m evals.reporting.cli trend

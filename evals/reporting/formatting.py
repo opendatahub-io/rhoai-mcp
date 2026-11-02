@@ -64,11 +64,12 @@ def format_table(
         )
         sep_parts = []
         for i in range(num_cols):
-            dash = "-" * col_widths[i]
+            width = max(3, col_widths[i])
+            dash = "-" * width
             if alignments[i] == "r":
-                sep_parts.append("-" * (col_widths[i] - 1) + ":")
+                sep_parts.append(dash + ":")
             elif alignments[i] == "c":
-                sep_parts.append(":" + "-" * (col_widths[i] - 2) + ":")
+                sep_parts.append(":" + dash + ":")
             else:
                 sep_parts.append(dash)
         sep_line = "| " + " | ".join(sep_parts) + " |"
@@ -142,11 +143,11 @@ def format_summary(
         metric_scores = {m.name: m for m in r.metrics}
         row = [truncate(r.scenario, 25)]
         for mn in all_metric_names:
-            m = metric_scores.get(mn)
-            row.append(f"{m.score:.2f}" if m else "-")
+            metric = metric_scores.get(mn)
+            row.append(f"{metric.score:.2f}" if metric else "-")
         row.append(str(r.turns))
         row.append("Y" if r.passed else "N")
-        row.append(f"{r.duration_seconds:.1f}s")
+        row.append(f"{r.duration_seconds:.1f}s" if r.duration_seconds is not None else "n/a")
         rows.append(row)
 
     table = format_table(headers, rows, alignments, fmt=fmt)

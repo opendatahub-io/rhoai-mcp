@@ -544,12 +544,33 @@ are preserved, and Navigator-deploy remains outside the paid scope.
 `[cluster fit]` cells in all four recommendation columns, with one fit label per
 column and `—` for a missing recommendation. All 18 existing table-check
 tests pass, and replay preserves every check result in the eight saved
-conversations. The clarified skill hash is `6b84c869d2cc`; no live evaluation
-has used it yet. Keep the completed 7/8 sweep tied to `25392e419e13` when
-building comparison/reporting. No paid call was made for this one-row change.
-The next implementation step is the comparison/reporting CLI.
+conversations. The clarified skill hash is `6b84c869d2cc`; the edit itself
+made no paid calls. Keep the completed 7/8 sweep tied to `25392e419e13` when
+building comparison/reporting.
+The offline comparison/reporting CLI is now implemented (§3.5), retaining this
+frozen cohort and its original verdicts.
 [Updated report](./navigator-resweep.md),
 [records](./navigator-resweep-results.json).
+
+**Subsequent sequential sweep — complete.** A separately authorized eight-case
+cohort used the clarified skill `6b84c869d2cc` with all four EnMaaS models.
+Anthropic, GPT, and DeepSeek passed 2/2 each; GLM passed 1/2. All eight completed
+five turns and passed table completeness. GLM vague (`4f2a187d74cd`) omitted the
+handoff block, failing three hard checks and scoring 0.50 for task completion;
+23/24 judge scores passed. No timeout, model/harness/judge error, forbidden
+call, deployment write, or rerun occurred. Source `f0bd975` plus its frozen
+working-tree diff, 286 file hashes, scenarios, packages, model profiles, and
+scoring settings stayed fixed. Whole-test intervals include agent execution,
+judging, and teardown; all 28 case pairs and all model batches show zero
+overlap. No sleep/wake event occurred. The earlier 54 history records and
+native/report evidence were preserved before plan status updates.
+This removes overlap introduced by our runner; shared provider load, caching,
+and one attempt per cell still limit latency and reliability claims. Preserve
+the separate cohorts, and inspect GLM's missing handoff offline before choosing
+any further change or paid validation.
+[Sequential sweep](./navigator-serial-sweep.md),
+[records](./navigator-serial-sweep-results.json),
+[comparison](./navigator-serial-model-comparison.md).
 
 **Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
 `create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding
@@ -607,24 +628,51 @@ always be re-read, while a lossy one cannot be recovered. Overall pass requires
 successful routing, all hard checks, and all required metrics passing; absent required
 scores cannot produce a pass. Dry runs are recorded as such.
 
-**Defer `comparison.py` and the CLI to Phase 3**, when a matrix exists to compare. One
-model and a handful of conversations are read directly from the JSONL and the
-per-attempt artifacts; a cross-model ranking view built before there are cross-model
-results is speculative work. When it does land it must: compare matching skill/golden
-sets and fixed judge/rubric configurations within a selected sweep; refuse to pool
-unrelated scenarios or arbitrary recent records into a ranking; show sample counts and
-leave missing values `n/a` rather than substituting `0.0` as the current comparison
-does; and report routing success, pass rate, errors, and per-metric means separately,
-with a coverage denominator on conditional judged quality.
+**Phase 3 comparison — implemented offline.** `make eval-compare ARGS="..."`
+accepts a frozen `--cohort` JSON or repeated original `--run-id` selections.
+It compares matching skill/golden sets and sampling proportions under fixed
+source, judge, rubric, metric versions/cutoffs, and per-agent settings. It
+rejects incompatible configurations, excludes dry runs/rescores/duplicate
+attempts, and never pools arbitrary recent history. `--last` applies per
+model/golden. Terminal, Markdown, and JSON output show sample counts and
+measured coverage; missing/error values stay `n/a` (JSON `null`), preserving
+genuine zero scores.
+
+Quality tables highlight tool use, completion, and fitness (the existing skill
+fidelity score), with routing, overall passes, hard checks, and errors separate.
+Efficiency tables cover completed user turns, model responses, output tokens,
+agent time, scoring time, and their sum per conversation. Additional usage
+includes input/reasoning/cache tokens, MCP calls/errors, and skill loads.
+Native per-response usage is counted once and checked against the frozen
+artifact hashes when available. Reasoning is included in output; cached input
+is included in input. These are provider-reported tokens, not billed cost.
+Missing native artifacts leave usage unavailable without discarding scores.
+The saved batch overlap is disclosed; times are descriptive and their sum is
+not cohort wall-clock duration. No model calls, rescoring, or ranking occurs.
+
+The latest [comparison](./navigator-serial-model-comparison.md) and
+[JSON report](./navigator-serial-model-comparison.json) preserve the new
+sequential `6b84c869d2cc` cohort and its 7/8 verdict, with measured scheduling
+verification attached. The earlier [comparison](./navigator-model-comparison.md)
+and [JSON](./navigator-model-comparison.json) retain the separate
+`25392e419e13` cohort and its original 7/8 verdict. Regenerate the latest
+comparison tables without paid calls:
+
+```bash
+make eval-compare ARGS="--cohort docs/temp/navigator-serial-sweep-results.json --artifacts-root evals/results --format markdown --output docs/temp/navigator-serial-model-comparison.md"
+```
+
+Use `--format json` with the JSON output path for the machine-readable report.
+See the [CLI guide](../EVALS.md#navigator-model-comparison) for run-ID selection.
 
 The remaining comparison scope is Navigator's happy-path and vague-requirements
 goldens across the four EnMaaS models. Select those records explicitly; historical
 Navigator-deploy records do not enter this comparison. Deployment reporting and
 additional paid validation are deferred under the cost scope.
 
-Retain the LCS reporting behavior through backward-compatible defaults. The new
-`make eval-skills` entry point selects a coherent sweep. Existing `make eval-compare`
-keeps working on LCS records and is not extended to this matrix until Phase 3.
+LCS-only comparison, summary, and trend reporting retain backward-compatible
+defaults. Skill histories require explicit selection. The `make eval-skills`
+entry point continues to select a coherent live sweep; reporting is offline.
 
 ### 3.6 Debugging artifacts
 

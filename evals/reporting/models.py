@@ -85,7 +85,7 @@ class EvalRecord:
     turns: int = 0
     tool_names_used: list[str] = field(default_factory=list)
     passed: bool = False
-    duration_seconds: float = 0.0
+    duration_seconds: float | None = None
 
     # -- skill-eval additions (plan §3.5) ----------------------------------- #
 
@@ -108,7 +108,7 @@ class EvalRecord:
     dry_run: bool = False
     """True when no judge ran. Such a record carries no metric scores and must
     never be read as a judged pass."""
-    agent_seconds: float = 0.0
+    agent_seconds: float | None = None
     """Agent execution time, separate from scoring time (``duration_seconds``)."""
     skill_sha: str = ""
     scenario_sha: str = ""

@@ -9,11 +9,13 @@ Section references (§) are to the parent plan.
 
 **Remaining cost scope:** sweep only Navigator's model-recommendation goldens
 (`navigator-happy-path`, `navigator-vague-requirements`) across four EnMaaS
-models under the corrected host/skill contract: **8 fresh conversations,
-now complete (7/8 passed)**. Anthropic's first two passed and were reviewed
-before GPT, GLM, and DeepSeek's remaining six. GLM and DeepSeek overlapped at
-the user's request. The Anthropic pair counts toward those eight.
-The earlier eight-case sweep remains historical. Navigator-deploy
+models under the corrected host/skill contract: **the new sequential eight-case
+sweep is complete (7/8 passed), with zero measured overlap**. Anthropic, GPT,
+and DeepSeek passed 2/2 each; GLM passed 1/2 after omitting a handoff. Table
+completeness passed in all eight cases under skill `6b84c869d2cc`.
+The earlier overlapping 7/8 cohort and initial 5/8 cohort remain historical.
+No further paid run is pending; the next review is GLM's saved failure.
+Navigator-deploy
 sweeps and new deployment-specific work are deferred. Existing deployment
 implementation, offline tests, and historical evidence below are retained.
 
@@ -237,7 +239,27 @@ judged assessment; automated GPU discovery remains deferred.
 
 ## 5. Phase 3 leftovers
 
-- **Updated sweep — 8/8 recorded, 7/8 passed.** Anthropic, GPT, and GLM passed
+- **Fresh sequential sweep — 8/8 recorded, 7/8 passed.** Anthropic, GPT, and
+  DeepSeek passed 2/2 each; GLM passed 1/2. All eight loaded Navigator and
+  completed five turns. Table completeness passed in all eight, including
+  DeepSeek's vague case under the clarified skill `6b84c869d2cc`. The sole
+  failure is GLM vague (`4f2a187d74cd`): its final answer refers to a handoff
+  block but omits it, failing three hard checks and scoring 0.50 for completion.
+  This is confirmed in the saved output. All 24 metric slots are populated;
+  23 passed. There were no reruns, timeouts, harness/model/judge errors,
+  forbidden calls, or deployment writes. Source `f0bd975` plus the recorded
+  working-tree diff, 286 source/config/test/runner hashes, both scenario hashes,
+  model profiles, and scoring settings stayed frozen. Whole-case intervals
+  include judging and teardown: **all 28 pairs show zero overlap**, and every
+  batch exited before the next started. No sleep/wake event occurred.
+  The 54 earlier history records remain a byte-identical prefix; exactly eight
+  were appended. All 120 earlier native JSON files and 33 earlier report/plan
+  files were unchanged at verification; plan status updates followed that check.
+  [Sweep and timing evidence](./navigator-serial-sweep.md),
+  [comparison](./navigator-serial-model-comparison.md),
+  [records](./navigator-serial-sweep-results.json),
+  [comparison JSON](./navigator-serial-model-comparison.json).
+- **Earlier updated sweep — 8/8 recorded, 7/8 passed.** Anthropic, GPT, and GLM passed
   2/2 each; DeepSeek passed 1/2. All eight conversations discovered Navigator,
   completed five turns, and preserved the selected capacity (`0.13` QPS).
   All 24 judge scores passed. The sole overall failure is DeepSeek's vague
@@ -326,16 +348,39 @@ judged assessment; automated GPU discovery remains deferred.
   identities and remains dry-run data. [Correction evidence](./precondition-check-fix-results.json).
   The planner's `tuple index out of range` on a cost-slot query is a separate
   observed tool defect.
-- **`comparison.py` + reporting CLI.** Multi-model Navigator records now exist;
-  first resolve the harness/checker concerns above. Initial reporting covers Navigator's two
-  goldens only; deployment reporting is deferred. It must compare only matching
-  skill/golden sets under fixed judge, rubric, and metric versions, show sample counts, and
-  leave missing values `n/a` rather than substituting `0.0` as the current
-  implementation does (§3.5).
+- **Navigator comparison + reporting CLI — implemented offline.** The
+  latest [comparison](./navigator-serial-model-comparison.md) and
+  [machine-readable report](./navigator-serial-model-comparison.json) use the
+  new sequential cohort, retaining skill `6b84c869d2cc` and its 7/8 verdict.
+  The [earlier comparison](./navigator-model-comparison.md) and
+  [JSON](./navigator-model-comparison.json) preserve the separate
+  `25392e419e13` cohort and its original 7/8 verdict.
+  Quality highlights tool use, task completion, and fitness (skill fidelity),
+  separately from routing, overall passes, and hard checks. Efficiency covers
+  user turns, model responses, input/output/reasoning/cache tokens, MCP calls
+  and errors, skill loads, and agent/scoring/total seconds. Means show measured
+  sample coverage; absent values stay `n/a`. Native usage is summed once per
+  response, with saved hashes verified; reasoning and cached input are subsets
+  of output and input respectively. Token counts are not billed EnMaaS cost.
+  The latest cohort has zero measured overlap; provider load, natural caching,
+  and one attempt per model/golden still limit stronger latency claims.
+  Select `--cohort` or explicit original `--run-id` values: incompatible skill,
+  scenario, source, judge, rubric, metric, or agent settings are rejected, as
+  are unequal golden sets or sampling proportions. Dry runs, rescores, and
+  duplicate attempts are excluded. No model or judge calls are made.
+  Regenerate the latest tables with `make eval-compare ARGS="--cohort docs/temp/navigator-serial-sweep-results.json --artifacts-root evals/results --format markdown --output docs/temp/navigator-serial-model-comparison.md"`;
+  use `--format json` with the JSON output path for machine-readable data.
+  The [CLI guide](../EVALS.md#navigator-model-comparison) also covers run-ID
+  selection and portable artifact paths.
+  Validation: all 371 offline evaluation tests pass, along with lint/format
+  and type checks for the changed reporting modules. Independent summation
+  reconciles native token usage; all 129 snapshotted evidence files and 54
+  history records are unchanged. Terminal, Markdown, and JSON paths were
+  exercised without model or judge calls.
 - **`make eval-rescore` recording.** Re-scores currently append records under a
-  *new* `run_id`. Pooling them with live runs in a future comparison would
-  double-count one agent run; the comparison layer must filter on `scoring_id`
-  / `dry_run`. Re-scoring also currently writes the current golden's scenario
+  *new* `run_id`. The comparison now excludes these using original artifact/run
+  identity and deduplicates `attempt_id`; dry runs are excluded separately.
+  The writer itself remains deferred. Re-scoring currently writes the current golden's scenario
   and skill hashes onto the new score record. Preserve the original attempt's
   identity separately from the scoring configuration before comparing history;
   the new agreement expectations intentionally change scenario hashes.
@@ -360,16 +405,18 @@ remaining work focuses on the Navigator sweep and its comparison:
 
 Found while building; none are scheduled.
 
-- **Skill template ambiguity — corrected offline.** Navigator's Cluster fit row
+- **Skill template ambiguity — corrected and exercised live.** Navigator's Cluster fit row
   now has four explicit `[cluster fit]` cells. The guidance defines exactly one
   hardware-fit label per column, with `—` for a missing recommendation. The
   table checker and workflow are unchanged. All 18 existing
   table-check tests pass; the actual skill template has complete cell structure.
   Replay of all eight saved conversations preserves every check result, including
   DeepSeek's original empty-cell failure (`1dd60008ed20`). The completed sweep
-  remains 7/8 under skill `25392e419e13`; the clarified template is
-  `6b84c869d2cc` and has no live result yet. No paid calls were made. Local
-  verification is retained in
+  remains 7/8 under skill `25392e419e13`. The clarified template
+  `6b84c869d2cc` subsequently passed table completeness in all eight cases of
+  the new sequential sweep (§5), including DeepSeek's vague case. The template
+  edit itself made no paid calls; the subsequent sweep was separately
+  authorized. Local verification is retained in
   `evals/results/navigator-cluster-fit-placeholder-20261102-validation.json`.
 - **Allowlist deviations observed, not gated** (§3.2). The deploy run called
   `list_data_connections`, `list_storage` and `prepare_model_deployment`, none
@@ -381,18 +428,16 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Review the completed updated sweep (§5)** — 7/8 passed, with all 24 judge
-   scores and all eight capacity handoffs passing. The staged Anthropic-first
-   run and the remaining six are complete; no additional sweep is pending.
-2. **Cluster fit template (§7) — correction ready for review.** The explicit
-   Cluster fit cells and per-column guidance pass 18 existing tests and keep
-   the eight saved check reports unchanged.
-   Preserve the frozen 7/8 baseline; any targeted live check of the new skill
-   hash is a separate record.
-3. **Navigator comparison (§5)** — implement `comparison.py` using the completed
-   current roster records. Keep historical configurations and deployment
-   attempts separate, report sample counts and `n/a`, and disclose the
-   GLM/DeepSeek timing overlap.
+1. **Review the sequential sweep and comparison (§5).** The full roster is
+   complete: 7/8 passed, all eight table checks passed, and all 28 interval
+   pairs show zero overlap. No additional sweep is pending. Preserve both
+   historical cohorts and their distinct failure cases.
+2. **Investigate GLM's omitted handoff offline.** Inspect `4f2a187d74cd`, its
+   delivered instructions, preceding turns, and final output. Do not attribute
+   one failure to the template edit or scheduling, change a historical verdict,
+   or run another paid sweep as part of this review.
+3. **Choose any follow-up correction after review.** Keep it minimal and verify
+   it offline first. Additional paid validation remains a separate decision.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
 outside this branch's current evaluation work by decision. Navigator-deploy

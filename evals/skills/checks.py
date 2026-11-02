@@ -387,6 +387,7 @@ def check_navigator(
     expect_handoff: bool = True,
     selection_turn_index: int | None = None,
     expectation: SelectionExpectation | None = None,
+    hardware_reply: str | None = None,
 ) -> CheckReport:
     """Deterministic checks for the ``navigator`` skill (plan §3.1).
 
@@ -396,6 +397,9 @@ def check_navigator(
             confirmed the workload profile. ``recommend_model`` must not precede
             it. ``None`` reports that ordering check as unexercised.
         expect_handoff: Whether this golden reaches the handoff block.
+        hardware_reply: Scripted user reply supplying inventory or explicitly
+            permitting an unfiltered search. None leaves this branch unexercised;
+            automatic discovery is outside this customer-reply check.
     """
     report = CheckReport()
     routed = check_routing(transcript, "navigator", report)
@@ -426,6 +430,8 @@ def check_navigator(
             f"recommend_model at turn {recommend_at}, confirmation at "
             f"turn {confirmation_turn_index}",
         )
+
+    _check_hardware_confirmation(transcript, report, hardware_reply)
 
     # Hard workflow boundary: this skill hands off, it never deploys.
     violations = sorted(set(used) & NAVIGATOR_FORBIDDEN_TOOLS)
@@ -471,6 +477,29 @@ def check_navigator(
     if not routed:
         report.add("navigator_fidelity", "n/a", "routing failed; skill adherence unscoreable")
     return report
+
+
+def _check_hardware_confirmation(
+    transcript: AgentTranscript, report: CheckReport, hardware_reply: str | None
+) -> None:
+    name = "navigator_recommend_after_hardware_confirmation"
+    if hardware_reply is None:
+        report.add(name, "unexercised", "golden did not identify a customer hardware reply")
+        return
+    recommendations = [c for c in transcript.mcp_tool_calls if c.name == "recommend_model"]
+    if not recommendations:
+        report.add(name, "n/a", "recommend_model never called")
+        return
+    hardware_at = (
+        find_user_turn_index(transcript, hardware_reply) if hardware_reply.strip() else None
+    )
+    premature = [c for c in recommendations if hardware_at is None or c.turn_index <= hardware_at]
+    report.check(
+        name,
+        hardware_at is not None and not premature,
+        f"recommendations before customer hardware inventory/consent: "
+        f"{[(c.call_id, c.turn_index) for c in premature]}; hardware reply at {hardware_at}",
+    )
 
 
 # --------------------------------------------------------------------------- #

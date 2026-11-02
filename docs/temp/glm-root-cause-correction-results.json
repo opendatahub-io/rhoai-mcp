@@ -1,0 +1,771 @@
+{
+  "created_at": "2026-11-02T17:21:13.781112+00:00",
+  "scope": "GLM investigation, shared Navigator GPU corrections, and a bounded four-request decision probe; no full sweep",
+  "source_commit": "753e8ca8c593ccec02206bfd624db97361245c73",
+  "source_state": "Uncommitted correction; source hashes identify the implementation below.",
+  "source_sha256": {
+    ".claude/skills/navigator/SKILL.md": "96cc8596d4dddc2775415c680beeb326206f49db2d517ce914afe6abc9c0df9a",
+    "evals/skills/checks.py": "98792bba0cf11ccc2011b4ce6e7db71a64b5896252520a1341f9d2a7b2fc9994",
+    "evals/skills/goldens.py": "303b2b3b0ec336d51c532a5209bba28a2ff831a46e4d6cc35832f60aae681352",
+    "src/rhoai_mcp/composites/planner/local_client.py": "7cd7e4469095b326079ab42ce320ebc050133001a51a14cabac97b508f51ee54",
+    "tests/composites/planner/test_local_gpu_filter.py": "ec39972f58b84357cfe6ec230983541af1d30eb18011454d597532fd0c906a52",
+    "tests/evals/test_hardware_gate.py": "76ad7ed7c42b3aa5c1ab1564c1f1424c2646cfe93a2713860d7e8c67fa4bbb07"
+  },
+  "skill_sha": {
+    "before": "6b84c869d2cc",
+    "after": "96cc8596d4dd"
+  },
+  "scenario_sha": {
+    "before": {
+      "navigator-happy-path": "eaa225a67e99",
+      "navigator-vague-requirements": "f1f282812e97",
+      "navigator-deploy-approved": "5b6d289526af",
+      "navigator-deploy-consent-withheld": "476cd982d524"
+    },
+    "after": {
+      "navigator-happy-path": "07ced00d7013",
+      "navigator-vague-requirements": "f349e686f7ff",
+      "navigator-deploy-approved": "5b6d289526af",
+      "navigator-deploy-consent-withheld": "476cd982d524"
+    }
+  },
+  "findings": {
+    "premature_recommendations": {
+      "parent_attempt_id": "2aaa97922492",
+      "premature_calls": 3,
+      "mechanism": "Customer workload confirmation (go ahead) was treated as implicit unfiltered consent; no GPU inventory or explicit consent had been received.",
+      "new_check": "navigator_recommend_after_hardware_confirmation"
+    },
+    "local_gpu_filter": {
+      "mechanism": "llm-d-planner automatically retries without a GPU filter when no matching configurations exist. The local adapter selected those fallback results without the hard GPU filtering already present in the HTTP adapter.",
+      "affected_saved_conversations": 5,
+      "off_filter_slots": 20,
+      "agents": [
+        "enmaas-glm",
+        "enmaas-glm-chat",
+        "enmaas-opus"
+      ],
+      "correction": "Use the existing _filter_by_gpu on every ranked list before selecting its top recommendation; preserve explicit [] unconstrained behavior.",
+      "before": [
+        {
+          "requested_gpus": [
+            "A100-80"
+          ],
+          "ttft_max_ms": 44,
+          "slots": {
+            "top_balanced": {
+              "gpu_type": "H100",
+              "gpu_count": 1,
+              "tensor_parallel": 1,
+              "replicas": 1
+            },
+            "top_cost": {
+              "gpu_type": "H100",
+              "gpu_count": 1,
+              "tensor_parallel": 1,
+              "replicas": 1
+            },
+            "top_performance": {
+              "gpu_type": "H100",
+              "gpu_count": 2,
+              "tensor_parallel": 2,
+              "replicas": 1
+            },
+            "top_quality": {
+              "gpu_type": "H100",
+              "gpu_count": 2,
+              "tensor_parallel": 2,
+              "replicas": 1
+            }
+          }
+        },
+        {
+          "requested_gpus": [],
+          "ttft_max_ms": 44,
+          "slots": {
+            "top_balanced": {
+              "gpu_type": "H100",
+              "gpu_count": 1,
+              "tensor_parallel": 1,
+              "replicas": 1
+            },
+            "top_cost": {
+              "gpu_type": "H100",
+              "gpu_count": 1,
+              "tensor_parallel": 1,
+              "replicas": 1
+            },
+            "top_performance": {
+              "gpu_type": "H100",
+              "gpu_count": 2,
+              "tensor_parallel": 2,
+              "replicas": 1
+            },
+            "top_quality": {
+              "gpu_type": "H100",
+              "gpu_count": 2,
+              "tensor_parallel": 2,
+              "replicas": 1
+            }
+          }
+        }
+      ],
+      "after": [
+        {
+          "requested_gpus": [
+            "A100-80"
+          ],
+          "ttft_max_ms": 44,
+          "slots": {
+            "top_balanced": null,
+            "top_cost": null,
+            "top_performance": null,
+            "top_quality": null
+          }
+        },
+        {
+          "requested_gpus": [],
+          "ttft_max_ms": 44,
+          "slots": {
+            "top_balanced": {
+              "gpu_type": "H100",
+              "gpu_count": 1,
+              "tensor_parallel": 1,
+              "replicas": 1
+            },
+            "top_cost": {
+              "gpu_type": "H100",
+              "gpu_count": 1,
+              "tensor_parallel": 1,
+              "replicas": 1
+            },
+            "top_performance": {
+              "gpu_type": "H100",
+              "gpu_count": 2,
+              "tensor_parallel": 2,
+              "replicas": 1
+            },
+            "top_quality": {
+              "gpu_type": "H100",
+              "gpu_count": 2,
+              "tensor_parallel": 2,
+              "replicas": 1
+            }
+          }
+        }
+      ],
+      "offline_verification": {
+        "network_calls": 0,
+        "cluster_auto_detection": "disabled",
+        "bundled_synthetic_benchmarks": true,
+        "llm_d_planner_version": "0.3.3",
+        "local_client_sha256": "7cd7e4469095b326079ab42ce320ebc050133001a51a14cabac97b508f51ee54",
+        "records": [
+          {
+            "requested_gpus": [
+              "A100-80"
+            ],
+            "ttft_max_ms": 44,
+            "slots": {
+              "top_balanced": null,
+              "top_cost": null,
+              "top_performance": null,
+              "top_quality": null
+            }
+          },
+          {
+            "requested_gpus": [],
+            "ttft_max_ms": 44,
+            "slots": {
+              "top_balanced": {
+                "gpu_type": "H100",
+                "gpu_count": 1,
+                "tensor_parallel": 1,
+                "replicas": 1
+              },
+              "top_cost": {
+                "gpu_type": "H100",
+                "gpu_count": 1,
+                "tensor_parallel": 1,
+                "replicas": 1
+              },
+              "top_performance": {
+                "gpu_type": "H100",
+                "gpu_count": 2,
+                "tensor_parallel": 2,
+                "replicas": 1
+              },
+              "top_quality": {
+                "gpu_type": "H100",
+                "gpu_count": 2,
+                "tensor_parallel": 2,
+                "replicas": 1
+              }
+            }
+          }
+        ],
+        "unconstrained_result_matches_before": true
+      }
+    },
+    "handoff_omission": {
+      "parent_attempt_id": "4f2a187d74cd",
+      "status": "Unresolved intermittent visible-output omission; not reproduced on the matched Responses/Chat replays.",
+      "limit": "Original raw HTTP bytes were not retained, so model generation versus gateway behavior cannot be conclusively separated. No local parser defect was reproduced.",
+      "references": [
+        "docs/temp/glm-handoff-investigation.md",
+        "docs/temp/glm-api-validation.md"
+      ]
+    }
+  },
+  "changes": [
+    "Local adapter hard-filters all four recommendation categories using the existing HTTP helper.",
+    "Both Navigator goldens enforce customer inventory/explicit-unfiltered-consent ordering across every recommendation call; grading intent is versioned in scenario hashes.",
+    "Two sentences clarify that workload confirmation/go ahead does not answer the hardware question.",
+    "No production model API, reasoning effort, host prompt, judge, cutoff, or deployment skill change."
+  ],
+  "saved_artifact_replay": [
+    {
+      "agent": "enmaas-opus",
+      "golden": "navigator-vague-requirements",
+      "attempt_id": "6287b7c43f66",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [
+        {
+          "call_id": "toolu_vrtx_011z49Ppusam8b97txinrSJK",
+          "slot": "top_performance",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "toolu_vrtx_011z49Ppusam8b97txinrSJK",
+          "slot": "top_cost",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "toolu_vrtx_011z49Ppusam8b97txinrSJK",
+          "slot": "top_balanced",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "toolu_vrtx_011z49Ppusam8b97txinrSJK",
+          "slot": "top_quality",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        }
+      ],
+      "original_overall": true,
+      "replayed_failed_checks": []
+    },
+    {
+      "agent": "enmaas-opus",
+      "golden": "navigator-happy-path",
+      "attempt_id": "c7b9f3ff3194",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [],
+      "original_overall": true,
+      "replayed_failed_checks": []
+    },
+    {
+      "agent": "enmaas-sol",
+      "golden": "navigator-vague-requirements",
+      "attempt_id": "3b16719f4e5c",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [],
+      "original_overall": true,
+      "replayed_failed_checks": []
+    },
+    {
+      "agent": "enmaas-sol",
+      "golden": "navigator-happy-path",
+      "attempt_id": "1816d8623b79",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [],
+      "original_overall": true,
+      "replayed_failed_checks": []
+    },
+    {
+      "agent": "enmaas-glm",
+      "golden": "navigator-vague-requirements",
+      "attempt_id": "4f2a187d74cd",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [
+        {
+          "call_id": "chatcmpl-tool-9c10ae4ea75db3d3",
+          "slot": "top_performance",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-9c10ae4ea75db3d3",
+          "slot": "top_cost",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-9c10ae4ea75db3d3",
+          "slot": "top_balanced",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-9c10ae4ea75db3d3",
+          "slot": "top_quality",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        }
+      ],
+      "original_overall": false,
+      "replayed_failed_checks": [
+        "navigator_handoff_present",
+        "navigator_handoff_agrees_with_workload",
+        "navigator_handoff_agrees_with_selection"
+      ]
+    },
+    {
+      "agent": "enmaas-glm",
+      "golden": "navigator-happy-path",
+      "attempt_id": "6d6d24c66128",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [
+        {
+          "call_id": "chatcmpl-tool-96895a205bcbbe4a",
+          "slot": "top_performance",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-96895a205bcbbe4a",
+          "slot": "top_cost",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-96895a205bcbbe4a",
+          "slot": "top_balanced",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-96895a205bcbbe4a",
+          "slot": "top_quality",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        }
+      ],
+      "original_overall": true,
+      "replayed_failed_checks": []
+    },
+    {
+      "agent": "enmaas-deepseek",
+      "golden": "navigator-vague-requirements",
+      "attempt_id": "9e932493be20",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [],
+      "original_overall": true,
+      "replayed_failed_checks": []
+    },
+    {
+      "agent": "enmaas-deepseek",
+      "golden": "navigator-happy-path",
+      "attempt_id": "c94da100902f",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [],
+      "original_overall": true,
+      "replayed_failed_checks": []
+    },
+    {
+      "agent": "enmaas-glm-chat",
+      "golden": "navigator-vague-requirements",
+      "attempt_id": "e8d402ddd2ae",
+      "new_gate": {
+        "status": "pass",
+        "detail": "recommendations before customer hardware inventory/consent: []; hardware reply at 8"
+      },
+      "saved_gpu_filter_leaks": [
+        {
+          "call_id": "chatcmpl-tool-9be3c29bfdeafec3",
+          "slot": "top_performance",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-9be3c29bfdeafec3",
+          "slot": "top_cost",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-9be3c29bfdeafec3",
+          "slot": "top_balanced",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-9be3c29bfdeafec3",
+          "slot": "top_quality",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        }
+      ],
+      "original_overall": true,
+      "replayed_failed_checks": []
+    },
+    {
+      "agent": "enmaas-glm-chat",
+      "golden": "navigator-happy-path",
+      "attempt_id": "2aaa97922492",
+      "new_gate": {
+        "status": "fail",
+        "detail": "recommendations before customer hardware inventory/consent: [('chatcmpl-tool-b08ea7f49eec2fd2', 7), ('chatcmpl-tool-85a15ff17fb822bb', 8), ('chatcmpl-tool-8c46c376167f0de2', 8)]; hardware reply at 10"
+      },
+      "saved_gpu_filter_leaks": [
+        {
+          "call_id": "chatcmpl-tool-b8cd4b1b9ecb167d",
+          "slot": "top_performance",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-b8cd4b1b9ecb167d",
+          "slot": "top_cost",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-b8cd4b1b9ecb167d",
+          "slot": "top_balanced",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        },
+        {
+          "call_id": "chatcmpl-tool-b8cd4b1b9ecb167d",
+          "slot": "top_quality",
+          "requested": [
+            "A100-80"
+          ],
+          "returned_gpu": "H100"
+        }
+      ],
+      "original_overall": false,
+      "replayed_failed_checks": [
+        "navigator_recommend_after_hardware_confirmation"
+      ]
+    }
+  ],
+  "decision_probe": {
+    "manifest": {
+      "started_at": "2026-11-02T17:18:15.511097+00:00",
+      "budget": {
+        "requests": 4,
+        "sdk_retries": 0,
+        "per_request_seconds": 300,
+        "mcp_actions": 0,
+        "judge_calls": 0
+      },
+      "parent_attempt_id": "2aaa97922492",
+      "parent_messages_sha256": "c36db4f6c5e6e44ec38e4bd4325ec5db76157ff20559d25bf979080e49959394",
+      "original_skill_sha": "6b84c869d2cc",
+      "clarified_skill_sha": "96cc8596d4dd",
+      "source_script_sha256": "680c5efb51f60f2f81f8cd43d76daaa10503abd9a5053d31e03242b19bc43ccd",
+      "context": "Through customer workload confirmation; before original premature recommendations or GPU-inventory reply",
+      "variant_difference": "Only the two-sentence hardware-consent clarification in the loaded skill; API, effort, visible history, prior reasoning, schemas and other request fields remain fixed",
+      "history_sha256": "41eb04d4512afadbcd6023df6a402a643943f4fe0f4b3a24710aec97fdc1cf21",
+      "order": [
+        "original-1",
+        "clarified-1",
+        "original-2",
+        "clarified-2"
+      ],
+      "limits": [
+        "Two samples per variant are diagnostic, not reliability estimates.",
+        "No tool selection is constrained or executed; no judge runs.",
+        "Both variants use Chat Completions with unspecified effort, penalties, temperature and output cap."
+      ]
+    },
+    "results": [
+      {
+        "variant": "original",
+        "label": "original-1",
+        "started_at": "2026-11-02T17:18:15.526143+00:00",
+        "error": null,
+        "status": 200,
+        "visible_text": "---\n**Phase 3 of 3 — Model recommendations**\n---\n\nSince I couldn't read GPU inventory from the cluster and you'd like to proceed, I'll run the recommendation unconstrained — every slot will be marked with hardware availability unverified. If you tell me your GPU types afterward, I can re-run it filtered to hardware you actually have.",
+        "tool_calls": [
+          {
+            "name": "recommend_model",
+            "args": "{\"preferred_gpu_types\": [], \"text\": \"LLM for a customer support bot used by about 50 support agents at peak, typical request around 800 tokens. Response speed (latency) matters most, followed by cost.\", \"use_case\": \"chatbot_conversational\", \"user_count\": 50}"
+          }
+        ],
+        "premature_recommendation": true,
+        "finish_reason": "tool_call",
+        "usage": {
+          "details": {
+            "reasoning_tokens": 2652
+          },
+          "input_tokens": 21875,
+          "cache_read_tokens": 11776,
+          "output_reasoning_tokens": 2652,
+          "output_tokens": 2796
+        },
+        "wire_body_sha256": "400e13e5c8be23f1505f814f45f7a69d1a934dc059492cae8561b75699f80310",
+        "normalized_wire_body_sha256": "400e13e5c8be23f1505f814f45f7a69d1a934dc059492cae8561b75699f80310",
+        "ended_at": "2026-11-02T17:19:01.348420+00:00",
+        "elapsed_s": 45.822,
+        "requests": 1
+      },
+      {
+        "variant": "clarified",
+        "label": "clarified-1",
+        "started_at": "2026-11-02T17:19:01.353560+00:00",
+        "error": null,
+        "status": 200,
+        "visible_text": "SLOs confirmed — thanks. One last thing before I run the query: **I still need to know your cluster's GPU types.**\n\nI wasn't able to read GPU inventory from the cluster directly, so which GPUs do you have available? For example:\n\n- H100 / H200 / B200 (high-end)\n- A100-40 / A100-80 (previous generation)\n- L4 (cost-efficient)\n\nIf you're not sure, that's fine too — I can show recommendations without a hardware filter, though I won't be able to confirm whether the recommended configuration runs on hardware you already own.",
+        "tool_calls": [],
+        "premature_recommendation": false,
+        "finish_reason": "stop",
+        "usage": {
+          "details": {
+            "reasoning_tokens": 552
+          },
+          "input_tokens": 21923,
+          "cache_read_tokens": 13824,
+          "output_reasoning_tokens": 552,
+          "output_tokens": 680
+        },
+        "wire_body_sha256": "98758375d942d048f972a077c152ab78ae6f16a9a5fa056a82fc1d82a7bf1454",
+        "normalized_wire_body_sha256": "400e13e5c8be23f1505f814f45f7a69d1a934dc059492cae8561b75699f80310",
+        "ended_at": "2026-11-02T17:19:12.888128+00:00",
+        "elapsed_s": 11.535,
+        "requests": 1
+      },
+      {
+        "variant": "original",
+        "label": "original-2",
+        "started_at": "2026-11-02T17:19:12.892997+00:00",
+        "error": null,
+        "status": 200,
+        "visible_text": "---\n**Phase 3 of 3 — Model recommendations**\n---\n\nSLO targets locked in — 300ms TTFT, 30ms ITL, defaults across the board.\n\nOne thing I still need before I can pull the recommendations: **which GPU types does your cluster have?** (e.g. H100, A100-80, L4). Your last message confirmed the latency targets but didn't mention the hardware.\n\nThis matters because recommendations are scored against GPUs your cluster actually runs — a model that's blazing fast on an H100 might not fit your setup if you're running L4s. If you're not sure, just say so and I'll show recommendations without a hardware filter instead.",
+        "tool_calls": [],
+        "premature_recommendation": false,
+        "finish_reason": "stop",
+        "usage": {
+          "details": {
+            "reasoning_tokens": 631
+          },
+          "input_tokens": 21875,
+          "cache_read_tokens": 20992,
+          "output_reasoning_tokens": 631,
+          "output_tokens": 776
+        },
+        "wire_body_sha256": "400e13e5c8be23f1505f814f45f7a69d1a934dc059492cae8561b75699f80310",
+        "normalized_wire_body_sha256": "400e13e5c8be23f1505f814f45f7a69d1a934dc059492cae8561b75699f80310",
+        "ended_at": "2026-11-02T17:19:26.846873+00:00",
+        "elapsed_s": 13.954,
+        "requests": 1
+      },
+      {
+        "variant": "clarified",
+        "label": "clarified-2",
+        "started_at": "2026-11-02T17:19:26.854111+00:00",
+        "error": null,
+        "status": 200,
+        "visible_text": "---\n**Phase 3 of 3 — Model recommendations**\n---\n\nAlmost there — one last thing before I query the planner. I still need to know **which GPU types are available in your cluster**.\n\nI wasn't able to read GPU inventory from the cluster (the inventory tool isn't available in this session), and since you didn't mention your hardware, I'd rather not guess — the recommendations change meaningfully depending on whether you have, say, L4s versus H100s.\n\nSo, one quick answer needed:\n\n- **Which GPUs does your cluster have?** (e.g. H100, A100-80, A100-40, L4)\n- **Or, if you're not sure**, just say so and I'll fetch recommendations without a hardware filter — they'll be ranked purely on your latency/cost priorities, with a note that cluster fit is unverified.\n\nWhich is it?",
+        "tool_calls": [],
+        "premature_recommendation": false,
+        "finish_reason": "stop",
+        "usage": {
+          "details": {
+            "reasoning_tokens": 587
+          },
+          "input_tokens": 21923,
+          "cache_read_tokens": 20992,
+          "output_reasoning_tokens": 587,
+          "output_tokens": 774
+        },
+        "wire_body_sha256": "98758375d942d048f972a077c152ab78ae6f16a9a5fa056a82fc1d82a7bf1454",
+        "normalized_wire_body_sha256": "400e13e5c8be23f1505f814f45f7a69d1a934dc059492cae8561b75699f80310",
+        "ended_at": "2026-11-02T17:19:39.575875+00:00",
+        "elapsed_s": 12.722,
+        "requests": 1
+      }
+    ],
+    "original": {
+      "samples": 2,
+      "premature_recommendations": 1,
+      "asked_inventory_and_waited": 1
+    },
+    "clarified": {
+      "samples": 2,
+      "premature_recommendations": 0,
+      "asked_inventory_and_waited": 2
+    },
+    "observed_total": {
+      "http_requests": 4,
+      "model_output_tokens": 5026,
+      "reasoning_tokens_included_in_output": 4422,
+      "mcp_actions": 0,
+      "judge_calls": 0,
+      "ordinary_records_added": 0
+    },
+    "offline_control": "Sockets blocked; normalized wire requests are identical after replacing the clarified skill body with the original body.",
+    "interpretation": "The failure recurred with original wording; both clarified samples asked for inventory and waited. This supports a targeted clarification, not a reliability estimate, end-to-end pass, API fix, or speed improvement. Cache usage varied."
+  },
+  "validation": [
+    {
+      "command": ".venv/bin/pytest tests/evals tests/composites/planner tests/integration/test_planner_local.py -m \"not live\" -o addopts= -q --reruns 0",
+      "passed": 597,
+      "deselected": 9,
+      "warnings": 6,
+      "note": "Broad run after the production fixes; final targeted run repeated after isolating the new real-planner test from cluster auto-detection."
+    },
+    {
+      "command": ".venv/bin/pytest tests/composites/planner/test_local_gpu_filter.py tests/evals/test_hardware_gate.py -o addopts= -q --reruns 0",
+      "passed": 22,
+      "note": "Final run; pytest requires its loopback coordination socket outside this sandbox."
+    },
+    {
+      "check": "Ruff lint and format",
+      "files": 5,
+      "passed": true
+    },
+    {
+      "check": "mypy",
+      "source_files": 3,
+      "passed": true
+    },
+    {
+      "check": "Navigator quick_validate.py",
+      "passed": true
+    },
+    {
+      "check": "Corrected real planner and unconstrained control with sockets blocked",
+      "passed": true
+    },
+    {
+      "check": "Saved ten-case hard-check replay without rejudging/history writes",
+      "passed": true
+    }
+  ],
+  "integrity_before_living_plan_updates": {
+    "snapshot_files_verified": 209,
+    "native_files_verified": 164,
+    "report_and_plan_files_verified": 44,
+    "all_unchanged": true,
+    "history_records": 64,
+    "history_sha256": "41eb04d4512afadbcd6023df6a402a643943f4fe0f4b3a24710aec97fdc1cf21",
+    "allowed_later_updates": [
+      "docs/temp/remaining-work.md",
+      "docs/temp/pydantic-ai-skill-evals-plan.md"
+    ]
+  },
+  "local_evidence_sha256": {
+    "evals/results/glm-hardware-gate-probe-20261102/clarified-1-native.json": "8d7a4ea40266f2a7368c1023e5c34be0d832399bd5e009092358261b7f0ac8ae",
+    "evals/results/glm-hardware-gate-probe-20261102/clarified-1-request.json": "18c618f68ed244c8580b01f961f96ebaa99bdc48b5434a4059ddb3508fc193fb",
+    "evals/results/glm-hardware-gate-probe-20261102/clarified-1-response.json": "85c94b27ea250e085b3a5c0890829e09175106419c91a51cfaee2ae7dbebb0e4",
+    "evals/results/glm-hardware-gate-probe-20261102/clarified-1-result.json": "c09cf1362ab4050518e6b95799845ba59e4e9ca97041350488db4910ac77f960",
+    "evals/results/glm-hardware-gate-probe-20261102/clarified-2-native.json": "cf33b04e2ba08a15c2753b5b687e3e7ffdcd73ac7d586b971e9ff8dc209b8d75",
+    "evals/results/glm-hardware-gate-probe-20261102/clarified-2-request.json": "18c618f68ed244c8580b01f961f96ebaa99bdc48b5434a4059ddb3508fc193fb",
+    "evals/results/glm-hardware-gate-probe-20261102/clarified-2-response.json": "615a4d06773e318503f7e86195670261b51ac574a67573e2f6eeef743dda6158",
+    "evals/results/glm-hardware-gate-probe-20261102/clarified-2-result.json": "08358ef47c3a08902c5068a86bdfb0ab9072a5c2bdda2fb98dd3a357b439aaf0",
+    "evals/results/glm-hardware-gate-probe-20261102/original-1-native.json": "cf34ab842e2c0a9a4bfcc2e8d088f35b669cada82d3ca8bd0e06de346501f044",
+    "evals/results/glm-hardware-gate-probe-20261102/original-1-request.json": "1b3f55348b3cb532da32990bd511645520bf1bbb1eb7f099b39a4879317f7fe8",
+    "evals/results/glm-hardware-gate-probe-20261102/original-1-response.json": "6505c1336da98a01826b22c93210377a1a8c3beffdd01089183e37eeec308856",
+    "evals/results/glm-hardware-gate-probe-20261102/original-1-result.json": "85113c2d5c792b6e4b8f42cace9e449720c2ab2263bda77f5f4fb4af4c1b29cf",
+    "evals/results/glm-hardware-gate-probe-20261102/original-2-native.json": "fd39d1e7a07b127528f0c11c818f63e9946b9e1a76d85694373323d54af8ae69",
+    "evals/results/glm-hardware-gate-probe-20261102/original-2-request.json": "1b3f55348b3cb532da32990bd511645520bf1bbb1eb7f099b39a4879317f7fe8",
+    "evals/results/glm-hardware-gate-probe-20261102/original-2-response.json": "017efb53966d104e45f4de508ea2fadcb53cc87df2e7a1bac63ccc8d4799ed2e",
+    "evals/results/glm-hardware-gate-probe-20261102/original-2-result.json": "faa47b3ddbd4ede84e106f4c415507c50e0768dd7c63e5dd0be9186c7fbfdb28",
+    "evals/results/glm-hardware-gate-probe-20261102/pre.json": "443cd90b9a900eb741e910e583a476c56523bf2dba88db26cba43f9cde3cf6dd",
+    "evals/results/glm-hardware-gate-probe-20261102/results.json": "26efaa2d1d1f87fe5af84d0b32339fdcd52f2d257b22bb303a8a63c091208d43",
+    "evals/results/glm_hardware_gate_probe_20261102.py": "680c5efb51f60f2f81f8cd43d76daaa10503abd9a5053d31e03242b19bc43ccd",
+    "evals/results/glm-hardware-gate-probe-offline-20261102.json": "ed5122ea8ab95feb17d52c06f482c79e960f8f877cf7379f3edf67268cc0a3e2",
+    "evals/results/glm-hardware-policy-original-20261102.json": "b5c5279af59dcf6a29ada5c5c1cce33929fc19300e68ccd967d3084c368984ec",
+    "evals/results/glm-deep-dive-replay-20261102.json": "56df4fb005aa29fcc21ce24a7029c159002f578023ece647d9a51ffbb94dac03",
+    "evals/results/glm-deep-dive-scenarios-before-20261102.json": "590480468610d55598e6c0b28539d203a5ca24c042072551a164e7753954d6ec",
+    "evals/results/glm-gpu-filter-before-20261102.json": "40c7d447f1314d4bdc479603108686687803924d15524b62e4e404b97f7f2691",
+    "evals/results/glm-gpu-filter-after-20261102.json": "f588351d8f038a5d3d8d3863f285cdb04faa2e94c1be5bf4748d17cd3838cce5",
+    "evals/results/glm-gpu-filter-offline-verification-20261102.json": "fbc1d79f502498a9bb7859a6894e17d4e23ba9bbddebcc47ef8d939442e574e4"
+  },
+  "remaining_limits": [
+    "The corrected skill/backend have not yet been validated in fresh complete Navigator conversations.",
+    "The original missing-handoff failure remains real; no API/configuration fix is established.",
+    "The diagnostic tests Chat Completions with unspecified effort/cap/penalties and non-streaming, not full Pi.dev parity.",
+    "All historical verdicts and judge scores are preserved. A new comparison requires a coherent cohort under the changed shared skill/backend and grading intent."
+  ],
+  "next_review": "Review the minimal code/skill changes, then run only the two GLM Navigator goldens as a separate validation cohort before considering another paid roster sweep.",
+  "integrity_after_living_plan_updates": {
+    "historical_files_unchanged": 207,
+    "changed_existing_files": [
+      "docs/temp/pydantic-ai-skill-evals-plan.md",
+      "docs/temp/remaining-work.md"
+    ],
+    "history_records": 64,
+    "history_unchanged": true,
+    "source_and_local_evidence_hashes_verified": true,
+    "human_report_links_verified": 7
+  }
+}

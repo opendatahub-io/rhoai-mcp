@@ -122,6 +122,8 @@ class Golden:
     confirmation_reply: str | None = None
     approval_reply: str | None = None
     selection_reply: str | None = None
+    hardware_reply: str | None = None
+    """Customer inventory or explicit unfiltered consent, for the manual GPU branch."""
     consent_given: bool = True
     expect_handoff: bool = True
     notes: list[str] = field(default_factory=list)
@@ -144,6 +146,7 @@ class Golden:
                 selection_turn_index=selection,
                 expectation=self.expectation,
                 expect_handoff=self.expect_handoff,
+                hardware_reply=self.hardware_reply,
             )
         elif self.skill == "navigator-deploy":
             approval = (
@@ -175,18 +178,19 @@ class Golden:
     def scenario_sha(self) -> str:
         """Hash the script and grading intent, so changed scenarios are not silently compared."""
         payload = "\n".join(f"{t.name}:{t.prompt}" for t in self.script)
-        payload += "\n" + json.dumps(
-            {
-                "expectation": asdict(self.expectation) if self.expectation is not None else None,
-                "description": self.description,
-                "confirmation_reply": self.confirmation_reply,
-                "selection_reply": self.selection_reply,
-                "approval_reply": self.approval_reply,
-                "consent_given": self.consent_given,
-                "expect_handoff": self.expect_handoff,
-            },
-            sort_keys=True,
-        )
+        intent: dict[str, object] = {
+            "expectation": asdict(self.expectation) if self.expectation is not None else None,
+            "description": self.description,
+            "confirmation_reply": self.confirmation_reply,
+            "selection_reply": self.selection_reply,
+            "approval_reply": self.approval_reply,
+            "consent_given": self.consent_given,
+            "expect_handoff": self.expect_handoff,
+        }
+        # Do not change hashes of unrelated goldens that do not use this gate.
+        if self.hardware_reply is not None:
+            intent["hardware_reply"] = self.hardware_reply
+        payload += "\n" + json.dumps(intent, sort_keys=True)
         return hashlib.sha256(payload.encode()).hexdigest()[:12]
 
     def skill_sha(self) -> str:
@@ -247,6 +251,7 @@ NAVIGATOR_HAPPY_PATH = Golden(
     ),
     confirmation_reply=CONFIRM_REPLY,
     selection_reply=CHOOSE_REPLY,
+    hardware_reply=GPU_REPLY,
     script=[
         ScriptedTurn(
             name="opening",
@@ -286,6 +291,7 @@ NAVIGATOR_VAGUE_REQUIREMENTS = Golden(
     ),
     confirmation_reply=CONFIRM_REPLY,
     selection_reply=CHOOSE_REPLY,
+    hardware_reply=GPU_REPLY,
     script=[
         ScriptedTurn(name="opening", prompt="We want to use an LLM. What do you recommend?"),
         ScriptedTurn(

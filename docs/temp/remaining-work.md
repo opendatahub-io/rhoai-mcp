@@ -14,11 +14,16 @@ sweep is complete (7/8 passed), with zero measured overlap**. Anthropic, GPT,
 and DeepSeek passed 2/2 each; GLM passed 1/2 after omitting a handoff. Table
 completeness passed in all eight cases under skill `6b84c869d2cc`.
 The earlier overlapping 7/8 cohort and initial 5/8 cohort remain historical.
-No further paid run is pending. GLM's saved failure was investigated offline;
-the subsequent matched API replay passed on both routes, and a separate full
-Chat Completions pair passed 1/2. Its handoffs were complete, but its happy case
-violated the GPU-inventory gate. The next useful review is deterministic
-coverage of that prerequisite, using saved artifacts.
+GLM's subsequent matched API replay passed on both routes, and a separate full
+Chat Completions pair passed 1/2. Its happy case violated the GPU-inventory gate.
+The deeper investigation now corrects that gate's missing deterministic coverage,
+clarifies hardware consent, and fixes a shared embedded-planner GPU-filter defect.
+A bounded four-request probe reproduced premature recommendations once with the
+old wording; both clarified samples asked for inventory and waited. No fresh
+full conversation has run under these corrections. Review the change, then
+validate only the two GLM Navigator goldens as a separate cohort. No full-roster
+repeat is scheduled, and the original missing-handoff failure remains unresolved.
+[Correction and evidence](./glm-root-cause-correction.md).
 Navigator-deploy
 sweeps and new deployment-specific work are deferred. Existing deployment
 implementation, offline tests, and historical evidence below are retained.
@@ -123,11 +128,14 @@ fall back to asking the customer for GPU inventory, so flows degrade rather than
 break, and `tests/composites/test_skill_allowed_tools.py` keeps the gap visible
 via `KNOWN_UNRESOLVED`.
 
-**Permanently unexercised while this stands** (§3.1, §3.4):
+**Unexercised automatically while this stands** (§3.1, §3.4):
 
 - automated GPU discovery
 - the GPU product → planner-type substring mapping table, in *both* skills
-- cluster-constrained `recommend_model` and its "requires new hardware" fallback
+
+Manual GPU inventory is supplied by both Navigator goldens. The embedded
+planner's corrected hard GPU filter and explicit unconstrained fallback now
+have offline regression coverage (§5); fresh end-to-end validation remains.
 
 **Note:** a complete, tested option-B implementation existed as
 `docs/temp/get-cluster-resources-fix.patch`. It was never committed and has been
@@ -309,6 +317,28 @@ judged assessment; automated GPU discovery remains deferred.
   [replay evidence](./glm-api-replay-results.json),
   [full records](./glm-chat-validation-results.json),
   [Chat comparison](./glm-chat-model-comparison.md).
+- **Hardware-consent and planner corrections — implemented.** The Chat happy
+  case treated workload confirmation as implicit permission to skip inventory.
+  Both Navigator goldens now require every recommendation to follow their
+  customer hardware reply. Saved replay fails only the known violation among
+  ten recent cases; the original missing-handoff failures remain. Separately,
+  the embedded adapter omitted the HTTP adapter's hard GPU filter after the
+  library's automatic unconstrained fallback. Saved tool responses contain
+  20 slots outside the requested filter across five conversations, including
+  Opus. The local adapter now filters all four rankings before choosing their
+  winners; explicit unconstrained requests retain their results. Two skill
+  sentences clarify that "go ahead" does not answer the GPU question.
+  Four isolated Chat decision requests reproduced the violation in 1/2 original
+  samples; 2/2 clarified samples asked for inventory and waited. No tools or
+  judges ran, and no ordinary records were added. This is a targeted probe,
+  not an end-to-end pass or reliability estimate. Broad offline checks passed
+  597 tests; the final focused run passed 22. Skill hash is `96cc8596d4dd`;
+  happy/vague scenario hashes are `07ced00d7013` / `f349e686f7ff`.
+  Model APIs/settings, judge, thresholds, deployment hashes, historical native
+  files, and 64 history records remain unchanged. Review the correction before
+  a separate two-golden GLM validation; no full-roster repeat is scheduled.
+  [Root causes, correction, and limits](./glm-root-cause-correction.md),
+  [machine-readable evidence](./glm-root-cause-correction-results.json).
 - **Earlier updated sweep — 8/8 recorded, 7/8 passed.** Anthropic, GPT, and GLM passed
   2/2 each; DeepSeek passed 1/2. All eight conversations discovered Navigator,
   completed five turns, and preserved the selected capacity (`0.13` QPS).
@@ -481,19 +511,24 @@ Found while building; none are scheduled.
 1. **Review the sequential sweep and comparison (§5).** The full roster is
    complete: 7/8 passed, all eight table checks passed, and all 28 interval
    pairs show zero overlap. No additional sweep is pending. Preserve both
-   historical cohorts and their distinct failure cases.
+   historical cohorts and their distinct failure cases. These predate the
+   hardware-consent/planner corrections and retain their original verdicts.
 2. **Review the completed GLM investigation.** The missing block is real;
    instructions and values were available, and no local parser/harness defect
    was reproduced. Preserve the failure and the generation/gateway attribution
    limit. Do not infer a regression from one sample.
-3. **Review the completed API diagnostic, then the GPU-inventory gate offline.**
+3. **Review the completed API diagnostic and hardware corrections.**
    Both APIs passed matched replay; Chat also passed 1/2 full flows, with a
-   different failure mode. This does not establish an API fix. Use
-   `2aaa97922492` and successful controls to review deterministic coverage of
-   recommendations before inventory/explicit unfiltered consent. No new
-   checker or skill edit is applied. Pi-style effort/cap/penalty/streaming
-   experiments remain separate decisions. Raw-reasoning viewer support is
-   separate diagnostic work.
+   different failure mode. This does not establish an API fix. The new gate
+   catches `2aaa97922492`; the shared planner filter is corrected and a bounded
+   probe supports the two-sentence consent clarification. Review the minimal
+   code/skill changes and [evidence](./glm-root-cause-correction.md).
+4. **Validate GLM on the two Navigator goldens after review.** Use a separate
+   cohort with the corrected backend, skill, and grading hashes. Check the
+   full inventory/fallback/table/handoff flow, retaining any failure. If a new
+   four-model comparison is later requested, every model needs the same shared
+   configuration. Pi-style effort/cap/penalty/streaming experiments and
+   raw-reasoning viewer support remain separate work.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
 outside this branch's current evaluation work by decision. Navigator-deploy

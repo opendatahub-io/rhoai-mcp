@@ -13,8 +13,12 @@ Start with one model before expanding the matrix. Keep both MCP metrics
 and the Navigator skill-fidelity judge. Persisted transcripts are the scoring input, so
 the same path re-scores them offline; OTel is planned. EvalHub orchestration is a follow-on, not designed here.
 
-**Cost scope:** the remaining paid work is the eight Navigator conversations,
-reviewed in batches of two per model. Navigator-deploy sweeps, new deployment
+**Cost scope:** the eight-case sequential Navigator sweep is complete (7/8).
+The subsequent GLM API investigation and bounded hardware-consent probe are
+also complete. Review the latest correction before a separate two-golden GLM
+validation; no full-roster repeat is scheduled. Any future comparison retains
+the four-model Navigator-only scope, reviewed in batches of two per model.
+Navigator-deploy sweeps, new deployment
 validation/calibration, and deployment-specific follow-up are deferred. Existing
 deployment code, offline tests, calibration evidence, and historical results remain
 available. Both skills stay in the discovery catalog so routing is still tested.
@@ -618,6 +622,37 @@ further implementation or paid experiments.
 [full validation](./glm-chat-validation-results.json),
 [Chat comparison](./glm-chat-model-comparison.md).
 
+**Deeper hardware investigation — correction implemented.** GLM treated workload
+confirmation as implicit permission for an unfiltered recommendation. Both
+Navigator goldens now enforce customer hardware inventory/explicit consent
+before every recommendation call. Saved replay catches the known Chat happy
+violation and passes the other nine recent cases, preserving the original
+missing-handoff failures. Two added skill sentences distinguish "go ahead"
+from an answer to the GPU question.
+
+A separate shared defect caused the embedded planner to return GPUs outside
+the requested filter after the library silently retried unconstrained. The
+HTTP adapter already enforced the filter; the local adapter now applies its
+existing helper to all four rankings before picking winners. Twenty saved
+slots in five conversations, including Opus, demonstrate that those GPU values
+originated in tool responses. Offline real-planner verification now returns
+empty slots for the constrained miss, preserving the explicit unconstrained
+fallback. Broad regression checks passed 597 tests; the final focused run
+passed 22, with lint, format, types, and skill validation passing.
+
+Four isolated GLM Chat decision requests changed only the loaded consent
+clarification: 1/2 original samples recommended prematurely; both clarified
+samples asked for inventory and waited. No tool execution, judge, or ordinary
+history write occurred. This supports the small correction, not an API fix,
+full-flow validation, or reliability estimate. Skill hash is `96cc8596d4dd`;
+Navigator happy/vague hashes are `07ced00d7013` / `f349e686f7ff`. Deployment hashes,
+model settings, judge, thresholds, original native evidence, and 64 historical
+records are unchanged. Review the correction, then validate only the two GLM
+Navigator goldens in a fresh cohort. A future full comparison must use the
+same corrected configuration for every model; historical cohorts stay separate.
+[Correction and limitations](./glm-root-cause-correction.md),
+[derived evidence](./glm-root-cause-correction-results.json).
+
 **Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
 `create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding
 hook, no env var, and no scenario file. Keep unvisited branches visible rather than
@@ -625,7 +660,7 @@ adding state control for this sweep. Navigator-deploy's existing approved and
 consent-withheld goldens remain available for offline regression and historical
 replay; further paid deployment evaluation is deferred.
 
-The remaining full sweep is **1 skill × 2 goldens × 4 models = 8 conversations**.
+Any future full sweep is **1 skill × 2 goldens × 4 models = 8 conversations**.
 A run omitting a required model is a partial sweep. Run one model's two goldens per
 reviewable macro step, with the same scoring configuration. Prevent idle sleep for
 local runs (`caffeinate -i` on macOS), disable pytest capture (`-s`) for stdio, and

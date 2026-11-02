@@ -103,6 +103,64 @@ def history() -> list[Any]:
 
 
 class TestConversationalTestCase:
+    def test_fidelity_sees_matched_plan_warnings_as_internal_evidence(
+        self, mcp_server: MCPServer
+    ) -> None:
+        warning = "Authentication must be configured before external access."
+        issue = "A serving runtime must be created first."
+        history = [
+            ModelRequest(parts=[UserPromptPart(content="Plan the deployment.")]),
+            ModelResponse(
+                parts=[
+                    ToolCallPart(tool_name="plan_deployment", args={}, tool_call_id="plan-1"),
+                    ToolCallPart(tool_name="other_tool", args={}, tool_call_id="other-1"),
+                ]
+            ),
+            ModelRequest(
+                parts=[
+                    ToolReturnPart(
+                        tool_name="other_tool",
+                        tool_call_id="other-1",
+                        content={"warnings": ["Unrelated warning"]},
+                    ),
+                    ToolReturnPart(
+                        tool_name="plan_deployment",
+                        tool_call_id="plan-1",
+                        content={
+                            "ready": False,
+                            "issues": [issue],
+                            "warnings": [warning],
+                            "configs": {"inferenceservice": "large YAML payload" * 1000},
+                        },
+                    ),
+                ]
+            ),
+            ModelResponse(parts=[TextPart(content="Here is the plan. Approve?")]),
+            ModelRequest(parts=[UserPromptPart(content="Yes, deploy.")]),
+        ]
+        transcript = from_pydantic_ai(history)
+        default_case = transcript_to_conversational_test_case(transcript, mcp_server)
+        fidelity = transcript_to_conversational_test_case(
+            transcript, mcp_server, annotate_tool_calls=True
+        )
+        call_turn = next(t for t in fidelity.turns if t.mcp_tools_called)
+
+        assert warning in call_turn.content
+        assert issue in call_turn.content
+        assert '"ready": false' in call_turn.content
+        assert "call_id=plan-1" in call_turn.content
+        assert "not customer-visible prose" in call_turn.content
+        assert "Unrelated warning" not in call_turn.content
+        assert "large YAML payload" not in call_turn.content
+        assert fidelity.turns.index(call_turn) < next(
+            i for i, t in enumerate(fidelity.turns) if t.content == "Yes, deploy."
+        )
+        assert warning not in "\n".join(t.content for t in default_case.turns)
+        assert warning not in transcript.assistant_text
+        assert call_turn.mcp_tools_called[0].result.structuredContent["result"]["warnings"] == [
+            warning
+        ]
+
     def test_only_mcp_calls_are_counted_as_mcp_interactions(
         self, history: list[Any], mcp_server: MCPServer
     ) -> None:

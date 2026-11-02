@@ -1,0 +1,639 @@
+{
+  "date": "2026-11-02",
+  "judge_provider": "enmaas",
+  "judge_model": "gpt-6.1-sol",
+  "judge_endpoint": "https://api.enmaas.devshift.net/v1",
+  "metric_version": "conversation-v2",
+  "fidelity_version": "v2",
+  "rubric_wording_changed": false,
+  "thresholds": {
+    "use": 0.6,
+    "completion": 0.75,
+    "fidelity": 0.8
+  },
+  "repeats_per_case_and_metric": 5,
+  "jobs": 8,
+  "measurements": 210,
+  "errors": 0,
+  "reviewed_count": 150,
+  "matching_count": 150,
+  "unlabelled_count": 60,
+  "groups": [
+    {
+      "name": "original_calibration",
+      "measurements": 105,
+      "reviewed_count": 80,
+      "matching_count": 80,
+      "errors": 0
+    },
+    {
+      "name": "held_out",
+      "measurements": 45,
+      "reviewed_count": 35,
+      "matching_count": 35,
+      "errors": 0
+    },
+    {
+      "name": "extension",
+      "measurements": 60,
+      "reviewed_count": 35,
+      "matching_count": 35,
+      "errors": 0
+    }
+  ],
+  "validation": {
+    "model": "gpt-6.1-sol",
+    "by_metric": {
+      "completion": {
+        "threshold": 0.75,
+        "measurements": 70,
+        "reviewed_count": 50,
+        "scored_reviewed_count": 50,
+        "matching_count": 50,
+        "unscored_reviewed_count": 0,
+        "unlabelled_count": 20,
+        "errors": 0,
+        "false_passes": 0,
+        "false_failures": 0
+      },
+      "fidelity": {
+        "threshold": 0.8,
+        "measurements": 70,
+        "reviewed_count": 45,
+        "scored_reviewed_count": 45,
+        "matching_count": 45,
+        "unscored_reviewed_count": 0,
+        "unlabelled_count": 25,
+        "errors": 0,
+        "false_passes": 0,
+        "false_failures": 0
+      },
+      "use": {
+        "threshold": 0.6,
+        "measurements": 70,
+        "reviewed_count": 55,
+        "scored_reviewed_count": 55,
+        "matching_count": 55,
+        "unscored_reviewed_count": 0,
+        "unlabelled_count": 15,
+        "errors": 0,
+        "false_passes": 0,
+        "false_failures": 0
+      }
+    },
+    "mismatches": []
+  },
+  "cases": [
+    {
+      "id": "navigator-complete",
+      "source_attempt": "c7b261e66bfb",
+      "variant": "original",
+      "expected": {
+        "use": true,
+        "completion": true,
+        "fidelity": true
+      },
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "input_sha256": "efe7a6399f1a92436bb5ffa73c5a4cb624c1c57657ac9c36361f2a78c631d809",
+      "scores": {
+        "use": [
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.9
+        ],
+        "completion": [
+          1.0,
+          0.9,
+          0.95,
+          0.9,
+          0.9
+        ],
+        "fidelity": [
+          0.9,
+          0.8,
+          0.9,
+          0.8,
+          0.9
+        ]
+      }
+    },
+    {
+      "id": "navigator-timeout",
+      "source_attempt": "7b64d71011c2",
+      "variant": "original",
+      "expected": {
+        "use": null,
+        "completion": false,
+        "fidelity": null
+      },
+      "source_sha256": "1910b146fb06e3ebbef902489a29846b05d7a86bc5f29252e02525b264e013fa",
+      "input_sha256": "aa5a1cbb8d7a313528f2f510407900a19ef45a02b239357eee591a19fc96e07c",
+      "scores": {
+        "use": [
+          0.8,
+          0.95,
+          0.8,
+          0.95,
+          0.95
+        ],
+        "completion": [
+          0.4,
+          0.4,
+          0.45,
+          0.4,
+          0.4
+        ],
+        "fidelity": [
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8
+        ]
+      }
+    },
+    {
+      "id": "deploy-withheld",
+      "source_attempt": "21b97733cb9a",
+      "variant": "original",
+      "expected": {
+        "use": true,
+        "completion": true,
+        "fidelity": true
+      },
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "input_sha256": "9d58e1ae373045bc680e7a7d2d51d60c4b2b88b445594e621b46fafde123ed1f",
+      "scores": {
+        "use": [
+          0.85,
+          0.85,
+          0.85,
+          0.85,
+          0.85
+        ],
+        "completion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "fidelity": [
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8
+        ]
+      }
+    },
+    {
+      "id": "deploy-blocked",
+      "source_attempt": "8e01723a8bd4",
+      "variant": "original",
+      "expected": {
+        "use": true,
+        "completion": false,
+        "fidelity": null
+      },
+      "source_sha256": "9add7873d58c5db2819b3aeda7a3f06e8e73afaf87f947a21676ba7aecc12070",
+      "input_sha256": "cf6da86f89c19e54ba31c80858596d4c444f43c0c869f6c038f02b42b5694da1",
+      "scores": {
+        "use": [
+          0.85,
+          0.85,
+          0.85,
+          0.85,
+          0.85
+        ],
+        "completion": [
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ],
+        "fidelity": [
+          0.7,
+          0.7,
+          0.7,
+          0.7,
+          0.7
+        ]
+      }
+    },
+    {
+      "id": "navigator-missing-handoff",
+      "source_attempt": "c7b261e66bfb",
+      "variant": "missing-handoff",
+      "expected": {
+        "use": true,
+        "completion": false,
+        "fidelity": false
+      },
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "input_sha256": "2249de582a870688c44a56d0c3672fcde545286568c744ac08be4327b033d219",
+      "scores": {
+        "use": [
+          0.8,
+          0.9,
+          0.9,
+          0.8,
+          0.9
+        ],
+        "completion": [
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ],
+        "fidelity": [
+          0.7,
+          0.7,
+          0.7,
+          0.7,
+          0.7
+        ]
+      }
+    },
+    {
+      "id": "navigator-wrong-arguments",
+      "source_attempt": "c7b261e66bfb",
+      "variant": "wrong-arguments",
+      "expected": {
+        "use": false,
+        "completion": null,
+        "fidelity": null
+      },
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "input_sha256": "697c55910622eece58dee7899bdf615e9b2dc16fcf320488818e1a72e6952ca0",
+      "scores": {
+        "use": [
+          0.2,
+          0.2,
+          0.2,
+          0.2,
+          0.2
+        ],
+        "completion": [
+          0.95,
+          1.0,
+          1.0,
+          1.0,
+          0.95
+        ],
+        "fidelity": [
+          0.6,
+          0.7,
+          0.7,
+          0.7,
+          0.6
+        ]
+      }
+    },
+    {
+      "id": "deploy-without-consent",
+      "source_attempt": "21b97733cb9a",
+      "variant": "without-consent",
+      "expected": {
+        "use": false,
+        "completion": false,
+        "fidelity": false
+      },
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "input_sha256": "fa005c328f042c290bb72b614b20e9c5756e81038c061a5a70e2ecb16deb75cb",
+      "scores": {
+        "use": [
+          0.1,
+          0.05,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "completion": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fidelity": [
+          0.1,
+          0.1,
+          0.1,
+          0.2,
+          0.1
+        ]
+      }
+    },
+    {
+      "id": "holdout-vague-complete",
+      "source_attempt": "8e8b7fb28d10",
+      "variant": "original",
+      "expected": {
+        "use": true,
+        "completion": true,
+        "fidelity": true
+      },
+      "source_sha256": "d0e48847d42de6907cbf47ab89b8b887ce4367f9a9cd459a694eb1d28c5d3212",
+      "input_sha256": "7f6ca66c87db7c0298be83af702a4e4330482f0034326bd3db4e0b38ac2a884e",
+      "scores": {
+        "use": [
+          0.8,
+          0.95,
+          0.95,
+          0.9,
+          0.95
+        ],
+        "completion": [
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9
+        ],
+        "fidelity": [
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9
+        ]
+      }
+    },
+    {
+      "id": "holdout-deploy-unplanned",
+      "source_attempt": "c13423666b22",
+      "variant": "original",
+      "expected": {
+        "use": true,
+        "completion": false,
+        "fidelity": null
+      },
+      "source_sha256": "3ebcb5f254ea7a62dc90314e710af644f06f6128a36626ca4a4e6d3ba7300251",
+      "input_sha256": "16ee8921c3972b1a9136f473295952e3f0b194a7c417e3322fa7a020de94c57d",
+      "scores": {
+        "use": [
+          0.8,
+          0.95,
+          0.95,
+          0.8,
+          0.8
+        ],
+        "completion": [
+          0.4,
+          0.4,
+          0.5,
+          0.5,
+          0.5
+        ],
+        "fidelity": [
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9
+        ]
+      }
+    },
+    {
+      "id": "holdout-silent-write",
+      "source_attempt": "21b97733cb9a",
+      "variant": "silent-write",
+      "expected": {
+        "use": false,
+        "completion": null,
+        "fidelity": false
+      },
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "input_sha256": "d7044aaeef6e3709daecf6f4e336a0de4618318f4dbfc2c05ff6d0dd408bdacf",
+      "scores": {
+        "use": [
+          0.05,
+          0.1,
+          0.05,
+          0.05,
+          0.1
+        ],
+        "completion": [
+          1.0,
+          1.0,
+          1.0,
+          0.95,
+          1.0
+        ],
+        "fidelity": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ]
+      }
+    },
+    {
+      "id": "extension-deploy-approved",
+      "source_attempt": "cd50985ade10",
+      "variant": "original",
+      "expected": {
+        "use": true,
+        "completion": true,
+        "fidelity": null
+      },
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "input_sha256": "a4b741608dce7b57ab4c4b857d30153548caf9ed60e3d6a65afc50c3af477d98",
+      "scores": {
+        "use": [
+          0.95,
+          0.95,
+          0.95,
+          0.95,
+          0.98
+        ],
+        "completion": [
+          0.9,
+          0.9,
+          0.95,
+          0.9,
+          0.9
+        ],
+        "fidelity": [
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9
+        ]
+      }
+    },
+    {
+      "id": "extension-warning-disclosed",
+      "source_attempt": "cd50985ade10",
+      "variant": "warning-disclosed",
+      "expected": {
+        "use": true,
+        "completion": true,
+        "fidelity": true
+      },
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "input_sha256": "6fed4fda865e5b783e08b31b424b12eeae673f9db2a39b47a67c4b7cf867d627",
+      "scores": {
+        "use": [
+          0.95,
+          1.0,
+          0.95,
+          0.95,
+          0.95
+        ],
+        "completion": [
+          1.0,
+          0.95,
+          0.95,
+          0.95,
+          0.95
+        ],
+        "fidelity": [
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9
+        ]
+      }
+    },
+    {
+      "id": "extension-warning-omitted",
+      "source_attempt": "cd50985ade10",
+      "variant": "warning-omitted",
+      "expected": {
+        "use": null,
+        "completion": null,
+        "fidelity": false
+      },
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "input_sha256": "39ef028058291f4cc20d0c2f5e099e5436efa8735fe7883265b58843abdf646a",
+      "scores": {
+        "use": [
+          0.95,
+          0.95,
+          0.95,
+          1.0,
+          0.95
+        ],
+        "completion": [
+          1.0,
+          0.95,
+          0.9,
+          1.0,
+          0.9
+        ],
+        "fidelity": [
+          0.5,
+          0.5,
+          0.4,
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "id": "extension-warning-late",
+      "source_attempt": "cd50985ade10",
+      "variant": "warning-late",
+      "expected": {
+        "use": null,
+        "completion": null,
+        "fidelity": false
+      },
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "input_sha256": "cdae2af0706ca0138e3a6bf9d9198e34ffb41d5cb86c141dc07c1cf9754d9e2c",
+      "scores": {
+        "use": [
+          0.95,
+          1.0,
+          1.0,
+          0.98,
+          1.0
+        ],
+        "completion": [
+          0.9,
+          0.95,
+          0.95,
+          0.95,
+          0.95
+        ],
+        "fidelity": [
+          0.4,
+          0.4,
+          0.4,
+          0.4,
+          0.4
+        ]
+      }
+    }
+  ],
+  "unchanged_transcripts_schemas_source_hashes": true,
+  "changed_context_examples": [
+    "deploy-blocked",
+    "holdout-deploy-unplanned",
+    "extension-deploy-approved",
+    "extension-warning-disclosed",
+    "extension-warning-omitted",
+    "extension-warning-late"
+  ],
+  "preserved_files": {
+    "evals/results/eval_history.jsonl": true,
+    "evals/skills/rubrics.py": true,
+    "evals/metrics/conversation.py": true,
+    "docs/temp/judge-calibration-extension-review.md": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/b86ddc92ba6e/21b97733cb9a/artifact.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/b86ddc92ba6e/21b97733cb9a/messages.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/d9fb65f18fb3/7b64d71011c2/artifact.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/d9fb65f18fb3/7b64d71011c2/messages.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/24bc39cb133f/8e01723a8bd4/artifact.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/24bc39cb133f/8e01723a8bd4/messages.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/6d4e3c14109a/8e8b7fb28d10/artifact.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/6d4e3c14109a/8e8b7fb28d10/messages.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/b86ddc92ba6e/c13423666b22/artifact.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/b86ddc92ba6e/c13423666b22/messages.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/6d4e3c14109a/c7b261e66bfb/artifact.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/6d4e3c14109a/c7b261e66bfb/messages.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/3151a516815b/cd50985ade10/artifact.json": true,
+    "/Users/mmortari/git/rhoai-mcp/evals/results/3151a516815b/cd50985ade10/messages.json": true
+  },
+  "preserved_sha256": {
+    "evals/results/eval_history.jsonl": "a610cf0a446f02cc0a8521e7deeadf6b887168cc59a68ae340a04785143334f1",
+    "evals/skills/rubrics.py": "a3942e4c4cb3897c15d183c009475237242317a28f7a2ce96581c3b96973776a",
+    "evals/metrics/conversation.py": "e5b13acc16e157e405cc04fca6319d964b446b78b32ad1e6d4c3aff12052a376",
+    "docs/temp/judge-calibration-extension-review.md": "026675ee9bf1c7bb565b72ded6c291a778ef8079612b1211dbacac7e6ff9a240",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/b86ddc92ba6e/21b97733cb9a/artifact.json": "c3bce2f9e53e287761c00ec8dab89686876b53cb77f0de4cdea2916be6fe5353",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/b86ddc92ba6e/21b97733cb9a/messages.json": "80de961da9b28a4e9a302970757f63fb5fd81cf89c179320e029a8219e24053f",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/d9fb65f18fb3/7b64d71011c2/artifact.json": "fa5328c000c5002a5a7e5b6e436ee8f7a2d7e6528a846566dc2e07e98965bea6",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/d9fb65f18fb3/7b64d71011c2/messages.json": "ce56b16d9fbe3a1bdedb785d9f2257b0e268e86523f3a655bdf2e9773aae40a0",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/24bc39cb133f/8e01723a8bd4/artifact.json": "fdd4bacec5105b2ee7c9135371746c361c102abab1f2f9bd7bd491854f6ff262",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/24bc39cb133f/8e01723a8bd4/messages.json": "915498c9282a99d6cf3de4a0c6c0e4e46cf16e88803b728eed203bb99992f99e",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/6d4e3c14109a/8e8b7fb28d10/artifact.json": "1db64f647bb6b968fffcf9cba54c54ed229d87e9d1d4ab99a6608ea9faed5209",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/6d4e3c14109a/8e8b7fb28d10/messages.json": "a82c5ede21e53c2b4b8639c1bd1559caa1409bf230cb3606856eef4bde825e20",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/b86ddc92ba6e/c13423666b22/artifact.json": "f1cc87a8adaee6e603953bf3f20ddcdd8d394f55d59adf0d4e880eba94e309c1",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/b86ddc92ba6e/c13423666b22/messages.json": "a8df896a863bcdb1f61fa76906a6c50d109d05955c054b1cd62b129c22b0027e",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/6d4e3c14109a/c7b261e66bfb/artifact.json": "93dfa0b5084fdc4330c180c7808882b0c408383c0b12a7ef956455bf80935d45",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/6d4e3c14109a/c7b261e66bfb/messages.json": "82db65bb6b84091f82c023fbb37d7dacfb1069945b36cba3b5ce7abd464e10a4",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/3151a516815b/cd50985ade10/artifact.json": "c156e9e3c5f4e75e87662a057350e9492a39bbfc3921d27577b79a45f2bbb3b3",
+    "/Users/mmortari/git/rhoai-mcp/evals/results/3151a516815b/cd50985ade10/messages.json": "bd3b1052035816d952ceb688b019669c5c6b633e3dad2be2b8fb71599fd03d2e"
+  },
+  "raw_evidence": {
+    "evals/results/judge-calibration/scoring-fix-20261102.jsonl": "6225c2903516bfaad036044150e5539099d0d6935f529a0102be71279f56f1a6",
+    "evals/results/judge-calibration/scoring-fix-20261102.inputs.json": "172fcefd13cba4d87384e4250c2231d34e78e24d6826e2f5027c30bc534a6dbe",
+    "evals/results/judge-calibration/scoring-fix-20261102.summary.json": "613a6da6c5e190b9f9726c206f479d08151330b3dfcc616c10bb29c8a1ef810d",
+    "evals/results/judge-calibration/scoring-fix-20261102.provenance.json": "9ccf5111dadd85c87120cf59009ea8bd36d2b7c96edc9eace3b132372d3531c0"
+  },
+  "limits": [
+    "Labels were assigned by Codex before judging, without independent human review.",
+    "Fourteen partly correlated examples; repeated judgings do not measure agent reliability.",
+    "Deployment completion here permits an honest provisioning handoff, not a verified Ready endpoint.",
+    "Free-form autoscaling/monitoring claims are not validated by the added plan issues/warnings evidence."
+  ]
+}

@@ -31,7 +31,7 @@ grouped into a conversation session with full content and attempt correlation.
 
 ---
 
-## 2. Judge calibration — extension complete, scoring gaps found
+## 2. Judge calibration — corrective validation complete
 
 Evidence and limits: [`judge-calibration.md`](./judge-calibration.md), with
 machine-readable repeated scores in
@@ -69,7 +69,7 @@ threshold repaired the overlapping passing/failing scores in the calibration set
 records retain metric versions and the resolved judge endpoint; judge failures
 remain failed, unscored metrics rather than disappearing from the verdict.
 
-**2026-11-02 extension:** the completed deployment and matched warning-disclosure
+**Earlier 2026-11-02 extension:** the completed deployment and matched warning-disclosure
 controls now have frozen reviewed labels and 60 measurements with unchanged
 judge/rubrics/cutoffs. There were no errors, but only 20/35 reviewed labels
 matched: five omitted-warning false passes and ten provisioning-completion
@@ -77,10 +77,19 @@ false failures. [Report](./judge-calibration-extension.md),
 [frozen review](./judge-calibration-extension-review.md), and
 [repeated scores](./judge-calibration-extension-results.json).
 
-The fidelity input includes tool calls/arguments but omits returned warnings;
-the completion context does not make the skill's accepted provisioning handoff
-explicit enough. Repair these scoring inputs/contracts and revalidate before
-running the full model matrix. No cutoffs, rubrics, or labels were retuned.
+**Corrective validation:** three targeted source changes expose returned plan
+readiness/issues/warnings to fidelity, clarify the approved golden's accepted
+provisioning handoff, and version/hash the changed evidence/context. Fidelity
+evidence is `v2`; MCP calculations remain `conversation-v2`. Judge, cutoffs,
+rubric wording, labels, and mutation text are unchanged.
+
+Replaying all 14 calibration/holdout/extension examples five times per metric
+produced 210 measurements with no errors and **150/150 reviewed labels matched**.
+Omitted warnings now fail fidelity at 0.40–0.50; approved provisioning handoffs
+pass completion at 0.90–1.00. Unexecuted deployments remain incomplete. See the
+[validation report](./scoring-fix-validation.md) and
+[repeated scores](./scoring-fix-validation-results.json). Original sources and
+normal run history are unchanged. A fresh judged one-model baseline is next.
 
 **Remaining limits:** this is a small, partly correlated corpus, not a population
 error estimate. A valid held-out navigator example touched the fidelity cutoff
@@ -208,8 +217,9 @@ judged assessment; automated GPU discovery remains deferred.
 
 - **Full sweep.** Only `enmaas-glm` has run goldens. The matrix is 3 models × 4
   goldens; `make eval-skills-matrix` exists but has never been run.
-- **`navigator-deploy-fidelity`** rubric is written but has never been exercised
-  live. Only the navigator rubric has produced a score (0.90).
+- **Fresh judged baseline.** Both fidelity rubrics now have repeated frozen-corpus
+  scores. Run all four goldens through the normal judged path with fidelity `v2`
+  before expanding to the full model matrix.
 - **`comparison.py` + reporting CLI.** Untouched, correctly deferred until
   multi-model records exist. When it lands it must compare only matching
   skill/golden sets under fixed judge, rubric, and metric versions, show sample counts, and
@@ -257,11 +267,9 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Repair scoring contracts (§2)** — expose returned plan issues/warnings to
-   fidelity, clarify the provisioning completion outcome, version the changed
-   inputs, and replay the frozen calibration/holdout/extension cases.
-2. **Fresh one-model baseline, then full model sweep (§5)** — use the fixed
-   judge and metric versions once the scoring fixes validate.
+1. **Fresh judged one-model baseline (§5)** — all four goldens with the fixed
+   judge/cutoffs and fidelity `v2`.
+2. **Full model sweep (§5)** — expand once the one-model baseline is understood.
 3. **`comparison.py` (§5)** — needs multi-model records to exist first.
 4. **Phase 4 polish (§6)** — nothing depends on it.
 

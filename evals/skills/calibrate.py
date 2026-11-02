@@ -580,6 +580,7 @@ async def run(args: argparse.Namespace) -> Path:
         context = f"{golden.description}\n\n{transcript.skill_body(skill) or ''}"
         snapshot = {
             "id": example.id,
+            "rubric_version": RUBRIC_VERSION,
             "source_sha256": fingerprint,
             "transcript": asdict(transcript),
             "context": context,
@@ -587,7 +588,11 @@ async def run(args: argparse.Namespace) -> Path:
         }
         input_fingerprint = hashlib.sha256(
             json.dumps(
-                {key: snapshot[key] for key in ("transcript", "context", "schemas")}, sort_keys=True
+                {
+                    key: snapshot[key]
+                    for key in ("transcript", "context", "schemas", "rubric_version")
+                },
+                sort_keys=True,
             ).encode()
         ).hexdigest()
         snapshot["input_sha256"] = input_fingerprint

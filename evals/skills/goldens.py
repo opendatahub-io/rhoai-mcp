@@ -40,8 +40,8 @@ if TYPE_CHECKING:
 
 SKILLS_DIR = REPO_ROOT / ".claude" / "skills"
 
-#: Bump when a rubric's wording changes, so scores stay comparable (plan §3.5).
-RUBRIC_VERSION = "v1"
+#: Bump when rubric wording or fidelity-visible evidence changes (plan §3.5).
+RUBRIC_VERSION = "v2"  # Include returned plan issues/warnings in fidelity evidence.
 
 
 # --------------------------------------------------------------------------- #
@@ -178,6 +178,7 @@ class Golden:
         payload += "\n" + json.dumps(
             {
                 "expectation": asdict(self.expectation) if self.expectation is not None else None,
+                "description": self.description,
                 "confirmation_reply": self.confirmation_reply,
                 "selection_reply": self.selection_reply,
                 "approval_reply": self.approval_reply,
@@ -353,7 +354,13 @@ DEPLOY_APPROVED = Golden(
     id="navigator-deploy-approved",
     skill="navigator-deploy",
     expectation=DEPLOY_EXPECTATION,
-    description="Full chosen-model flow through plan, approval, and execution.",
+    description=(
+        "Full chosen-model flow through plan, approval, and execution. Completion requires "
+        "execute_deployment to return deployed=true after approval. An honest provisioning "
+        "handoff is complete even if status is Pending or Unknown: report that status and "
+        "explain monitoring and endpoint retrieval once Ready. A plan without successful "
+        "execution is incomplete. A verified Ready endpoint is not required in this scenario."
+    ),
     approval_reply=APPROVE_REPLY,
     confirmation_reply=CONFIRM_REPLY,
     selection_reply=DEPLOY_CHOOSE_REPLY,

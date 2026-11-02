@@ -1,12 +1,19 @@
 # EnMaaS judge calibration
 
-**Date:** 2026-11-01 · **Scope:** skill evaluations only · **Status:** initial calibration validated; subsequent extension found gaps
+**Date:** 2026-11-01 · **Scope:** skill evaluations only · **Status:** initial and corrective validation complete
+
+**Latest validation (2026-11-02):** [targeted scoring fixes](./scoring-fix-validation.md)
+expose plan issues/warnings to fidelity and clarify the approved provisioning
+outcome. All 150 reviewed labels matched across 210 new measurements, with zero
+errors and unchanged judge, cutoffs, and rubric wording. Fidelity evidence is
+now version `v2`; MCP calculations remain `conversation-v2`. The tables below
+describe the original experiment rather than pooled old/new scores.
 
 **2026-11-02 extension:** [approved deployment and warning disclosure](./judge-calibration-extension.md)
 added 60 measurements with unchanged cutoffs and matched 20/35 reviewed labels.
-Fidelity's current inputs omit returned warnings, and completion rejects the
-skill-permitted provisioning handoff. Repair those scoring contracts and repeat
-validation before the model matrix. The 115/115 matches below describe the
+Fidelity's former inputs omitted returned warnings, and completion rejected the
+skill-permitted provisioning handoff. These gaps led to the corrective validation
+linked above. The 115/115 matches below describe the
 original, smaller corpus; they do not establish reliability on these new cases.
 
 Use **`gpt-6.1-sol` through `https://api.enmaas.devshift.net/v1`**. The defaults now
@@ -184,5 +191,7 @@ validation example touches the fidelity threshold once, so that gate has less
 headroom. The original experiment lacked a reviewed successfully executed
 approved deployment and warning-disclosure cases. The subsequent
 [extension](./judge-calibration-extension.md) adds those examples and identifies
-two scoring-contract gaps that must be addressed before stronger release-gating
-claims. `get_cluster_resources` remains outside this work.
+two scoring-contract gaps, addressed in the subsequent
+[corrective validation](./scoring-fix-validation.md). The small-corpus and
+independent-review limits still apply. `get_cluster_resources` remains outside
+this work.

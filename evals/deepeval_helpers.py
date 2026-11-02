@@ -188,6 +188,22 @@ def _render_args(arguments: dict[str, Any]) -> str:
     return f"{rendered[:MAX_RENDERED_ARGS]}… <args truncated for display, call was complete>"
 
 
+def _render_fidelity_call(call: ToolCallRecord) -> str:
+    rendered = f"[called tool: {call.name}({_render_args(call.arguments)})"
+    rendered += " -> ERROR]" if call.is_error else "]"
+    if call.name == "plan_deployment" and isinstance(call.structured_result, dict):
+        evidence = {
+            key: call.structured_result[key]
+            for key in ("ready", "issues", "warnings")
+            if key in call.structured_result
+        }
+        rendered += (
+            f"\n[internal tool result: {call.name}, call_id={call.call_id}; "
+            "not customer-visible prose] " + json.dumps(evidence, ensure_ascii=False)
+        )
+    return rendered
+
+
 def transcript_to_conversational_test_case(
     transcript: AgentTranscript,
     mcp_server: MCPServer,
@@ -259,11 +275,7 @@ def transcript_to_conversational_test_case(
             # Render tool calls into the content so a rubric scored on ROLE and
             # CONTENT can see them. MultiTurnParams.MCP_TOOLS cannot be used for
             # this: it looks for a case-level attribute that does not exist.
-            rendered = "\n".join(
-                f"[called tool: {c.name}({_render_args(c.arguments)})"
-                + (" -> ERROR]" if c.is_error else "]")
-                for c in source.mcp_tool_calls
-            )
+            rendered = "\n".join(_render_fidelity_call(c) for c in source.mcp_tool_calls)
             content = f"{content}\n{rendered}" if content else rendered
 
         if mcp_tools_called:

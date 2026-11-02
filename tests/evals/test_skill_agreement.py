@@ -442,6 +442,13 @@ def test_changing_expected_intent_changes_scenario_hash() -> None:
     assert not changed.grade(from_pydantic_ai(workflow(deploy=True))).passed
 
 
+def test_completion_contract_changes_scenario_hash_without_changing_user_script() -> None:
+    changed = replace(DEPLOY_APPROVED, description="Require a verified Ready inference endpoint.")
+
+    assert changed.script == DEPLOY_APPROVED.script
+    assert changed.scenario_sha() != DEPLOY_APPROVED.scenario_sha()
+
+
 @pytest.mark.parametrize("key", ["tensor_parallel", "replicas"])
 def test_omitted_api_defaults_are_compared_as_effective_values(key: str) -> None:
     messages = workflow(deploy=True)

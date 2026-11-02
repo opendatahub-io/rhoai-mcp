@@ -572,6 +572,52 @@ any further change or paid validation.
 [records](./navigator-serial-sweep-results.json),
 [comparison](./navigator-serial-model-comparison.md).
 
+**GLM follow-up — investigated offline.** The saved final text really omits the
+handoff, while retained provider reasoning metadata represents the instruction
+and all eleven values. Successful controls received identical handoff-section
+text. Four offline transport cases retain the complete skill and preserve
+fenced/unfenced handoff text; adding a grounded block to an in-memory transcript
+changes only handoff checks. No local parser or serialization defect was
+reproduced. Original HTTP bytes were not retained, so model generation versus
+gateway behavior cannot be conclusively separated. The viewer's omission of
+provider `raw_content` reasoning is a separate diagnostic limitation.
+A small final-output self-check is proposed but not applied or behaviorally
+validated. No model/judge calls, skill changes, or historical verdict changes
+were made. Review the [investigation](./glm-handoff-investigation.md) and
+[derived evidence](./glm-handoff-investigation-results.json) before choosing
+any further correction or paid validation.
+
+The user's subsequent Pi.dev configuration supplies a concrete diagnostic
+candidate: Chat Completions instead of the sweep's Responses API, with a
+65,536-token model ceiling, explicit zero penalties, and thinking support.
+Installed Pi defaults to medium thinking unless overridden; the sweep left
+effort unspecified. The Codex/Pi configuration does not directly configure
+Pydantic AI. Compare actual API request settings on saved pre-handoff context
+before changing skill wording; a further end-to-end validation, if warranted,
+should be only the two GLM Navigator goldens in a separate cohort. No additional
+live call was made during this configuration review.
+
+**Authorized API follow-up — complete.** One final-turn replay per API preserved
+the same saved history, including eight reasoning segments. Both Responses and
+Chat returned valid handoffs. The separate API-only Chat validation completed
+both GLM Navigator goldens, with both handoffs and all hard checks passing, but
+passed 1/2 overall. Vague scored 0.95/0.95/0.80; happy scored 0.30/0.90/0.60
+after making unfiltered recommendations before GPU inventory or explicit
+consent. That prerequisite violation is caught by the judges, not the current
+hard checks. Happy took 507.26 agent seconds, with nine MCP calls and 24,910
+reasoning tokens, and completed normally. There were no timeouts, model/harness/
+judge errors, forbidden calls, writes, or reruns. Effort, temperature, output
+caps, penalties, skill, scoring settings, and limits were unchanged; this is
+not full Pi.dev host/settings parity. All 142 compared runtime hashes match
+the roster baseline. Exactly two ordinary records were appended after the
+unchanged 62-record prefix; replays stayed separate. Neither an API fix nor an
+overall improvement was established. Preserve the original 7/8 roster report
+and default model specs. Review the GPU-inventory gate offline before choosing
+further implementation or paid experiments.
+[Report](./glm-api-validation.md), [replays](./glm-api-replay-results.json),
+[full validation](./glm-chat-validation-results.json),
+[Chat comparison](./glm-chat-model-comparison.md).
+
 **Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
 `create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding
 hook, no env var, and no scenario file. Keep unvisited branches visible rather than

@@ -14,7 +14,11 @@ sweep is complete (7/8 passed), with zero measured overlap**. Anthropic, GPT,
 and DeepSeek passed 2/2 each; GLM passed 1/2 after omitting a handoff. Table
 completeness passed in all eight cases under skill `6b84c869d2cc`.
 The earlier overlapping 7/8 cohort and initial 5/8 cohort remain historical.
-No further paid run is pending; the next review is GLM's saved failure.
+No further paid run is pending. GLM's saved failure was investigated offline;
+the subsequent matched API replay passed on both routes, and a separate full
+Chat Completions pair passed 1/2. Its handoffs were complete, but its happy case
+violated the GPU-inventory gate. The next useful review is deterministic
+coverage of that prerequisite, using saved artifacts.
 Navigator-deploy
 sweeps and new deployment-specific work are deferred. Existing deployment
 implementation, offline tests, and historical evidence below are retained.
@@ -259,6 +263,52 @@ judged assessment; automated GPU discovery remains deferred.
   [comparison](./navigator-serial-model-comparison.md),
   [records](./navigator-serial-sweep-results.json),
   [comparison JSON](./navigator-serial-model-comparison.json).
+- **GLM handoff investigation — complete offline.** The final native text
+  genuinely omits the block, although provider reasoning metadata represents
+  the instruction and all eleven required values. The current happy-path and
+  both preceding GLM controls received the identical handoff section and
+  emitted valid blocks. Four scripted transport cases retain the complete
+  skill and preserve fenced/unfenced handoff text exactly. An in-memory
+  transcript with a handoff grounded in the failed case's own tool results
+  changes only the four handoff-related check statuses and passes hard checks;
+  it is not a new agent run or judge score. No local parser or serialization
+  defect was reproduced. Original HTTP response bytes are unavailable, so
+  generation versus gateway behavior remains unresolved. The viewer also
+  hides reasoning held in provider `raw_content`; native evidence retains it.
+  A two-sentence final-output self-check is proposed but not applied, and its
+  behavioral effectiveness is untested. All 62 history records and 189
+  pre-existing evidence files were unchanged before plan updates. No network,
+  model, judge, or MCP calls were made; the sequential result stays 7/8.
+  [Investigation](./glm-handoff-investigation.md),
+  [derived evidence](./glm-handoff-investigation-results.json).
+  Follow-up: the user's Pi.dev settings use Chat Completions, system-role
+  instructions, a 65,536-token model ceiling, and explicit zero penalties.
+  Installed Pi defaults to medium thinking unless overridden; the sweep used
+  Responses with unspecified effort. These settings do not directly configure
+  the Python harness, but make API/configuration comparison a concrete next
+  diagnostic. No further live call was made during that initial review.
+- **GLM API diagnostic and Chat validation — complete.** Exactly one final-turn
+  replay on Responses and one on Chat used the same failed pre-handoff context,
+  preserving all eight prior reasoning segments and other settings. Both
+  emitted correct handoffs and passed derived hard checks; the omission did
+  not recur. A separate two-golden `enmaas-glm-chat` validation then passed
+  **1/2 overall**, with both five-turn conversations, both handoffs, and all
+  hard checks passing. Vague scored 0.95/0.95/0.80; happy scored
+  0.30/0.90/0.60. Happy made unfiltered recommendations before receiving GPU
+  inventory or explicit consent, a real gate violation caught by the judges
+  but absent from current deterministic coverage. It made nine MCP calls and
+  generated 24,910 reasoning tokens in 507.26 agent seconds; no timeout occurred.
+  The candidate changes only the API and diagnostic identity, keeping skill,
+  judge, thresholds, effort, sampling, and limits fixed. It is not full Pi.dev
+  settings parity. All 142 compared runtime files match the roster baseline.
+  There were no automatic reruns, infrastructure/judge errors, forbidden calls,
+  or deployment writes. The 62 earlier history records remain a byte-identical
+  prefix; exactly two full-run records were appended. The production roster,
+  skill, historical reports, and original 7/8 verdict remain unchanged.
+  [Diagnostic and interpretation](./glm-api-validation.md),
+  [replay evidence](./glm-api-replay-results.json),
+  [full records](./glm-chat-validation-results.json),
+  [Chat comparison](./glm-chat-model-comparison.md).
 - **Earlier updated sweep — 8/8 recorded, 7/8 passed.** Anthropic, GPT, and GLM passed
   2/2 each; DeepSeek passed 1/2. All eight conversations discovered Navigator,
   completed five turns, and preserved the selected capacity (`0.13` QPS).
@@ -432,12 +482,18 @@ Found while building; none are scheduled.
    complete: 7/8 passed, all eight table checks passed, and all 28 interval
    pairs show zero overlap. No additional sweep is pending. Preserve both
    historical cohorts and their distinct failure cases.
-2. **Investigate GLM's omitted handoff offline.** Inspect `4f2a187d74cd`, its
-   delivered instructions, preceding turns, and final output. Do not attribute
-   one failure to the template edit or scheduling, change a historical verdict,
-   or run another paid sweep as part of this review.
-3. **Choose any follow-up correction after review.** Keep it minimal and verify
-   it offline first. Additional paid validation remains a separate decision.
+2. **Review the completed GLM investigation.** The missing block is real;
+   instructions and values were available, and no local parser/harness defect
+   was reproduced. Preserve the failure and the generation/gateway attribution
+   limit. Do not infer a regression from one sample.
+3. **Review the completed API diagnostic, then the GPU-inventory gate offline.**
+   Both APIs passed matched replay; Chat also passed 1/2 full flows, with a
+   different failure mode. This does not establish an API fix. Use
+   `2aaa97922492` and successful controls to review deterministic coverage of
+   recommendations before inventory/explicit unfiltered consent. No new
+   checker or skill edit is applied. Pi-style effort/cap/penalty/streaming
+   experiments remain separate decisions. Raw-reasoning viewer support is
+   separate diagnostic work.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
 outside this branch's current evaluation work by decision. Navigator-deploy

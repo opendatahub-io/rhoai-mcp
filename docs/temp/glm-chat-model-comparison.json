@@ -1,0 +1,625 @@
+{
+  "configuration": {
+    "skill": "navigator",
+    "skill_sha": "6b84c869d2cc",
+    "source_commit": "29266d6",
+    "rubric_version": "v2",
+    "judge_provider": "enmaas",
+    "judge_model": "gpt-6.1-sol",
+    "judge_endpoint": "https://api.enmaas.devshift.net/v1",
+    "cluster_mode": "mock",
+    "agent_backend": "pydantic-ai",
+    "mcp_thresholds": [
+      0.6,
+      0.75
+    ],
+    "scenario_sha": {
+      "navigator-happy-path": "eaa225a67e99",
+      "navigator-vague-requirements": "f1f282812e97"
+    },
+    "metrics": {
+      "Conversation MCP Task Completion": {
+        "version": "conversation-v2",
+        "threshold": 0.75
+      },
+      "Conversation MCP Use": {
+        "version": "conversation-v2",
+        "threshold": 0.6
+      },
+      "Navigator Skill Fidelity [Conversational GEval]": {
+        "version": "v2",
+        "threshold": 0.8
+      }
+    },
+    "run_ids": [
+      "67101adf181c"
+    ],
+    "cohort_file_sha256": "a43803ef2a14e505a4481374dc04abfdbd4a73c83f3ac42bb02427a4e9b0f43d",
+    "execution_verification": {
+      "case_intervals_measured": 2,
+      "case_pairs_checked": 1,
+      "case_overlap_count": 0,
+      "scoring_included": true
+    }
+  },
+  "models": [
+    {
+      "model": "enmaas-glm-chat",
+      "samples": 2,
+      "passed": 1,
+      "routing_passed": 2,
+      "routing_measured": 2,
+      "hard_checks_passed": 2,
+      "hard_checks_measured": 2,
+      "errors": {
+        "harness": 0,
+        "model": 0,
+        "routing": 0,
+        "judge_metrics": 0
+      },
+      "metrics": {
+        "tool_use": {
+          "mean": 0.625,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 1.25
+        },
+        "completion": {
+          "mean": 0.925,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 1.85
+        },
+        "fitness": {
+          "mean": 0.7,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 1.4
+        }
+      },
+      "efficiency": {
+        "input_tokens": {
+          "mean": 230185,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 460370
+        },
+        "output_tokens": {
+          "mean": 20291,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 40582
+        },
+        "reasoning_tokens": {
+          "mean": 17128,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 34256
+        },
+        "cache_read_tokens": {
+          "mean": 191488,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 382976
+        },
+        "model_responses": {
+          "mean": 10,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 20
+        },
+        "mcp_calls": {
+          "mean": 7.5,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 15
+        },
+        "mcp_errors": {
+          "mean": 0,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 0
+        },
+        "unreturned_mcp_calls": {
+          "mean": 0,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 0
+        },
+        "capability_loads": {
+          "mean": 1,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 2
+        },
+        "agent_seconds": {
+          "mean": 348.335,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 696.67
+        },
+        "scoring_seconds": {
+          "mean": 39.0,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 78.0
+        },
+        "total_seconds": {
+          "mean": 387.335,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 774.67
+        },
+        "turns": {
+          "mean": 5,
+          "measured": 2,
+          "expected": 2,
+          "observed_total": 10
+        }
+      },
+      "profile": {
+        "agent_backend": "pydantic-ai",
+        "api": "chat",
+        "base_url": "https://api.enmaas.devshift.net/v1",
+        "extra_settings": {},
+        "id": "enmaas-glm-chat",
+        "model_name": "rits/zai-org/glm-5-3",
+        "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+        "temperature": null
+      }
+    }
+  ],
+  "attempts": [
+    {
+      "record": {
+        "run_id": "67101adf181c",
+        "timestamp": "2026-11-02T16:49:05.139399+00:00",
+        "scenario": "navigator-vague-requirements",
+        "git": {
+          "commit": "29266d6",
+          "branch": "tarilabs-20261031-deepevalpydanticai"
+        },
+        "environment": {
+          "agent_backend": "pydantic-ai",
+          "agent_model": "enmaas-glm-chat",
+          "lcs_url": "",
+          "eval_provider": "enmaas",
+          "eval_model": "gpt-6.1-sol",
+          "cluster_mode": "mock",
+          "mcp_use_threshold": 0.6,
+          "task_completion_threshold": 0.75,
+          "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+        },
+        "metrics": [
+          {
+            "name": "Conversation MCP Use",
+            "score": 0.95,
+            "success": true,
+            "threshold": 0.6,
+            "reason": "The score is 0.95 because the application largely met the evaluation requirements by using appropriate workload and recommendation tools with correctly typed, confirmed inputs, waiting for required confirmations, requesting GPU information when the resource tool was unavailable, avoiding deployment tools, and rerunning recommendations to resolve duplicates. The only minor error was setting the integer quality threshold to 32 instead of rounding 27.1 + 5 up to 33, which was necessary to enforce the required minimum five-point increase.",
+            "version": "conversation-v2"
+          },
+          {
+            "name": "Conversation MCP Task Completion",
+            "score": 0.95,
+            "success": true,
+            "threshold": 0.75,
+            "reason": "The score is 0.95 because the application successfully clarified the use case, scale, and priorities, confirmed the workload, provided hardware-aware recommendations, and delivered the selected balanced model’s complete deployment handoff while preserving expected_qps at 0.13. It appropriately stopped at the handoff, with a minor deduction for overstating unsuccessful tighter searches as proof of absolute cost and quality limits.",
+            "version": "conversation-v2"
+          },
+          {
+            "name": "Navigator Skill Fidelity [Conversational GEval]",
+            "score": 0.8,
+            "success": true,
+            "threshold": 0.8,
+            "reason": "The navigator skill is present, and the assistant announced all three phases, waited for workload confirmation before recommendations, asked for GPU types when inventory was unavailable, and waited for model selection before handing off to /navigator-deploy without deploying. Results were readable prose and markdown tables. However, it presented an H100 recommendation despite all shown recommendation calls being constrained to A100-80, with no visible unconstrained fallback supporting that result. The handoff’s expected_qps also cannot be verified against a tool response in the provided conversation.",
+            "version": "v2"
+          }
+        ],
+        "turns": 5,
+        "tool_names_used": [
+          "get_use_case_defaults",
+          "get_expected_rps",
+          "recommend_model"
+        ],
+        "passed": true,
+        "duration_seconds": 40.11,
+        "attempt_id": "e8d402ddd2ae",
+        "scoring_id": "134378770918",
+        "skill": "navigator",
+        "golden_id": "navigator-vague-requirements",
+        "skills_loaded": [
+          "navigator"
+        ],
+        "outcome": "evaluated",
+        "error_stage": "",
+        "error_detail": "",
+        "checks": [
+          {
+            "name": "routing_loaded_expected_skill",
+            "status": "pass",
+            "detail": "expected 'navigator', loaded ['navigator']"
+          },
+          {
+            "name": "routing_no_unintended_skill_loads",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "routing_skill_body_delivered",
+            "status": "pass",
+            "detail": "load_capability succeeded but no instruction body was delivered"
+          },
+          {
+            "name": "navigator_called_get_use_case_defaults",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_called_get_expected_rps",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_called_recommend_model",
+            "status": "pass",
+            "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+          },
+          {
+            "name": "navigator_recommend_after_confirmation",
+            "status": "pass",
+            "detail": "recommend_model at turn 9, confirmation at turn 6"
+          },
+          {
+            "name": "navigator_no_deployment_tools",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "table_present",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "table_columns_exact",
+            "status": "pass",
+            "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+          },
+          {
+            "name": "table_rows_exact",
+            "status": "pass",
+            "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+          },
+          {
+            "name": "table_cells_complete",
+            "status": "pass",
+            "detail": "every row has a value or an explicit em dash"
+          },
+          {
+            "name": "table_no_placeholders",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_present",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_complete",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_agrees_with_workload",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_agrees_with_selection",
+            "status": "pass",
+            "detail": ""
+          }
+        ],
+        "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/67101adf181c/e8d402ddd2ae",
+        "trace_id": "",
+        "dry_run": false,
+        "agent_seconds": 189.41,
+        "skill_sha": "6b84c869d2cc",
+        "scenario_sha": "f1f282812e97",
+        "rubric_version": "v2"
+      },
+      "observations": {
+        "input_tokens": 171590,
+        "output_tokens": 11822,
+        "reasoning_tokens": 9346,
+        "cache_read_tokens": 136192,
+        "model_responses": 9,
+        "mcp_calls": 6,
+        "mcp_errors": 0,
+        "unreturned_mcp_calls": 0,
+        "capability_loads": 1,
+        "artifact_run_id": "67101adf181c",
+        "artifact_sha256": "2252342e6b53e9b35c25ba96cb17171fd7284dbc6c214162e92e721d16492fe7",
+        "messages_sha256": "2476f92d75557d50506c3ea80738f1c7005b09d9db17b035567e6f5ac6e1d134",
+        "metadata": {
+          "spec_id": "enmaas-glm-chat",
+          "outcome": "evaluated",
+          "error": null,
+          "error_stage": null,
+          "turns_completed": 5,
+          "elapsed_s": 189.23,
+          "trace_session_id": "",
+          "golden_id": "navigator-vague-requirements",
+          "skill": "navigator",
+          "scenario_sha": "f1f282812e97",
+          "selection_expectation": {
+            "use_case": "chatbot_conversational",
+            "user_count": 50,
+            "category": "balanced",
+            "cluster_gpu_types": [
+              "A100-80"
+            ],
+            "model_id": null,
+            "namespace": null,
+            "storage_uri": null,
+            "slo_overrides": {}
+          },
+          "skill_sha": "6b84c869d2cc",
+          "rubric_version": "v2",
+          "id": "enmaas-glm-chat",
+          "model_name": "rits/zai-org/glm-5-3",
+          "base_url": "https://api.enmaas.devshift.net/v1",
+          "api": "chat",
+          "temperature": null,
+          "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+          "extra_settings": {},
+          "agent_backend": "pydantic-ai"
+        },
+        "warnings": []
+      },
+      "routing_ok": true,
+      "hard_checks_ok": true,
+      "agent_seconds": 189.41,
+      "scoring_seconds": 40.11,
+      "total_seconds": 229.51999999999998
+    },
+    {
+      "record": {
+        "run_id": "67101adf181c",
+        "timestamp": "2026-11-02T16:58:10.328715+00:00",
+        "scenario": "navigator-happy-path",
+        "git": {
+          "commit": "29266d6",
+          "branch": "tarilabs-20261031-deepevalpydanticai"
+        },
+        "environment": {
+          "agent_backend": "pydantic-ai",
+          "agent_model": "enmaas-glm-chat",
+          "lcs_url": "",
+          "eval_provider": "enmaas",
+          "eval_model": "gpt-6.1-sol",
+          "cluster_mode": "mock",
+          "mcp_use_threshold": 0.6,
+          "task_completion_threshold": 0.75,
+          "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+        },
+        "metrics": [
+          {
+            "name": "Conversation MCP Use",
+            "score": 0.3,
+            "success": false,
+            "threshold": 0.6,
+            "reason": "The score is 0.3 because the application failed to satisfy key hardware-selection requirements: it requested unfiltered recommendations before obtaining GPU inventory or explicit consent, then accepted H100 results from an A100-80-filtered call without validating the mismatch or making the required unconstrained fallback call. Although it used appropriate tools, generally supplied schema-valid arguments, reran recommendations after learning the GPU type, preserved the selected expected_qps of 0.13, and avoided deployment actions, these strengths did not outweigh the unresolved prerequisites and result-validation failures.",
+            "version": "conversation-v2"
+          },
+          {
+            "name": "Conversation MCP Task Completion",
+            "score": 0.9,
+            "success": true,
+            "threshold": 0.75,
+            "reason": "The score is 0.9 because the application largely completed the task correctly: it confirmed the workload, presented recommendations, obtained the user's Balanced selection, and delivered a complete Llama 3.1 8B handoff preserving expected_qps at 0.13 and specifying A100-80 hardware without attempting deployment. Minor shortcomings prevented full credit: it treated the ambiguous 800-token request size as prompt-only and initially proceeded without resolving GPU inventory.",
+            "version": "conversation-v2"
+          },
+          {
+            "name": "Navigator Skill Fidelity [Conversational GEval]",
+            "score": 0.6,
+            "success": false,
+            "threshold": 0.8,
+            "reason": "The navigator skill provides the specification. The assistant announced all three phases, obtained workload/SLO confirmation before recommendations, used readable prose and markdown tables, waited for a model choice, and ended with the /navigator-deploy handoff without planning or executing deployment. However, it violated the GPU-inventory gate: after asking which GPUs were available, it treated the customer's unanswered hardware question as permission to run unconstrained recommendations. The customer had neither said they did not know nor explicitly requested unfiltered results. Later A100-80 filtering did not undo that violation. The revised table also included an H100 fallback without a corresponding new unconstrained fallback call being shown.",
+            "version": "v2"
+          }
+        ],
+        "turns": 5,
+        "tool_names_used": [
+          "get_use_case_defaults",
+          "get_expected_rps",
+          "recommend_model"
+        ],
+        "passed": false,
+        "duration_seconds": 37.89,
+        "attempt_id": "2aaa97922492",
+        "scoring_id": "487d89e9d3ff",
+        "skill": "navigator",
+        "golden_id": "navigator-happy-path",
+        "skills_loaded": [
+          "navigator"
+        ],
+        "outcome": "evaluated",
+        "error_stage": "",
+        "error_detail": "",
+        "checks": [
+          {
+            "name": "routing_loaded_expected_skill",
+            "status": "pass",
+            "detail": "expected 'navigator', loaded ['navigator']"
+          },
+          {
+            "name": "routing_no_unintended_skill_loads",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "routing_skill_body_delivered",
+            "status": "pass",
+            "detail": "load_capability succeeded but no instruction body was delivered"
+          },
+          {
+            "name": "navigator_called_get_use_case_defaults",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_called_get_expected_rps",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_called_recommend_model",
+            "status": "pass",
+            "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+          },
+          {
+            "name": "navigator_recommend_after_confirmation",
+            "status": "pass",
+            "detail": "recommend_model at turn 7, confirmation at turn 6"
+          },
+          {
+            "name": "navigator_no_deployment_tools",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "table_present",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "table_columns_exact",
+            "status": "pass",
+            "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+          },
+          {
+            "name": "table_rows_exact",
+            "status": "pass",
+            "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+          },
+          {
+            "name": "table_cells_complete",
+            "status": "pass",
+            "detail": "every row has a value or an explicit em dash"
+          },
+          {
+            "name": "table_no_placeholders",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_present",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_complete",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_agrees_with_workload",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_agrees_with_selection",
+            "status": "pass",
+            "detail": ""
+          }
+        ],
+        "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/67101adf181c/2aaa97922492",
+        "trace_id": "",
+        "dry_run": false,
+        "agent_seconds": 507.26,
+        "skill_sha": "6b84c869d2cc",
+        "scenario_sha": "eaa225a67e99",
+        "rubric_version": "v2"
+      },
+      "observations": {
+        "input_tokens": 288780,
+        "output_tokens": 28760,
+        "reasoning_tokens": 24910,
+        "cache_read_tokens": 246784,
+        "model_responses": 11,
+        "mcp_calls": 9,
+        "mcp_errors": 0,
+        "unreturned_mcp_calls": 0,
+        "capability_loads": 1,
+        "artifact_run_id": "67101adf181c",
+        "artifact_sha256": "7636a19e2f58c35ad047eb307b2b7da261ef4ed7fa94ab99e4b393226361b8da",
+        "messages_sha256": "c36db4f6c5e6e44ec38e4bd4325ec5db76157ff20559d25bf979080e49959394",
+        "metadata": {
+          "spec_id": "enmaas-glm-chat",
+          "outcome": "evaluated",
+          "error": null,
+          "error_stage": null,
+          "turns_completed": 5,
+          "elapsed_s": 507.26,
+          "trace_session_id": "",
+          "golden_id": "navigator-happy-path",
+          "skill": "navigator",
+          "scenario_sha": "eaa225a67e99",
+          "selection_expectation": {
+            "use_case": "chatbot_conversational",
+            "user_count": 50,
+            "category": "balanced",
+            "cluster_gpu_types": [
+              "A100-80"
+            ],
+            "model_id": null,
+            "namespace": null,
+            "storage_uri": null,
+            "slo_overrides": {}
+          },
+          "skill_sha": "6b84c869d2cc",
+          "rubric_version": "v2",
+          "id": "enmaas-glm-chat",
+          "model_name": "rits/zai-org/glm-5-3",
+          "base_url": "https://api.enmaas.devshift.net/v1",
+          "api": "chat",
+          "temperature": null,
+          "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+          "extra_settings": {},
+          "agent_backend": "pydantic-ai"
+        },
+        "warnings": []
+      },
+      "routing_ok": true,
+      "hard_checks_ok": true,
+      "agent_seconds": 507.26,
+      "scoring_seconds": 37.89,
+      "total_seconds": 545.15
+    }
+  ],
+  "excluded": {
+    "dry_run": 0,
+    "rescore": 0,
+    "duplicate": 0,
+    "outside_selection": 0,
+    "last_limit": 0
+  },
+  "notes": [
+    "Fitness means the existing skill-fidelity score; no composite ranking is calculated.",
+    "Hard checks pass when all applicable measured checks pass. Conditional n/a or unexercised checks do not establish branch coverage.",
+    "All averages are per selected conversation. Each value shows measured/selected coverage; missing or errored scores stay n/a, never zero. Partial coverage means are not directly comparable to full coverage.",
+    "Turns are completed scripted user turns; model responses count saved responses, including tool-use steps.",
+    "Token counts sum the retained per-response agent usage across the conversation, including repeated context. Output includes reasoning and tool-call tokens; reasoning is a subset, not an extra charge to add. Cached input is a subset of input. Failed requests without saved usage cannot be counted.",
+    "Tokenizers and provider accounting differ. These are recorded token counts, not billed EnMaaS cost. SDK price estimates are not reported as billing.",
+    "Agent time excludes judging. Total time = agent + scoring per conversation; it is not cohort elapsed time. Timing includes provider latency, mock MCP work, and startup.",
+    "One attempt per cell is a smoke comparison, not a reliability estimate. Failures remain in quality and efficiency denominators.",
+    "One replay per API and one full attempt per golden do not establish reliability or a causal API fix.",
+    "Responses and Chat both passed the final-turn replay.",
+    "The API-only Chat profile is not full Pi.dev parity; effort, cap, penalties, streaming and host differ from Pi.",
+    "Do not pool these two cases into the existing eight-case roster or revise its 7/8 verdict.",
+    "No production model spec or skill wording was changed."
+  ],
+  "execution_overlaps": []
+}

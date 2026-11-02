@@ -7,6 +7,12 @@
 What is built, what is not, and what order the remainder is worth doing in.
 Section references (§) are to the parent plan.
 
+**Remaining cost scope:** sweep only Navigator's model-recommendation goldens
+(`navigator-happy-path`, `navigator-vague-requirements`) across four EnMaaS
+models: **8 conversations**, in batches of two per model. Navigator-deploy
+sweeps and new deployment-specific work are deferred. Existing deployment
+implementation, offline tests, and historical evidence below are retained.
+
 ---
 
 ## 1. Built and working
@@ -227,12 +233,15 @@ judged assessment; automated GPU discovery remains deferred.
 - **Full sweep — revised roster.** Only `enmaas-glm` has run goldens. The required
   roster is **four agents, all through EnMaaS**: GPT (`gpt-5.6-sol`), Anthropic
   (`claude-opus-4-6`, native Messages), GLM (`rits/zai-org/glm-5-3`), and
-  DeepSeek (`rits/deepseek-ai/DeepSeek-V4.1-Flash-1017`). Four goldens each means
-  **16 conversations**. GPT and Opus passed all 11 checks under probe `v2`;
+  DeepSeek (`rits/deepseek-ai/DeepSeek-V4.1-Flash-1017`). Run only Navigator's
+  two goldens per model: **8 conversations**. Navigator-deploy goldens are
+  excluded from the remaining sweep. GPT and Opus passed all 11 checks under probe `v2`;
   earlier OpenAI-compatible 404s for Opus were an API mismatch. `models.py` now
   uses EnMaaS GPT as its default and all four EnMaaS specs for `matrix`; Claude
   is explicitly configured with `AnthropicModel`/`AnthropicProvider`. The SDK
   base URL is the EnMaaS root for Messages. The full sweep has not run.
+  All four skill-eval Make targets now select `evals/skills/test_navigator.py`
+  explicitly, with automatic retries disabled.
   [Qualification evidence](./enmaas-matrix-qualification.md).
 - **Fresh judged baseline — captured, follow-up needed.** All four goldens ran
   through the normal judged path with fixed judge/cutoffs and fidelity `v2`.
@@ -260,7 +269,8 @@ judged assessment; automated GPU discovery remains deferred.
   The planner's `tuple index out of range` on a cost-slot query is a separate
   observed tool defect.
 - **`comparison.py` + reporting CLI.** Untouched, correctly deferred until
-  multi-model records exist. When it lands it must compare only matching
+  multi-model Navigator records exist. Initial reporting covers Navigator's two
+  goldens only; deployment reporting is deferred. It must compare only matching
   skill/golden sets under fixed judge, rubric, and metric versions, show sample counts, and
   leave missing values `n/a` rather than substituting `0.0` as the current
   implementation does (§3.5).
@@ -276,7 +286,8 @@ judged assessment; automated GPU discovery remains deferred.
 
 ## 6. Phase 4 leftovers
 
-The spike works end to end. What remains is productisation:
+The spike works end to end. These productisation items are deferred while the
+remaining work focuses on the Navigator sweep and its comparison:
 
 - surface the recorded conversation session id as a clickable MLflow link in reports
 - decide whether tracing defaults on in CI (it is opt-in via
@@ -306,11 +317,14 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Full model sweep (§5)** — four goldens per model, one model per reviewable
-   step, for 16 conversations. Prevent idle sleep, disable automatic retries, and
+1. **Navigator-only model sweep (§5)** — two recommendation goldens per model,
+   one model per reviewable step, for 8 conversations. Use
+   `evals/skills/test_navigator.py`; prevent idle sleep, disable automatic retries, and
    retain the fixed EnMaaS judge/cutoffs and fidelity `v2`.
-2. **`comparison.py` (§5)** — needs multi-model records to exist first.
-3. **Phase 4 polish (§6)** — nothing depends on it.
+2. **Navigator comparison (§5)** — implement `comparison.py` after those records
+   exist, keeping historical deployment attempts outside the new comparison.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
-outside this branch's current evaluation work by decision.
+outside this branch's current evaluation work by decision. Navigator-deploy
+sweeps, new deployment-specific follow-up, and Phase 4 polish (§6) are also
+deferred under the current cost scope.

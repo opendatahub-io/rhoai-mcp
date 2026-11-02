@@ -18,7 +18,9 @@ The required sweep now has **four agent models, all through EnMaaS** at
 | `enmaas-glm` | Open-weight GLM | `rits/zai-org/glm-5-3` | Qualified; full goldens exercised |
 | `enmaas-deepseek` | Open-weight DeepSeek | `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017` | Phase 0 qualified |
 
-This is **2 skills × 2 goldens × 4 models = 16 conversations**. The Anthropic
+The remaining cost scope is **Navigator only: 1 skill × 2 goldens × 4 models =
+8 conversations**. Navigator-deploy sweeps are deferred; its historical results
+and offline tests are retained. The Anthropic
 entry is required; a three-model run is only a partial sweep. The calibrated
 judge stays EnMaaS `gpt-6.1-sol`, separate from the GPT
 agent. Temperature remains unset for the matrix, recording provider defaults.
@@ -37,7 +39,9 @@ No direct-provider substitute is part of this sweep. See
 
 `models.py` now defaults to `enmaas-sol`, and `matrix` selects GPT, Opus, GLM,
 and DeepSeek through EnMaaS. Direct-provider specs remain diagnostic-only, outside
-the default and matrix. Historical sections below describe the original roster.
+the default and matrix. Sweep commands explicitly select
+`evals/skills/test_navigator.py`. Both skills stay in the discovery catalog.
+Historical sections below describe the original roster and broader validation.
 
 ---
 

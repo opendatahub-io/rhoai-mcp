@@ -2,10 +2,13 @@
 
 **Date:** 2026-11-02 · **Decision:** GPT + Anthropic + GLM + DeepSeek, all via EnMaaS.
 
-The runtime default and matrix now match the requested roster. The full sweep is
-**2 skills × 2 goldens × 4 models = 16 conversations**, run one model at a time
-for review. This step qualified the Anthropic route and adapter; it did not run
+The runtime default and matrix match the requested roster. The remaining full
+sweep is now **Navigator only: 2 goldens × 4 models = 8 conversations**, run one
+model at a time for review. This step qualified the Anthropic route and adapter; it did not run
 the full sweep or any new judge evaluations.
+
+Navigator-deploy sweeps are deferred to contain costs. Existing qualification and
+deployment evidence is retained; both skills remain in the discovery catalog.
 
 | Spec | Model | Explicit API | Provider base URL |
 |---|---|---|---|
@@ -76,7 +79,7 @@ This is a smoke test, not a judged skill golden or a reliability estimate. The
 spike also records five planner HTTP 400 results, followed by successful
 recommendations, and `explore_cluster` outside the skill's declared allowlist.
 The bundled planner's optional real node probes returned 401 despite mock MCP
-state. These observations remain visible for the four goldens to assess; no
+state. These observations remain visible for the Navigator goldens to assess; no
 behavior or skill prompt was tuned here. No deployment ran.
 
 ## Validation and next step
@@ -85,7 +88,9 @@ All **280 offline evaluation tests passed**. Tests exercise the actual native
 Messages request path, EnMaaS credential selection, paired tool results, omission
 of null SDK fields, matrix/default coverage, and the corrected answer check.
 Targeted lint, formatting, and type checks passed; the lockfile resolved offline.
-Pytest collection confirms 16 full-matrix cases without executing them.
+The original qualification step collected 16 cases across both skills, without
+executing them; that count is preserved in the machine-readable evidence. The
+revised Navigator-only sweep selects 8 cases and supersedes that broader scope.
 
 [Machine-readable evidence](./enmaas-matrix-probe-results.json) retains the catalog,
 route failures, earlier probe failures, successful versioned probes, adapter
@@ -93,7 +98,7 @@ checks and observations, package versions, and source/artifact hashes. Native
 artifacts and individual raw probe files remain under local `evals/results/`.
 Existing calibration, baseline, and result history were not rewritten.
 
-The next macro step is four judged goldens for one matrix entry, keeping the
+The next macro step is two judged Navigator goldens for one matrix entry, keeping the
 judge and settings fixed. For example, with `ENMAAS_KEY` available:
 
 ```sh
@@ -108,10 +113,11 @@ RHOAI_EVAL_CLUSTER_MODE=mock \
 RHOAI_EVAL_OTLP_ENDPOINT= \
 DEEPEVAL_TELEMETRY_OPT_OUT=YES \
 KUBECONFIG=/dev/null \
-caffeinate -i uv run --group skill-eval pytest evals/skills -v -s --reruns 0
+caffeinate -i uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
 ```
 
 Use one explicit spec per reviewed batch; `matrix` selects all four. Each attempt
 keeps its own artifact and scoring identity, including failures. Do not pool this
 qualification spike with judged golden records or interpret a partial family
-set as the complete 16-conversation sweep.
+set as the complete 8-conversation Navigator sweep. `make eval-skills-matrix`
+now selects only the Navigator test file across all four models.

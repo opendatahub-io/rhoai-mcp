@@ -179,15 +179,15 @@ eval-trend: ## Show eval score trends over time
 # Skill evaluations (Pydantic AI agent over stdio; no LCORE/compose needed)
 # =============================================================================
 
-eval-skills: ## Run skill evals, deterministic checks only (no judge cost)
-	uv run --group skill-eval pytest evals/skills -v
+eval-skills: ## Run Navigator goldens, deterministic checks only (no judge cost)
+	uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
 
-eval-skills-judge: ## Run skill evals with judged metrics (costs money)
-	RHOAI_EVAL_SKILL_JUDGE=1 uv run --group skill-eval pytest evals/skills -v
+eval-skills-judge: ## Run Navigator goldens with judged metrics (costs money)
+	RHOAI_EVAL_SKILL_JUDGE=1 uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
 
-eval-skills-matrix: ## Run skill evals across the full model matrix
+eval-skills-matrix: ## Run Navigator's 2 goldens across 4 EnMaaS models (8 conversations)
 	RHOAI_EVAL_AGENT_MODELS=matrix RHOAI_EVAL_SKILL_JUDGE=1 \
-		uv run --group skill-eval pytest evals/skills -v
+		uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
 
 eval-rescore: ## Re-score saved artifacts, no agent run (usage: make eval-rescore ARGS="--run <id> --judge")
 	uv run --group skill-eval python -m evals.skills.rescore $(ARGS)
@@ -208,10 +208,10 @@ mlflow-up: ## Start a local MLflow server (UI + OTLP ingestion at /v1/traces)
 	uv run --no-project --with mlflow mlflow server \
 		--host 127.0.0.1 --port $(MLFLOW_PORT) --backend-store-uri $(MLFLOW_STORE)
 
-eval-skills-traced: ## Run skill evals exporting OTel traces to the local MLflow
+eval-skills-traced: ## Run Navigator goldens exporting OTel traces to the local MLflow
 	RHOAI_EVAL_OTLP_ENDPOINT=http://127.0.0.1:$(MLFLOW_PORT)/v1/traces \
 	RHOAI_EVAL_MLFLOW_EXPERIMENT_ID=$${RHOAI_EVAL_MLFLOW_EXPERIMENT_ID:-0} \
-		uv run --group skill-eval --group trace pytest evals/skills -v
+		uv run --group skill-eval --group trace pytest evals/skills/test_navigator.py -v -s --reruns 0
 
 # =============================================================================
 # Requirements

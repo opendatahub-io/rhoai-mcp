@@ -4,13 +4,20 @@
 
 Complement the LightSpeed Core (LCORE) compose stack that `evals/` currently needs with a
 small Pydantic AI agent that wires `rhoai-mcp` over **stdio** and exposes the two
-agentskills.io skills in `.claude/skills/`. **Eight matrix cells: 2 skills × 4 models**
-(GPT, Anthropic Claude, GLM, and DeepSeek), **all through EnMaaS**, with
-**2 scenarios per skill = 16 conversations** per full sweep. GPT and Anthropic are
-required family representatives; GLM and DeepSeek are the two open-weight entries.
+agentskills.io skills in `.claude/skills/`. The remaining sweep covers **Navigator
+(model recommendation) only: 1 skill × 4 models × 2 goldens = 8 conversations**.
+The models are GPT, Anthropic Claude, GLM, and DeepSeek, **all through EnMaaS**.
+GPT and Anthropic are required family representatives; GLM and DeepSeek are the
+two open-weight entries.
 Start with one model before expanding the matrix. Keep both MCP metrics
-and one skill-fidelity judge per skill. Persisted transcripts are the scoring input, so
+and the Navigator skill-fidelity judge. Persisted transcripts are the scoring input, so
 the same path re-scores them offline; OTel is planned. EvalHub orchestration is a follow-on, not designed here.
+
+**Cost scope:** the remaining paid work is the eight Navigator conversations,
+reviewed in batches of two per model. Navigator-deploy sweeps, new deployment
+validation/calibration, and deployment-specific follow-up are deferred. Existing
+deployment code, offline tests, calibration evidence, and historical results remain
+available. Both skills stay in the discovery catalog so routing is still tested.
 
 ---
 
@@ -399,7 +406,8 @@ recommendation cell. Validate one comparison table's exact headers, row labels, 
 counts; do not mix it with earlier workload tables. Add malformed-table examples to
 exercise those checks.
 
-**Navigator-deploy** — `plan_deployment` is reached; the plan is shown before requesting
+**Navigator-deploy (retained implementation reference; outside the remaining sweep)** —
+`plan_deployment` is reached; the plan is shown before requesting
 deployment approval; neither `execute_deployment` nor runtime creation occurs before
 the scripted affirmative reply. When `runtime_needs_creation` is true, successful
 `create_serving_runtime` must precede execution. An absent confirmation, an unresolved
@@ -469,41 +477,38 @@ thresholds against reviewed passing and failing examples with a fixed judge, not
 against whichever agent model scores highest. Report every metric separately; avoid a
 combined number that could hide a workflow violation.
 
-### 3.4 The matrix — 8 cells, 16 conversations per complete sweep
+### 3.4 The remaining matrix — Navigator only, 8 conversations
 
 | | EnMaaS GPT | EnMaaS Anthropic | EnMaaS GLM | EnMaaS DeepSeek |
 |---|---|---|---|---|
 | **navigator** | 2 goldens | 2 goldens | 2 goldens | 2 goldens |
-| **navigator-deploy** | 2 goldens | 2 goldens | 2 goldens | 2 goldens |
 
-Start with **2 goldens per skill**:
+Run these **two Navigator goldens per model**:
 
 | Golden | Purpose |
 |---|---|
 | navigator: happy path | Confirm workload, show recommendations, confirm selection, emit handoff |
 | navigator: vague requirements | Ask for missing intent/scale before proceeding; then complete the flow |
-| navigator-deploy: approved deployment | Full chosen-model flow through plan, approval, and execution against the default mock state |
-| navigator-deploy: handoff with consent withheld | Consume a complete handoff, skip redundant workload/recommendation phases, show the plan, and honor a final "hold off" reply without writes |
 
 **Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
 `create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding
-hook, no env var, and no scenario file. That state already contains both a
-`ServingRuntime` and a `vllm-runtime-template`
-(`mock_k8s/cluster_state.py:360-399`), so the `runtime_needs_creation` branch is
-probably unreachable from it. Record which branch each golden actually took and mark
-the unvisited one unexercised (§3.1) rather than adding a seeding mechanism to reach
-it. Adding state control is a separate decision, to be made only if the unexercised
-branches turn out to matter.
+hook, no env var, and no scenario file. Keep unvisited branches visible rather than
+adding state control for this sweep. Navigator-deploy's existing approved and
+consent-withheld goldens remain available for offline regression and historical
+replay; further paid deployment evaluation is deferred.
 
-The handoff case uses a fixed valid fixture supplied in the scripted conversation, so it
-depends on neither a preceding navigator run nor any mock-state change.
-Start with one scenario per skill and one model, then expand to all four scenarios and
-four models: **2 skills × 2 goldens × 4 models = 16 conversations**. A run omitting
-the required Anthropic entry is a partial sweep. Run one model's four goldens per
+The remaining full sweep is **1 skill × 2 goldens × 4 models = 8 conversations**.
+A run omitting a required model is a partial sweep. Run one model's two goldens per
 reviewable macro step, with the same scoring configuration. Prevent idle sleep for
 local runs (`caffeinate -i` on macOS), disable pytest capture (`-s`) for stdio, and
 disable automatic retries (`--reruns 0`). Repeated attempts
 multiply this count and each gets its own record and artifact.
+
+Use `evals/skills/test_navigator.py` as the explicit pytest target. The
+`eval-skills`, `eval-skills-judge`, `eval-skills-matrix`, and `eval-skills-traced`
+Make targets now select only that file. Do not target the whole `evals/skills/`
+directory for the remaining paid sweep. Both skills remain discoverable by the
+agent; only Navigator tasks are scripted and judged.
 
 Keep `outcome` distinct from pass/fail: `harness_error` (setup, auth, adapter, or judge
 failure, with `error_stage`), `model_failure` (unrecoverable model-response/argument failure or
@@ -550,6 +555,11 @@ unrelated scenarios or arbitrary recent records into a ranking; show sample coun
 leave missing values `n/a` rather than substituting `0.0` as the current comparison
 does; and report routing success, pass rate, errors, and per-metric means separately,
 with a coverage denominator on conditional judged quality.
+
+The remaining comparison scope is Navigator's happy-path and vague-requirements
+goldens across the four EnMaaS models. Select those records explicitly; historical
+Navigator-deploy records do not enter this comparison. Deployment reporting and
+additional paid validation are deferred under the cost scope.
 
 Retain the LCS reporting behavior through backward-compatible defaults. The new
 `make eval-skills` entry point selects a coherent sweep. Existing `make eval-compare`
@@ -670,7 +680,7 @@ register `get_cluster_resources` once, with cluster ownership and a training-onl
 fallback. Carry over permission mappings. Test default, training-only, and combined
 configurations and retain the all-plugin collision check. No skill or contract changes.
 
-**Phase 2 — both skills, one model, deterministic checks.** Build the runner, artifact
+**Phase 2 — both skills, one model, deterministic checks (implementation history).** Build the runner, artifact
 save/load path, corrected shared adapter, stdio fixtures, checkpoints, and the
 `recorder.py` / `reader.py` changes only (§3.5). Scoring reads the artifact from the
 start, so the single path costs nothing to adopt here. Delete the stale `turn._mcp_interaction = True`
@@ -680,26 +690,25 @@ transcripts are recorded before pytest assertions, that branch checks actually e
 and report unexercised branches honestly, and that the reader retains new metadata.
 No judge cost yet; dry-run records identify this mode explicitly.
 
-**Phase 3 — all required metrics, then the full model roster.** On the one-model path,
-add **`MultiTurnMCPUseMetric`, `MCPTaskCompletionMetric`, and the relevant
-`ConversationalGEval` rubric**. Then wire EnMaaS credentials for the models that passed
-the Phase 0 probe and adapter spike and expand to the required full sweep — 8 cells
-and **16 conversations** across GPT, Anthropic, GLM, and DeepSeek, all via EnMaaS.
+**Phase 3 — Navigator-only model sweep and comparison.** Use the calibrated
+conversation MCP use/completion metrics and Navigator fidelity rubric. Run
+Navigator's happy-path and vague-requirements goldens across GPT, Anthropic, GLM,
+and DeepSeek, all via EnMaaS: **1 skill × 2 goldens × 4 models = 8 conversations**.
+Review one model's two conversations before progressing to the next model.
 Anthropic uses the explicitly qualified native Messages configuration (§2.3); do
 not silently omit the family or switch its provider. The runtime matrix is aligned
 with the four-model roster. Keep the calibrated EnMaaS judge and scoring settings
-fixed. Only then extend
-`comparison.py` and the CLI (§3.5), against real
-multi-model records. Verify that routing failures, missing scores, and errors are
-reported without biasing comparisons. New targets: `make eval-skills` (one-model
-default, model selection via environment), `make eval-skills-matrix`, and
-`make eval-rescore` (re-judge saved artifacts while calibrating rubrics), plus an
-explicit dry-run option for deterministic-only iterations.
+fixed. Then extend `comparison.py` and the CLI (§3.5) for the Navigator records.
+Report routing failures, missing scores, and errors without biasing comparisons.
+The skill-eval Make targets select `evals/skills/test_navigator.py`; use free
+deterministic replay for checker work. Further paid Navigator-deploy runs and
+deployment-specific follow-up are deferred.
 
-**Phase 4 — trace viewing.** Add native OTel provider/exporter setup and a local
+**Phase 4 — trace viewing (deferred under the cost scope).** The retained design
+adds native OTel provider/exporter setup and a local
 collector. Acceptance: one conversation trace contains the skill-loading result, MCP
 arguments and results, and correlation IDs matching its saved record. Planned work, but
-sequenced last deliberately: no phase above depends on it, and an unavailable collector
+sequenced after the Navigator sweep and comparison: no phase above depends on it, and an unavailable collector
 must never prevent transcript capture or normal evaluation runs (§3.6).
 
 LCORE stays as-is throughout. Deciding its fate is a separate conversation once this path

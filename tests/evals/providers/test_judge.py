@@ -7,6 +7,51 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+class TestEnMaaSJudge:
+    @patch("evals.providers.judge.OpenAIJudgeLLM")
+    def test_default_judge_stays_on_enmaas(
+        self, mock_judge: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from evals.config import EvalConfig
+        from evals.providers import create_judge_llm
+
+        monkeypatch.setenv("ENMAAS_KEY", "gateway-key")
+        config = EvalConfig(_env_file=None, _env_prefix="RHOAI_TEST_")
+        create_judge_llm(config)
+        mock_judge.assert_called_once_with(
+            model_name="gpt-6.1-sol",
+            api_key="gateway-key",
+            base_url="https://api.enmaas.devshift.net/v1",
+        )
+
+    @patch("evals.providers.judge.OpenAIJudgeLLM")
+    def test_enmaas_uses_gateway_key_and_endpoint(
+        self, mock_judge: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from evals.config import EvalConfig
+        from evals.providers import create_judge_llm
+
+        monkeypatch.setenv("ENMAAS_KEY", "gateway-key")
+        config = EvalConfig(_env_file=None, eval_provider="enmaas", eval_model="gpt-5.6-sol")
+        create_judge_llm(config)
+        mock_judge.assert_called_once_with(
+            model_name="gpt-5.6-sol",
+            api_key="gateway-key",
+            base_url="https://api.enmaas.devshift.net/v1",
+        )
+
+    def test_enmaas_missing_key_fails_without_provider_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from evals.config import EvalConfig
+        from evals.providers import create_judge_llm
+
+        monkeypatch.delenv("ENMAAS_KEY", raising=False)
+        config = EvalConfig(_env_file=None, eval_provider="enmaas", eval_api_key="")
+        with pytest.raises(ValueError, match="ENMAAS_KEY"):
+            create_judge_llm(config)
+
+
 class TestGoogleJudgeLLMInit:
     """Tests for GoogleJudgeLLM.__init__ use_vertex branches."""
 
@@ -42,7 +87,7 @@ class TestGoogleJudgeLLMInit:
         )
 
     @patch("google.genai.Client")
-    def test_vertex_no_key_no_project_raises(self, mock_client_cls: MagicMock) -> None:
+    def test_vertex_no_key_no_project_raises(self, _mock_client_cls: MagicMock) -> None:
         """use_vertex=True with neither api_key nor vertex_project_id → ValueError."""
         from evals.providers.judge import GoogleJudgeLLM
 

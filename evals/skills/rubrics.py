@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 #: Threshold for the fidelity rubrics. Deliberately separate from the MCP
 #: thresholds: adherence and tool-use correctness fail for different reasons and
 #: a shared bar would hide which one moved.
-DEFAULT_FIDELITY_THRESHOLD = 0.7
+DEFAULT_FIDELITY_THRESHOLD = 0.8
 
 NAVIGATOR_FIDELITY_NAME = "Navigator Skill Fidelity"
 NAVIGATOR_DEPLOY_FIDELITY_NAME = "Navigator-Deploy Skill Fidelity"

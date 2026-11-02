@@ -212,7 +212,13 @@ def score_artifact(
     scoring_seconds = 0.0
     if judge is not None:
         metrics, scoring_seconds = _score(
-            transcript, artifact_path, golden.skill, config, judge, report
+            transcript,
+            artifact_path,
+            golden.skill,
+            config,
+            judge,
+            report,
+            scenario=golden.description,
         )
 
     passed = overall_passed(
@@ -243,6 +249,7 @@ def score_artifact(
             cluster_mode=config.cluster_mode.value,
             mcp_use_threshold=config.mcp_use_threshold,
             task_completion_threshold=config.task_completion_threshold,
+            eval_model_base_url=config.judge_base_url or "",
         ),
         metrics=metrics,
         turns=turns if turns is not None else int(meta.get("turns_completed", 0) or 0),
@@ -296,6 +303,8 @@ def _score(
     config: EvalConfig,
     judge: Any,
     report: CheckReport,
+    *,
+    scenario: str = "",
 ) -> tuple[list[MetricRecord], float]:
     """Run the judged MCP metrics against the rebuilt transcript.
 
@@ -303,8 +312,7 @@ def _score(
     whose preconditions are absent is recorded ``n/a`` with the specific missing
     precondition rather than silently skipped (plan §3.3).
     """
-    from deepeval import evaluate
-    from deepeval.evaluate.configs import AsyncConfig
+    from deepeval.evaluate import AsyncConfig, evaluate
 
     from evals.agent.transcript import AttemptArtifact
     from evals.deepeval_helpers import (
@@ -316,6 +324,7 @@ def _score(
         create_multi_turn_mcp_use_metric,
         create_task_completion_metric,
     )
+    from evals.metrics.conversation import CONVERSATION_METRIC_VERSION
 
     schemas = AttemptArtifact.load(artifact_path).mcp_tools()
     try:
@@ -334,13 +343,11 @@ def _score(
         )
         return [], 0.0
 
+    context = f"{scenario}\n\n{transcript.skill_body(skill) or ''}"
     metrics = [
-        create_multi_turn_mcp_use_metric(config),
-        create_task_completion_metric(config),
+        create_multi_turn_mcp_use_metric(config, model=judge, context=context),
+        create_task_completion_metric(config, model=judge, context=context),
     ]
-    # Hold the judge fixed across agent models.
-    for metric in metrics:
-        metric.model = judge
 
     started = time.monotonic()
     try:
@@ -349,9 +356,21 @@ def _score(
         )
     except Exception as exc:  # noqa: BLE001 - a judge failure is an error, not a 0
         report.add("judged_metrics", "n/a", f"judge failed: {type(exc).__name__}: {exc}")
-        return [], time.monotonic() - started
+        return [
+            MetricRecord(
+                name=metric.__name__,
+                score=-1.0,
+                success=False,
+                threshold=float(metric.threshold or 0.0),
+                reason=f"{type(exc).__name__}: {exc}",
+                version=CONVERSATION_METRIC_VERSION,
+            )
+            for metric in metrics
+        ], time.monotonic() - started
 
     records, _ = metric_records_from(eval_result)
+    for record in records:
+        record.version = CONVERSATION_METRIC_VERSION
     records += _score_fidelity(transcript, schemas, skill, config, judge, report)
     return records, time.monotonic() - started
 
@@ -368,14 +387,13 @@ def _score_fidelity(
 
     Scored on a *separate* test case built with ``include_skill_body=True``: the
     judge cannot assess adherence to a document it has not been shown. The MCP
-    metrics deliberately do not get that case, since the skill body is not part
-    of the trajectory they score.
+    metrics receive the same document as workflow context when building their
+    conversation-wide task, rather than as an extra assistant message.
 
     Conditional on routing — with no skill loaded there is nothing to adhere to,
     so the result is ``n/a`` with a reason, never 0.0.
     """
-    from deepeval import evaluate
-    from deepeval.evaluate.configs import AsyncConfig
+    from deepeval.evaluate import AsyncConfig, evaluate
 
     from evals.deepeval_helpers import (
         build_mcp_server_from_schemas,
@@ -409,7 +427,18 @@ def _score_fidelity(
         )
     except Exception as exc:  # noqa: BLE001
         report.add("skill_fidelity", "n/a", f"rubric failed: {type(exc).__name__}: {exc}")
-        return []
+        return [
+            MetricRecord(
+                name=metric.__name__,
+                score=-1.0,
+                success=False,
+                threshold=metric.threshold,
+                reason=f"{type(exc).__name__}: {exc}",
+                version=RUBRIC_VERSION,
+            )
+        ]
 
     records, _ = metric_records_from(result)
+    for record in records:
+        record.version = RUBRIC_VERSION
     return records

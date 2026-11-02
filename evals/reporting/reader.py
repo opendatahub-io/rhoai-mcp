@@ -51,6 +51,7 @@ def load_records(path: str | None = None) -> list[EvalRecord]:
                 cluster_mode=env_data.get("cluster_mode", "unknown"),
                 mcp_use_threshold=env_data.get("mcp_use_threshold", 0.5),
                 task_completion_threshold=env_data.get("task_completion_threshold", 0.6),
+                eval_model_base_url=env_data.get("eval_model_base_url", ""),
             )
             record = EvalRecord(
                 run_id=data["run_id"],

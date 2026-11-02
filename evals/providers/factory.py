@@ -6,6 +6,7 @@ is needed for DeepEval metrics.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 from evals.config import LLMProvider
@@ -28,6 +29,18 @@ def create_judge_llm(config: EvalConfig) -> Any:
         A model name string or DeepEvalBaseLLM instance.
     """
     provider = config.eval_provider
+
+    if provider == LLMProvider.ENMAAS:
+        from evals.providers.judge import OpenAIJudgeLLM
+
+        key = config.eval_api_key or os.environ.get("ENMAAS_KEY", "")
+        if not key:
+            raise ValueError("EnMaaS judge requires ENMAAS_KEY or RHOAI_EVAL_EVAL_API_KEY")
+        return OpenAIJudgeLLM(
+            model_name=config.eval_model,
+            api_key=key,
+            base_url=config.judge_base_url,
+        )
 
     if provider == LLMProvider.VLLM and not config.eval_model_base_url:
         raise ValueError(
@@ -54,7 +67,9 @@ def create_judge_llm(config: EvalConfig) -> Any:
         return AnthropicJudgeLLM(
             model_name=config.eval_model,
             api_key=config.eval_api_key,
-            vertex_project_id=config.vertex_project_id if provider == LLMProvider.ANTHROPIC_VERTEX else None,
+            vertex_project_id=config.vertex_project_id
+            if provider == LLMProvider.ANTHROPIC_VERTEX
+            else None,
             vertex_location=config.vertex_location,
         )
 

@@ -17,6 +17,7 @@ class MetricRecord:
     success: bool
     threshold: float
     reason: str
+    version: str = ""
 
 
 @dataclass
@@ -39,6 +40,7 @@ class EnvironmentRecord:
     cluster_mode: str
     mcp_use_threshold: float
     task_completion_threshold: float
+    eval_model_base_url: str = ""
 
 
 @dataclass

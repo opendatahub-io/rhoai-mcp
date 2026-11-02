@@ -72,7 +72,18 @@ class TestRecordRoundTrip:
             skill_sha="deadbeef",
             scenario_sha="cafe",
             rubric_version="v1",
+            metrics=[
+                MetricRecord(
+                    name="Conversation MCP Use",
+                    score=0.8,
+                    success=True,
+                    threshold=0.6,
+                    reason="",
+                    version="conversation-v2",
+                )
+            ],
         )
+        record.environment.eval_model_base_url = "https://api.enmaas.devshift.net/v1"
 
         (loaded,) = load_records(str(write(tmp_path, record)))
 
@@ -89,6 +100,8 @@ class TestRecordRoundTrip:
         assert loaded.agent_seconds == 42.5
         assert loaded.skill_sha == "deadbeef"
         assert loaded.rubric_version == "v1"
+        assert loaded.metrics[0].version == "conversation-v2"
+        assert loaded.environment.eval_model_base_url == "https://api.enmaas.devshift.net/v1"
 
     def test_check_results_survive_with_their_status(self, tmp_path: Path) -> None:
         """``unexercised`` must not be flattened into pass/fail on reload."""

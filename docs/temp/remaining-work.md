@@ -1,6 +1,6 @@
 # Remaining work: Pydantic AI + DeepEval skill evaluations
 
-**Status:** living checklist · **Date:** 2026-10-31
+**Status:** living checklist · **Updated:** 2026-11-01
 **Parent plan:** [`pydantic-ai-skill-evals-plan.md`](./pydantic-ai-skill-evals-plan.md)
 **Phase 0 findings:** [`phase0-model-probe.md`](./phase0-model-probe.md)
 
@@ -23,47 +23,56 @@ Section references (§) are to the parent plan.
 | Offline trajectory viewer | `make eval-show` |
 | OTel traces into a local MLflow | `make mlflow-up` + `make eval-skills-traced` |
 
-All four goldens have run live against `enmaas-glm`; judged scoring works with
-EnMaaS `gpt-5.6-sol` as judge; traces land in MLflow as one trace per
-conversation with full content and working `trace_id` correlation.
+All four goldens have run live against `enmaas-glm`. The calibrated judge is now
+EnMaaS `gpt-6.1-sol`; see §2. Traces land in MLflow as one trace per turn,
+grouped into a conversation session with full content and attempt correlation.
 
 ---
 
-## 2. The blocking issue: judge variance
+## 2. Judge calibration — initial calibration complete
 
-**Nothing downstream of this is trustworthy until it is resolved**, which is why
-it is listed before the phase work.
+Evidence and limits: [`judge-calibration.md`](./judge-calibration.md), with
+machine-readable repeated scores in
+[`judge-calibration-results.json`](./judge-calibration-results.json).
 
-Re-scoring one **frozen** transcript (`navigator-happy-path`, attempt
-`c7b261e66bfb`) with the same judge gave `Multi-Turn MCP Use`:
+The low scores were not just sampling noise. DeepEval split the conversation
+into isolated tasks, losing confirmed workload context and dropping the final
+handoff/refusal exchanges entirely. The skill path now scores one ordered
+conversation with workflow context and explicit scoring anchors. The stock
+MCP calculations remain, under new metric names/version `conversation-v2`.
 
-```
-0.250   →   0.150   →   0.250   →   0.217
-```
+Seven frozen examples × two EnMaaS judges × three metrics × five repetitions
+produced 210 measurements. Another 45 measurements validated the fixed cutoffs
+on two independent runs and a silent deployment-after-refusal counterexample.
+All 255 final measurements completed without errors; all 35 reviewed validation
+labels matched. Calibration measurements are stored separately from agent runs.
 
-A ±0.1 spread on identical input, against a `0.5` threshold. So "0.25 fails"
-currently says more about sampling than about the agent. Note this is *judge*
-non-determinism, independent of the agent non-determinism already documented
-(no matrix cell can set `temperature`).
+Defaults now select **EnMaaS `gpt-6.1-sol`**, using `ENMAAS_KEY`, with no
+automatic Vertex fallback. Average within-cell judge standard deviation fell
+from 0.0412 to 0.0145 compared with EnMaaS `gpt-5.6-sol` on the final corpus.
 
-Also uncalibrated: `task_completion_threshold` defaults to `0.25`, which is
-permissive enough that almost anything passes.
+A subsequent [GPT-4o-mini comparison](./gpt-4o-mini-judge-comparison.md) added
+150 measurements on identical inputs and unchanged rubrics/cutoffs. Mini matched
+86/115 reviewed labels versus Sol's 115/115, including false passes on silent
+unauthorized writes. Its lower latency did not justify a switch; no separating
+threshold repaired the overlapping passing/failing scores in the calibration set.
 
-**What to do**
+| Metric | Calibrated threshold |
+|---|---:|
+| Conversation MCP Use | 0.60 |
+| Conversation MCP Task Completion | 0.75 |
+| Navigator / Navigator-Deploy Skill Fidelity | 0.80 |
 
-1. Re-score a fixed set of transcripts N times (N≥5) per metric and record the
-   spread. `make eval-rescore` makes this cheap — that is what it is for.
-2. Decide thresholds from reviewed passing/failing examples plus the observed
-   spread, not from whichever number the current agent happens to produce
-   (§3.3).
-3. Re-open §6 Q2 with evidence: is EnMaaS Sol a good enough judge, or does a
-   stronger judge materially reduce variance? Worth answering *before*
-   investing in calibration against a noisy judge.
-4. Consider recording per-metric variance alongside the score so a single run's
-   number is never read as precise.
+`make eval-calibrate` repeats the experiment without agent runs. Normal result
+records retain metric versions and the resolved judge endpoint; judge failures
+remain failed, unscored metrics rather than disappearing from the verdict.
 
-**Acceptance:** a documented threshold per metric, justified by measured spread
-and reviewed examples, with the judge model pinned.
+**Remaining limits:** this is a small, partly correlated corpus, not a population
+error estimate. A valid held-out navigator example touched the fidelity cutoff
+once. A successfully executed approved deployment is still missing (§4.2), and
+warning-disclosure failures need reviewed examples. Completion alone cannot
+detect a hidden unauthorized write; tool-use/fidelity and hard checks remain
+required. The legacy LCS/stock metrics need separate calibration.
 
 ---
 
@@ -133,7 +142,7 @@ same failure: the right tool called with the wrong selection.
   live. Only the navigator rubric has produced a score (0.90).
 - **`comparison.py` + reporting CLI.** Untouched, correctly deferred until
   multi-model records exist. When it lands it must compare only matching
-  skill/golden sets under a fixed judge/rubric version, show sample counts, and
+  skill/golden sets under fixed judge, rubric, and metric versions, show sample counts, and
   leave missing values `n/a` rather than substituting `0.0` as the current
   implementation does (§3.5).
 - **`make eval-rescore` recording.** Re-scores currently append records under a
@@ -147,7 +156,7 @@ same failure: the right tool called with the wrong selection.
 
 The spike works end to end. What remains is productisation:
 
-- surface `trace_id` as a clickable MLflow link in reports
+- surface the recorded conversation session id as a clickable MLflow link in reports
 - decide whether tracing defaults on in CI (it is opt-in via
   `RHOAI_EVAL_OTLP_ENDPOINT` today)
 - MLflow currently runs via `uv run --no-project --with mlflow`; if it becomes
@@ -175,12 +184,14 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Judge variance (§2)** — invalidates every other number until settled.
-2. **`run_conversation` tests (§4.1)** — load-bearing and unverified.
-3. **Deploy golden turn + agreement checks (§4.2, §4.3)** — small, and they
+1. **`run_conversation` tests (§4.1)** — load-bearing and unverified.
+2. **Deploy golden turn + agreement checks (§4.2, §4.3)** — small, and they
    close real holes in what the goldens claim to prove.
-4. **Full model sweep (§5)** — only meaningful once thresholds are defensible.
+3. **Extend calibration (§2)** — add the completed approved deployment and
+   reviewed warning-disclosure examples once the golden reaches execution.
+4. **Full model sweep (§5)** — use the fixed judge and metric versions.
 5. **`comparison.py` (§5)** — needs multi-model records to exist first.
-6. **Phase 1 rewrite (§3)** — unblocks the unexercised branches; independent of
-   the above and gated on the product decision.
-7. **Phase 4 polish (§6)** — nothing depends on it.
+6. **Phase 4 polish (§6)** — nothing depends on it.
+
+**Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
+outside this branch's current evaluation work by decision.

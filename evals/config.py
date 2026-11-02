@@ -12,6 +12,7 @@ class LLMProvider(str, Enum):
     """LLM provider for the judge LLM."""
 
     OPENAI = "openai"
+    ENMAAS = "enmaas"
     VLLM = "vllm"
     AZURE = "azure"
     ANTHROPIC = "anthropic"
@@ -66,7 +67,7 @@ class EvalConfig(BaseSettings):
 
     # Judge LLM settings (for DeepEval metrics)
     eval_model: str = Field(
-        default="gemini-2.5-flash",
+        default="gpt-6.1-sol",
         description="Model name for the DeepEval judge LLM",
     )
     eval_model_base_url: str | None = Field(
@@ -80,7 +81,7 @@ class EvalConfig(BaseSettings):
 
     # Judge LLM provider
     eval_provider: LLMProvider = Field(
-        default=LLMProvider.GOOGLE_VERTEX,
+        default=LLMProvider.ENMAAS,
         description="LLM provider for the DeepEval judge",
     )
 
@@ -102,14 +103,23 @@ class EvalConfig(BaseSettings):
 
     # Metric thresholds
     mcp_use_threshold: float = Field(
-        default=0.5,
+        default=0.6,
         ge=0.0,
         le=1.0,
         description="Minimum score for MCPUseMetric",
     )
     task_completion_threshold: float = Field(
-        default=0.25,
+        default=0.75,
         ge=0.0,
         le=1.0,
         description="Minimum score for MCPTaskCompletionMetric",
     )
+
+    @property
+    def judge_base_url(self) -> str | None:
+        """Resolved endpoint, including the EnMaaS default, without credentials."""
+        if self.eval_provider == LLMProvider.ENMAAS and not self.eval_model_base_url:
+            from evals.agent.models import ENMAAS_BASE_URL
+
+            return ENMAAS_BASE_URL
+        return self.eval_model_base_url

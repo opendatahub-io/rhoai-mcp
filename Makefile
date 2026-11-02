@@ -192,6 +192,9 @@ eval-skills-matrix: ## Run skill evals across the full model matrix
 eval-rescore: ## Re-score saved artifacts, no agent run (usage: make eval-rescore ARGS="--run <id> --judge")
 	uv run --group skill-eval python -m evals.skills.rescore $(ARGS)
 
+eval-calibrate: ## Repeated EnMaaS-only scoring of reviewed frozen examples (costs money)
+	uv run --group skill-eval python -m evals.skills.calibrate $(ARGS)
+
 eval-show: ## Print a saved attempt's trajectory (usage: make eval-show ARGS="--attempt <id>")
 	uv run --group skill-eval python -m evals.skills.show $(ARGS)
 

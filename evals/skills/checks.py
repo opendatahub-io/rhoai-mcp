@@ -21,8 +21,20 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from evals.skills.agreement import (
+    SelectionExpectation,
+    confirmed_workload,
+    differences,
+    execution_errors,
+    handoff_errors,
+    mapping,
+    plan_selection_errors,
+    selected_recommendation,
+    valid_gate,
+)
+
 if TYPE_CHECKING:
-    from evals.agent.transcript import AgentTranscript
+    from evals.agent.transcript import AgentTranscript, ToolCallRecord
 
 Status = Literal["pass", "fail", "n/a", "unexercised"]
 
@@ -364,6 +376,8 @@ def check_navigator(
     *,
     confirmation_turn_index: int | None = None,
     expect_handoff: bool = True,
+    selection_turn_index: int | None = None,
+    expectation: SelectionExpectation | None = None,
 ) -> CheckReport:
     """Deterministic checks for the ``navigator`` skill (plan §3.1).
 
@@ -426,13 +440,25 @@ def check_navigator(
         if handoff is None:
             report.add("navigator_handoff_complete", "n/a", "no handoff block to parse")
         else:
-            missing = [k for k in HANDOFF_KEYS if not handoff.get(k)]
+            missing = [
+                k
+                for k in HANDOFF_KEYS
+                if k not in handoff or (k != "cluster_gpu_types" and not handoff[k])
+            ]
             report.check(
                 "navigator_handoff_complete",
                 not missing,
                 f"missing or empty keys: {missing}" if missing else "",
             )
 
+    _check_handoff_agreement(
+        transcript,
+        report,
+        expectation,
+        confirmation_turn_index,
+        selection_turn_index,
+        expect_handoff,
+    )
     if not routed:
         report.add("navigator_fidelity", "n/a", "routing failed; skill adherence unscoreable")
     return report
@@ -443,21 +469,98 @@ def check_navigator(
 # --------------------------------------------------------------------------- #
 
 
-def deployment_review_error(
+def _selected_cells(
+    transcript: AgentTranscript, category: str, selection: int | None
+) -> tuple[str, str]:
+    if not valid_gate(transcript, selection):
+        return "", ""
+    cells = ("", "")
+    for turn in transcript.turns[:selection]:
+        if turn.role != "assistant":
+            continue
+        table = find_recommendation_table(turn.content)
+        if table is None or category.title() not in table.headers:
+            continue
+        column = table.headers.index(category.title())
+        rows = {row[0]: row for row in table.rows if len(row) > column}
+        cells = (
+            rows.get("Model", [""] * (column + 1))[column],
+            rows.get("GPU", [""] * (column + 1))[column],
+        )
+    return cells
+
+
+def _check_handoff_agreement(
+    transcript: AgentTranscript,
+    report: CheckReport,
+    intent: SelectionExpectation | None,
+    confirmation: int | None,
+    selection: int | None,
+    expect_handoff: bool,
+) -> None:
+    names = ("navigator_handoff_agrees_with_workload", "navigator_handoff_agrees_with_selection")
+    if not expect_handoff or intent is None:
+        for name in names:
+            report.add(
+                name,
+                "unexercised",
+                "no handoff expected"
+                if not expect_handoff
+                else "no scenario selection expectation supplied",
+            )
+        return
+    workload, errors = confirmed_workload(transcript, intent, confirmation)
+    handoff = None
+    if selection is not None and valid_gate(transcript, selection):
+        for turn in transcript.turns[selection + 1 :]:
+            if turn.role == "assistant":
+                for block in HANDOFF_RE.finditer(turn.content):
+                    handoff = parse_handoff(block.group(0))
+    if handoff is None:
+        errors.append("no handoff emitted after the customer's selection")
+    else:
+        errors += handoff_errors(handoff, workload, intent)
+    report.check(names[0], not errors, "; ".join(errors))
+
+    recommendation, specification, errors = selected_recommendation(
+        transcript,
+        intent,
+        selection,
+        *_selected_cells(transcript, intent.category, selection),
+        after_turn=confirmation,
+    )
+    errors += differences(
+        mapping(specification.get("traffic_profile")),
+        {key: workload.get(key) for key in ("prompt_tokens", "output_tokens")},
+    )
+    errors += differences(
+        handoff or {},
+        {"chosen_category": intent.category, "model_id": recommendation.get("model_id")},
+    )
+    report.check(names[1], not errors, "; ".join(errors))
+
+
+@dataclass
+class DeploymentReview:
+    plan: ToolCallRecord
+    values: dict[str, str]
+
+
+def _deployment_review(
     transcript: AgentTranscript, *, before_turn: int | None = None
-) -> str | None:
+) -> tuple[DeploymentReview | None, str | None]:
     """Require a usable plan and a visible, complete review table before approval.
 
     Shared by the approval checkpoint and the final checks. Tool results alone
     are not a review: the customer must see the plan, including resolved storage.
-    Value agreement with the selected recommendation is a separate check.
+    Return the same parsed review to the value-agreement checks.
     """
     stop = len(transcript.turns) if before_turn is None else before_turn
     plans = [
         c for c in transcript.mcp_tool_calls if c.name == "plan_deployment" and c.turn_index < stop
     ]
     if not plans:
-        return "plan_deployment has not been called before approval"
+        return None, "plan_deployment has not been called before approval"
     plan = plans[-1]
     data = plan.structured_result
     if (
@@ -468,9 +571,10 @@ def deployment_review_error(
         or not data.get("model_id")
         or not data.get("runtime")
     ):
-        return "latest deployment plan failed or still has unresolved prerequisites"
+        return None, "latest deployment plan failed or still has unresolved prerequisites"
 
     required = {"model", "namespace", "serving runtime", "storage", "gpus", "replicas"}
+    review = None
     for turn in transcript.turns[plan.turn_index + 1 : stop]:
         if turn.role != "assistant":
             continue
@@ -482,6 +586,8 @@ def deployment_review_error(
                 label = row[0].strip("*` ").casefold()
                 label = {"runtime": "serving runtime", "gpu": "gpus"}.get(label, label)
                 values[label] = row[1].strip("*` ")
+            if {"model", "namespace"} <= values.keys():
+                review = None
             if not required <= values.keys():
                 continue
             if any(
@@ -492,8 +598,21 @@ def deployment_review_error(
             ):
                 continue
             if re.search(r"(?:oci|s3|pvc)://[^\s`|<>]+", values["storage"]):
-                return None
-    return "no complete deployment review table with resolved storage was shown before approval"
+                review = DeploymentReview(plan, values)
+    # The latest complete review is what the customer approves, including any
+    # correction made after an earlier complete table.
+    if review is not None:
+        return review, None
+    return (
+        None,
+        "no complete deployment review table with resolved storage was shown before approval",
+    )
+
+
+def deployment_review_error(
+    transcript: AgentTranscript, *, before_turn: int | None = None
+) -> str | None:
+    return _deployment_review(transcript, before_turn=before_turn)[1]
 
 
 def check_navigator_deploy(
@@ -501,6 +620,9 @@ def check_navigator_deploy(
     *,
     approval_turn_index: int | None = None,
     consent_given: bool = True,
+    confirmation_turn_index: int | None = None,
+    selection_turn_index: int | None = None,
+    expectation: SelectionExpectation | None = None,
 ) -> CheckReport:
     """Deterministic checks for the ``navigator-deploy`` skill (plan §3.1).
 
@@ -628,9 +750,74 @@ def check_navigator_deploy(
             f"turn {last_failure}",
         )
 
+    _check_deployment_agreement(
+        transcript,
+        report,
+        expectation,
+        confirmation_turn_index,
+        selection_turn_index,
+        approval_turn_index,
+        consent_given,
+    )
     if not routed:
         report.add("deploy_fidelity", "n/a", "routing failed; skill adherence unscoreable")
     return report
+
+
+def _check_deployment_agreement(
+    transcript: AgentTranscript,
+    report: CheckReport,
+    intent: SelectionExpectation | None,
+    confirmation: int | None,
+    selection: int | None,
+    approval: int | None,
+    consent_given: bool,
+) -> None:
+    names = ("deploy_plan_agrees_with_selection", "deploy_execution_agrees_with_reviewed_plan")
+    if not consent_given or intent is None:
+        for name in names:
+            report.add(
+                name,
+                "n/a" if not consent_given else "unexercised",
+                "consent withheld"
+                if not consent_given
+                else "no scenario selection expectation supplied",
+            )
+        return
+    workload, errors = confirmed_workload(transcript, intent, confirmation)
+    recommendation, specification, selection_errors = selected_recommendation(
+        transcript,
+        intent,
+        selection,
+        *_selected_cells(transcript, intent.category, selection),
+        after_turn=confirmation,
+    )
+    errors += selection_errors
+    review, review_error = (
+        _deployment_review(transcript, before_turn=approval)
+        if valid_gate(transcript, approval)
+        else (None, "deployment approval turn is missing")
+    )
+    if review is None:
+        errors.append(review_error or "deployment review is missing")
+    else:
+        errors += plan_selection_errors(
+            review.plan, recommendation, specification, workload, intent
+        )
+        if selection is None or review.plan.turn_index <= selection:
+            errors.append("deployment plan preceded the customer's configuration selection")
+    report.check(names[0], not errors, "; ".join(errors))
+    executions = [c for c in transcript.mcp_tool_calls if c.name == "execute_deployment"]
+    errors = []
+    if not executions or review is None:
+        errors.append("no execution or approved review to compare")
+    else:
+        for call in executions:
+            errors += [
+                f"{call.call_id}: {error}"
+                for error in execution_errors(call, review.plan, review.values, intent)
+            ]
+    report.check(names[1], not errors, "; ".join(errors))
 
 
 def _plan_requires_runtime(transcript: AgentTranscript) -> bool | None:

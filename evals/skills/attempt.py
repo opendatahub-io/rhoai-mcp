@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -129,6 +129,9 @@ async def run_attempt(
             "golden_id": golden.id,
             "skill": golden.skill,
             "scenario_sha": golden.scenario_sha(),
+            "selection_expectation": asdict(golden.expectation)
+            if golden.expectation is not None
+            else None,
             "skill_sha": golden.skill_sha(),
             "rubric_version": RUBRIC_VERSION,
             "trace_session_id": result.trace_session_id,

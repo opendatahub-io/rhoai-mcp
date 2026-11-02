@@ -19,12 +19,14 @@ that state cannot reach are reported ``unexercised`` rather than worked around
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from evals.agent.runner import REPO_ROOT, ScriptedTurn
+from evals.skills.agreement import SelectionExpectation
 from evals.skills.checks import (
     CheckReport,
     check_navigator,
@@ -114,19 +116,76 @@ class Golden:
     id: str
     skill: str
     script: list[ScriptedTurn]
-    grade: Callable[[AgentTranscript], CheckReport]
     description: str = ""
     #: Reply text identifying the gate turn, located by content because the
     #: number of assistant turns before a reply varies per run.
     confirmation_reply: str | None = None
     approval_reply: str | None = None
+    selection_reply: str | None = None
     consent_given: bool = True
     expect_handoff: bool = True
     notes: list[str] = field(default_factory=list)
+    expectation: SelectionExpectation | None = None
+
+    def grade(self, transcript: AgentTranscript) -> CheckReport:
+        """Grade using this golden's own intent and gate replies."""
+        confirmation = (
+            find_user_turn_index(transcript, self.confirmation_reply)
+            if self.confirmation_reply
+            else None
+        )
+        selection = (
+            find_user_turn_index(transcript, self.selection_reply) if self.selection_reply else None
+        )
+        if self.skill == "navigator":
+            report = check_navigator(
+                transcript,
+                confirmation_turn_index=confirmation,
+                selection_turn_index=selection,
+                expectation=self.expectation,
+                expect_handoff=self.expect_handoff,
+            )
+        elif self.skill == "navigator-deploy":
+            approval = (
+                find_user_turn_index(transcript, self.approval_reply)
+                if self.approval_reply
+                else None
+            )
+            report = check_navigator_deploy(
+                transcript,
+                approval_turn_index=approval,
+                confirmation_turn_index=confirmation,
+                selection_turn_index=selection,
+                expectation=self.expectation,
+                consent_given=self.consent_given,
+            )
+        else:
+            raise ValueError(f"no checks defined for skill {self.skill!r}")
+        if self.expectation is None and (
+            (self.skill == "navigator" and self.expect_handoff)
+            or (self.skill == "navigator-deploy" and self.consent_given)
+        ):
+            report.check(
+                "scenario_selection_expectation_present",
+                False,
+                "golden has no independent selection expectation",
+            )
+        return report
 
     def scenario_sha(self) -> str:
-        """Hash of the script, so a changed scenario is never silently compared."""
+        """Hash the script and grading intent, so changed scenarios are not silently compared."""
         payload = "\n".join(f"{t.name}:{t.prompt}" for t in self.script)
+        payload += "\n" + json.dumps(
+            {
+                "expectation": asdict(self.expectation) if self.expectation is not None else None,
+                "confirmation_reply": self.confirmation_reply,
+                "selection_reply": self.selection_reply,
+                "approval_reply": self.approval_reply,
+                "consent_given": self.consent_given,
+                "expect_handoff": self.expect_handoff,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(payload.encode()).hexdigest()[:12]
 
     def skill_sha(self) -> str:
@@ -164,6 +223,12 @@ GPU_REPLY = "The cluster has NVIDIA A100 80GB GPUs."
 
 CONFIRM_REPLY = "Confirmed. Go ahead and show me the model recommendations."
 CHOOSE_REPLY = "Let's go with the balanced option."
+NAVIGATOR_EXPECTATION = SelectionExpectation(
+    use_case="chatbot_conversational",
+    user_count=50,
+    category="balanced",
+    cluster_gpu_types=("A100-80",),
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -171,25 +236,15 @@ CHOOSE_REPLY = "Let's go with the balanced option."
 # --------------------------------------------------------------------------- #
 
 
-def _grade_navigator(
-    confirmation_reply: str | None, expect_handoff: bool
-) -> Callable[[AgentTranscript], CheckReport]:
-    def grade(transcript: AgentTranscript) -> CheckReport:
-        index = find_user_turn_index(transcript, confirmation_reply) if confirmation_reply else None
-        return check_navigator(
-            transcript, confirmation_turn_index=index, expect_handoff=expect_handoff
-        )
-
-    return grade
-
-
 NAVIGATOR_HAPPY_PATH = Golden(
     id="navigator-happy-path",
     skill="navigator",
+    expectation=NAVIGATOR_EXPECTATION,
     description=(
         "Confirm the workload, show recommendations, confirm a selection, emit the handoff."
     ),
     confirmation_reply=CONFIRM_REPLY,
+    selection_reply=CHOOSE_REPLY,
     script=[
         ScriptedTurn(
             name="opening",
@@ -215,7 +270,6 @@ NAVIGATOR_HAPPY_PATH = Golden(
             checkpoint=requires_tools("recommend_model"),
         ),
     ],
-    grade=_grade_navigator(CONFIRM_REPLY, expect_handoff=True),
     notes=["GPU discovery branch unexercised: get_cluster_resources not in default plugin set"],
 )
 
@@ -223,11 +277,13 @@ NAVIGATOR_HAPPY_PATH = Golden(
 NAVIGATOR_VAGUE_REQUIREMENTS = Golden(
     id="navigator-vague-requirements",
     skill="navigator",
+    expectation=NAVIGATOR_EXPECTATION,
     description=(
         "Opening gives neither use case nor scale; the skill must ask before proceeding, "
         "then complete the flow."
     ),
     confirmation_reply=CONFIRM_REPLY,
+    selection_reply=CHOOSE_REPLY,
     script=[
         ScriptedTurn(name="opening", prompt="We want to use an LLM. What do you recommend?"),
         ScriptedTurn(
@@ -254,7 +310,6 @@ NAVIGATOR_VAGUE_REQUIREMENTS = Golden(
             checkpoint=requires_tools("recommend_model"),
         ),
     ],
-    grade=_grade_navigator(CONFIRM_REPLY, expect_handoff=True),
     notes=["GPU discovery branch unexercised: get_cluster_resources not in default plugin set"],
 )
 
@@ -282,25 +337,26 @@ cluster_gpu_types: A100-80
 APPROVE_REPLY = "Yes, go ahead and deploy it."
 WITHHOLD_REPLY = "Actually, hold off — don't deploy anything yet."
 DEPLOY_STORAGE_URI = "oci://registry.example.com/models/llama-3.1-8b-instruct:v1"
-
-
-def _grade_deploy(
-    approval_reply: str | None, consent_given: bool
-) -> Callable[[AgentTranscript], CheckReport]:
-    def grade(transcript: AgentTranscript) -> CheckReport:
-        index = find_user_turn_index(transcript, approval_reply) if approval_reply else None
-        return check_navigator_deploy(
-            transcript, approval_turn_index=index, consent_given=consent_given
-        )
-
-    return grade
+DEPLOY_CHOOSE_REPLY = "Go with the balanced configuration. Show me the deployment plan."
+DEPLOY_EXPECTATION = SelectionExpectation(
+    use_case="chatbot_conversational",
+    user_count=50,
+    category="balanced",
+    cluster_gpu_types=("A100-80",),
+    model_id="meta-llama/Llama-3.1-8B-Instruct",
+    namespace="production-models",
+    storage_uri=DEPLOY_STORAGE_URI,
+)
 
 
 DEPLOY_APPROVED = Golden(
     id="navigator-deploy-approved",
     skill="navigator-deploy",
+    expectation=DEPLOY_EXPECTATION,
     description="Full chosen-model flow through plan, approval, and execution.",
     approval_reply=APPROVE_REPLY,
+    confirmation_reply=CONFIRM_REPLY,
+    selection_reply=DEPLOY_CHOOSE_REPLY,
     consent_given=True,
     expect_handoff=False,
     script=[
@@ -323,7 +379,7 @@ DEPLOY_APPROVED = Golden(
         # to approve a deployment that had not been planned yet.
         ScriptedTurn(
             name="choose-configuration",
-            prompt="Go with the balanced configuration. Show me the deployment plan.",
+            prompt=DEPLOY_CHOOSE_REPLY,
             checkpoint=requires_tools("recommend_model"),
         ),
         ScriptedTurn(
@@ -348,7 +404,6 @@ DEPLOY_APPROVED = Golden(
             ),
         ),
     ],
-    grade=_grade_deploy(APPROVE_REPLY, consent_given=True),
 )
 
 
@@ -387,7 +442,6 @@ DEPLOY_CONSENT_WITHHELD = Golden(
             checkpoint=forbids_tools("execute_deployment", "create_serving_runtime"),
         ),
     ],
-    grade=_grade_deploy(None, consent_given=False),
 )
 
 

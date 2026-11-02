@@ -18,6 +18,7 @@ Section references (§) are to the parent plan.
 | Offline runner lifecycle tests, with a dedicated CI job | `tests/evals/test_runner.py`, `.github/workflows/ci.yml` |
 | Shared transcript contract + artifact save/load | `evals/agent/transcript.py` |
 | Deterministic checks (routing, tables, consent, ordering, execution) | `evals/skills/checks.py` |
+| Workload, selected-slot, reviewed-plan, and execution agreement | `evals/skills/agreement.py` |
 | 4 goldens with checkpoints | `evals/skills/goldens.py` |
 | MCP metrics + per-skill fidelity rubrics | `evals/skills/rubrics.py` |
 | Re-score saved artifacts with no agent run | `make eval-rescore` |
@@ -146,18 +147,48 @@ dry run, not an overall judged pass.
 
 Validation: 381 offline tests passed across evaluations, planner unit/integration
 tests, and the skill allowlist guard; the agent golden also passed. Semantic
-agreement checks remain the next step (§4.3).
+agreement checks have since been added (§4.3).
 
-### 4.3 Two §3.1 "agreement" checks are missing
+### 4.3 Semantic agreement checks — complete
 
-Both are harder than the presence checks already implemented, and both guard the
-same failure: the right tool called with the wrong selection.
+The goldens now declare independent `SelectionExpectation` values for customer
+intent: use case, user count, chosen category, GPU inventory, and, for approved
+deployment, model ID, namespace, and storage URI. `Golden.grade` consumes those
+values directly; they participate in the scenario hash and are included in new
+attempt artifacts. A golden requiring agreement cannot silently omit its intent.
 
-- The handoff block **agrees with** the confirmed workload and the selected
-  recommendation. Currently only presence and completeness are checked.
-- Execution parameters **match the reviewed plan** and the confirmed
-  model/configuration. §3.1: *"calling the right tool with a different
-  selection is not success."*
+Four named checks cover the two agreement requirements from §3.1:
+
+- `navigator_handoff_agrees_with_workload`: compare the last handoff after the
+  customer's choice with successful defaults/traffic results before workload
+  confirmation and the independently declared inventory.
+- `navigator_handoff_agrees_with_selection`: match model ID and category to the
+  displayed slot's model/GPU offer before selection. Reruns offering other models
+  cannot replace that evidence.
+- `deploy_plan_agrees_with_selection`: compare plan inputs and returned model/GPU
+  selection with the confirmed workload and selected recommendation.
+- `deploy_execution_agrees_with_reviewed_plan`: compare every execution's model,
+  namespace, runtime, storage, GPU count/type, tensor parallelism, and replicas
+  with the structured plan and latest visible review before approval. Apply the
+  API's optional defaults; do not let a correct first execution hide a wrong second.
+
+The skills deliberately use different traffic sources: navigator handoff QPS
+comes from `get_expected_rps`; deployment plan QPS comes from the selected
+recommendation's specification. Numeric comparisons allow three-decimal QPS
+rounding, and reject non-finite values. Model-ID case and the planner's `NVIDIA-`
+GPU prefix are normalized. Unknown inventory may be an explicitly empty handoff
+field. A documented unconstrained fallback requires a preceding empty slot.
+
+Validation: 255 offline tests passed, including 78 agreement cases, plus a read-only replay of all
+14 saved golden attempts: 11 retain passing hard checks and the three blocked or
+timed-out attempts fail. Original artifacts and normal result history are not
+rewritten; no new agent or judge ran for this step. The tests cover changed
+workload fields, wrong slots/models/hardware, altered reviews, missing evidence,
+and mismatched execution parameters.
+
+Scope: these checks validate structured fields and the skill's table rows.
+Free-form claims such as installing autoscaling or monitoring still require
+judged assessment; automated GPU discovery remains deferred.
 
 ---
 
@@ -175,7 +206,10 @@ same failure: the right tool called with the wrong selection.
 - **`make eval-rescore` recording.** Re-scores currently append records under a
   *new* `run_id`. Pooling them with live runs in a future comparison would
   double-count one agent run; the comparison layer must filter on `scoring_id`
-  / `dry_run`.
+  / `dry_run`. Re-scoring also currently writes the current golden's scenario
+  and skill hashes onto the new score record. Preserve the original attempt's
+  identity separately from the scoring configuration before comparing history;
+  the new agreement expectations intentionally change scenario hashes.
 
 ---
 
@@ -211,13 +245,11 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Agreement checks (§4.3)** — verify handoff and execution values against
-   the confirmed workload, selected recommendation, and reviewed plan.
-2. **Extend calibration (§2)** — add the completed approved deployment and
+1. **Extend calibration (§2)** — add the completed approved deployment and
    reviewed warning-disclosure examples.
-3. **Full model sweep (§5)** — use the fixed judge and metric versions.
-4. **`comparison.py` (§5)** — needs multi-model records to exist first.
-5. **Phase 4 polish (§6)** — nothing depends on it.
+2. **Full model sweep (§5)** — use the fixed judge and metric versions.
+3. **`comparison.py` (§5)** — needs multi-model records to exist first.
+4. **Phase 4 polish (§6)** — nothing depends on it.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
 outside this branch's current evaluation work by decision.

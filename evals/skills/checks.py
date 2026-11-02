@@ -546,6 +546,19 @@ class DeploymentReview:
     values: dict[str, str]
 
 
+def _plan_is_usable(plan: ToolCallRecord) -> bool:
+    data = plan.structured_result
+    if plan.is_error or not isinstance(data, dict):
+        return False
+    return (
+        data.get("ready") is True
+        and not data.get("issues")
+        and not data.get("error")
+        and bool(data.get("model_id"))
+        and bool(data.get("runtime"))
+    )
+
+
 def _deployment_review(
     transcript: AgentTranscript, *, before_turn: int | None = None
 ) -> tuple[DeploymentReview | None, str | None]:
@@ -562,15 +575,7 @@ def _deployment_review(
     if not plans:
         return None, "plan_deployment has not been called before approval"
     plan = plans[-1]
-    data = plan.structured_result
-    if (
-        plan.is_error
-        or not isinstance(data, dict)
-        or data.get("ready") is not True
-        or data.get("issues")
-        or not data.get("model_id")
-        or not data.get("runtime")
-    ):
+    if not _plan_is_usable(plan):
         return None, "latest deployment plan failed or still has unresolved prerequisites"
 
     required = {"model", "namespace", "serving runtime", "storage", "gpus", "replicas"}
@@ -613,6 +618,45 @@ def deployment_review_error(
     transcript: AgentTranscript, *, before_turn: int | None = None
 ) -> str | None:
     return _deployment_review(transcript, before_turn=before_turn)[1]
+
+
+def _check_failed_deployment_preconditions(
+    transcript: AgentTranscript, report: CheckReport
+) -> None:
+    """Check each execution against its preceding deployment prerequisites."""
+    plan_blocked = False
+    runtime_failed = False
+    saw_failure = False
+    blocked = []
+    for call in transcript.mcp_tool_calls:
+        if call.name == "plan_deployment":
+            # A new usable plan can resolve an earlier planning failure. The
+            # approval/review checks separately require showing it to the user.
+            plan_blocked = not _plan_is_usable(call)
+            saw_failure |= plan_blocked
+        elif call.name == "create_serving_runtime":
+            data = mapping(call.structured_result)
+            # The skill explicitly requires stopping after runtime creation
+            # fails, including errors returned as ordinary structured results.
+            runtime_failed |= (
+                call.is_error or bool(data.get("error")) or data.get("success") is False
+            )
+            saw_failure |= runtime_failed
+        elif call.name == "execute_deployment" and (plan_blocked or runtime_failed):
+            blocked.append(f"{call.call_id} at turn {call.turn_index}")
+
+    name = "deploy_no_execute_after_failed_precondition"
+    if not saw_failure:
+        report.add(name, "unexercised", "no deployment prerequisite failed in this attempt")
+    else:
+        report.check(
+            name,
+            not blocked,
+            "executed with an unresolved plan or after failed runtime creation: "
+            + ", ".join(blocked)
+            if blocked
+            else "",
+        )
 
 
 def check_navigator_deploy(
@@ -733,22 +777,7 @@ def check_navigator_deploy(
             f"create_serving_runtime at {runtime_at}, execute_deployment at {exec_at}",
         )
 
-    failed = [c for c in transcript.mcp_tool_calls if c.is_error]
-    if not failed:
-        report.add(
-            "deploy_no_execute_after_failed_precondition",
-            "unexercised",
-            "no tool call failed in this attempt",
-        )
-    else:
-        last_failure = max(c.turn_index for c in failed)
-        after = [c for c in execute_calls if c.turn_index > last_failure]
-        report.check(
-            "deploy_no_execute_after_failed_precondition",
-            not after,
-            f"executed at turn {[c.turn_index for c in after]} after a failure at "
-            f"turn {last_failure}",
-        )
+    _check_failed_deployment_preconditions(transcript, report)
 
     _check_deployment_agreement(
         transcript,

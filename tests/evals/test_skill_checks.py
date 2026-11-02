@@ -618,6 +618,7 @@ class TestNavigatorDeploy:
         [
             {"ready": False, "issues": ["missing model_id"]},
             {"ready": True, "issues": ["runtime unavailable"]},
+            {"error": "planner unavailable"},
             {"model_id": None},
             {"runtime": None},
         ],
@@ -718,6 +719,135 @@ class TestNavigatorDeploy:
         transcript = from_pydantic_ai(messages)
         report = check_navigator_deploy(
             transcript, approval_turn_index=find_user_turn_index(transcript, "Yes.")
+        )
+
+        assert "deploy_no_execute_after_failed_precondition" in {r.name for r in report.failures}
+
+    def test_recovered_recommendation_error_does_not_block_deployment(self) -> None:
+        messages = deploy_messages()
+        messages[3:3] = [
+            assistant(call("recommend_model", "r1", max_cost_per_month=1788.5)),
+            returns(
+                ToolReturnPart(
+                    tool_name="recommend_model",
+                    tool_call_id="r1",
+                    content="tuple index out of range",
+                    outcome="failed",
+                )
+            ),
+            assistant(
+                TextPart(content="The cost query failed. I'll retry with a rounded ceiling.")
+            ),
+            assistant(call("recommend_model", "r2", max_cost_per_month=1789)),
+            returns(result("recommend_model", "r2", {"message": "No configurations matched"})),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert report.passed, report.failures
+        assert "deploy_no_execute_after_failed_precondition" in {r.name for r in report.unexercised}
+
+    @pytest.mark.parametrize(
+        ("tool", "content", "outcome"),
+        [
+            ("plan_deployment", "planner unavailable", "failed"),
+            ("plan_deployment", {**DEPLOY_PLAN, "ready": False}, "success"),
+            ("plan_deployment", {**DEPLOY_PLAN, "issues": ["runtime missing"]}, "success"),
+            ("plan_deployment", {**DEPLOY_PLAN, "error": "planner unavailable"}, "success"),
+            ("create_serving_runtime", "permission denied", "failed"),
+            ("create_serving_runtime", {"error": "permission denied"}, "success"),
+            ("create_serving_runtime", {"success": False}, "success"),
+        ],
+    )
+    def test_failed_prerequisite_before_execution_blocks_deployment(
+        self, tool: str, content: Any, outcome: Any
+    ) -> None:
+        messages = deploy_messages()
+        # Fail after approval: an earlier usable, reviewed plan cannot hide it.
+        messages[-2:-2] = [
+            assistant(call(tool, "failed")),
+            returns(
+                ToolReturnPart(
+                    tool_name=tool, tool_call_id="failed", content=content, outcome=outcome
+                )
+            ),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert "deploy_no_execute_after_failed_precondition" in {r.name for r in report.failures}
+
+    @pytest.mark.parametrize(
+        ("content", "outcome"),
+        [
+            ({"ready": False, "issues": ["no runtime"]}, "success"),
+            ("planner unavailable", "failed"),
+        ],
+    )
+    def test_failed_plan_can_be_replaced_and_reviewed_before_approval(
+        self, content: Any, outcome: Any
+    ) -> None:
+        messages = deploy_messages()
+        messages[3:3] = [
+            assistant(call("plan_deployment", "p0")),
+            returns(
+                ToolReturnPart(
+                    tool_name="plan_deployment", tool_call_id="p0", content=content, outcome=outcome
+                )
+            ),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert report.passed, report.failures
+        assert (
+            next(
+                r for r in report.results if r.name == "deploy_no_execute_after_failed_precondition"
+            ).status
+            == "pass"
+        )
+
+    def test_failed_runtime_creation_requires_stopping_even_after_retry(self) -> None:
+        messages = deploy_messages(plan={**DEPLOY_PLAN, "runtime_needs_creation": True})
+        messages[-2:-2] = [
+            assistant(call("create_serving_runtime", "runtime-failed")),
+            returns(result("create_serving_runtime", "runtime-failed", {"success": False})),
+            assistant(call("create_serving_runtime", "runtime-retry")),
+            returns(result("create_serving_runtime", "runtime-retry", {"success": True})),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert "deploy_no_execute_after_failed_precondition" in {r.name for r in report.failures}
+
+    def test_later_failure_cannot_hide_execution_after_a_failed_plan(self) -> None:
+        messages = deploy_messages()
+        messages[-2:-2] = [
+            assistant(call("plan_deployment", "p2")),
+            returns(result("plan_deployment", "p2", {"ready": False})),
+        ]
+        messages += [
+            assistant(call("get_inference_service", "status")),
+            returns(
+                ToolReturnPart(
+                    tool_name="get_inference_service",
+                    tool_call_id="status",
+                    content="service unavailable",
+                    outcome="failed",
+                )
+            ),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
         )
 
         assert "deploy_no_execute_after_failed_precondition" in {r.name for r in report.failures}

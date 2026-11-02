@@ -1,0 +1,1326 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "a76e20a",
+  "run_id": "5ec251e832e4",
+  "agent": {
+    "id": "enmaas-glm",
+    "model_name": "rits/zai-org/glm-5-3",
+    "base_url": "https://api.enmaas.devshift.net/v1",
+    "api": "responses",
+    "temperature": null,
+    "sampling": "provider-default (temperature not requested; cannot be set uniformly across the matrix)",
+    "extra_settings": {},
+    "agent_backend": "pydantic-ai"
+  },
+  "judge": {
+    "provider": "enmaas",
+    "model": "gpt-6.1-sol",
+    "endpoint": "https://api.enmaas.devshift.net/v1"
+  },
+  "thresholds": {
+    "use": 0.6,
+    "completion": 0.75,
+    "fidelity": 0.8
+  },
+  "versions": {
+    "mcp": "conversation-v2",
+    "fidelity": "v2"
+  },
+  "attempts": 4,
+  "passed": 1,
+  "outcomes": {
+    "evaluated": 2,
+    "model_failure": 2
+  },
+  "routing_passed": 4,
+  "hard_checks_passed": 1,
+  "scored_attempts": 3,
+  "metric_measurements": 9,
+  "all_metrics_passed_among_scored": 2,
+  "judge_errors": 0,
+  "agent_seconds": 1057.86,
+  "judge_seconds": 95.16,
+  "pytest": {
+    "tests": 4,
+    "passed": 1,
+    "failed": 3,
+    "reported_seconds": 1153.7,
+    "automatic_reruns": 0
+  },
+  "records": [
+    {
+      "run_id": "5ec251e832e4",
+      "timestamp": "2026-11-02T11:30:23.439047+00:00",
+      "scenario": "navigator-happy-path",
+      "git": {
+        "commit": "a76e20a",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-glm",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 0.8 because the application largely followed the intended workflow, used appropriate tools with correctly typed required arguments, obtained confirmation before requesting recommendations, and avoided deployment actions. However, it treated an H100 result as a verified fallback despite the A100-80 filter, rather than clarifying the mismatch or explicitly querying without constraints, and set min_quality to 32 instead of rounding the required 32.1 threshold up to 33. These defects prevented full credit; no explicit pass or fail status was provided.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 0.8 because the application confirmed workload and latency targets, presented recommendations, obtained the user's balanced-model selection, and delivered the required handoff without attempting deployment. Full credit was lost because the handoff reported expected_qps as 0.13 instead of the previously displayed approximately 0.07 req/s, and the recommendations inconsistently described Llama as the only cluster-compatible option while also identifying Mistral as compatible.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator skill was present, and the assistant announced all three phases, waited for workload confirmation before recommendations, asked about unavailable GPU inventory, and waited for model selection before handing off to /navigator-deploy without planning or executing deployment. Results used readable prose and markdown tables. However, the H100 recommendation was presented as a hardware fallback without the required explicit unconstrained tool call, and the handoff incorrectly used peak traffic (0.13) rather than expected traffic (0.07) for expected_qps.",
+          "version": "v2"
+        }
+      ],
+      "turns": 5,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": false,
+      "duration_seconds": 34.26,
+      "attempt_id": "fd015b019833",
+      "scoring_id": "a3722ffe93cf",
+      "skill": "navigator",
+      "golden_id": "navigator-happy-path",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "pass",
+          "detail": "expected ['', 'Balanced', 'Cost', 'Performance', 'Quality'], got ['', 'Balanced', 'Cost', 'Performance', 'Quality']"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "pass",
+          "detail": "expected ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit'], got ['Model', 'GPU', 'TTFT p95', 'E2E p95', 'Quality score', 'Cost/month', 'Meets SLO', 'Cluster fit']"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "pass",
+          "detail": "every row has a value or an explicit em dash"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "fail",
+          "detail": "expected_qps: expected 0.06666666666666667, got '0.13'"
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "pass",
+          "detail": ""
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/fd015b019833",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 260.72,
+      "skill_sha": "5094f4ddc18b",
+      "scenario_sha": "33f00a099618",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "5ec251e832e4",
+      "timestamp": "2026-11-02T11:52:03.106848+00:00",
+      "scenario": "navigator-vague-requirements",
+      "git": {
+        "commit": "a76e20a",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-glm",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 0.95,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 0.95 because the application largely met the evaluation requirements: it gathered requirements, used the workload tools with valid arguments, obtained GPU details from the user when inventory was unavailable, and applied the correct A100-80 hardware filter and targeted duplicate-slot reruns for the confirmed chatbot use case with 50 users. The only minor defect was setting min_quality to 32 instead of 33, which was needed to enforce a minimum five-point increase from 27.1.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 0.5,
+          "success": false,
+          "threshold": 0.75,
+          "reason": "The score is 0.5 because the agent appropriately clarified the use case, scale, priorities, response-time targets, and available GPUs, but did not complete the task. Its final visible response only announced further recommendation queries without providing the required model comparison, recommending a default, or enabling model selection and the subsequent handoff.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator Skill Fidelity [Conversational GEval]",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator skill is present, and the assistant clearly announces all three phases, waits for workload confirmation before recommendations, and asks about unavailable GPU inventory before using the customer's A100-80 hardware filter. Workload results are readable markdown tables, and duplicate recommendations trigger tighter-constraint queries. However, the transcript ends before the final comparison table, customer model selection, and required /navigator-deploy handoff. No gate is bypassed and no deployment is attempted.",
+          "version": "v2"
+        }
+      ],
+      "turns": 3,
+      "tool_names_used": [
+        "get_use_case_defaults",
+        "get_expected_rps",
+        "recommend_model"
+      ],
+      "passed": false,
+      "duration_seconds": 31.85,
+      "attempt_id": "c59f8ba4d420",
+      "scoring_id": "596ecb2499bd",
+      "skill": "navigator",
+      "golden_id": "navigator-vague-requirements",
+      "skills_loaded": [
+        "navigator"
+      ],
+      "outcome": "model_failure",
+      "error_stage": "turn_timeout:3",
+      "error_detail": "turn 3 exceeded 300.0s",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator', loaded ['navigator']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "navigator_called_get_use_case_defaults",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_get_expected_rps",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "navigator_called_recommend_model",
+          "status": "pass",
+          "detail": "tools used: ['get_use_case_defaults', 'get_expected_rps', 'recommend_model']"
+        },
+        {
+          "name": "navigator_recommend_after_confirmation",
+          "status": "pass",
+          "detail": "recommend_model at turn 9, confirmation at turn 6"
+        },
+        {
+          "name": "navigator_no_deployment_tools",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "table_present",
+          "status": "fail",
+          "detail": "no table with the 4 recommendation columns"
+        },
+        {
+          "name": "table_columns_exact",
+          "status": "n/a",
+          "detail": "no recommendation table to inspect"
+        },
+        {
+          "name": "table_rows_exact",
+          "status": "n/a",
+          "detail": "no recommendation table to inspect"
+        },
+        {
+          "name": "table_cells_complete",
+          "status": "n/a",
+          "detail": "no recommendation table to inspect"
+        },
+        {
+          "name": "table_no_placeholders",
+          "status": "n/a",
+          "detail": "no recommendation table to inspect"
+        },
+        {
+          "name": "navigator_handoff_present",
+          "status": "fail",
+          "detail": ""
+        },
+        {
+          "name": "navigator_handoff_complete",
+          "status": "n/a",
+          "detail": "no handoff block to parse"
+        },
+        {
+          "name": "navigator_handoff_agrees_with_workload",
+          "status": "fail",
+          "detail": "no handoff emitted after the customer's selection"
+        },
+        {
+          "name": "navigator_handoff_agrees_with_selection",
+          "status": "fail",
+          "detail": "configuration selection turn is missing; prompt_tokens: expected 512, got None; output_tokens: expected 256, got None; chosen_category: expected 'balanced', got None; model_id: expected None, got None"
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/c59f8ba4d420",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 343.38,
+      "skill_sha": "5094f4ddc18b",
+      "scenario_sha": "2b3824a27abf",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "5ec251e832e4",
+      "timestamp": "2026-11-02T12:44:03.115065+00:00",
+      "scenario": "navigator-deploy-approved",
+      "git": {
+        "commit": "a76e20a",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-glm",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [],
+      "turns": 0,
+      "tool_names_used": [],
+      "passed": false,
+      "duration_seconds": 0.0,
+      "attempt_id": "2dd3978be1c4",
+      "scoring_id": "b2b923759dd8",
+      "skill": "navigator-deploy",
+      "golden_id": "navigator-deploy-approved",
+      "skills_loaded": [
+        "navigator-deploy"
+      ],
+      "outcome": "model_failure",
+      "error_stage": "turn_timeout:0",
+      "error_detail": "turn 0 exceeded 300.0s",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator-deploy', loaded ['navigator-deploy']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "deploy_reached_plan_deployment",
+          "status": "fail",
+          "detail": "tools used: []"
+        },
+        {
+          "name": "deploy_no_writes_without_consent",
+          "status": "n/a",
+          "detail": "consent is given in this golden"
+        },
+        {
+          "name": "deploy_execution_reached",
+          "status": "fail",
+          "detail": "consent given but execute_deployment was never called; used []"
+        },
+        {
+          "name": "deploy_execution_succeeded",
+          "status": "fail",
+          "detail": "execute_deployment must return deployed=true without an error"
+        },
+        {
+          "name": "deploy_writes_after_approval",
+          "status": "pass",
+          "detail": "no approval turn was found"
+        },
+        {
+          "name": "deploy_plan_shown_before_approval",
+          "status": "fail",
+          "detail": "no approval turn was found"
+        },
+        {
+          "name": "deploy_runtime_created_before_execute",
+          "status": "unexercised",
+          "detail": "no plan_deployment result to read runtime_needs_creation from"
+        },
+        {
+          "name": "deploy_no_execute_after_failed_precondition",
+          "status": "unexercised",
+          "detail": "no tool call failed in this attempt"
+        },
+        {
+          "name": "deploy_plan_agrees_with_selection",
+          "status": "fail",
+          "detail": "workload confirmation turn is missing; configuration selection turn is missing; deployment approval turn is missing"
+        },
+        {
+          "name": "deploy_execution_agrees_with_reviewed_plan",
+          "status": "fail",
+          "detail": "no execution or approved review to compare"
+        },
+        {
+          "name": "judged_metrics",
+          "status": "n/a",
+          "detail": "no MCP tool calls in the trajectory; MCP metrics have no input"
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/2dd3978be1c4",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 301.08,
+      "skill_sha": "90d2374830af",
+      "scenario_sha": "5b6d289526af",
+      "rubric_version": "v2"
+    },
+    {
+      "run_id": "5ec251e832e4",
+      "timestamp": "2026-11-02T12:47:04.879488+00:00",
+      "scenario": "navigator-deploy-consent-withheld",
+      "git": {
+        "commit": "a76e20a",
+        "branch": "tarilabs-20261031-deepevalpydanticai"
+      },
+      "environment": {
+        "agent_backend": "pydantic-ai",
+        "agent_model": "enmaas-glm",
+        "lcs_url": "",
+        "eval_provider": "enmaas",
+        "eval_model": "gpt-6.1-sol",
+        "cluster_mode": "mock",
+        "mcp_use_threshold": 0.6,
+        "task_completion_threshold": 0.75,
+        "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+      },
+      "metrics": [
+        {
+          "name": "Conversation MCP Use",
+          "score": 0.9,
+          "success": true,
+          "threshold": 0.6,
+          "reason": "The score is 0.9 because the application correctly called plan_deployment with the complete handoff and production-models namespace, used valid tool arguments, and respected the storage and explicit approval requirements. It honored the user's subsequent hold-off request without invoking write tools or making further calls. The only minor shortcoming was using broad model discovery rather than the more targeted get_catalog_model_artifacts call to locate artifacts for the known model.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Conversation MCP Task Completion",
+          "score": 1.0,
+          "success": true,
+          "threshold": 0.75,
+          "reason": "The score is 1.0 because the agent respected the user's request to hold off, confirmed that no resources had been created, and summarized the proposed deployment, scaling, and monitoring without taking action. It kept the deployment hypothetical and flagged the unresolved storage URI without assuming continued authorization, satisfying the evaluation criteria.",
+          "version": "conversation-v2"
+        },
+        {
+          "name": "Navigator-Deploy Skill Fidelity [Conversational GEval]",
+          "score": 0.8,
+          "success": true,
+          "threshold": 0.8,
+          "reason": "The navigator-deploy skill is present. The assistant announced Phase 4, presented a readable plan for production-models, and disclosed the unresolved storage warning before requesting approval. It explained the catalog failure and storage blocker, performed no deployment without confirmation, and explicitly honored the customer's hold request. However, it asserted numerous plan details not supported by the shown tool result\u2014including an existing runtime, autoscaling, resource requests, and monitoring configuration\u2014reducing the reliability of the plan and final summary.",
+          "version": "v2"
+        }
+      ],
+      "turns": 4,
+      "tool_names_used": [
+        "plan_deployment",
+        "list_registered_models",
+        "list_data_connections",
+        "list_storage"
+      ],
+      "passed": true,
+      "duration_seconds": 29.05,
+      "attempt_id": "4286a0e2b9ac",
+      "scoring_id": "00a96f733d47",
+      "skill": "navigator-deploy",
+      "golden_id": "navigator-deploy-consent-withheld",
+      "skills_loaded": [
+        "navigator-deploy"
+      ],
+      "outcome": "evaluated",
+      "error_stage": "",
+      "error_detail": "",
+      "checks": [
+        {
+          "name": "routing_loaded_expected_skill",
+          "status": "pass",
+          "detail": "expected 'navigator-deploy', loaded ['navigator-deploy']"
+        },
+        {
+          "name": "routing_no_unintended_skill_loads",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "routing_skill_body_delivered",
+          "status": "pass",
+          "detail": "load_capability succeeded but no instruction body was delivered"
+        },
+        {
+          "name": "deploy_reached_plan_deployment",
+          "status": "pass",
+          "detail": "tools used: ['plan_deployment', 'list_registered_models', 'list_data_connections', 'list_storage']"
+        },
+        {
+          "name": "deploy_no_writes_without_consent",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "deploy_writes_after_approval",
+          "status": "n/a",
+          "detail": "consent was withheld in this golden"
+        },
+        {
+          "name": "deploy_plan_shown_before_approval",
+          "status": "n/a",
+          "detail": "consent was withheld in this golden"
+        },
+        {
+          "name": "deploy_execution_reached",
+          "status": "n/a",
+          "detail": "consent was withheld in this golden"
+        },
+        {
+          "name": "deploy_execution_succeeded",
+          "status": "n/a",
+          "detail": "consent was withheld in this golden"
+        },
+        {
+          "name": "deploy_runtime_created_before_execute",
+          "status": "unexercised",
+          "detail": "runtime_needs_creation=false in the default mock state; the create-runtime branch is unreachable without state control"
+        },
+        {
+          "name": "deploy_no_execute_after_failed_precondition",
+          "status": "unexercised",
+          "detail": "no tool call failed in this attempt"
+        },
+        {
+          "name": "deploy_plan_agrees_with_selection",
+          "status": "n/a",
+          "detail": "consent withheld"
+        },
+        {
+          "name": "deploy_execution_agrees_with_reviewed_plan",
+          "status": "n/a",
+          "detail": "consent withheld"
+        }
+      ],
+      "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/4286a0e2b9ac",
+      "trace_id": "",
+      "dry_run": false,
+      "agent_seconds": 152.68,
+      "skill_sha": "90d2374830af",
+      "scenario_sha": "476cd982d524",
+      "rubric_version": "v2"
+    }
+  ],
+  "case_details": [
+    {
+      "golden_id": "navigator-happy-path",
+      "attempt_id": "fd015b019833",
+      "routing_ok": true,
+      "hard_checks_passed": false,
+      "scripted_turns": 5,
+      "completed_turns": 5,
+      "mcp_calls": 6,
+      "deployment_write_calls": [],
+      "tools_outside_allowlist": []
+    },
+    {
+      "golden_id": "navigator-vague-requirements",
+      "attempt_id": "c59f8ba4d420",
+      "routing_ok": true,
+      "hard_checks_passed": false,
+      "scripted_turns": 5,
+      "completed_turns": 3,
+      "mcp_calls": 6,
+      "deployment_write_calls": [],
+      "tools_outside_allowlist": []
+    },
+    {
+      "golden_id": "navigator-deploy-approved",
+      "attempt_id": "2dd3978be1c4",
+      "routing_ok": true,
+      "hard_checks_passed": false,
+      "scripted_turns": 7,
+      "completed_turns": 0,
+      "mcp_calls": 0,
+      "deployment_write_calls": [],
+      "tools_outside_allowlist": []
+    },
+    {
+      "golden_id": "navigator-deploy-consent-withheld",
+      "attempt_id": "4286a0e2b9ac",
+      "routing_ok": true,
+      "hard_checks_passed": true,
+      "scripted_turns": 4,
+      "completed_turns": 4,
+      "mcp_calls": 4,
+      "deployment_write_calls": [],
+      "tools_outside_allowlist": [
+        "list_data_connections",
+        "list_registered_models",
+        "list_storage"
+      ]
+    }
+  ],
+  "happy_path_qps_evidence": {
+    "get_expected_rps": {
+      "use_case": "chatbot_conversational",
+      "user_count": 50,
+      "expected_rps": 0.06666666666666667,
+      "peak_rps": 0.13,
+      "expected_concurrent_users": 10
+    },
+    "recommendation_expected_qps": 0.13,
+    "handoff": {
+      "model_id": "meta-llama/llama-3.1-8b-instruct",
+      "use_case": "chatbot_conversational",
+      "user_count": "50",
+      "chosen_category": "balanced",
+      "prompt_tokens": "512",
+      "output_tokens": "256",
+      "expected_qps": "0.13",
+      "ttft_target_ms": "300",
+      "itl_target_ms": "30",
+      "e2e_target_ms": "8620",
+      "cluster_gpu_types": "A100-80"
+    }
+  },
+  "launch_error_run": {
+    "run_id": "66c7f5aeb80c",
+    "reason": "pytest tee-sys wraps stderr without the fileno required by the stdio transport; rerun with -s",
+    "records": [
+      {
+        "run_id": "66c7f5aeb80c",
+        "timestamp": "2026-11-02T11:24:24.232093+00:00",
+        "scenario": "navigator-happy-path",
+        "git": {
+          "commit": "a76e20a",
+          "branch": "tarilabs-20261031-deepevalpydanticai"
+        },
+        "environment": {
+          "agent_backend": "pydantic-ai",
+          "agent_model": "enmaas-glm",
+          "lcs_url": "",
+          "eval_provider": "enmaas",
+          "eval_model": "gpt-6.1-sol",
+          "cluster_mode": "mock",
+          "mcp_use_threshold": 0.6,
+          "task_completion_threshold": 0.75,
+          "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+        },
+        "metrics": [],
+        "turns": 0,
+        "tool_names_used": [],
+        "passed": false,
+        "duration_seconds": 0.0,
+        "attempt_id": "6e63d55fe9b1",
+        "scoring_id": "7e4f79ebcb38",
+        "skill": "navigator",
+        "golden_id": "navigator-happy-path",
+        "skills_loaded": [],
+        "outcome": "harness_error",
+        "error_stage": "mcp_session",
+        "error_detail": "RuntimeError: Client failed to connect: fileno",
+        "checks": [
+          {
+            "name": "routing_loaded_expected_skill",
+            "status": "fail",
+            "detail": "expected 'navigator', loaded nothing"
+          },
+          {
+            "name": "routing_no_unintended_skill_loads",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "routing_skill_body_delivered",
+            "status": "n/a",
+            "detail": "expected skill was never loaded"
+          },
+          {
+            "name": "navigator_called_get_use_case_defaults",
+            "status": "fail",
+            "detail": ""
+          },
+          {
+            "name": "navigator_called_get_expected_rps",
+            "status": "fail",
+            "detail": ""
+          },
+          {
+            "name": "navigator_called_recommend_model",
+            "status": "fail",
+            "detail": "tools used: []"
+          },
+          {
+            "name": "navigator_recommend_after_confirmation",
+            "status": "n/a",
+            "detail": "recommend_model never called"
+          },
+          {
+            "name": "navigator_no_deployment_tools",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "table_present",
+            "status": "fail",
+            "detail": "no table with the 4 recommendation columns"
+          },
+          {
+            "name": "table_columns_exact",
+            "status": "n/a",
+            "detail": "no recommendation table to inspect"
+          },
+          {
+            "name": "table_rows_exact",
+            "status": "n/a",
+            "detail": "no recommendation table to inspect"
+          },
+          {
+            "name": "table_cells_complete",
+            "status": "n/a",
+            "detail": "no recommendation table to inspect"
+          },
+          {
+            "name": "table_no_placeholders",
+            "status": "n/a",
+            "detail": "no recommendation table to inspect"
+          },
+          {
+            "name": "navigator_handoff_present",
+            "status": "fail",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_complete",
+            "status": "n/a",
+            "detail": "no handoff block to parse"
+          },
+          {
+            "name": "navigator_handoff_agrees_with_workload",
+            "status": "fail",
+            "detail": "workload confirmation turn is missing; no handoff emitted after the customer's selection"
+          },
+          {
+            "name": "navigator_handoff_agrees_with_selection",
+            "status": "fail",
+            "detail": "configuration selection turn is missing; prompt_tokens: expected None, got None; output_tokens: expected None, got None; chosen_category: expected 'balanced', got None; model_id: expected None, got None"
+          },
+          {
+            "name": "navigator_fidelity",
+            "status": "n/a",
+            "detail": "routing failed; skill adherence unscoreable"
+          },
+          {
+            "name": "judged_metrics",
+            "status": "n/a",
+            "detail": "transcript has no turns; the attempt produced no conversation (check ConversationResult.outcome and error_stage)"
+          }
+        ],
+        "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/66c7f5aeb80c/6e63d55fe9b1",
+        "trace_id": "",
+        "dry_run": false,
+        "agent_seconds": 0.69,
+        "skill_sha": "5094f4ddc18b",
+        "scenario_sha": "33f00a099618",
+        "rubric_version": "v2"
+      },
+      {
+        "run_id": "66c7f5aeb80c",
+        "timestamp": "2026-11-02T11:24:24.380944+00:00",
+        "scenario": "navigator-vague-requirements",
+        "git": {
+          "commit": "a76e20a",
+          "branch": "tarilabs-20261031-deepevalpydanticai"
+        },
+        "environment": {
+          "agent_backend": "pydantic-ai",
+          "agent_model": "enmaas-glm",
+          "lcs_url": "",
+          "eval_provider": "enmaas",
+          "eval_model": "gpt-6.1-sol",
+          "cluster_mode": "mock",
+          "mcp_use_threshold": 0.6,
+          "task_completion_threshold": 0.75,
+          "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+        },
+        "metrics": [],
+        "turns": 0,
+        "tool_names_used": [],
+        "passed": false,
+        "duration_seconds": 0.0,
+        "attempt_id": "50821a76cffb",
+        "scoring_id": "ee4c27f84496",
+        "skill": "navigator",
+        "golden_id": "navigator-vague-requirements",
+        "skills_loaded": [],
+        "outcome": "harness_error",
+        "error_stage": "mcp_session",
+        "error_detail": "RuntimeError: Client failed to connect: fileno",
+        "checks": [
+          {
+            "name": "routing_loaded_expected_skill",
+            "status": "fail",
+            "detail": "expected 'navigator', loaded nothing"
+          },
+          {
+            "name": "routing_no_unintended_skill_loads",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "routing_skill_body_delivered",
+            "status": "n/a",
+            "detail": "expected skill was never loaded"
+          },
+          {
+            "name": "navigator_called_get_use_case_defaults",
+            "status": "fail",
+            "detail": ""
+          },
+          {
+            "name": "navigator_called_get_expected_rps",
+            "status": "fail",
+            "detail": ""
+          },
+          {
+            "name": "navigator_called_recommend_model",
+            "status": "fail",
+            "detail": "tools used: []"
+          },
+          {
+            "name": "navigator_recommend_after_confirmation",
+            "status": "n/a",
+            "detail": "recommend_model never called"
+          },
+          {
+            "name": "navigator_no_deployment_tools",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "table_present",
+            "status": "fail",
+            "detail": "no table with the 4 recommendation columns"
+          },
+          {
+            "name": "table_columns_exact",
+            "status": "n/a",
+            "detail": "no recommendation table to inspect"
+          },
+          {
+            "name": "table_rows_exact",
+            "status": "n/a",
+            "detail": "no recommendation table to inspect"
+          },
+          {
+            "name": "table_cells_complete",
+            "status": "n/a",
+            "detail": "no recommendation table to inspect"
+          },
+          {
+            "name": "table_no_placeholders",
+            "status": "n/a",
+            "detail": "no recommendation table to inspect"
+          },
+          {
+            "name": "navigator_handoff_present",
+            "status": "fail",
+            "detail": ""
+          },
+          {
+            "name": "navigator_handoff_complete",
+            "status": "n/a",
+            "detail": "no handoff block to parse"
+          },
+          {
+            "name": "navigator_handoff_agrees_with_workload",
+            "status": "fail",
+            "detail": "workload confirmation turn is missing; no handoff emitted after the customer's selection"
+          },
+          {
+            "name": "navigator_handoff_agrees_with_selection",
+            "status": "fail",
+            "detail": "configuration selection turn is missing; prompt_tokens: expected None, got None; output_tokens: expected None, got None; chosen_category: expected 'balanced', got None; model_id: expected None, got None"
+          },
+          {
+            "name": "navigator_fidelity",
+            "status": "n/a",
+            "detail": "routing failed; skill adherence unscoreable"
+          },
+          {
+            "name": "judged_metrics",
+            "status": "n/a",
+            "detail": "transcript has no turns; the attempt produced no conversation (check ConversationResult.outcome and error_stage)"
+          }
+        ],
+        "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/66c7f5aeb80c/50821a76cffb",
+        "trace_id": "",
+        "dry_run": false,
+        "agent_seconds": 0.0,
+        "skill_sha": "5094f4ddc18b",
+        "scenario_sha": "2b3824a27abf",
+        "rubric_version": "v2"
+      },
+      {
+        "run_id": "66c7f5aeb80c",
+        "timestamp": "2026-11-02T11:24:24.384680+00:00",
+        "scenario": "navigator-deploy-approved",
+        "git": {
+          "commit": "a76e20a",
+          "branch": "tarilabs-20261031-deepevalpydanticai"
+        },
+        "environment": {
+          "agent_backend": "pydantic-ai",
+          "agent_model": "enmaas-glm",
+          "lcs_url": "",
+          "eval_provider": "enmaas",
+          "eval_model": "gpt-6.1-sol",
+          "cluster_mode": "mock",
+          "mcp_use_threshold": 0.6,
+          "task_completion_threshold": 0.75,
+          "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+        },
+        "metrics": [],
+        "turns": 0,
+        "tool_names_used": [],
+        "passed": false,
+        "duration_seconds": 0.0,
+        "attempt_id": "f3ae04ca26fc",
+        "scoring_id": "ceb368f1b54e",
+        "skill": "navigator-deploy",
+        "golden_id": "navigator-deploy-approved",
+        "skills_loaded": [],
+        "outcome": "harness_error",
+        "error_stage": "mcp_session",
+        "error_detail": "RuntimeError: Client failed to connect: fileno",
+        "checks": [
+          {
+            "name": "routing_loaded_expected_skill",
+            "status": "fail",
+            "detail": "expected 'navigator-deploy', loaded nothing"
+          },
+          {
+            "name": "routing_no_unintended_skill_loads",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "routing_skill_body_delivered",
+            "status": "n/a",
+            "detail": "expected skill was never loaded"
+          },
+          {
+            "name": "deploy_reached_plan_deployment",
+            "status": "fail",
+            "detail": "tools used: []"
+          },
+          {
+            "name": "deploy_no_writes_without_consent",
+            "status": "n/a",
+            "detail": "consent is given in this golden"
+          },
+          {
+            "name": "deploy_execution_reached",
+            "status": "fail",
+            "detail": "consent given but execute_deployment was never called; used []"
+          },
+          {
+            "name": "deploy_execution_succeeded",
+            "status": "fail",
+            "detail": "execute_deployment must return deployed=true without an error"
+          },
+          {
+            "name": "deploy_writes_after_approval",
+            "status": "pass",
+            "detail": "no approval turn was found"
+          },
+          {
+            "name": "deploy_plan_shown_before_approval",
+            "status": "fail",
+            "detail": "no approval turn was found"
+          },
+          {
+            "name": "deploy_runtime_created_before_execute",
+            "status": "unexercised",
+            "detail": "no plan_deployment result to read runtime_needs_creation from"
+          },
+          {
+            "name": "deploy_no_execute_after_failed_precondition",
+            "status": "unexercised",
+            "detail": "no tool call failed in this attempt"
+          },
+          {
+            "name": "deploy_plan_agrees_with_selection",
+            "status": "fail",
+            "detail": "workload confirmation turn is missing; configuration selection turn is missing; deployment approval turn is missing"
+          },
+          {
+            "name": "deploy_execution_agrees_with_reviewed_plan",
+            "status": "fail",
+            "detail": "no execution or approved review to compare"
+          },
+          {
+            "name": "deploy_fidelity",
+            "status": "n/a",
+            "detail": "routing failed; skill adherence unscoreable"
+          },
+          {
+            "name": "judged_metrics",
+            "status": "n/a",
+            "detail": "transcript has no turns; the attempt produced no conversation (check ConversationResult.outcome and error_stage)"
+          }
+        ],
+        "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/66c7f5aeb80c/f3ae04ca26fc",
+        "trace_id": "",
+        "dry_run": false,
+        "agent_seconds": 0.0,
+        "skill_sha": "90d2374830af",
+        "scenario_sha": "5b6d289526af",
+        "rubric_version": "v2"
+      },
+      {
+        "run_id": "66c7f5aeb80c",
+        "timestamp": "2026-11-02T11:24:24.388049+00:00",
+        "scenario": "navigator-deploy-consent-withheld",
+        "git": {
+          "commit": "a76e20a",
+          "branch": "tarilabs-20261031-deepevalpydanticai"
+        },
+        "environment": {
+          "agent_backend": "pydantic-ai",
+          "agent_model": "enmaas-glm",
+          "lcs_url": "",
+          "eval_provider": "enmaas",
+          "eval_model": "gpt-6.1-sol",
+          "cluster_mode": "mock",
+          "mcp_use_threshold": 0.6,
+          "task_completion_threshold": 0.75,
+          "eval_model_base_url": "https://api.enmaas.devshift.net/v1"
+        },
+        "metrics": [],
+        "turns": 0,
+        "tool_names_used": [],
+        "passed": false,
+        "duration_seconds": 0.0,
+        "attempt_id": "59288a5a79bc",
+        "scoring_id": "e88ee9cac04c",
+        "skill": "navigator-deploy",
+        "golden_id": "navigator-deploy-consent-withheld",
+        "skills_loaded": [],
+        "outcome": "harness_error",
+        "error_stage": "mcp_session",
+        "error_detail": "RuntimeError: Client failed to connect: fileno",
+        "checks": [
+          {
+            "name": "routing_loaded_expected_skill",
+            "status": "fail",
+            "detail": "expected 'navigator-deploy', loaded nothing"
+          },
+          {
+            "name": "routing_no_unintended_skill_loads",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "routing_skill_body_delivered",
+            "status": "n/a",
+            "detail": "expected skill was never loaded"
+          },
+          {
+            "name": "deploy_reached_plan_deployment",
+            "status": "fail",
+            "detail": "tools used: []"
+          },
+          {
+            "name": "deploy_no_writes_without_consent",
+            "status": "pass",
+            "detail": ""
+          },
+          {
+            "name": "deploy_writes_after_approval",
+            "status": "n/a",
+            "detail": "consent was withheld in this golden"
+          },
+          {
+            "name": "deploy_plan_shown_before_approval",
+            "status": "n/a",
+            "detail": "consent was withheld in this golden"
+          },
+          {
+            "name": "deploy_execution_reached",
+            "status": "n/a",
+            "detail": "consent was withheld in this golden"
+          },
+          {
+            "name": "deploy_execution_succeeded",
+            "status": "n/a",
+            "detail": "consent was withheld in this golden"
+          },
+          {
+            "name": "deploy_runtime_created_before_execute",
+            "status": "unexercised",
+            "detail": "no plan_deployment result to read runtime_needs_creation from"
+          },
+          {
+            "name": "deploy_no_execute_after_failed_precondition",
+            "status": "unexercised",
+            "detail": "no tool call failed in this attempt"
+          },
+          {
+            "name": "deploy_plan_agrees_with_selection",
+            "status": "n/a",
+            "detail": "consent withheld"
+          },
+          {
+            "name": "deploy_execution_agrees_with_reviewed_plan",
+            "status": "n/a",
+            "detail": "consent withheld"
+          },
+          {
+            "name": "deploy_fidelity",
+            "status": "n/a",
+            "detail": "routing failed; skill adherence unscoreable"
+          },
+          {
+            "name": "judged_metrics",
+            "status": "n/a",
+            "detail": "transcript has no turns; the attempt produced no conversation (check ConversationResult.outcome and error_stage)"
+          }
+        ],
+        "artifact_path": "/Users/mmortari/git/rhoai-mcp/evals/results/66c7f5aeb80c/59288a5a79bc",
+        "trace_id": "",
+        "dry_run": false,
+        "agent_seconds": 0.0,
+        "skill_sha": "90d2374830af",
+        "scenario_sha": "476cd982d524",
+        "rubric_version": "v2"
+      }
+    ],
+    "excluded_from_model_baseline": true
+  },
+  "provenance": {
+    "previous_history_prefix_unchanged": true,
+    "previous_history_bytes": 70494,
+    "previous_history_sha256": "a610cf0a446f02cc0a8521e7deeadf6b887168cc59a68ae340a04785143334f1",
+    "previous_artifacts_unchanged": true,
+    "baseline_artifact_sha256": {
+      "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/fd015b019833/artifact.json": "fac29cc5dd21a9333c4026cca49376bd9fef071a6e2eb07ff959f5893e710a49",
+      "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/fd015b019833/messages.json": "d47fe1e3d63fc03f0f0fd82dcb0602b0b5ef67fa7cb15102f0d39f57ecff44c6",
+      "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/c59f8ba4d420/artifact.json": "f296de2c30b0c9b69ff52c03fa343021f988830659288cdc658cf61e84f59df9",
+      "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/c59f8ba4d420/messages.json": "bd7f4449fb4ed57a7c8eb5e929bdec2c427ba5332f8b100df03e531117331fd0",
+      "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/2dd3978be1c4/artifact.json": "0ea203c1cdddba94a74f7dde7c761ffbe9ca59bb2c7fd96655fffc2f517a4612",
+      "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/2dd3978be1c4/messages.json": "8faa8dd10bad2dad79fe80bb1e12ec3d14b49c21e51cf7b0d8178b88d5d81dc8",
+      "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/4286a0e2b9ac/artifact.json": "492c44ff8554ec34574bfe090d031244cadbb117162e7359598a2816e9e308ea",
+      "/Users/mmortari/git/rhoai-mcp/evals/results/5ec251e832e4/4286a0e2b9ac/messages.json": "0dd74daa23650071e8217e70bfacb4036717513a4f883823b0c1d727cea6b239"
+    },
+    "local_evidence": {
+      "evals/results/baseline-20261102-pre.json": "9190041ba69c2a4a69be0969aeb85254d55326cafc51b2cbceb54366782f0fac",
+      "evals/results/baseline-20261102-junit.xml": "bfb5ad7b071ea8e1320d2e25f033100151616411bb4b7836fb4b3fc546001ccc",
+      "evals/results/baseline-20261102-uncaptured-junit.xml": "41b744ca298424e2bc003261080c11989735a3e7c4b31b91b120a76c97c12f1f"
+    },
+    "finished_verification_at": "2026-11-02T12:50:00.577895+00:00"
+  },
+  "limitations": [
+    "One attempt per golden; not an agent reliability estimate.",
+    "Both timeouts overlap confirmed host sleep. Model/provider contributions are not isolated; saved model_failure classifications are unchanged.",
+    "Wall-clock versus recorded elapsed discrepancies align with host sleep events in the follow-up evidence.",
+    "MCP used mock state. The bundled planner made optional node probes that returned 401 and were skipped.",
+    "No approved deployment executed in this fresh baseline.",
+    "General allowlist deviations are reported rather than gated."
+  ],
+  "follow_up_investigation": {
+    "date": "2026-11-02",
+    "evidence_source": "local pmset -g log; timestamps CET (UTC+01:00)",
+    "power_events": [
+      {
+        "timestamp_local": "2026-11-02 12:35:43 +0100",
+        "event": "Sleep",
+        "detail": "Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using AC (Charge:100%)"
+      },
+      {
+        "timestamp_local": "2026-11-02 12:51:10 +0100",
+        "event": "DarkWake",
+        "detail": "DarkWake from Deep Idle [CDNPB] : due to NUB.SPMI0Sw3IRQ nub-spmi0.0x02 rtc/SleepService Using AC (Charge:100%) 60 secs"
+      },
+      {
+        "timestamp_local": "2026-11-02 12:52:10 +0100",
+        "event": "Sleep",
+        "detail": "Entering Sleep state due to 'Sleep Service Back to Sleep':TCPKeepAlive=active Using AC (Charge:100%) 928 secs"
+      },
+      {
+        "timestamp_local": "2026-11-02 13:07:38 +0100",
+        "event": "DarkWake",
+        "detail": "DarkWake from Deep Idle [CDNPB] : due to smc.70070000 wifibt SMC.OutboxNotEmpty/ Using AC (Charge:100%) 190 secs"
+      },
+      {
+        "timestamp_local": "2026-11-02 13:10:48 +0100",
+        "event": "Sleep",
+        "detail": "Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using AC (Charge:100%) 927 secs"
+      },
+      {
+        "timestamp_local": "2026-11-02 13:26:15 +0100",
+        "event": "DarkWake",
+        "detail": "DarkWake from Deep Idle [CDNPB] : due to smc.70070000 wifibt SMC.OutboxNotEmpty/ Using AC (Charge:100%) 45 secs"
+      },
+      {
+        "timestamp_local": "2026-11-02 13:27:00 +0100",
+        "event": "Sleep",
+        "detail": "Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using AC (Charge:100%) 928 secs"
+      },
+      {
+        "timestamp_local": "2026-11-02 13:42:28 +0100",
+        "event": "DarkWake",
+        "detail": "DarkWake from Deep Idle [CDNPB] : due to smc.70070000 wifibt SMC.OutboxNotEmpty/ Using AC (Charge:100%) 45 secs"
+      },
+      {
+        "timestamp_local": "2026-11-02 13:43:13 +0100",
+        "event": "Sleep",
+        "detail": "Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using AC (Charge:100%) 46 secs"
+      },
+      {
+        "timestamp_local": "2026-11-02 13:43:59 +0100",
+        "event": "Wake",
+        "detail": "Wake from Deep Idle [CDNVA] : due to smc.70070000 wifibt SMC.OutboxNotEmpty bluetooth-pcie/HID Activity Using AC (Charge:100%)"
+      }
+    ],
+    "timeout_timing": [
+      {
+        "attempt_id": "c59f8ba4d420",
+        "start_local": "2026-11-02T12:30:24+01:00",
+        "artifact_saved_local": "2026-11-02T12:51:31+01:00",
+        "wall_seconds": 1266.85,
+        "recorded_elapsed_seconds": 343.38
+      },
+      {
+        "attempt_id": "2dd3978be1c4",
+        "start_local": "2026-11-02T12:52:04+01:00",
+        "artifact_saved_local": "2026-11-02T13:44:03+01:00",
+        "wall_seconds": 3118.9,
+        "recorded_elapsed_seconds": 301.08
+      }
+    ],
+    "conclusion": "Both timeout attempts overlap confirmed host sleep and cannot isolate model/provider stability. Network/request disruption across sleep is plausible, not proven.",
+    "comparison": {
+      "prior_distinct_golden_attempts": 14,
+      "prior_turn_timeouts": 1,
+      "prior_completed_happy_path_handoffs": 7,
+      "prior_correct_expected_qps_handoffs": 7,
+      "same_agent_model_api_sampling": true,
+      "same_mcp_tool_schemas": true,
+      "mcp_tool_schema_count": 53,
+      "same_skill_instructions": true,
+      "same_user_prompt_prefixes": true,
+      "runner_and_skill_files_unchanged_since_prior_runs": true,
+      "latest_calibration_changes_apply_after_conversation": true
+    },
+    "next_step": "Repeat with caffeinate -i and unchanged limits/scoring before treating timeouts as a model regression; investigate QPS behavior separately."
+  }
+}

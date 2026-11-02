@@ -89,7 +89,8 @@ Omitted warnings now fail fidelity at 0.40–0.50; approved provisioning handoff
 pass completion at 0.90–1.00. Unexecuted deployments remain incomplete. See the
 [validation report](./scoring-fix-validation.md) and
 [repeated scores](./scoring-fix-validation-results.json). Original sources and
-normal run history are unchanged. A fresh judged one-model baseline is next.
+normal run history are unchanged. The fresh judged one-model baseline is now
+recorded in §5.
 
 **Remaining limits:** this is a small, partly correlated corpus, not a population
 error estimate. A valid held-out navigator example touched the fidelity cutoff
@@ -166,6 +167,14 @@ The mock reports status `Unknown`: this verifies creation of an InferenceService
 not a ready endpoint. Judging and tracing were disabled; the record remains a
 dry run, not an overall judged pass.
 
+**Fresh judged repeat:** attempt `692e6d32458d` in run `ac9dc8832cb7` also
+completed all seven turns, returned `deployed=true` / status `Unknown`, and
+passed all three judge metrics and the review/selection/execution agreement
+checks. Its original overall verdict remains failed under the old precondition
+check. Corrected-check replay now passes its hard checks, with unchanged saved
+judge scores; no new judge ran. See §5 and the
+[repeat analysis](./glm-baseline.md#repeat-with-idle-sleep-prevented).
+
 Validation: 381 offline tests passed across evaluations, planner unit/integration
 tests, and the skill allowlist guard; the agent golden also passed. Semantic
 agreement checks have since been added (§4.3).
@@ -217,9 +226,31 @@ judged assessment; automated GPU discovery remains deferred.
 
 - **Full sweep.** Only `enmaas-glm` has run goldens. The matrix is 3 models × 4
   goldens; `make eval-skills-matrix` exists but has never been run.
-- **Fresh judged baseline.** Both fidelity rubrics now have repeated frozen-corpus
-  scores. Run all four goldens through the normal judged path with fidelity `v2`
-  before expanding to the full model matrix.
+- **Fresh judged baseline — captured, follow-up needed.** All four goldens ran
+  through the normal judged path with fixed judge/cutoffs and fidelity `v2`.
+  Run `5ec251e832e4` passed **1/4**: consent withheld passed; navigator happy
+  path failed expected-versus-peak QPS agreement despite passing judge scores;
+  vague requirements and approved deployment hit turn timeouts. No approved
+  deployment executed. Three attempts yielded nine metric scores with no judge
+  errors. Separate launch errors and partial histories are preserved. Follow-up
+  confirmed Mac sleep during both timeouts. Repeating the three failures with
+  `caffeinate -i` yielded **2/3 overall passes**, three complete conversations,
+  no timeouts, and nine passing judge scores. Both navigator handoffs had correct
+  QPS. Approved deployment executed successfully but failed the overly broad
+  precondition check described below. One repeat is not a reliability estimate;
+  [report](./glm-baseline.md), [baseline records](./glm-baseline-results.json),
+  and [repeat records](./glm-baseline-repeat-results.json).
+- **Precondition check scope — corrected.** Each execution is checked against
+  its preceding plan and the stop rule after failed runtime creation. Unrelated
+  MCP errors do not block deployment; a usable replacement plan resolves an
+  earlier planning failure. Structured prerequisite errors count, and later
+  errors cannot hide earlier invalid executions. Approval/storage checks remain.
+  All 270 offline evaluation tests and targeted lint/type checks passed. Replay
+  of 25 saved artifacts changes only `692e6d32458d` to hard-check pass; original
+  verdicts and judge scores are preserved. The separate replay uses new scoring
+  identities and remains dry-run data. [Correction evidence](./precondition-check-fix-results.json).
+  The planner's `tuple index out of range` on a cost-slot query is a separate
+  observed tool defect.
 - **`comparison.py` + reporting CLI.** Untouched, correctly deferred until
   multi-model records exist. When it lands it must compare only matching
   skill/golden sets under fixed judge, rubric, and metric versions, show sample counts, and
@@ -267,11 +298,11 @@ Found while building; none are scheduled.
 
 ## 8. Suggested order
 
-1. **Fresh judged one-model baseline (§5)** — all four goldens with the fixed
-   judge/cutoffs and fidelity `v2`.
-2. **Full model sweep (§5)** — expand once the one-model baseline is understood.
-3. **`comparison.py` (§5)** — needs multi-model records to exist first.
-4. **Phase 4 polish (§6)** — nothing depends on it.
+1. **Full model sweep (§5)** — expand after reviewing the completed check
+   correction and offline replay. Prevent idle sleep for local runs and retain
+   the fixed judge/cutoffs and fidelity `v2`.
+2. **`comparison.py` (§5)** — needs multi-model records to exist first.
+3. **Phase 4 polish (§6)** — nothing depends on it.
 
 **Separately deferred:** the Phase 1 `get_cluster_resources` rewrite (§3) remains
 outside this branch's current evaluation work by decision.

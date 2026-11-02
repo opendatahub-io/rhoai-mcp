@@ -19,11 +19,14 @@ Chat Completions pair passed 1/2. Its happy case violated the GPU-inventory gate
 The deeper investigation now corrects that gate's missing deterministic coverage,
 clarifies hardware consent, and fixes a shared embedded-planner GPU-filter defect.
 A bounded four-request probe reproduced premature recommendations once with the
-old wording; both clarified samples asked for inventory and waited. No fresh
-full conversation has run under these corrections. Review the change, then
-validate only the two GLM Navigator goldens as a separate cohort. No full-roster
-repeat is scheduled, and the original missing-handoff failure remains unresolved.
-[Correction and evidence](./glm-root-cause-correction.md).
+old wording; both clarified samples asked for inventory and waited.
+**The subsequent two-golden GLM validation now passed 2/2** under committed
+corrections (`44d6774`), using the production Responses profile. Both passed the
+hardware gate, table and handoff checks, and all six judge metrics. This does
+not establish that intermittent handoff omissions cannot recur. No further
+paid run or full-roster repeat is scheduled.
+[Correction](./glm-root-cause-correction.md),
+[new validation](./glm-corrected-validation.md).
 Navigator-deploy
 sweeps and new deployment-specific work are deferred. Existing deployment
 implementation, offline tests, and historical evidence below are retained.
@@ -335,10 +338,29 @@ judged assessment; automated GPU discovery remains deferred.
   597 tests; the final focused run passed 22. Skill hash is `96cc8596d4dd`;
   happy/vague scenario hashes are `07ced00d7013` / `f349e686f7ff`.
   Model APIs/settings, judge, thresholds, deployment hashes, historical native
-  files, and 64 history records remain unchanged. Review the correction before
-  a separate two-golden GLM validation; no full-roster repeat is scheduled.
+  files, and 64 history records remain unchanged. The subsequent two-golden
+  GLM validation is recorded below; no full-roster repeat is scheduled.
   [Root causes, correction, and limits](./glm-root-cause-correction.md),
   [machine-readable evidence](./glm-root-cause-correction-results.json).
+- **Corrected GLM validation — 2/2 passed.** Commit `44d6774`, production
+  `enmaas-glm` Responses profile, skill `96cc8596d4dd`, and the updated scenario
+  hashes were frozen across two sequential Navigator conversations. Vague
+  scored 0.95/0.90/0.80; happy scored 0.80/0.95/1.00. Both completed five turns,
+  waited for A100-80 inventory, stayed within the GPU filter, and emitted
+  complete handoffs preserving `0.13` QPS. All hard checks and six metrics pass.
+  Each used nine model responses and six MCP calls; output was 8,728 / 12,869
+  tokens, and agent time 154.47 / 210.60 seconds. Pytest took 444.67 seconds
+  including judging, with no reruns or measured overlap. Neither initial call
+  required the primary unconstrained fallback, so that branch remains covered
+  offline. Both cases under-rounded the tighter quality threshold (32 versus
+  required 33); vague also overstated empty-search conclusions and omitted the
+  relaxation question. These judge caveats remain recorded. The upstream
+  planner's denied optional node probes also limit mock isolation. The original
+  64 history records and prior native/report evidence are preserved; exactly
+  two records were appended (66 total). No production implementation changed.
+  [Validation and limits](./glm-corrected-validation.md),
+  [records](./glm-corrected-validation-results.json),
+  [quality/usage comparison](./glm-corrected-model-comparison.md).
 - **Earlier updated sweep — 8/8 recorded, 7/8 passed.** Anthropic, GPT, and GLM passed
   2/2 each; DeepSeek passed 1/2. All eight conversations discovered Navigator,
   completed five turns, and preserved the selected capacity (`0.13` QPS).
@@ -523,9 +545,11 @@ Found while building; none are scheduled.
    catches `2aaa97922492`; the shared planner filter is corrected and a bounded
    probe supports the two-sentence consent clarification. Review the minimal
    code/skill changes and [evidence](./glm-root-cause-correction.md).
-4. **Validate GLM on the two Navigator goldens after review.** Use a separate
-   cohort with the corrected backend, skill, and grading hashes. Check the
-   full inventory/fallback/table/handoff flow, retaining any failure. If a new
+4. **Review the completed corrected GLM pair.** Both Navigator goldens passed
+   under the committed correction; inspect the remaining quality-threshold,
+   explanation, and mock-isolation caveats in the
+   [report](./glm-corrected-validation.md). Primary unconstrained fallback was
+   not needed in these cases. No additional paid run is pending. If a new
    four-model comparison is later requested, every model needs the same shared
    configuration. Pi-style effort/cap/penalty/streaming experiments and
    raw-reasoning viewer support remain separate work.

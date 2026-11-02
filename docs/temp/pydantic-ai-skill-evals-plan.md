@@ -15,8 +15,9 @@ the same path re-scores them offline; OTel is planned. EvalHub orchestration is 
 
 **Cost scope:** the eight-case sequential Navigator sweep is complete (7/8).
 The subsequent GLM API investigation and bounded hardware-consent probe are
-also complete. Review the latest correction before a separate two-golden GLM
-validation; no full-roster repeat is scheduled. Any future comparison retains
+also complete. The separate two-golden GLM validation under the committed
+correction passed 2/2; no further paid run or full-roster repeat is scheduled.
+Any future comparison retains
 the four-model Navigator-only scope, reviewed in batches of two per model.
 Navigator-deploy sweeps, new deployment
 validation/calibration, and deployment-specific follow-up are deferred. Existing
@@ -647,11 +648,36 @@ history write occurred. This supports the small correction, not an API fix,
 full-flow validation, or reliability estimate. Skill hash is `96cc8596d4dd`;
 Navigator happy/vague hashes are `07ced00d7013` / `f349e686f7ff`. Deployment hashes,
 model settings, judge, thresholds, original native evidence, and 64 historical
-records are unchanged. Review the correction, then validate only the two GLM
-Navigator goldens in a fresh cohort. A future full comparison must use the
+records are unchanged. The subsequent fresh two-golden GLM validation is
+reported below. A future full comparison must use the
 same corrected configuration for every model; historical cohorts stay separate.
 [Correction and limitations](./glm-root-cause-correction.md),
 [derived evidence](./glm-root-cause-correction-results.json).
+
+**Corrected GLM validation — 2/2 passed.** The committed correction (`44d6774`)
+was exercised by two sequential five-turn Navigator goldens through the
+production GLM Responses profile. Vague scored 0.95/0.90/0.80; happy scored
+0.80/0.95/1.00. All hard checks and six judge metrics passed, including the
+hardware gate and complete handoffs preserving `0.13` QPS. No recommendation
+returned a GPU outside the A100-80 filter. Each case used nine model responses
+and six MCP calls; output was 8,728 / 12,869 tokens, agent time 154.47 / 210.60
+seconds, and scoring time 43.56 / 35.73 seconds. Pytest completed in 444.67
+seconds with no automatic reruns or measured case overlap. Model settings,
+judge, thresholds, and limits were unchanged; 288 source/configuration/test/
+driver files stayed frozen. The 64-record history prefix and prior native/
+report evidence remain unchanged; two records were appended (66 total).
+
+This pair did not need the primary unconstrained fallback. Both cases used
+`min_quality=32` where the required five-point integer increase was 33; vague
+also overstates empty-search conclusions and omits the relaxation question.
+These caveats remain in the judge reasons. Denied optional node discovery
+inside the upstream planner limits full mock isolation. Review these residual
+issues before choosing another change; no further paid run is scheduled.
+The historical roster remains 7/8, and this pair is not pooled into its
+comparison or treated as proof against intermittent handoff omissions.
+[Validation](./glm-corrected-validation.md),
+[records and provenance](./glm-corrected-validation-results.json),
+[comparison](./glm-corrected-model-comparison.md).
 
 **Goldens take the default mock state as given.** `--mock-cluster` builds a fixed
 `create_default_cluster_state()` at startup (`server.py:216-218`); there is no seeding

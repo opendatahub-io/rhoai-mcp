@@ -7,6 +7,8 @@ from enum import Enum
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_JUDGE_MODEL = "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+
 
 class LLMProvider(str, Enum):
     """LLM provider for the judge LLM."""
@@ -67,7 +69,7 @@ class EvalConfig(BaseSettings):
 
     # Judge LLM settings (for DeepEval metrics)
     eval_model: str = Field(
-        default="gpt-6.1-sol",
+        default=DEFAULT_JUDGE_MODEL,
         description="Model name for the DeepEval judge LLM",
     )
     eval_model_base_url: str | None = Field(

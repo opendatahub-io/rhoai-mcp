@@ -315,7 +315,7 @@ def _score(
     whose preconditions are absent is recorded ``n/a`` with the specific missing
     precondition rather than silently skipped (plan §3.3).
     """
-    from deepeval.evaluate import AsyncConfig, evaluate
+    from deepeval.evaluate import AsyncConfig, CacheConfig, evaluate
 
     from evals.agent.transcript import AttemptArtifact
     from evals.deepeval_helpers import (
@@ -355,7 +355,11 @@ def _score(
     started = time.monotonic()
     try:
         eval_result = evaluate(
-            test_cases=[case], metrics=metrics, async_config=AsyncConfig(run_async=False)
+            test_cases=[case],
+            metrics=metrics,
+            async_config=AsyncConfig(run_async=False),
+            # Metric names are stable across versions; do not reuse old scores.
+            cache_config=CacheConfig(use_cache=False, write_cache=False),
         )
     except Exception as exc:  # noqa: BLE001 - a judge failure is an error, not a 0
         report.add("judged_metrics", "n/a", f"judge failed: {type(exc).__name__}: {exc}")

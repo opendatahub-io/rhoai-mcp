@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from evals.reporting.models import EvalRecord
+from evals.reporting.models import EvalRecord, MetricRecord
+
+
+def format_metric_score(metric: MetricRecord | None) -> str:
+    if metric is None or not 0 <= metric.score <= 1:
+        return "n/a"
+    # Preserve visible item-fraction detail without implying finer GEval grades.
+    decimals = 4 if metric.version == "conversation-v3-items" else 2
+    return f"{metric.score:.{decimals}f}"
 
 
 def truncate(text: str, width: int) -> str:
@@ -144,7 +152,7 @@ def format_summary(
         row = [truncate(r.scenario, 25)]
         for mn in all_metric_names:
             metric = metric_scores.get(mn)
-            row.append(f"{metric.score:.2f}" if metric else "-")
+            row.append(format_metric_score(metric) if metric else "-")
         row.append(str(r.turns))
         row.append("Y" if r.passed else "N")
         row.append(f"{r.duration_seconds:.1f}s" if r.duration_seconds is not None else "n/a")

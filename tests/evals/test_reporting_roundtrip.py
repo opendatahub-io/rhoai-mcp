@@ -249,6 +249,48 @@ class TestMetricExtraction:
         assert all_passed
         assert records[0].score == 0.8
 
+    def test_item_evidence_and_fraction_survive_recording(self) -> None:
+        from evals.reporting.reader import record_from_dict
+
+        cards = [
+            {
+                "rubric": "tools",
+                "earned_points": 23,
+                "possible_points": 24,
+                "score": 23 / 24,
+                "items": [
+                    {"id": "efficiency", "rating": 1, "weight": 1, "evidence": "[2] repeated call"}
+                ],
+            }
+        ]
+        result = self._EvalResult(
+            [
+                self._TestResult(
+                    [
+                        self._MetricData(
+                            score=23 / 24,
+                            reason=json.dumps(
+                                {"metric_version": "conversation-v3-items", "scorecards": cards}
+                            ),
+                        )
+                    ]
+                )
+            ]
+        )
+        records, _ = metric_records_from(result)
+        assert records[0].scorecards == cards
+        record = EvalRecord(
+            run_id="r",
+            timestamp="now",
+            scenario="test",
+            git=GitRecord("abc", "test"),
+            environment=environment(),
+            metrics=records,
+        )
+        loaded = record_from_dict(json.loads(json.dumps(asdict(record))))
+        assert loaded.metrics[0].score == 23 / 24
+        assert loaded.metrics[0].scorecards == cards
+
     def test_errored_metric_is_not_scored_zero(self) -> None:
         """-1.0 marks 'no score', distinguishable from a genuine 0.0."""
         result = self._EvalResult(
@@ -272,6 +314,42 @@ class TestMetricExtraction:
 
 
 class TestOutcomeRecording:
+    def test_lcs_wrapper_retains_item_evidence(self, tmp_path: Path) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from evals.config import EvalConfig
+        from evals.reporting.recorder import EvalRecorder, evaluate_and_record
+
+        cards = [{"rubric": "completion", "score": 33 / 34, "items": []}]
+        result = SimpleNamespace(
+            test_results=[
+                SimpleNamespace(
+                    metrics_data=[
+                        SimpleNamespace(
+                            name="completion",
+                            score=33 / 34,
+                            success=True,
+                            threshold=0.75,
+                            error=None,
+                            reason=json.dumps(
+                                {"scorecards": cards, "summary": "clarity partly met"}
+                            ),
+                        )
+                    ]
+                )
+            ]
+        )
+        path = tmp_path / "history.jsonl"
+        recorder = EvalRecorder(EvalConfig(_env_file=None), path=path)
+        with patch("deepeval.evaluate.evaluate", return_value=result):
+            evaluate_and_record(
+                recorder, "test", SimpleNamespace(turns=1, tool_names_used=[]), [], []
+            )
+        (record,) = load_records(str(path))
+        assert record.metrics[0].scorecards == cards
+        assert record.metrics[0].reason == "clarity partly met"
+
     def test_harness_error_attempt_is_still_written(self, tmp_path: Path) -> None:
         """A failed setup must produce a record, not silence (plan §3.5)."""
         record = EvalRecord(

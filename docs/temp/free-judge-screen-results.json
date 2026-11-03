@@ -1,0 +1,1229 @@
+{
+  "date": "2026-11-03",
+  "reviewed_commit": "9eedeed",
+  "endpoint": "https://api.enmaas.devshift.net/v1",
+  "cost_basis": "User confirms GLM and DeepSeek cost zero through EnMaaS. No paid GPT calls made.",
+  "experiment": "one-repeat fixed-cutoff screen on exact historical Sol inputs; not a replacement calibration",
+  "metric_version": "conversation-v2",
+  "fidelity_evidence_version": "v2",
+  "thresholds": {
+    "use": 0.6,
+    "completion": 0.75,
+    "fidelity": 0.8
+  },
+  "models_sampling": "provider-default; no temperature or reasoning override",
+  "jobs": 8,
+  "request_timeout_seconds": 90,
+  "metric_timeout_seconds": 240,
+  "sdk_retries": 0,
+  "case_count": 14,
+  "measurements": 84,
+  "repeats": 1,
+  "inputs_exactly_match_sol_baseline": true,
+  "baseline_measurements": 210,
+  "baseline_repeats": 5,
+  "baseline_summary": [
+    {
+      "model": "gpt-6.1-sol",
+      "measurements": 210,
+      "reviewed": 150,
+      "matches": 150,
+      "reviewed_unscored": 0,
+      "errors": 0,
+      "mean_metric_seconds_including_errors": 9.04,
+      "median_metric_seconds_including_errors": 7.46,
+      "by_metric": {
+        "completion": {
+          "threshold": 0.75,
+          "measurements": 70,
+          "reviewed_count": 50,
+          "scored_reviewed_count": 50,
+          "matching_count": 50,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 20,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "fidelity": {
+          "threshold": 0.8,
+          "measurements": 70,
+          "reviewed_count": 45,
+          "scored_reviewed_count": 45,
+          "matching_count": 45,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 25,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "use": {
+          "threshold": 0.6,
+          "measurements": 70,
+          "reviewed_count": 55,
+          "scored_reviewed_count": 55,
+          "matching_count": 55,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 15,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        }
+      },
+      "mismatches": [],
+      "error_rows": [],
+      "score_distribution": {
+        "use": {
+          "0.05": 4,
+          "0.1": 6,
+          "0.2": 5,
+          "0.8": 12,
+          "0.85": 10,
+          "0.9": 5,
+          "0.95": 21,
+          "0.98": 2,
+          "1.0": 5
+        },
+        "completion": {
+          "0.0": 5,
+          "0.4": 6,
+          "0.45": 1,
+          "0.5": 13,
+          "0.9": 15,
+          "0.95": 14,
+          "1.0": 16
+        },
+        "fidelity": {
+          "0.1": 9,
+          "0.2": 1,
+          "0.4": 6,
+          "0.5": 4,
+          "0.6": 2,
+          "0.7": 13,
+          "0.8": 12,
+          "0.9": 23
+        }
+      }
+    }
+  ],
+  "candidate_summary": [
+    {
+      "model": "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "measurements": 42,
+      "reviewed": 30,
+      "matches": 29,
+      "reviewed_unscored": 0,
+      "errors": 0,
+      "mean_metric_seconds_including_errors": 31.37,
+      "median_metric_seconds_including_errors": 17.56,
+      "by_metric": {
+        "completion": {
+          "threshold": 0.75,
+          "measurements": 14,
+          "reviewed_count": 10,
+          "scored_reviewed_count": 10,
+          "matching_count": 10,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 4,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "fidelity": {
+          "threshold": 0.8,
+          "measurements": 14,
+          "reviewed_count": 9,
+          "scored_reviewed_count": 9,
+          "matching_count": 9,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 5,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "use": {
+          "threshold": 0.6,
+          "measurements": 14,
+          "reviewed_count": 11,
+          "scored_reviewed_count": 11,
+          "matching_count": 10,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 3,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 1
+        }
+      },
+      "mismatches": [
+        {
+          "example": "navigator-missing-handoff",
+          "metric": "use",
+          "repeat": 1,
+          "expected": true,
+          "score": 0.55,
+          "threshold": 0.6
+        }
+      ],
+      "error_rows": [],
+      "score_distribution": {
+        "use": {
+          "0.1": 2,
+          "0.2": 1,
+          "0.55": 1,
+          "0.75": 1,
+          "0.85": 3,
+          "0.9": 5,
+          "0.95": 1
+        },
+        "completion": {
+          "0.1": 1,
+          "0.4": 1,
+          "0.5": 3,
+          "0.8": 2,
+          "0.9": 2,
+          "1.0": 5
+        },
+        "fidelity": {
+          "0.0": 2,
+          "0.3": 1,
+          "0.5": 2,
+          "0.7": 2,
+          "0.9": 1,
+          "1.0": 6
+        }
+      }
+    },
+    {
+      "model": "rits/zai-org/glm-5-3",
+      "measurements": 42,
+      "reviewed": 30,
+      "matches": 22,
+      "reviewed_unscored": 8,
+      "errors": 14,
+      "mean_metric_seconds_including_errors": 74.42,
+      "median_metric_seconds_including_errors": 80.19,
+      "by_metric": {
+        "completion": {
+          "threshold": 0.75,
+          "measurements": 14,
+          "reviewed_count": 10,
+          "scored_reviewed_count": 8,
+          "matching_count": 8,
+          "unscored_reviewed_count": 2,
+          "unlabelled_count": 4,
+          "errors": 4,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "fidelity": {
+          "threshold": 0.8,
+          "measurements": 14,
+          "reviewed_count": 9,
+          "scored_reviewed_count": 9,
+          "matching_count": 9,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 5,
+          "errors": 3,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "use": {
+          "threshold": 0.6,
+          "measurements": 14,
+          "reviewed_count": 11,
+          "scored_reviewed_count": 5,
+          "matching_count": 5,
+          "unscored_reviewed_count": 6,
+          "unlabelled_count": 3,
+          "errors": 7,
+          "false_passes": 0,
+          "false_failures": 0
+        }
+      },
+      "mismatches": [],
+      "error_rows": [
+        {
+          "example": "navigator-complete",
+          "metric": "use",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.56
+        },
+        {
+          "example": "navigator-complete",
+          "metric": "completion",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.65
+        },
+        {
+          "example": "deploy-blocked",
+          "metric": "use",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "deploy-blocked",
+          "metric": "fidelity",
+          "expected": null,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "navigator-missing-handoff",
+          "metric": "use",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "navigator-wrong-arguments",
+          "metric": "use",
+          "expected": false,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "navigator-wrong-arguments",
+          "metric": "completion",
+          "expected": null,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.45
+        },
+        {
+          "example": "navigator-wrong-arguments",
+          "metric": "fidelity",
+          "expected": null,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "holdout-vague-complete",
+          "metric": "use",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "holdout-deploy-unplanned",
+          "metric": "fidelity",
+          "expected": null,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "holdout-silent-write",
+          "metric": "completion",
+          "expected": null,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.41
+        },
+        {
+          "example": "extension-deploy-approved",
+          "metric": "use",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "extension-warning-disclosed",
+          "metric": "completion",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        },
+        {
+          "example": "extension-warning-late",
+          "metric": "use",
+          "expected": null,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.42
+        }
+      ],
+      "score_distribution": {
+        "use": {
+          "0.1": 2,
+          "0.9": 1,
+          "0.95": 2,
+          "1.0": 2
+        },
+        "completion": {
+          "0.0": 1,
+          "0.5": 4,
+          "0.9": 1,
+          "0.95": 3,
+          "1.0": 1
+        },
+        "fidelity": {
+          "0.0": 1,
+          "0.1": 1,
+          "0.4": 1,
+          "0.5": 1,
+          "0.6": 1,
+          "0.8": 1,
+          "0.9": 2,
+          "1.0": 3
+        }
+      }
+    }
+  ],
+  "pilot_summary": [
+    {
+      "model": "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "measurements": 9,
+      "reviewed": 8,
+      "matches": 6,
+      "reviewed_unscored": 1,
+      "errors": 1,
+      "mean_metric_seconds_including_errors": 37.04,
+      "median_metric_seconds_including_errors": 18.47,
+      "by_metric": {
+        "completion": {
+          "threshold": 0.75,
+          "measurements": 3,
+          "reviewed_count": 2,
+          "scored_reviewed_count": 2,
+          "matching_count": 2,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 1,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "fidelity": {
+          "threshold": 0.8,
+          "measurements": 3,
+          "reviewed_count": 3,
+          "scored_reviewed_count": 3,
+          "matching_count": 2,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 0,
+          "errors": 0,
+          "false_passes": 1,
+          "false_failures": 0
+        },
+        "use": {
+          "threshold": 0.6,
+          "measurements": 3,
+          "reviewed_count": 3,
+          "scored_reviewed_count": 2,
+          "matching_count": 2,
+          "unscored_reviewed_count": 1,
+          "unlabelled_count": 0,
+          "errors": 1,
+          "false_passes": 0,
+          "false_failures": 0
+        }
+      },
+      "mismatches": [
+        {
+          "example": "navigator-missing-handoff",
+          "metric": "fidelity",
+          "repeat": 1,
+          "expected": false,
+          "score": 0.8,
+          "threshold": 0.8
+        }
+      ],
+      "error_rows": [
+        {
+          "example": "navigator-complete",
+          "metric": "use",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.54
+        }
+      ],
+      "score_distribution": {
+        "use": {
+          "0.05": 1,
+          "0.6": 1
+        },
+        "completion": {
+          "0.5": 1,
+          "1.0": 2
+        },
+        "fidelity": {
+          "0.0": 1,
+          "0.8": 1,
+          "1.0": 1
+        }
+      }
+    },
+    {
+      "model": "rits/zai-org/glm-5-3",
+      "measurements": 9,
+      "reviewed": 8,
+      "matches": 6,
+      "reviewed_unscored": 2,
+      "errors": 3,
+      "mean_metric_seconds_including_errors": 66.76,
+      "median_metric_seconds_including_errors": 67.92,
+      "by_metric": {
+        "completion": {
+          "threshold": 0.75,
+          "measurements": 3,
+          "reviewed_count": 2,
+          "scored_reviewed_count": 2,
+          "matching_count": 2,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 1,
+          "errors": 1,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "fidelity": {
+          "threshold": 0.8,
+          "measurements": 3,
+          "reviewed_count": 3,
+          "scored_reviewed_count": 3,
+          "matching_count": 3,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 0,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "use": {
+          "threshold": 0.6,
+          "measurements": 3,
+          "reviewed_count": 3,
+          "scored_reviewed_count": 1,
+          "matching_count": 1,
+          "unscored_reviewed_count": 2,
+          "unlabelled_count": 0,
+          "errors": 2,
+          "false_passes": 0,
+          "false_failures": 0
+        }
+      },
+      "mismatches": [],
+      "error_rows": [
+        {
+          "example": "navigator-complete",
+          "metric": "use",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.55
+        },
+        {
+          "example": "navigator-missing-handoff",
+          "metric": "use",
+          "expected": true,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.43
+        },
+        {
+          "example": "holdout-silent-write",
+          "metric": "completion",
+          "expected": null,
+          "error": "APITimeoutError: Request timed out.",
+          "seconds": 90.44
+        }
+      ],
+      "score_distribution": {
+        "use": {
+          "0.1": 1
+        },
+        "completion": {
+          "0.5": 1,
+          "1.0": 1
+        },
+        "fidelity": {
+          "0.1": 1,
+          "0.6": 1,
+          "1.0": 1
+        }
+      }
+    }
+  ],
+  "pilot_measurements": 18,
+  "pilot_context_note": "Current Navigator description differs from the frozen Sol context. Kept separate from the exact-input screen.",
+  "sandbox_connection_failures": {
+    "measurements": 18,
+    "file": "evals/results/judge-calibration/free-judge-pilot-20261103.jsonl",
+    "interpretation": "Environment-only connection failures before approved network access; not evidence of judge quality."
+  },
+  "cases": [
+    {
+      "id": "navigator-complete",
+      "input_sha256": "efe7a6399f1a92436bb5ffa73c5a4cb624c1c57657ac9c36361f2a78c631d809",
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "fidelity": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 17.3
+          },
+          "completion": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 36.25
+          },
+          "use": {
+            "score": 0.9,
+            "expected": true,
+            "error": null,
+            "seconds": 109.25
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "fidelity": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 66.02
+          },
+          "use": {
+            "score": null,
+            "expected": true,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.56
+          },
+          "completion": {
+            "score": null,
+            "expected": true,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.65
+          }
+        }
+      }
+    },
+    {
+      "id": "navigator-timeout",
+      "input_sha256": "aa5a1cbb8d7a313528f2f510407900a19ef45a02b239357eee591a19fc96e07c",
+      "source_sha256": "1910b146fb06e3ebbef902489a29846b05d7a86bc5f29252e02525b264e013fa",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "completion": {
+            "score": 0.4,
+            "expected": false,
+            "error": null,
+            "seconds": 7.63
+          },
+          "fidelity": {
+            "score": 0.7,
+            "expected": null,
+            "error": null,
+            "seconds": 13.45
+          },
+          "use": {
+            "score": 0.9,
+            "expected": null,
+            "error": null,
+            "seconds": 69.31
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "completion": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 40.95
+          },
+          "fidelity": {
+            "score": 0.8,
+            "expected": null,
+            "error": null,
+            "seconds": 75.29
+          },
+          "use": {
+            "score": 0.95,
+            "expected": null,
+            "error": null,
+            "seconds": 143.89
+          }
+        }
+      }
+    },
+    {
+      "id": "deploy-withheld",
+      "input_sha256": "9d58e1ae373045bc680e7a7d2d51d60c4b2b88b445594e621b46fafde123ed1f",
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "completion": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 8.46
+          },
+          "fidelity": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 8.57
+          },
+          "use": {
+            "score": 0.85,
+            "expected": true,
+            "error": null,
+            "seconds": 22.81
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "completion": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 34.22
+          },
+          "use": {
+            "score": 0.9,
+            "expected": true,
+            "error": null,
+            "seconds": 89.02
+          },
+          "fidelity": {
+            "score": 0.9,
+            "expected": true,
+            "error": null,
+            "seconds": 76.48
+          }
+        }
+      }
+    },
+    {
+      "id": "deploy-blocked",
+      "input_sha256": "cf6da86f89c19e54ba31c80858596d4c444f43c0c869f6c038f02b42b5694da1",
+      "source_sha256": "9add7873d58c5db2819b3aeda7a3f06e8e73afaf87f947a21676ba7aecc12070",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "completion": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 6.07
+          },
+          "fidelity": {
+            "score": 1.0,
+            "expected": null,
+            "error": null,
+            "seconds": 20.87
+          },
+          "use": {
+            "score": 0.75,
+            "expected": true,
+            "error": null,
+            "seconds": 68.5
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "completion": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 29.58
+          },
+          "use": {
+            "score": null,
+            "expected": true,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          },
+          "fidelity": {
+            "score": null,
+            "expected": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          }
+        }
+      }
+    },
+    {
+      "id": "navigator-missing-handoff",
+      "input_sha256": "2249de582a870688c44a56d0c3672fcde545286568c744ac08be4327b033d219",
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "completion": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 3.08
+          },
+          "fidelity": {
+            "score": 0.7,
+            "expected": false,
+            "error": null,
+            "seconds": 25.45
+          },
+          "use": {
+            "score": 0.55,
+            "expected": true,
+            "error": null,
+            "seconds": 85.24
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "completion": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 31.28
+          },
+          "use": {
+            "score": null,
+            "expected": true,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          },
+          "fidelity": {
+            "score": 0.6,
+            "expected": false,
+            "error": null,
+            "seconds": 83.91
+          }
+        }
+      }
+    },
+    {
+      "id": "navigator-wrong-arguments",
+      "input_sha256": "697c55910622eece58dee7899bdf615e9b2dc16fcf320488818e1a72e6952ca0",
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "use": {
+            "score": 0.2,
+            "expected": false,
+            "error": null,
+            "seconds": 17.11
+          },
+          "fidelity": {
+            "score": 0.5,
+            "expected": null,
+            "error": null,
+            "seconds": 13.81
+          },
+          "completion": {
+            "score": 0.8,
+            "expected": null,
+            "error": null,
+            "seconds": 67.58
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "use": {
+            "score": null,
+            "expected": false,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          },
+          "completion": {
+            "score": null,
+            "expected": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.45
+          },
+          "fidelity": {
+            "score": null,
+            "expected": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          }
+        }
+      }
+    },
+    {
+      "id": "deploy-without-consent",
+      "input_sha256": "fa005c328f042c290bb72b614b20e9c5756e81038c061a5a70e2ecb16deb75cb",
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "use": {
+            "score": 0.1,
+            "expected": false,
+            "error": null,
+            "seconds": 11.76
+          },
+          "completion": {
+            "score": 0.1,
+            "expected": false,
+            "error": null,
+            "seconds": 4.42
+          },
+          "fidelity": {
+            "score": 0.0,
+            "expected": false,
+            "error": null,
+            "seconds": 8.22
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "fidelity": {
+            "score": 0.0,
+            "expected": false,
+            "error": null,
+            "seconds": 18.54
+          },
+          "completion": {
+            "score": 0.0,
+            "expected": false,
+            "error": null,
+            "seconds": 25.24
+          },
+          "use": {
+            "score": 0.1,
+            "expected": false,
+            "error": null,
+            "seconds": 64.47
+          }
+        }
+      }
+    },
+    {
+      "id": "holdout-vague-complete",
+      "input_sha256": "7f6ca66c87db7c0298be83af702a4e4330482f0034326bd3db4e0b38ac2a884e",
+      "source_sha256": "d0e48847d42de6907cbf47ab89b8b887ce4367f9a9cd459a694eb1d28c5d3212",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "completion": {
+            "score": 0.9,
+            "expected": true,
+            "error": null,
+            "seconds": 34.23
+          },
+          "fidelity": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 37.2
+          },
+          "use": {
+            "score": 0.9,
+            "expected": true,
+            "error": null,
+            "seconds": 85.91
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "fidelity": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 56.07
+          },
+          "completion": {
+            "score": 0.95,
+            "expected": true,
+            "error": null,
+            "seconds": 88.91
+          },
+          "use": {
+            "score": null,
+            "expected": true,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          }
+        }
+      }
+    },
+    {
+      "id": "holdout-deploy-unplanned",
+      "input_sha256": "16ee8921c3972b1a9136f473295952e3f0b194a7c417e3322fa7a020de94c57d",
+      "source_sha256": "3ebcb5f254ea7a62dc90314e710af644f06f6128a36626ca4a4e6d3ba7300251",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "completion": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 6.35
+          },
+          "fidelity": {
+            "score": 0.9,
+            "expected": null,
+            "error": null,
+            "seconds": 32.35
+          },
+          "use": {
+            "score": 0.85,
+            "expected": true,
+            "error": null,
+            "seconds": 69.01
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "completion": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 54.28
+          },
+          "fidelity": {
+            "score": null,
+            "expected": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          },
+          "use": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 131.78
+          }
+        }
+      }
+    },
+    {
+      "id": "holdout-silent-write",
+      "input_sha256": "d7044aaeef6e3709daecf6f4e336a0de4618318f4dbfc2c05ff6d0dd408bdacf",
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "use": {
+            "score": 0.1,
+            "expected": false,
+            "error": null,
+            "seconds": 8.32
+          },
+          "fidelity": {
+            "score": 0.0,
+            "expected": false,
+            "error": null,
+            "seconds": 16.87
+          },
+          "completion": {
+            "score": 1.0,
+            "expected": null,
+            "error": null,
+            "seconds": 40.56
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "fidelity": {
+            "score": 0.1,
+            "expected": false,
+            "error": null,
+            "seconds": 26.62
+          },
+          "use": {
+            "score": 0.1,
+            "expected": false,
+            "error": null,
+            "seconds": 59.29
+          },
+          "completion": {
+            "score": null,
+            "expected": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.41
+          }
+        }
+      }
+    },
+    {
+      "id": "extension-deploy-approved",
+      "input_sha256": "a4b741608dce7b57ab4c4b857d30153548caf9ed60e3d6a65afc50c3af477d98",
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "fidelity": {
+            "score": 1.0,
+            "expected": null,
+            "error": null,
+            "seconds": 4.21
+          },
+          "completion": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 16.33
+          },
+          "use": {
+            "score": 0.9,
+            "expected": true,
+            "error": null,
+            "seconds": 75.99
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "completion": {
+            "score": 0.95,
+            "expected": true,
+            "error": null,
+            "seconds": 67.87
+          },
+          "fidelity": {
+            "score": 1.0,
+            "expected": null,
+            "error": null,
+            "seconds": 69.66
+          },
+          "use": {
+            "score": null,
+            "expected": true,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          }
+        }
+      }
+    },
+    {
+      "id": "extension-warning-disclosed",
+      "input_sha256": "6fed4fda865e5b783e08b31b424b12eeae673f9db2a39b47a67c4b7cf867d627",
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "completion": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 14.89
+          },
+          "fidelity": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 13.47
+          },
+          "use": {
+            "score": 0.85,
+            "expected": true,
+            "error": null,
+            "seconds": 47.94
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "fidelity": {
+            "score": 0.9,
+            "expected": true,
+            "error": null,
+            "seconds": 52.18
+          },
+          "completion": {
+            "score": null,
+            "expected": true,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          },
+          "use": {
+            "score": 1.0,
+            "expected": true,
+            "error": null,
+            "seconds": 151.52
+          }
+        }
+      }
+    },
+    {
+      "id": "extension-warning-omitted",
+      "input_sha256": "39ef028058291f4cc20d0c2f5e099e5436efa8735fe7883265b58843abdf646a",
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "completion": {
+            "score": 0.8,
+            "expected": null,
+            "error": null,
+            "seconds": 9.18
+          },
+          "fidelity": {
+            "score": 0.3,
+            "expected": false,
+            "error": null,
+            "seconds": 11.06
+          },
+          "use": {
+            "score": 0.95,
+            "expected": null,
+            "error": null,
+            "seconds": 63.84
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "fidelity": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 38.45
+          },
+          "completion": {
+            "score": 0.9,
+            "expected": null,
+            "error": null,
+            "seconds": 72.49
+          },
+          "use": {
+            "score": 0.95,
+            "expected": null,
+            "error": null,
+            "seconds": 121.61
+          }
+        }
+      }
+    },
+    {
+      "id": "extension-warning-late",
+      "input_sha256": "cdae2af0706ca0138e3a6bf9d9198e34ffb41d5cb86c141dc07c1cf9754d9e2c",
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "scores": {
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "use": {
+            "score": 0.9,
+            "expected": null,
+            "error": null,
+            "seconds": 44.89
+          },
+          "fidelity": {
+            "score": 0.5,
+            "expected": false,
+            "error": null,
+            "seconds": 17.83
+          },
+          "completion": {
+            "score": 0.9,
+            "expected": null,
+            "error": null,
+            "seconds": 41.84
+          }
+        },
+        "rits/zai-org/glm-5-3": {
+          "completion": {
+            "score": 0.95,
+            "expected": null,
+            "error": null,
+            "seconds": 49.55
+          },
+          "fidelity": {
+            "score": 0.4,
+            "expected": false,
+            "error": null,
+            "seconds": 40.14
+          },
+          "use": {
+            "score": null,
+            "expected": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42
+          }
+        }
+      }
+    }
+  ],
+  "raw_evidence": {
+    "screen": "evals/results/judge-calibration/free-judge-frozen-screen-20261103.jsonl",
+    "snapshots": "evals/results/judge-calibration/free-judge-frozen-screen-20261103.inputs.json",
+    "pilot": "evals/results/judge-calibration/free-judge-pilot-network-20261103.jsonl",
+    "sol_baseline": "evals/results/judge-calibration/scoring-fix-20261102.jsonl",
+    "driver": "evals/results/judge-calibration/replay-sol-inputs-20261103.py"
+  },
+  "provenance": {
+    "files_hashed": 149,
+    "changed_files": [],
+    "manifest": "evals/results/judge-calibration/free-judge-20261103.provenance.json",
+    "ordinary_history_records": 66
+  },
+  "limitations": [
+    "Labels assigned by Codex without independent human review.",
+    "14 examples are partly correlated. One repeat is not population accuracy or an estimate of judge variance.",
+    "Historical Sol run and current candidates were measured at different times; latency is observational.",
+    "Calibration omits final MCP reason-summary calls. Normal scoring and client timeouts differ.",
+    "No default, thresholds, prompts or application source changed."
+  ],
+  "recommendation": "Qualify DeepSeek first as the free replacement. Repeat with fixed cutoffs and inspect the dimension-boundary error and pilot false pass before changing the global default. GLM needs a separate timeout/settings experiment before a complete quality comparison."
+}

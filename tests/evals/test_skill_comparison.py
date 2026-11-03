@@ -381,6 +381,22 @@ def test_missing_timing_is_not_zero_and_explicit_zero_survives(records: list[Eva
     assert "n/a" in format_summary([loaded])
 
 
+def test_item_fractions_remain_visible_in_summary_and_attempt_tables(
+    records: list[EvalRecord],
+) -> None:
+    for r in records:
+        r.metrics[0].score = 21 / 22
+        r.metrics[1].score = 33 / 34
+        for metric in r.metrics[:2]:
+            metric.version = "conversation-v3-items"
+    summary = format_summary([records[0]], fmt="markdown")
+    comparison = render_skill_comparison(build(records), "markdown")
+    for rendered in (summary, comparison):
+        assert "0.9545" in rendered
+        assert "0.9706" in rendered
+    assert records[0].metrics[0].score == 21 / 22
+
+
 def test_current_skill_files_are_not_consulted_and_overlap_is_disclosed(
     records: list[EvalRecord],
 ) -> None:

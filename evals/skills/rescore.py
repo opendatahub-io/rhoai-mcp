@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from evals.agent.transcript import AttemptArtifact
+from evals.reporting.formatting import format_metric_score
 from evals.skills.attempt import RESULTS_ROOT, score_artifact
 from evals.skills.goldens import GOLDENS_BY_ID
 
@@ -152,7 +153,7 @@ def render(outcomes: list[AttemptOutcome]) -> str:
             lines.append(f"         FAIL {check.name}: {check.detail[:120]}")
         for metric in outcome.metrics:
             flag = "ok " if metric.success else "FAIL"
-            score = "n/a" if metric.score < 0 else f"{metric.score:.3f}"
+            score = format_metric_score(metric)
             lines.append(f"         {flag} {metric.name}: {score} (thr {metric.threshold})")
 
     judged = [o for o in outcomes if not o.dry_run]

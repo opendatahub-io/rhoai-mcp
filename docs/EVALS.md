@@ -45,6 +45,10 @@ This replaces the earlier self-instrumentation approach (`ENABLE_EVALUATION` hoo
 
 ## Running Evaluations
 
+For the stdio skill-evaluation path, see [judge configuration and score
+interpretation](./JUDGE-SCORING.md). It documents the EnMaaS DeepSeek default,
+item-based MCP scoring, and G-Eval fidelity's default 0–10 scale.
+
 ### Make targets
 
 ```bash
@@ -85,22 +89,23 @@ All variables use the `RHOAI_EVAL_` prefix and can be set in `.env.eval` or as e
 | `LLM_MODEL` | `gpt-4o` | Model name for the agent LLM |
 | `LLM_API_KEY` | (none) | API key for the agent LLM |
 | `LLM_BASE_URL` | (none) | Base URL for vLLM or Azure endpoints |
-| `EVAL_PROVIDER` | `openai` | Judge LLM provider (see [Supported Providers](#supported-providers)) |
-| `EVAL_MODEL` | `gpt-4o` | Model name for the DeepEval judge LLM |
-| `EVAL_API_KEY` | (none) | API key for the judge LLM |
+| `EVAL_PROVIDER` | `enmaas` | Judge LLM provider (see [Supported Providers](#supported-providers)) |
+| `EVAL_MODEL` | `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017` | Model name for the DeepEval judge LLM |
+| `EVAL_API_KEY` | (none) | Explicit judge credential; EnMaaS otherwise uses `ENMAAS_KEY` |
 | `EVAL_MODEL_BASE_URL` | (none) | Base URL for a custom judge endpoint |
 | `VERTEX_PROJECT_ID` | (none) | Google Cloud project ID (for `anthropic-vertex` and `google-vertex`) |
 | `VERTEX_LOCATION` | `us-central1` | Google Cloud region (for `anthropic-vertex` and `google-vertex`) |
 | `CLUSTER_MODE` | `mock` | `mock` (no cluster needed) or `live` (real cluster) |
-| `MCP_USE_THRESHOLD` | `0.5` | Minimum score for MCP tool usage metrics (0.0-1.0) |
-| `TASK_COMPLETION_THRESHOLD` | `0.6` | Minimum score for task completion metrics (0.0-1.0) |
+| `MCP_USE_THRESHOLD` | `0.6` | Minimum MCP-use score; validate per judge/metric version |
+| `TASK_COMPLETION_THRESHOLD` | `0.75` | Minimum completion score; validate per judge/metric version |
 | `MAX_AGENT_TURNS` | `20` | Maximum LLM turns per scenario (1-100) |
 
 ### Supported Providers
 
 | Provider | Value | SDK | Notes |
 |----------|-------|-----|-------|
-| OpenAI | `openai` | `openai` | Default. Uses OpenAI API directly. |
+| EnMaaS | `enmaas` | `openai` | Default judge endpoint; uses `ENMAAS_KEY`. |
+| OpenAI | `openai` | `openai` | Uses OpenAI API directly when explicitly selected. |
 | vLLM | `vllm` | `openai` | OpenAI-compatible. Requires `LLM_BASE_URL`. |
 | Azure OpenAI | `azure` | `openai` | OpenAI-compatible. Requires `LLM_BASE_URL`. |
 | Anthropic | `anthropic` | `anthropic` | Claude models via direct API. |
@@ -412,9 +417,10 @@ RHOAI_EVAL_EVAL_MODEL_BASE_URL=http://localhost:8001/v1
 
 The GitHub Actions workflow (`.github/workflows/eval.yml`) runs mock-cluster evals on manual dispatch:
 
-- **Trigger:** `workflow_dispatch` with `agent_provider`, `agent_model`, `judge_provider`, and `judge_model` inputs
-- **Defaults:** `openai` provider, `gpt-4o-mini` for the agent, `gpt-4o` for the judge
+- **Trigger:** `workflow_dispatch` with `inference_model`, `judge_provider`, and `judge_model` inputs
+- **Judge defaults:** `enmaas` and `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017`
 - **Required secrets:** Depends on provider selection:
+  - EnMaaS judge: `ENMAAS_KEY`
   - OpenAI/vLLM/Azure: `OPENAI_API_KEY`
   - Anthropic: `ANTHROPIC_API_KEY`
   - Google: `GOOGLE_API_KEY`
@@ -424,13 +430,11 @@ The GitHub Actions workflow (`.github/workflows/eval.yml`) runs mock-cluster eva
 To trigger manually from the GitHub UI or CLI:
 
 ```bash
-# Default (OpenAI)
-gh workflow run eval.yml --field agent_model=gpt-4o --field judge_model=gpt-4o
+# Default EnMaaS DeepSeek judge
+gh workflow run eval.yml
 
-# Anthropic agent, OpenAI judge
+# Explicit OpenAI judge override (paid)
 gh workflow run eval.yml \
-  --field agent_provider=anthropic \
-  --field agent_model=claude-sonnet-4-20250514 \
   --field judge_provider=openai \
   --field judge_model=gpt-4o
 ```
@@ -445,20 +449,18 @@ Maintainers can trigger evals directly from a pull request by commenting `@run_e
 
 1. The workflow adds an `eyes` reaction to acknowledge the comment
 2. The PR's head branch is checked out (not the default branch)
-3. Evals run using `google-genai` / `gemini-2.0-flash` for both the agent and judge LLMs
+3. Evals run with the EnMaaS DeepSeek judge and the LCS inference configuration
 4. Results are posted as a PR comment with the markdown summary table
 5. A `rocket` reaction is added on success, or `thumbsdown` on failure
 
-**Required secret:** `GOOGLE_API_KEY` (Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)).
+**Required judge secret:** `ENMAAS_KEY`. The LCS inference service has separate credentials.
 
 **Default configuration for `@run_evals`:**
 
 | Setting | Value |
 |---------|-------|
-| Agent provider | `google-genai` |
-| Agent model | `gemini-2.0-flash` |
-| Judge provider | `google-genai` |
-| Judge model | `gemini-2.0-flash` |
+| Judge provider | `enmaas` |
+| Judge model | `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017` |
 | Cluster mode | `mock` |
 
 The `workflow_dispatch` trigger remains available for full provider/model flexibility.

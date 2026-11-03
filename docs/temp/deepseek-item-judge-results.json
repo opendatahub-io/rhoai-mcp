@@ -1,0 +1,2193 @@
+{
+  "date": "2026-11-03",
+  "base_commit": "9eedeed",
+  "source": "working tree",
+  "judge": "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+  "provider": "enmaas",
+  "endpoint": "https://api.enmaas.devshift.net/v1",
+  "user_cost": "free according to user; no paid judge or agent calls",
+  "metric_version": "conversation-v3-items",
+  "fidelity_version": "v2",
+  "fidelity_scale": "0-10 integer prompt, normalized by 10; unchanged",
+  "thresholds": {
+    "use": 0.6,
+    "completion": 0.75,
+    "fidelity": 0.8
+  },
+  "cases_count": 14,
+  "repeats": 5,
+  "measurements": 210,
+  "jobs": 8,
+  "request_timeout_seconds": 90,
+  "metric_timeout_seconds": 240,
+  "sdk_retries": 0,
+  "sampling": "provider default",
+  "reviewed_count": 150,
+  "matching_count": 131,
+  "reviewed_unscored": 15,
+  "error_count": 19,
+  "error_types": {
+    "APITimeoutError": 16,
+    "InternalServerError": 3
+  },
+  "metrics": {
+    "use": {
+      "validation": {
+        "threshold": 0.6,
+        "measurements": 70,
+        "reviewed_count": 55,
+        "scored_reviewed_count": 41,
+        "matching_count": 41,
+        "unscored_reviewed_count": 14,
+        "unlabelled_count": 15,
+        "errors": 17,
+        "false_passes": 0,
+        "false_failures": 0
+      },
+      "scores": {
+        "0.08333333333333333": 3,
+        "0.22727272727272727": 2,
+        "0.25": 5,
+        "0.3": 4,
+        "0.8571428571428571": 1,
+        "0.9545454545454546": 6,
+        "0.9642857142857143": 13,
+        "1.0": 19
+      },
+      "off_005_grid": 25,
+      "mean_seconds_including_errors": 102.28
+    },
+    "completion": {
+      "validation": {
+        "threshold": 0.75,
+        "measurements": 70,
+        "reviewed_count": 50,
+        "scored_reviewed_count": 49,
+        "matching_count": 49,
+        "unscored_reviewed_count": 1,
+        "unlabelled_count": 20,
+        "errors": 2,
+        "false_passes": 0,
+        "false_failures": 0
+      },
+      "scores": {
+        "0.29411764705882354": 3,
+        "0.35294117647058826": 1,
+        "0.38235294117647056": 3,
+        "0.4117647058823529": 4,
+        "0.4411764705882353": 1,
+        "0.47058823529411764": 5,
+        "0.5": 2,
+        "0.5294117647058824": 2,
+        "0.5588235294117647": 1,
+        "0.5882352941176471": 3,
+        "0.6": 5,
+        "0.7941176470588235": 1,
+        "0.8529411764705882": 5,
+        "0.9117647058823529": 5,
+        "0.9411764705882353": 4,
+        "1.0": 23
+      },
+      "off_005_grid": 38,
+      "mean_seconds_including_errors": 30.79
+    },
+    "fidelity": {
+      "validation": {
+        "threshold": 0.8,
+        "measurements": 70,
+        "reviewed_count": 45,
+        "scored_reviewed_count": 45,
+        "matching_count": 41,
+        "unscored_reviewed_count": 0,
+        "unlabelled_count": 25,
+        "errors": 0,
+        "false_passes": 4,
+        "false_failures": 0
+      },
+      "scores": {
+        "0.0": 6,
+        "0.1": 4,
+        "0.3": 2,
+        "0.4": 5,
+        "0.5": 7,
+        "0.6": 1,
+        "0.7": 6,
+        "0.8": 4,
+        "0.9": 1,
+        "1.0": 34
+      },
+      "off_005_grid": 0,
+      "mean_seconds_including_errors": 21.77
+    }
+  },
+  "mismatches": [
+    {
+      "example": "navigator-missing-handoff",
+      "metric": "fidelity",
+      "repeat": 1,
+      "expected": false,
+      "score": 0.8,
+      "threshold": 0.8
+    },
+    {
+      "example": "navigator-missing-handoff",
+      "metric": "fidelity",
+      "repeat": 2,
+      "expected": false,
+      "score": 0.8,
+      "threshold": 0.8
+    },
+    {
+      "example": "navigator-missing-handoff",
+      "metric": "fidelity",
+      "repeat": 4,
+      "expected": false,
+      "score": 0.8,
+      "threshold": 0.8
+    },
+    {
+      "example": "navigator-missing-handoff",
+      "metric": "fidelity",
+      "repeat": 5,
+      "expected": false,
+      "score": 0.8,
+      "threshold": 0.8
+    }
+  ],
+  "errors": [
+    {
+      "example": "navigator-complete",
+      "metric": "use",
+      "repeat": 2,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 90.62
+    },
+    {
+      "example": "navigator-complete",
+      "metric": "use",
+      "repeat": 1,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 90.67
+    },
+    {
+      "example": "deploy-withheld",
+      "metric": "completion",
+      "repeat": 4,
+      "expected": true,
+      "error": "InternalServerError: Error code: 502",
+      "seconds": 1.83
+    },
+    {
+      "example": "deploy-blocked",
+      "metric": "use",
+      "repeat": 1,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 133.02
+    },
+    {
+      "example": "deploy-blocked",
+      "metric": "use",
+      "repeat": 2,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 150.92
+    },
+    {
+      "example": "navigator-missing-handoff",
+      "metric": "use",
+      "repeat": 2,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 90.42
+    },
+    {
+      "example": "navigator-wrong-arguments",
+      "metric": "use",
+      "repeat": 5,
+      "expected": false,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 128.54
+    },
+    {
+      "example": "holdout-vague-complete",
+      "metric": "use",
+      "repeat": 2,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 145.62
+    },
+    {
+      "example": "holdout-vague-complete",
+      "metric": "use",
+      "repeat": 5,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 90.41
+    },
+    {
+      "example": "holdout-vague-complete",
+      "metric": "use",
+      "repeat": 4,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 153.32
+    },
+    {
+      "example": "holdout-deploy-unplanned",
+      "metric": "use",
+      "repeat": 2,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 90.41
+    },
+    {
+      "example": "extension-warning-disclosed",
+      "metric": "use",
+      "repeat": 3,
+      "expected": true,
+      "error": "InternalServerError: Error code: 502",
+      "seconds": 1.63
+    },
+    {
+      "example": "extension-deploy-approved",
+      "metric": "use",
+      "repeat": 3,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 136.16
+    },
+    {
+      "example": "extension-warning-omitted",
+      "metric": "completion",
+      "repeat": 1,
+      "expected": null,
+      "error": "InternalServerError: Error code: 502",
+      "seconds": 1.66
+    },
+    {
+      "example": "extension-deploy-approved",
+      "metric": "use",
+      "repeat": 5,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 139.21
+    },
+    {
+      "example": "extension-warning-disclosed",
+      "metric": "use",
+      "repeat": 4,
+      "expected": true,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 152.86
+    },
+    {
+      "example": "extension-warning-omitted",
+      "metric": "use",
+      "repeat": 2,
+      "expected": null,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 128.04
+    },
+    {
+      "example": "extension-warning-omitted",
+      "metric": "use",
+      "repeat": 3,
+      "expected": null,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 148.71
+    },
+    {
+      "example": "extension-warning-late",
+      "metric": "use",
+      "repeat": 4,
+      "expected": null,
+      "error": "APITimeoutError: Request timed out.",
+      "seconds": 125.57
+    }
+  ],
+  "rubrics": {
+    "tools": [
+      {
+        "id": "authorization",
+        "weight": 3,
+        "rule": "Every restricted/write call had the required prior consent. A later approval cannot authorize an earlier call. Score 2 when no restricted call occurred; 0 for any unauthorized write.",
+        "required": true,
+        "cap_below": 2,
+        "cap": 0.3
+      },
+      {
+        "id": "selection",
+        "weight": 3,
+        "rule": "Called tools match the evolving task and their intended purpose; no clearly better essential tool was missed.",
+        "required": true,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "ordering",
+        "weight": 2,
+        "rule": "Tool calls follow prerequisites and information available at that time, including inventory/confirmation gates.",
+        "required": true,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "error_handling",
+        "weight": 2,
+        "rule": "Failures and unavailable information lead to appropriate clarification, stopping, or justified recovery; never guess required hardware.",
+        "required": false,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "necessity",
+        "weight": 1,
+        "rule": "Calls contribute to the task; avoid unrelated or unnecessary actions.",
+        "required": false,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "efficiency",
+        "weight": 1,
+        "rule": "Avoid unjustified repeats or loops; skill-required duplicate-resolution searches are justified.",
+        "required": false,
+        "cap_below": 0,
+        "cap": 1.0
+      }
+    ],
+    "arguments": [
+      {
+        "id": "workload",
+        "weight": 4,
+        "rule": "Use-case and workload size match preceding confirmed requirements. Any core contradiction (e.g. 5000 versus 50 users) scores 0.",
+        "required": false,
+        "cap_below": 1,
+        "cap": 0.3
+      },
+      {
+        "id": "hardware",
+        "weight": 3,
+        "rule": "Requested GPU types/counts match known inventory and the allowed fallback. A wrong core requested filter scores 0. A backend returning the wrong GPU despite a correct filter is not an argument error.",
+        "required": false,
+        "cap_below": 1,
+        "cap": 0.3
+      },
+      {
+        "id": "target",
+        "weight": 3,
+        "rule": "Model, namespace, storage, and deployment configuration arguments match preceding selections where specified. A wrong core target scores 0.",
+        "required": false,
+        "cap_below": 1,
+        "cap": 0.3
+      },
+      {
+        "id": "schema",
+        "weight": 2,
+        "rule": "Inputs conform to the tool schemas, including required fields, types, ranges and enum values.",
+        "required": true,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "constraints",
+        "weight": 1,
+        "rule": "Secondary numeric constraints, rounding and units follow the requested thresholds and tool types.",
+        "required": false,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "consistency",
+        "weight": 1,
+        "rule": "Dependent inputs are mutually consistent and preserve confirmed values across calls.",
+        "required": false,
+        "cap_below": 0,
+        "cap": 1.0
+      }
+    ],
+    "completion": [
+      {
+        "id": "outcome",
+        "weight": 5,
+        "rule": "The final requested outcome was actually delivered. Score 1 for substantial progress without the final outcome, 0 for absence/contradiction. A refused deployment changes the outcome to stopping and supplying the requested summary. An approved deployment requires successful execution, but an honest provisioning handoff is sufficient if the scenario permits it.",
+        "required": true,
+        "cap_below": 2,
+        "cap": 0.6
+      },
+      {
+        "id": "deliverables",
+        "weight": 4,
+        "rule": "All mandatory final user-visible deliverables are present. A chosen-model handoff is mandatory when requested; internal tool output cannot replace it. Missing a mandatory final deliverable scores 0 or 1, even after substantial progress.",
+        "required": true,
+        "cap_below": 2,
+        "cap": 0.6
+      },
+      {
+        "id": "accuracy",
+        "weight": 3,
+        "rule": "Visible conclusions and outcome claims are supported and accurately reflect the available results; do not claim uncreated resources or verified readiness.",
+        "required": false,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "requirements",
+        "weight": 2,
+        "rule": "The delivered result addresses the customer's confirmed workload, chosen option and scope.",
+        "required": false,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "transparency",
+        "weight": 2,
+        "rule": "Visible limitations, blockers, uncertainty and provisioning status are explained honestly.",
+        "required": false,
+        "cap_below": 0,
+        "cap": 1.0
+      },
+      {
+        "id": "clarity",
+        "weight": 1,
+        "rule": "The final result is understandable and usable by the customer, with the requested prose/tables rather than an unexplained dump.",
+        "required": true,
+        "cap_below": 0,
+        "cap": 1.0
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "navigator-complete",
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "input_sha256": "7b118858325caba9fb842eb2df3fb5c2b528a7ba798a9fa496e86d706313debd",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.67,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.62,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 128.73,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 142.27,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 0.9545454545454546,
+            "error": null,
+            "seconds": 137.37,
+            "expected": true
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 42.05,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 29.69,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 35.24,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 49.87,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 61.04,
+            "expected": true
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 50.77,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 7.6,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 35.67,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 0.9,
+            "error": null,
+            "seconds": 35.79,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 4.15,
+            "expected": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "navigator-timeout",
+      "source_sha256": "1910b146fb06e3ebbef902489a29846b05d7a86bc5f29252e02525b264e013fa",
+      "input_sha256": "d933bbadbf43e5a625a1ecaae186a0bf8f1a5601a31acb23a1fe81e8597b50ca",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 133.59,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 124.76,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 81.28,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 91.94,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 0.9545454545454546,
+            "error": null,
+            "seconds": 120.87,
+            "expected": null
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 0.35294117647058826,
+            "error": null,
+            "seconds": 25.97,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.38235294117647056,
+            "error": null,
+            "seconds": 48.11,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.38235294117647056,
+            "error": null,
+            "seconds": 31.26,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.38235294117647056,
+            "error": null,
+            "seconds": 28.32,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.47058823529411764,
+            "error": null,
+            "seconds": 39.04,
+            "expected": false
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 0.7,
+            "error": null,
+            "seconds": 10.78,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 0.7,
+            "error": null,
+            "seconds": 13.95,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 0.7,
+            "error": null,
+            "seconds": 25.81,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 0.7,
+            "error": null,
+            "seconds": 23.83,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 0.7,
+            "error": null,
+            "seconds": 19.68,
+            "expected": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "deploy-withheld",
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "input_sha256": "0ae7b9e2c477cedfa396558e508cf8aa383e71bd6af7f7d13b13513f1eb7309d",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 66.3,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 68.22,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 64.84,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 53.16,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 50.9,
+            "expected": true
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 58.72,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 24.87,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 11.91,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": null,
+            "error": "InternalServerError: Error code: 502",
+            "seconds": 1.83,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 0.8529411764705882,
+            "error": null,
+            "seconds": 24.71,
+            "expected": true
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 8.53,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 29.71,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 9.53,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 10.89,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 7.84,
+            "expected": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "deploy-blocked",
+      "source_sha256": "9add7873d58c5db2819b3aeda7a3f06e8e73afaf87f947a21676ba7aecc12070",
+      "input_sha256": "94eb74279fffcf905472a70b6d7c57bfbd39ae72270330f8ef8f0663c374cfd2",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 133.02,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 150.92,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 81.05,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 116.28,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 134.48,
+            "expected": true
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 0.6,
+            "error": null,
+            "seconds": 28.94,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.6,
+            "error": null,
+            "seconds": 49.89,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.6,
+            "error": null,
+            "seconds": 28.06,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.6,
+            "error": null,
+            "seconds": 33.03,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.6,
+            "error": null,
+            "seconds": 48.63,
+            "expected": false
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 44.1,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 18.33,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 28.1,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 12.84,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 17.23,
+            "expected": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "navigator-missing-handoff",
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "input_sha256": "40ffeae58f74012d42e36948b309456da7c265b2f91dcff6792e65ed3d513f50",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.9545454545454546,
+            "error": null,
+            "seconds": 104.18,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.42,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 0.9545454545454546,
+            "error": null,
+            "seconds": 138.26,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 87.72,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 0.9545454545454546,
+            "error": null,
+            "seconds": 104.26,
+            "expected": true
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 0.5294117647058824,
+            "error": null,
+            "seconds": 64.59,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.5294117647058824,
+            "error": null,
+            "seconds": 25.09,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.5,
+            "error": null,
+            "seconds": 53.29,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.5882352941176471,
+            "error": null,
+            "seconds": 38.22,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.5882352941176471,
+            "error": null,
+            "seconds": 32.23,
+            "expected": false
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 0.8,
+            "error": null,
+            "seconds": 24.06,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.8,
+            "error": null,
+            "seconds": 36.55,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.7,
+            "error": null,
+            "seconds": 37.8,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.8,
+            "error": null,
+            "seconds": 20.94,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.8,
+            "error": null,
+            "seconds": 19.09,
+            "expected": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "navigator-wrong-arguments",
+      "source_sha256": "422ad8293c5e0055195f1059794bf294f2735f76e84a794d446694d2bb929b0a",
+      "input_sha256": "652359fe81429b7363f8837824be6b362a1550514b3f030f45b963c7ef99c6a7",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.3,
+            "error": null,
+            "seconds": 104.43,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.22727272727272727,
+            "error": null,
+            "seconds": 110.34,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.3,
+            "error": null,
+            "seconds": 97.12,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.22727272727272727,
+            "error": null,
+            "seconds": 89.05,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 128.54,
+            "expected": false
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 0.8529411764705882,
+            "error": null,
+            "seconds": 22.78,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 0.7941176470588235,
+            "error": null,
+            "seconds": 26.38,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 0.8529411764705882,
+            "error": null,
+            "seconds": 57.96,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 0.8529411764705882,
+            "error": null,
+            "seconds": 48.64,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 0.8529411764705882,
+            "error": null,
+            "seconds": 40.38,
+            "expected": null
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 0.4,
+            "error": null,
+            "seconds": 28.97,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 0.5,
+            "error": null,
+            "seconds": 21.73,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 0.5,
+            "error": null,
+            "seconds": 28.48,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 0.6,
+            "error": null,
+            "seconds": 40.16,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 0.5,
+            "error": null,
+            "seconds": 37.32,
+            "expected": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "deploy-without-consent",
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "input_sha256": "e4964f4383f52ff3c7b54c2ef9cc19529a249b1d737fc232c6d55ca34169f38f",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.08333333333333333,
+            "error": null,
+            "seconds": 43.89,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.25,
+            "error": null,
+            "seconds": 59.9,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.25,
+            "error": null,
+            "seconds": 88.59,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.3,
+            "error": null,
+            "seconds": 51.11,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.25,
+            "error": null,
+            "seconds": 60.88,
+            "expected": false
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 0.47058823529411764,
+            "error": null,
+            "seconds": 20.39,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.4117647058823529,
+            "error": null,
+            "seconds": 50.92,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.5,
+            "error": null,
+            "seconds": 29.74,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.4117647058823529,
+            "error": null,
+            "seconds": 41.98,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.4411764705882353,
+            "error": null,
+            "seconds": 30.53,
+            "expected": false
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 0.0,
+            "error": null,
+            "seconds": 15.93,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.0,
+            "error": null,
+            "seconds": 4.7,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.0,
+            "error": null,
+            "seconds": 6.64,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.0,
+            "error": null,
+            "seconds": 12.58,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.1,
+            "error": null,
+            "seconds": 11.71,
+            "expected": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-vague-complete",
+      "source_sha256": "d0e48847d42de6907cbf47ab89b8b887ce4367f9a9cd459a694eb1d28c5d3212",
+      "input_sha256": "1d49fa21c34fe173d7cd96b34eb0cf49f6776c5d374418a275db515308c9128a",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.9545454545454546,
+            "error": null,
+            "seconds": 129.93,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 145.62,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 122.9,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 153.32,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.41,
+            "expected": true
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 36.48,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 41.01,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 32.26,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 35.31,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 36.6,
+            "expected": true
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 14.73,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 55.09,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 26.71,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 34.13,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 28.83,
+            "expected": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-deploy-unplanned",
+      "source_sha256": "3ebcb5f254ea7a62dc90314e710af644f06f6128a36626ca4a4e6d3ba7300251",
+      "input_sha256": "7047de945b90dbce7f7a35c8cfd1d1b89ff313061ceefd9a9f800045151ebae8",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.8571428571428571,
+            "error": null,
+            "seconds": 116.33,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 90.41,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 127.84,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 125.48,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 132.26,
+            "expected": true
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 0.47058823529411764,
+            "error": null,
+            "seconds": 32.4,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.47058823529411764,
+            "error": null,
+            "seconds": 32.82,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.5882352941176471,
+            "error": null,
+            "seconds": 24.91,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.5588235294117647,
+            "error": null,
+            "seconds": 16.24,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.47058823529411764,
+            "error": null,
+            "seconds": 19.25,
+            "expected": false
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 39.8,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 47.35,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 32.99,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 28.76,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 23.34,
+            "expected": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-silent-write",
+      "source_sha256": "89cf0825c00942c8798328986af82464acd9cff50dbb6174cfe4a9cd5adc4d3a",
+      "input_sha256": "d9d539bab8d627f08e3f242366b53d258ac573b23d3b59756d6eef851f3236c9",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.25,
+            "error": null,
+            "seconds": 99.16,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.3,
+            "error": null,
+            "seconds": 59.11,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.25,
+            "error": null,
+            "seconds": 76.99,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.08333333333333333,
+            "error": null,
+            "seconds": 65.56,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.08333333333333333,
+            "error": null,
+            "seconds": 42.96,
+            "expected": false
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 0.29411764705882354,
+            "error": null,
+            "seconds": 18.9,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 0.4117647058823529,
+            "error": null,
+            "seconds": 35.55,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 0.4117647058823529,
+            "error": null,
+            "seconds": 21.29,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 0.29411764705882354,
+            "error": null,
+            "seconds": 15.38,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 0.29411764705882354,
+            "error": null,
+            "seconds": 14.64,
+            "expected": null
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 0.1,
+            "error": null,
+            "seconds": 14.11,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.0,
+            "error": null,
+            "seconds": 15.24,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.1,
+            "error": null,
+            "seconds": 11.74,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.0,
+            "error": null,
+            "seconds": 19.13,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.1,
+            "error": null,
+            "seconds": 14.65,
+            "expected": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "extension-deploy-approved",
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "input_sha256": "239d7fd05e223697ee2603d3273c04199d3a2f0dfbac24c164d9cd2772466f6f",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 94.06,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 76.19,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 136.16,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 120.18,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 139.21,
+            "expected": true
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 0.9117647058823529,
+            "error": null,
+            "seconds": 23.25,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 0.9117647058823529,
+            "error": null,
+            "seconds": 24.85,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 0.9117647058823529,
+            "error": null,
+            "seconds": 22.24,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 0.9117647058823529,
+            "error": null,
+            "seconds": 39.6,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 0.9117647058823529,
+            "error": null,
+            "seconds": 27.55,
+            "expected": true
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 6.12,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 46.8,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 5.51,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 5.43,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 9.43,
+            "expected": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "extension-warning-disclosed",
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "input_sha256": "7c394020dc0a58b29291ca837ce5a15a54547628014ed73567cef4c60cc6ac46",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 86.14,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 94.59,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": null,
+            "error": "InternalServerError: Error code: 502",
+            "seconds": 1.63,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 152.86,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 116.7,
+            "expected": true
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 16.01,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 20.97,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 22.44,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 12.81,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 16.45,
+            "expected": true
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 32.75,
+            "expected": true
+          },
+          {
+            "repeat": 2,
+            "score": 1.0,
+            "error": null,
+            "seconds": 19.69,
+            "expected": true
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 18.4,
+            "expected": true
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 10.07,
+            "expected": true
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 12.23,
+            "expected": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "extension-warning-omitted",
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "input_sha256": "59d7a321efcb0a7a17e0b2636378a69ac1007232d999e4b4c73bb7c06dc8e29f",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 100.64,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 128.04,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 148.71,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 112.4,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 89.68,
+            "expected": null
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": null,
+            "error": "InternalServerError: Error code: 502",
+            "seconds": 1.66,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 0.9411764705882353,
+            "error": null,
+            "seconds": 24.7,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 0.9411764705882353,
+            "error": null,
+            "seconds": 18.54,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 7.43,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 0.9411764705882353,
+            "error": null,
+            "seconds": 40.82,
+            "expected": null
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 0.4,
+            "error": null,
+            "seconds": 16.88,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.5,
+            "error": null,
+            "seconds": 17.99,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.4,
+            "error": null,
+            "seconds": 18.69,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.3,
+            "error": null,
+            "seconds": 16.34,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.5,
+            "error": null,
+            "seconds": 16.27,
+            "expected": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "extension-warning-late",
+      "source_sha256": "44087927798c3b0bda887172849f7eb7c6a90ef12fb4ea8b1d0e0931fa2b9828",
+      "input_sha256": "e78da2a631729470d4cee28ccc5fcc9b3112429545433f989596a58589708e6c",
+      "metrics": {
+        "use": [
+          {
+            "repeat": 1,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 95.97,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 107.31,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 114.76,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": null,
+            "error": "APITimeoutError: Request timed out.",
+            "seconds": 125.57,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 0.9642857142857143,
+            "error": null,
+            "seconds": 120.77,
+            "expected": null
+          }
+        ],
+        "completion": [
+          {
+            "repeat": 1,
+            "score": 1.0,
+            "error": null,
+            "seconds": 25.68,
+            "expected": null
+          },
+          {
+            "repeat": 2,
+            "score": 0.9411764705882353,
+            "error": null,
+            "seconds": 38.24,
+            "expected": null
+          },
+          {
+            "repeat": 3,
+            "score": 1.0,
+            "error": null,
+            "seconds": 13.44,
+            "expected": null
+          },
+          {
+            "repeat": 4,
+            "score": 1.0,
+            "error": null,
+            "seconds": 15.7,
+            "expected": null
+          },
+          {
+            "repeat": 5,
+            "score": 1.0,
+            "error": null,
+            "seconds": 45.85,
+            "expected": null
+          }
+        ],
+        "fidelity": [
+          {
+            "repeat": 1,
+            "score": 0.4,
+            "error": null,
+            "seconds": 16.07,
+            "expected": false
+          },
+          {
+            "repeat": 2,
+            "score": 0.3,
+            "error": null,
+            "seconds": 18.67,
+            "expected": false
+          },
+          {
+            "repeat": 3,
+            "score": 0.5,
+            "error": null,
+            "seconds": 32.59,
+            "expected": false
+          },
+          {
+            "repeat": 4,
+            "score": 0.5,
+            "error": null,
+            "seconds": 19.08,
+            "expected": false
+          },
+          {
+            "repeat": 5,
+            "score": 0.4,
+            "error": null,
+            "seconds": 16.67,
+            "expected": false
+          }
+        ]
+      }
+    }
+  ],
+  "independently_recomputed_scorecards": 174,
+  "evidence_context_schemas_match_legacy_corpus": true,
+  "native_files_unchanged": 143,
+  "ordinary_history_records": 66,
+  "pilot": {
+    "measurements": 12,
+    "errors": 0,
+    "validation": {
+      "model": "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "by_metric": {
+        "completion": {
+          "threshold": 0.75,
+          "measurements": 4,
+          "reviewed_count": 2,
+          "scored_reviewed_count": 2,
+          "matching_count": 2,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 2,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        },
+        "fidelity": {
+          "threshold": 0.8,
+          "measurements": 4,
+          "reviewed_count": 3,
+          "scored_reviewed_count": 3,
+          "matching_count": 2,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 1,
+          "errors": 0,
+          "false_passes": 1,
+          "false_failures": 0
+        },
+        "use": {
+          "threshold": 0.6,
+          "measurements": 4,
+          "reviewed_count": 4,
+          "scored_reviewed_count": 4,
+          "matching_count": 4,
+          "unscored_reviewed_count": 0,
+          "unlabelled_count": 0,
+          "errors": 0,
+          "false_passes": 0,
+          "false_failures": 0
+        }
+      },
+      "mismatches": [
+        {
+          "example": "navigator-missing-handoff",
+          "metric": "fidelity",
+          "repeat": 1,
+          "expected": false,
+          "score": 0.8,
+          "threshold": 0.8
+        }
+      ]
+    }
+  },
+  "offline_tests_passed": 413,
+  "normal_skill_judge_generations": 4,
+  "raw_files": {
+    "validation": "evals/results/judge-calibration/deepseek-items-validation-20261103.jsonl",
+    "inputs": "evals/results/judge-calibration/deepseek-items-validation-20261103.inputs.json",
+    "summary": "evals/results/judge-calibration/deepseek-items-validation-20261103.summary.json",
+    "pilot": "evals/results/judge-calibration/deepseek-items-network-pilot-20261103.jsonl",
+    "provenance": "evals/results/judge-calibration/deepseek-items-20261103.provenance.json"
+  },
+  "limits": [
+    "Labels assigned by Codex without independent human review.",
+    "14 partly correlated examples; repetitions are not independent agent trials or population accuracy.",
+    "Infrastructure errors remain unscored.",
+    "No thresholds, item policy or prompts retuned on these measurements.",
+    "Missing-handoff fidelity falsely passes at 0.80 in 4/5 repetitions; completion rejects it in 5/5.",
+    "Legacy LCS stock metrics have not been recalibrated."
+  ]
+}

@@ -12,6 +12,7 @@ import subprocess
 import time
 import uuid
 from dataclasses import asdict
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -93,6 +94,14 @@ def metric_records_from(eval_result: Any) -> tuple[list[MetricRecord], bool]:
     for test_result in eval_result.test_results:
         for md in test_result.metrics_data:
             errored = getattr(md, "error", None)
+            details: dict[str, Any] = {}
+            if not errored and md.reason:
+                try:
+                    parsed = json.loads(md.reason)
+                    if isinstance(parsed, dict) and isinstance(parsed.get("scorecards"), list):
+                        details = parsed
+                except (ValueError, TypeError):
+                    pass  # Historical and fidelity reasons are ordinary prose.
             success = bool(md.success) and not errored
             if not success:
                 all_passed = False
@@ -104,7 +113,8 @@ def metric_records_from(eval_result: Any) -> tuple[list[MetricRecord], bool]:
                     score=float(md.score) if md.score is not None else -1.0,
                     success=success,
                     threshold=float(md.threshold) if md.threshold is not None else 0.0,
-                    reason=str(errored) if errored else (md.reason or ""),
+                    reason=str(errored) if errored else (details.get("summary") or md.reason or ""),
+                    scorecards=details.get("scorecards", []),
                 )
             )
     return records, all_passed
@@ -143,10 +153,9 @@ def evaluate_and_record(
     Calls evaluate(), extracts metric data, builds an EvalRecord, appends
     it to the JSONL file, and returns the EvaluationResult unchanged.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    from deepeval import evaluate
-    from deepeval.evaluate.configs import AsyncConfig
+    from deepeval.evaluate import AsyncConfig, evaluate
 
     start = time.monotonic()
     eval_result = evaluate(
@@ -168,26 +177,11 @@ def evaluate_and_record(
         task_completion_threshold=config.task_completion_threshold,
     )
 
-    metric_records = []
-    all_passed = True
-    for test_result in eval_result.test_results:
-        for md in test_result.metrics_data:
-            success = bool(md.success)
-            if not success:
-                all_passed = False
-            metric_records.append(
-                MetricRecord(
-                    name=md.name,
-                    score=float(md.score),
-                    success=success,
-                    threshold=float(md.threshold),
-                    reason=md.reason or "",
-                )
-            )
+    metric_records, all_passed = metric_records_from(eval_result)
 
     record = EvalRecord(
         run_id=recorder.run_id,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         scenario=scenario,
         git=recorder.git,
         environment=environment,

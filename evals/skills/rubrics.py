@@ -97,6 +97,11 @@ def _build(name: str, criteria: str, steps: list[str], threshold: float, model: 
     from deepeval.metrics import ConversationalGEval
     from deepeval.test_case.conversational_test_case import MultiTurnParams
 
+    # DeepEval's standard G-Eval prompt requests an integer grade from 0 to 10,
+    # then normalizes by 10. Our wrapper uses the plain-score fallback rather
+    # than token-logprob weighting. Keep this scale when changing the judge.
+    # https://deepeval.com/docs/metrics-llm-evals#rubric
+    # Installed template: conversational_g_eval/templates/generate_evaluation_results.txt
     return ConversationalGEval(
         name=name,
         criteria=criteria,

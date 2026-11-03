@@ -6,6 +6,7 @@ Dataclasses matching the JSONL schema for eval result persistence.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -18,6 +19,8 @@ class MetricRecord:
     threshold: float
     reason: str
     version: str = ""
+    scorecards: list[dict[str, Any]] = field(default_factory=list)
+    """Item ratings, evidence, weights, fractions and caps, when available."""
 
 
 @dataclass

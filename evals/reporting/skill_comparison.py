@@ -12,7 +12,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from evals.reporting.formatting import format_table
+from evals.reporting.formatting import format_metric_score, format_table
 from evals.reporting.models import EvalRecord
 from evals.reporting.observations import AgentObservations, read_agent_observations
 from evals.reporting.reader import record_from_dict
@@ -519,7 +519,7 @@ def render_skill_comparison(report: SkillComparison, fmt: str = "terminal") -> s
     ):
         r = a.record
         scores = [
-            f"{_metric(r, name):.2f}" if _metric(r, name) is not None else "n/a"
+            format_metric_score(next((m for m in r.metrics if m.name == name), None))
             for name in QUALITY_METRICS.values()
         ]
         detail.append(

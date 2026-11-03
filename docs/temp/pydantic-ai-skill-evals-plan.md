@@ -2,6 +2,13 @@
 
 **Status:** implementation plan · **Date:** 2026-10-31 · **Updated:** 2026-11-02
 
+**2026-11-03 follow-up:** the user requested a free EnMaaS DeepSeek judge and
+item-based MCP scoring. The working tree now defaults to DeepSeek with
+`conversation-v3-items`; fidelity remains G-Eval 0–10 / evidence `v2`. References
+below to a fixed Sol judge describe the historical sweeps. See the
+[current scoring contract](../JUDGE-SCORING.md). Preserve historical results;
+new judge/metric configurations need separate validation.
+
 Complement the LightSpeed Core (LCORE) compose stack that `evals/` currently needs with a
 small Pydantic AI agent that wires `rhoai-mcp` over **stdio** and exposes the two
 agentskills.io skills in `.claude/skills/`. The remaining sweep covers **Navigator

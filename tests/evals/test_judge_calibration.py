@@ -8,6 +8,29 @@ from typing import Any
 import pytest
 
 
+@pytest.mark.parametrize(
+    ("argv", "expected_model"),
+    [
+        ([], "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017"),
+        (["--models", "rits/zai-org/glm-5-3"], "rits/zai-org/glm-5-3"),
+    ],
+)
+def test_calibration_defaults_to_free_judge_and_keeps_explicit_selection(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str], expected_model: str
+) -> None:
+    from evals.skills import calibrate
+
+    selected = []
+
+    async def capture(args: Any) -> None:
+        selected.append(args.models)
+
+    monkeypatch.setattr(calibrate, "run", capture)
+
+    assert calibrate.main(argv) == 0
+    assert selected == [expected_model]
+
+
 def test_errors_and_unreviewed_examples_cannot_produce_a_threshold() -> None:
     from evals.skills.calibrate import recommend_threshold, score_summary
 

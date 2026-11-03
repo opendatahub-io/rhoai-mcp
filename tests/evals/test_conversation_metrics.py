@@ -129,6 +129,13 @@ async def test_partial_history_keeps_final_unanswered_user_reply(
 
     class FixedJudge(UnusedJudge):
         def generate(self, _prompt: str, schema: Any = None, **_kwargs: Any) -> Any:
+            from evals.metrics.scorecards import Scorecard
+
+            from tests.evals.test_scorecards import card
+
+            if schema is Scorecard:
+                rubric = _prompt.split("Evaluate the ", 1)[1].split(" dimension", 1)[0]
+                return schema.model_validate(card(rubric))
             return schema(score=0.9, reason="offline contract test")
 
         async def a_generate(self, prompt: str, schema: Any = None, **kwargs: Any) -> Any:
@@ -151,3 +158,48 @@ async def test_partial_history_keeps_final_unanswered_user_reply(
         metric.measure(case, _show_indicator=False)
     assert len(metric.tasks) == 1
     assert "Hold off; do not deploy." in "\n".join(metric.tasks[0].steps_taken)
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize(
+    ("metric_name", "expected_score", "expected_calls"),
+    [("ConversationMCPUseMetric", 23 / 24, 2), ("ConversationTaskCompletionMetric", 33 / 34, 1)],
+)
+async def test_item_scores_drive_real_metric_and_retain_audit_evidence(
+    metric_name: str, expected_score: float, expected_calls: int, async_mode: bool
+) -> None:
+    import json
+
+    from evals.metrics import conversation
+
+    from tests.evals.test_scorecards import card
+
+    class ItemJudge(UnusedJudge):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, prompt: str, schema: Any = None, **_kwargs: Any) -> Any:
+            self.calls += 1
+            rubric = prompt.split("Evaluate the ", 1)[1].split(" dimension", 1)[0]
+            return schema.model_validate(card(rubric, efficiency=1, constraints=1, clarity=1))
+
+        async def a_generate(self, prompt: str, schema: Any = None, **kwargs: Any) -> Any:
+            return self.generate(prompt, schema, **kwargs)
+
+    judge = ItemJudge()
+    metric = getattr(conversation, metric_name)(model=judge, async_mode=False)
+    case = ConversationalTestCase(
+        turns=[Turn(role="user", content="Stop"), Turn(role="assistant", content="Stopped")],
+        mcp_servers=[MCPServer(server_name="offline")],
+    )
+    for _ in range(2):
+        if async_mode:
+            await metric.a_measure(case, _show_indicator=False)
+        else:
+            metric.measure(case, _show_indicator=False)
+        assert metric.score == pytest.approx(expected_score)
+        assert len(metric.scorecards) == expected_calls
+        evidence = json.loads(metric.reason)
+        assert evidence["metric_version"] == conversation.CONVERSATION_METRIC_VERSION
+        assert evidence["scorecards"][0]["items"][0]["evidence"]
+    assert judge.calls == expected_calls * 2  # no extra LLM summary requests

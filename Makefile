@@ -182,7 +182,7 @@ eval-trend: ## Show eval score trends over time
 eval-skills: ## Run Navigator goldens, deterministic checks only (no judge cost)
 	uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
 
-eval-skills-judge: ## Run Navigator goldens with judged metrics (costs money)
+eval-skills-judge: ## Run Navigator with the default EnMaaS DeepSeek judge (agent costs vary)
 	RHOAI_EVAL_SKILL_JUDGE=1 uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
 
 eval-skills-matrix: ## Run Navigator's 2 goldens across 4 EnMaaS models (8 conversations)
@@ -192,7 +192,7 @@ eval-skills-matrix: ## Run Navigator's 2 goldens across 4 EnMaaS models (8 conve
 eval-rescore: ## Re-score saved artifacts, no agent run (usage: make eval-rescore ARGS="--run <id> --judge")
 	uv run --group skill-eval python -m evals.skills.rescore $(ARGS)
 
-eval-calibrate: ## Repeated EnMaaS-only scoring of reviewed frozen examples (costs money)
+eval-calibrate: ## Score frozen examples with EnMaaS DeepSeek by default; no agent run
 	uv run --group skill-eval python -m evals.skills.calibrate $(ARGS)
 
 eval-show: ## Print a saved attempt's trajectory (usage: make eval-show ARGS="--attempt <id>")

@@ -24,6 +24,7 @@ from typing import Any
 
 from evals.agent.models import ENMAAS_BASE_URL
 from evals.agent.transcript import AgentTranscript, AttemptArtifact, ToolCallRecord, TranscriptTurn
+from evals.config import DEFAULT_JUDGE_MODEL
 from evals.skills.rescore import find_artifacts
 
 
@@ -441,6 +442,7 @@ async def run(args: argparse.Namespace) -> Path:
         ConversationMCPUseMetric,
         ConversationTaskCompletionMetric,
     )
+    from evals.metrics.scorecards import RUBRICS
     from evals.providers.judge import OpenAIJudgeLLM
     from evals.skills.goldens import GOLDENS_BY_ID, RUBRIC_VERSION
     from evals.skills.rubrics import create_fidelity_metric
@@ -550,6 +552,7 @@ async def run(args: argparse.Namespace) -> Path:
                     tool_details=getattr(metric, "tools_scores_reasons_list", None),
                     argument_details=getattr(metric, "args_scores_reasons_list", None),
                     completion_details=getattr(metric, "scores_reasons_list", None),
+                    scorecards=getattr(metric, "scorecards", []),
                 )
             except Exception as exc:  # noqa: BLE001 - retain failed judgings as evidence
                 row["error"] = f"{type(exc).__name__}: {exc}"
@@ -581,6 +584,10 @@ async def run(args: argparse.Namespace) -> Path:
         snapshot = {
             "id": example.id,
             "rubric_version": RUBRIC_VERSION,
+            "metric_version": "stock" if args.stock else CONVERSATION_METRIC_VERSION,
+            "scorecard_rubrics": {}
+            if args.stock
+            else {name: [asdict(c) for c in items] for name, items in RUBRICS.items()},
             "source_sha256": fingerprint,
             "transcript": asdict(transcript),
             "context": context,
@@ -590,7 +597,14 @@ async def run(args: argparse.Namespace) -> Path:
             json.dumps(
                 {
                     key: snapshot[key]
-                    for key in ("transcript", "context", "schemas", "rubric_version")
+                    for key in (
+                        "transcript",
+                        "context",
+                        "schemas",
+                        "rubric_version",
+                        "metric_version",
+                        "scorecard_rubrics",
+                    )
                 },
                 sort_keys=True,
             ).encode()
@@ -628,7 +642,7 @@ async def run(args: argparse.Namespace) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--models", default="gpt-5.6-sol,gpt-6.1-sol")
+    parser.add_argument("--models", default=DEFAULT_JUDGE_MODEL)
     parser.add_argument(
         "--case",
         action="append",

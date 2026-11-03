@@ -9,7 +9,7 @@ import pytest
 
 class TestEnMaaSJudge:
     @patch("evals.providers.judge.OpenAIJudgeLLM")
-    def test_default_judge_stays_on_enmaas(
+    def test_default_judge_uses_deepseek_on_enmaas(
         self, mock_judge: MagicMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from evals.config import EvalConfig
@@ -19,7 +19,7 @@ class TestEnMaaSJudge:
         config = EvalConfig(_env_file=None, _env_prefix="RHOAI_TEST_")
         create_judge_llm(config)
         mock_judge.assert_called_once_with(
-            model_name="gpt-6.1-sol",
+            model_name="rits/deepseek-ai/DeepSeek-V4.1-Flash-1017",
             api_key="gateway-key",
             base_url="https://api.enmaas.devshift.net/v1",
         )

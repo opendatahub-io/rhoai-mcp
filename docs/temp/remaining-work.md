@@ -2,6 +2,12 @@
 
 **Status:** living checklist · **Updated:** 2026-11-02
 **Parent plan:** [`pydantic-ai-skill-evals-plan.md`](./pydantic-ai-skill-evals-plan.md)
+
+**2026-11-03 cost/scoring update:** the user selected EnMaaS DeepSeek as the
+default judge. MCP metrics now use item scorecards (`conversation-v3-items`);
+fidelity keeps its 0–10 G-Eval grade and evidence version `v2`. The Sol
+calibration/sweep evidence below remains historical. See the
+[current contract](../JUDGE-SCORING.md) and [judge screening](./eval-plan-completion-and-free-judges.md).
 **Phase 0 findings:** [`phase0-model-probe.md`](./phase0-model-probe.md)
 
 What is built, what is not, and what order the remainder is worth doing in.

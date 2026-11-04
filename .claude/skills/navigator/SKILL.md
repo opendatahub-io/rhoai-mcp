@@ -65,7 +65,7 @@ Adapt based on what the customer provided when invoking `/navigator`:
   > "I'll help you find the right model for your use case in three steps:
   > 1. **Understand your requirements** — tell me what you're building and I'll ask a few quick questions
   > 2. **Confirm workload profile** — I'll show you the planner's workload model so you can confirm the response time targets before recommendations are fetched
-  > 3. **Model recommendations** — I'll query the llm-d planner and show you the top options ranked by cost, performance, and quality against your cluster's actual GPU availability
+  > 3. **Model recommendations** — I'll query the llm-d planner and show you the top options ranked by cost, performance, and quality using your cluster's GPU types as a filter
   >
   > Once you've picked a model, I'll tell you exactly how to continue with `/navigator-deploy` to find the optimal GPU configuration and deploy it.
   >
@@ -175,9 +175,9 @@ Track whether this call was **cluster-constrained** (`cluster_gpu_types` non-emp
 
 **Step 3 — Fallback (cluster-constrained calls only).**
 
-If Step 2 was cluster-constrained and a slot returned `None` (no match on cluster hardware), make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ requires new hardware" in the Cluster fit row.
+If Step 2 was cluster-constrained and a slot has no recommendation, make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ no cluster-constrained match" in the Cluster fit row. The constrained call found no recommendation under the current requirements and GPU filter; it does not establish that new hardware is needed.
 
-If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A `None` slot from an unconstrained call means the planner found no result for this SLO/use-case combination — show "—" in that slot (not a hardware miss).
+If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A missing slot from an unconstrained call means the planner found no result under the current requirements — show "—" in that slot.
 
 **Build the table only after all slots have data (or confirmed "—").** Fill in this exact template — replace every `[value]` and `[cluster fit]` placeholder. Do not add, remove, or rename any row or column.
 
@@ -195,7 +195,7 @@ If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A 
 **Cluster fit labels:** Replace each `[cluster fit]` with exactly one of these labels, independently for each column:
 
 - `Available ✓` — slot filled by a cluster-constrained call; a GPU of this type is present in the cluster. The GPU count per replica is not checked.
-- `⚠ requires new hardware` — slot filled by the unconstrained fallback (Step 3); cluster lacks this GPU
+- `⚠ no cluster-constrained match` — slot filled by the unconstrained fallback (Step 3); no recommendation matched the current requirements with the cluster GPU filter
 - `⚠ cluster GPU unknown` — slot filled by an unconstrained call because GPU inventory could not be determined; hardware availability unverified
 - `—` — no recommendation is available for that slot
 
@@ -211,9 +211,9 @@ Round the quality threshold up to an integer: a current score of 27.1 requires `
 
 If a re-run returns no result, show "—" in that slot and explain that no match was returned under that query's constraints. Do not infer that no cheaper, faster, or higher-quality alternatives exist.
 
-Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English. For fallback slots, note that the recommendation requires hardware not currently in the cluster.
+Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English. For fallback slots, note that the displayed recommendation came from an unconstrained call after the cluster-constrained call found no match under the current requirements.
 
-Suggest a default based on the customer's stated priority, favouring cluster-available options. Ask them to confirm which model to proceed with.
+Suggest a default based on the customer's stated priority, favouring recommendations returned by the cluster-constrained call. Ask them to confirm which model to proceed with.
 
 **Wait for the customer's confirmation before proceeding.**
 

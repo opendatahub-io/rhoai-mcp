@@ -17,6 +17,7 @@ from rhoai_mcp.composites.planner.client import (
     CATEGORY_MAP,
     PlannerAPIError,
     _apply_priority_overrides,
+    _filter_by_gpu,
     _parse_recommendation,
 )
 from rhoai_mcp.composites.planner.models import (
@@ -231,6 +232,13 @@ class LocalPlannerClient:
             latency_list = ranked_data.get("lowest_latency", [])
             quality_list = ranked_data.get("best_quality", [])
 
+            if gpu_types_override:
+                allowed = set(gpu_types_override)
+                balanced_list = _filter_by_gpu(balanced_list, allowed)
+                cost_list = _filter_by_gpu(cost_list, allowed)
+                latency_list = _filter_by_gpu(latency_list, allowed)
+                quality_list = _filter_by_gpu(quality_list, allowed)
+
             top_balanced = _parse_recommendation(balanced_list[0]) if balanced_list else None
             top_cost = _parse_recommendation(cost_list[0]) if cost_list else None
             top_performance = _parse_recommendation(latency_list[0]) if latency_list else None
@@ -335,6 +343,8 @@ class LocalPlannerClient:
             ranked_data = ranked.model_dump()
 
             category_list = ranked_data.get(category_key, [])
+            if preferred_gpu_types:
+                category_list = _filter_by_gpu(category_list, set(preferred_gpu_types))
             if not category_list:
                 raise PlannerAPIError(
                     status_code=404,

@@ -210,6 +210,60 @@ class TestLocalPlannerRecommend:
         assert result.total_configs_evaluated == 2847
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_gpu_override_filters_every_category(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """Only requested GPU types can appear in category selections."""
+        mock_planner = _make_mock_planner()
+        ranked_data = mock_planner.generate_recommendations.return_value.model_dump.return_value
+        h100_rec = ranked_data["balanced"][0]
+        a100_gpu_config = {"gpu_type": "NVIDIA-A100-80", "gpu_count": 1}
+        a100_rec = {
+            **h100_rec,
+            "gpu_config": a100_gpu_config,
+            "configuration": {**h100_rec["configuration"], "gpu_config": a100_gpu_config},
+        }
+        ranked_data["balanced"] = [h100_rec, a100_rec]
+        ranked_data["lowest_cost"] = [h100_rec]
+        ranked_data["lowest_latency"] = [a100_rec, h100_rec]
+        ranked_data["best_quality"] = [h100_rec]
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=50,
+            gpu_types_override=["A100-80"],
+        )
+
+        assert result.top_balanced is not None
+        assert result.top_balanced.gpu_config.gpu_type == "NVIDIA-A100-80"
+        assert result.top_cost is None
+        assert result.top_performance is not None
+        assert result.top_performance.gpu_config.gpu_type == "NVIDIA-A100-80"
+        assert result.top_quality is None
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_empty_gpu_override_leaves_rankings_unfiltered(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """An empty GPU list allows the planner's unrestricted rankings."""
+        mock_planner = _make_mock_planner()
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=50,
+            gpu_types_override=[],
+        )
+
+        assert result.top_balanced is not None
+        assert result.top_balanced.gpu_config.gpu_type == "NVIDIA-H100"
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_recommend_missing_overrides_raises(self, mock_planner_cls: MagicMock) -> None:
         """Missing required overrides raises PlannerAPIError(400)."""
         client = LocalPlannerClient()
@@ -420,6 +474,32 @@ class TestLocalPlannerGenerateConfig:
             )
 
         assert exc_info.value.status_code == 404
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_generate_config_gpu_override_rejects_unsupported(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """No deployment is generated from an out-of-filter recommendation."""
+        mock_planner = _make_mock_planner()
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        with pytest.raises(PlannerAPIError, match="No recommendation found") as exc_info:
+            await client.generate_config(
+                category="balanced",
+                use_case="chatbot_conversational",
+                user_count=50,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=150,
+                itl_target_ms=65,
+                e2e_target_ms=2000,
+                preferred_gpu_types=["A100-80"],
+            )
+
+        assert exc_info.value.status_code == 404
+        mock_planner.generate_deployment.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_generate_config_no_files_raises(self, mock_planner_cls: MagicMock) -> None:

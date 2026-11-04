@@ -212,3 +212,5 @@ __marimo__/
 evals/reports/
 evals/results/
 .env.eval
+
+.deepeval

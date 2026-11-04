@@ -205,7 +205,10 @@ dependency bot updates it directly (it is listed in `ignorePaths`).
 dependency PRs) must run `make generate-requirements-cpu` and commit the
 regenerated `requirements-cpu.txt` before merging.** The
 [`check-requirements-cpu`](.github/workflows/check-requirements-cpu.yml)
-workflow regenerates the file and fails on drift.
+workflow regenerates the file and fails when the drift exceeds SemVer
+tolerance: added or removed packages, major or minor version changes on
+non-0.x packages, or a changed index URL. Patch-level and 0.x drift are
+tolerated.
 
 ## Questions?
 

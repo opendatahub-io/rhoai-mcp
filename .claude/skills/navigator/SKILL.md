@@ -194,7 +194,7 @@ If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A 
 
 **Cluster fit labels:** Replace each `[cluster fit]` with exactly one of these labels, independently for each column:
 
-- `Available ✓` — slot filled by a cluster-constrained call; hardware is confirmed available
+- `Available ✓` — slot filled by a cluster-constrained call; a GPU of this type is present in the cluster. The GPU count per replica is not checked.
 - `⚠ requires new hardware` — slot filled by the unconstrained fallback (Step 3); cluster lacks this GPU
 - `⚠ cluster GPU unknown` — slot filled by an unconstrained call because GPU inventory could not be determined; hardware availability unverified
 - `—` — no recommendation is available for that slot

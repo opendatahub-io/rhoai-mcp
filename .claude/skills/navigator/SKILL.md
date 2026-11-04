@@ -160,6 +160,8 @@ If `get_cluster_resources` is unavailable, fails, or returns missing, empty, or 
 
 **Wait for the customer's answer before calling `recommend_model`.** Tool unavailability alone is not permission to recommend without a hardware filter.
 
+Confirming the Phase 2 workload/SLOs or saying "go ahead" does not answer the GPU question. If the customer only confirms those requirements, ask for GPU types again and wait. Proceed without a GPU filter only if the customer says they do not know their GPU types or explicitly requests unfiltered recommendations.
+
 - If they provide GPU types → map them using the table above, set `cluster_gpu_types` to those values, and proceed to Step 2. Ask for clarification if a supplied type is ambiguous or unsupported.
 - If they say they don't know or explicitly request unfiltered recommendations → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`).
 

@@ -122,23 +122,26 @@ jobs:
     needs: [discover, check-rhds-branch, check-model-metadata-imageref, check-requirements-cpu-index]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Send job results to Slack
         env:
-          WEBHOOK_URL: ${{ secrets.MMORTARI_WORKFLOW_SLACK_WEBHOOK }}
+          MMORTARI_WORKFLOW_SLACK_WEBHOOK: ${{ secrets.MMORTARI_WORKFLOW_SLACK_WEBHOOK }}
           JOBS: ${{ toJSON(needs) }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "$WEBHOOK_URL" ]]; then
+          if [[ -z "$MMORTARI_WORKFLOW_SLACK_WEBHOOK" ]]; then
             echo '::error::MMORTARI_WORKFLOW_SLACK_WEBHOOK is not available'
             exit 1
           fi
-          payload=$(jq -n --argjson jobs "$JOBS" --arg url "$RUN_URL" '
-            {text: ("check-others failed: " + $url + "\n" +
+          payload=$(jq -n --argjson jobs "$JOBS" '
+            {text: ("check-others failed\n" +
               ($jobs | to_entries | map("\(.key): \(.value.result)") | join("\n")))}
           ')
-          curl --fail --silent --show-error \
+          if ! curl --fail --silent --max-time 30 \
             -H 'Content-Type: application/json' \
-            --data "$payload" "$WEBHOOK_URL"
+            --data "$payload" "$MMORTARI_WORKFLOW_SLACK_WEBHOOK" > /dev/null 2>&1; then
+            echo '::error::Failed to send Slack notification'
+            exit 1
+          fi

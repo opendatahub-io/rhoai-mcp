@@ -60,6 +60,7 @@ def _make_mock_planner() -> MagicMock:
             {
                 "model_id": "meta-llama/Llama-3.1-70B-Instruct",
                 "model_name": "Llama 3.1 70B",
+                "model_uri": "hf://meta-llama/Llama-3.1-70B-Instruct",
                 "gpu_config": {
                     "gpu_type": "NVIDIA-H100",
                     "gpu_count": 2,
@@ -361,6 +362,14 @@ class TestLocalPlannerGenerateConfig:
         assert result.deployment_id == "chatbot-llama-20260322"
         assert result.namespace == "default"
         assert result.model_name == "Llama 3.1 70B"
+        assert result.model_id == "meta-llama/Llama-3.1-70B-Instruct"
+        assert result.model_uri == "hf://meta-llama/Llama-3.1-70B-Instruct"
+        assert result.gpu_config == {
+            "gpu_type": "NVIDIA-H100",
+            "gpu_count": 2,
+            "tensor_parallel": 2,
+            "replicas": 1,
+        }
         assert "inferenceservice" in result.configs
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")

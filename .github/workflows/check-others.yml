@@ -117,3 +117,31 @@ jobs:
             exit 1
           fi
           printf 'requirements-cpu.txt --index-url verified: %s\n' "$actual"
+
+  notify-failure:
+    needs: [discover, check-rhds-branch, check-model-metadata-imageref, check-requirements-cpu-index]
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Send job results to Slack
+        env:
+          MMORTARI_WORKFLOW_SLACK_WEBHOOK: ${{ secrets.MMORTARI_WORKFLOW_SLACK_WEBHOOK }}
+          JOBS: ${{ toJSON(needs) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$MMORTARI_WORKFLOW_SLACK_WEBHOOK" ]]; then
+            echo '::error::MMORTARI_WORKFLOW_SLACK_WEBHOOK is not available'
+            exit 1
+          fi
+          payload=$(jq -n --argjson jobs "$JOBS" '
+            {text: ("check-others failed\n" +
+              ($jobs | to_entries | map("\(.key): \(.value.result)") | join("\n")))}
+          ')
+          if ! curl --fail --silent --max-time 30 \
+            -H 'Content-Type: application/json' \
+            --data "$payload" "$MMORTARI_WORKFLOW_SLACK_WEBHOOK" > /dev/null 2>&1; then
+            echo '::error::Failed to send Slack notification'
+            exit 1
+          fi

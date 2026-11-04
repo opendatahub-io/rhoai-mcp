@@ -169,13 +169,17 @@ If `get_cluster_resources` is unavailable, fails, or returns missing, empty, or 
 recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[<cluster_gpu_types>])
 ```
 
-Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`). Map response slots: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
+Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`).
+
+**Check every `recommend_model` response before using it.** Immediately after the primary call, the fallback call, and any duplicate-slot re-run below, check whether the response contains an `error` field. If it does, report the planner failure (including the `error` and any `hint`) to the customer and stop recommendation processing. Do not classify an error as a missing slot, make another recommendation call, build the table, or suggest relaxing requirements based on that error.
+
+Only after a successful call, map response slots: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
 
 Track whether this call was **cluster-constrained** (`cluster_gpu_types` non-empty) or **unconstrained** (`cluster_gpu_types = []`), as the Cluster fit label depends on it.
 
 **Step 3 — Fallback (cluster-constrained calls only).**
 
-If Step 2 was cluster-constrained and a slot has no recommendation, make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ no cluster-constrained match" in the Cluster fit row. The constrained call found no recommendation under the current requirements and GPU filter; it does not establish that new hardware is needed.
+If Step 2 succeeded, was cluster-constrained, and a slot has no recommendation, make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ no cluster-constrained match" in the Cluster fit row. The constrained call found no recommendation under the current requirements and GPU filter; it does not establish that new hardware is needed.
 
 If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A missing slot from an unconstrained call means the planner found no result under the current requirements — show "—" in that slot.
 
@@ -257,7 +261,7 @@ This skill ends here. Do not attempt to plan or execute a deployment.
 | `get_use_case_defaults` | 2 | SLO targets and workload profile for the use case |
 | `get_expected_rps` | 2 | Expected and peak RPS for the user count |
 | `get_cluster_resources` | 3 | Discover cluster GPU inventory before calling recommend_model |
-| `recommend_model` | 3 | Ranked model slots — called with cluster GPUs, then unconstrained for any empty slots |
+| `recommend_model` | 3 | Ranked model slots — called with cluster GPUs, then unconstrained for missing slots only after a successful constrained call |
 
 ### Supporting tools
 | Tool | When to use |

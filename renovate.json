@@ -15,6 +15,17 @@
       ],
       "groupName": "major updates",
       "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Do not propose major updates to mcp or kubernetes until the migration is planned",
+      "matchPackageNames": [
+        "mcp",
+        "kubernetes"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
     }
   ]
 }

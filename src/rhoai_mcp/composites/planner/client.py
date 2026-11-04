@@ -93,7 +93,8 @@ def _gpu_type_matches(rec_data: dict[str, Any], allowed: set[str]) -> bool:
     gpu_type = gpu_config.get("gpu_type") if isinstance(gpu_config, dict) else None
     if not isinstance(gpu_type, str):
         return False
-    return bool(set(normalize_gpu_types([gpu_type])) & allowed)
+    normalized_gpu_types = set(normalize_gpu_types([gpu_type]))
+    return bool(normalized_gpu_types) and normalized_gpu_types <= allowed
 
 
 def _filter_by_gpu(recs: list[dict[str, Any]], allowed: set[str]) -> list[dict[str, Any]]:

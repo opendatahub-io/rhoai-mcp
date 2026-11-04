@@ -203,9 +203,11 @@ If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A 
 |---|---|
 | Cost | `max_cost_per_month=<current_cost * 0.7>` |
 | Performance | `ttft_max_ms=<current_ttft * 0.7>` |
-| Quality | `min_quality=<current_quality_score + 5>` |
+| Quality | `min_quality=<ceil(current_quality_score + 5)>` |
 
-If a re-run returns no result, show "—" in that slot and note why.
+Round the quality threshold up to an integer: a current score of 27.1 requires `min_quality=33`.
+
+If a re-run returns no result, show "—" in that slot and explain that no match was returned under that query's constraints. Do not infer that no cheaper, faster, or higher-quality alternatives exist.
 
 Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English. For fallback slots, note that the recommendation requires hardware not currently in the cluster.
 
@@ -213,7 +215,7 @@ Suggest a default based on the customer's stated priority, favouring cluster-ava
 
 **Wait for the customer's confirmation before proceeding.**
 
-**If a slot is missing from the response:** Show "—" in that column and ask the customer if they want to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count.
+**If a slot is missing or a duplicate-slot re-run returns no result:** Show "—" in that column and ask the customer if they want to relax one constraint — raise latency tolerance, raise cost ceiling, or reduce user count.
 
 ---
 

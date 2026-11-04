@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -188,6 +189,57 @@ class TestLocalPlannerClientInit:
 
 class TestLocalPlannerRecommend:
     """Tests for LocalPlannerClient.recommend()."""
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_filters_all_slots_by_requested_gpu(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """Planner fallback GPUs cannot fill cluster-constrained recommendation slots."""
+        mock_planner = _make_mock_planner()
+        ranked = mock_planner.generate_recommendations.return_value.model_dump.return_value
+        h100 = ranked["balanced"][0]
+        l4 = deepcopy(h100)
+        l4["gpu_config"]["gpu_type"] = "NVIDIA-L4"
+        l4["configuration"]["gpu_config"]["gpu_type"] = "NVIDIA-L4"
+        ranked["balanced"] = [l4, h100]
+        ranked["lowest_cost"] = [l4, h100]
+        ranked["lowest_latency"] = [l4, h100]
+        ranked["best_quality"] = [l4]
+        mock_planner_cls.return_value = mock_planner
+
+        result = await LocalPlannerClient().recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=1000,
+            gpu_types_override=["H100"],
+        )
+
+        for recommendation in (result.top_balanced, result.top_cost, result.top_performance):
+            assert recommendation is not None
+            assert recommendation.gpu_config is not None
+            assert recommendation.gpu_config.gpu_type == "NVIDIA-H100"
+        assert result.top_quality is None
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_empty_gpu_list_keeps_fallback(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """An explicit unconstrained request can return the planner's fallback GPU."""
+        mock_planner = _make_mock_planner()
+        ranked = mock_planner.generate_recommendations.return_value.model_dump.return_value
+        ranked["balanced"][0]["gpu_config"]["gpu_type"] = "NVIDIA-L4"
+        mock_planner_cls.return_value = mock_planner
+
+        result = await LocalPlannerClient().recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=1000,
+            gpu_types_override=[],
+        )
+
+        assert result.top_balanced is not None
+        assert result.top_balanced.gpu_config is not None
+        assert result.top_balanced.gpu_config.gpu_type == "NVIDIA-L4"
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_recommend_full_flow(self, mock_planner_cls: MagicMock) -> None:

@@ -8,7 +8,7 @@ SKILL = Path(__file__).resolve().parents[1] / ".claude/skills/navigator-deploy/S
 def test_gpu_discovery_fallback_handles_unavailable_tool_and_unknown_inventory() -> None:
     """Hardware discovery must ask before running an unconstrained recommendation."""
     phase = (
-        SKILL.read_text()
+        SKILL.read_text(encoding="utf-8")
         .split("## Phase 3 — Get ranked configurations", 1)[1]
         .split("## Phase 4 — Deployment plan", 1)[0]
     )

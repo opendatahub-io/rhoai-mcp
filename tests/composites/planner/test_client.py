@@ -140,6 +140,8 @@ SAMPLE_RANKED_RESPONSE = {
     ("gpu_type", "allowed", "matches"),
     [
         ("NVIDIA-A100-80GB", {"A100-80"}, True),
+        ("NVIDIA-A100-80GB", {"A100-80GB"}, True),
+        ("NVIDIA-A100-80GB", {"NVIDIA-A100-80GB"}, True),
         ("NVIDIA-A100-SXM4-80GB", {"A100-80"}, True),
         ("NVIDIA-A100-40GB", {"A100-80"}, False),
         ("NVIDIA-H100", {"H100"}, True),

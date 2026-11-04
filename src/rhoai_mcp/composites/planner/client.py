@@ -98,7 +98,8 @@ def _gpu_type_matches(rec_data: dict[str, Any], allowed: set[str]) -> bool:
 
 def _filter_by_gpu(recs: list[dict[str, Any]], allowed: set[str]) -> list[dict[str, Any]]:
     """Filter a recommendation list to only those with a GPU type in allowed."""
-    return [r for r in recs if _gpu_type_matches(r, allowed)]
+    normalized_allowed = set(normalize_gpu_types(list(allowed)))
+    return [r for r in recs if _gpu_type_matches(r, normalized_allowed)]
 
 
 class PlannerConnectionError(Exception):

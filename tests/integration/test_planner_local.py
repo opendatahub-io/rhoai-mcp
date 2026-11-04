@@ -351,6 +351,67 @@ async def test_generate_config_invalid_category(local_client: LocalPlannerClient
     assert exc_info.value.status_code == 400
 
 
+@pytest.mark.parametrize("with_canonical_h100", [False, True])
+async def test_vendor_prefixed_gpu_is_ranked_before_category_limit(
+    with_canonical_h100: bool,
+) -> None:
+    """A compatible GPU must survive the planner's top-10 cutoff in both flows."""
+    client = LocalPlannerClient()
+    repo = client._planner._benchmark_repo
+    rows_by_model = {}
+    for row in repo.get_all_benchmarks():
+        if (
+            row.hardware == "H100"
+            and row.hardware_count == 1
+            and (row.prompt_tokens, row.output_tokens) == (512, 256)
+        ):
+            rows_by_model.setdefault(row.model_hf_repo, row)
+    assert len(rows_by_model) >= 13
+
+    rows = list(rows_by_model.values())[:13]
+    benchmarks = [
+        {**row.to_dict(), "hardware": "A100-80" if i < 11 else "NVIDIA-H100"}
+        for i, row in enumerate(rows[:12])
+    ]
+    if with_canonical_h100:
+        benchmarks.append({**rows[12].to_dict(), "hardware_count": 8})
+    repo.reset()
+    repo.load_benchmarks(benchmarks, confidence_level="benchmarked")
+
+    common = {
+        "use_case_override": "chatbot_conversational",
+        "user_count_override": 1,
+        "ttft_override_ms": 5000,
+        "itl_override_ms": 1000,
+        "e2e_override_ms": 100000,
+    }
+    unrestricted = await client.recommend("unused", gpu_types_override=[], **common)
+    assert unrestricted.top_cost is not None
+    assert unrestricted.top_cost.gpu_config.gpu_type == "A100-80"
+
+    constrained = await client.recommend("unused", gpu_types_override=["H100"], **common)
+    assert constrained.top_cost is not None
+    assert constrained.top_cost.gpu_config.gpu_type == "NVIDIA-H100"
+
+    unavailable = await client.recommend("unused", gpu_types_override=["L4"], **common)
+    assert unavailable.top_cost is None
+
+    deployment = await client.generate_config(
+        category="cost",
+        use_case="chatbot_conversational",
+        user_count=1,
+        prompt_tokens=512,
+        output_tokens=256,
+        expected_qps=0.1,
+        ttft_target_ms=5000,
+        itl_target_ms=1000,
+        e2e_target_ms=100000,
+        preferred_gpu_types=["H100"],
+    )
+    assert deployment.model_name == constrained.top_cost.model_name
+    assert deployment.configs
+
+
 # == MCP tool: recommend_model ================================================
 
 

@@ -28,6 +28,24 @@ from rhoai_mcp.composites.planner.models import (
 logger = logging.getLogger(__name__)
 
 
+class _GpuAliasBenchmarkRepository:
+    """Include vendor-prefixed benchmark hardware in Planner's GPU query."""
+
+    def __init__(self, repository: Any) -> None:
+        self._repository = repository
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._repository, name)
+
+    def find_configurations_meeting_slo(self, **kwargs: Any) -> Any:
+        gpu_types = kwargs.get("gpu_types")
+        if gpu_types:
+            kwargs["gpu_types"] = [
+                gpu for gpu_type in gpu_types for gpu in (gpu_type, f"NVIDIA-{gpu_type}")
+            ]
+        return self._repository.find_configurations_meeting_slo(**kwargs)
+
+
 class LocalPlannerClient:
     """Embedded Planner client using in-process library calls.
 
@@ -42,6 +60,9 @@ class LocalPlannerClient:
         model_catalog_url: str | None = None,
     ) -> None:
         self._planner = Planner()
+        self._planner._config_finder.benchmark_repo = _GpuAliasBenchmarkRepository(
+            self._planner._benchmark_repo
+        )
 
         # Pre-seed the gpu_normalizer singleton with the Planner's catalog
         # to avoid a redundant ModelCatalog() construction on first

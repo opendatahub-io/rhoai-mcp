@@ -380,6 +380,9 @@ class LocalPlannerClient:
                 deployment_id=bundle.deployment_id,
                 namespace=bundle.namespace,
                 model_name=model_name,
+                model_id=recommendation.get("model_id"),
+                model_uri=recommendation.get("model_uri"),
+                gpu_config=recommendation.get("gpu_config"),
                 configs=bundle.files,
             )
 

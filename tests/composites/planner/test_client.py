@@ -10,6 +10,7 @@ from rhoai_mcp.composites.planner.client import (
     PlannerAPIError,
     PlannerClient,
     PlannerConnectionError,
+    _filter_by_gpu,
 )
 from rhoai_mcp.composites.planner.models import DeploymentConfigResult
 
@@ -133,6 +134,26 @@ SAMPLE_RANKED_RESPONSE = {
     "configs_after_filters": 542,
     "specification": _SAMPLE_SPECIFICATION,
 }
+
+
+@pytest.mark.parametrize(
+    ("gpu_type", "allowed", "matches"),
+    [
+        ("NVIDIA-A100-80GB", {"A100-80"}, True),
+        ("NVIDIA-A100-SXM4-80GB", {"A100-80"}, True),
+        ("NVIDIA-A100-40GB", {"A100-80"}, False),
+        ("NVIDIA-H100", {"H100"}, True),
+        ("NVIDIA-L4", {"H100"}, False),
+    ],
+)
+def test_filter_by_gpu_uses_planner_gpu_aliases(
+    gpu_type: str, allowed: set[str], matches: bool
+) -> None:
+    """Catalog GPU aliases match only the requested hardware variants."""
+    recommendation = {"gpu_config": {"gpu_type": gpu_type}}
+
+    assert _filter_by_gpu([recommendation], allowed) == ([recommendation] if matches else [])
+
 
 SAMPLE_DEPLOYMENT_BUNDLE = {
     "deployment_id": "chatbot-llama-3-1-70b-20260322143022",

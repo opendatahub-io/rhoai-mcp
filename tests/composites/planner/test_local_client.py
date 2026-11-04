@@ -6,6 +6,7 @@ from copy import deepcopy
 from unittest.mock import MagicMock, patch
 
 import pytest
+from planner.knowledge_base.model_catalog import ModelCatalog
 
 from rhoai_mcp.composites.planner.client import PlannerAPIError
 from rhoai_mcp.composites.planner.local_client import LocalPlannerClient
@@ -30,6 +31,7 @@ _MOCK_USE_CASE_DATA: dict[str, dict[str, object]] = {
 def _make_mock_planner() -> MagicMock:
     """Create a mock Planner instance with standard responses."""
     mock = MagicMock()
+    mock._model_catalog = ModelCatalog()
     mock._spec_service._traffic_gen._usecase_data = _MOCK_USE_CASE_DATA
 
     mock.generate_specification.return_value.model_dump.return_value = {
@@ -189,6 +191,30 @@ class TestLocalPlannerClientInit:
 
 class TestLocalPlannerRecommend:
     """Tests for LocalPlannerClient.recommend()."""
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_keeps_catalog_gpu_alias(self, mock_planner_cls: MagicMock) -> None:
+        """Catalog hardware names remain eligible for a matching short GPU request."""
+        mock_planner = _make_mock_planner()
+        ranked = mock_planner.generate_recommendations.return_value.model_dump.return_value
+        recommendation = ranked["balanced"][0]
+        recommendation["gpu_config"]["gpu_type"] = "NVIDIA-A100-80GB"
+        for category in ("lowest_cost", "lowest_latency", "best_quality"):
+            ranked[category] = [recommendation]
+        mock_planner_cls.return_value = mock_planner
+
+        result = await LocalPlannerClient().recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=1000,
+            gpu_types_override=["A100-80"],
+        )
+
+        for slot in ("top_balanced", "top_cost", "top_performance", "top_quality"):
+            selected = getattr(result, slot)
+            assert selected is not None
+            assert selected.gpu_config is not None
+            assert selected.gpu_config.gpu_type == "NVIDIA-A100-80GB"
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_recommend_filters_all_slots_by_requested_gpu(

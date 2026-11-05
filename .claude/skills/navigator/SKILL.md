@@ -161,7 +161,7 @@ If `get_cluster_resources` is unavailable, fails, or returns missing, empty, or 
 **Wait for the customer's answer before calling `recommend_model`.** Tool unavailability alone is not permission to recommend without a hardware filter.
 
 - If they provide GPU types → map them using the table above, set `cluster_gpu_types` to those values, and proceed to Step 2. Ask for clarification if a supplied type is ambiguous or unsupported.
-- If they say they don't know or explicitly request unfiltered recommendations → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`).
+- If they say they don't know or explicitly request unfiltered recommendations → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`; label these slots "⚠ GPU availability unverified").
 
 **Step 2 — Primary call.**
 
@@ -171,7 +171,7 @@ recommend_model(text="<customer description>", use_case="<value>", user_count=<n
 
 Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`).
 
-**Check every `recommend_model` response before using it.** Immediately after the primary call, the fallback call, and any duplicate-slot re-run below, check whether the response contains an `error` field. If it does, report the planner failure (including the `error` and any `hint`) to the customer and stop recommendation processing. Do not classify an error as a missing slot, make another recommendation call, build the table, or suggest relaxing requirements based on that error.
+**Check every `recommend_model` response before using it.** Immediately after the primary call, the fallback call, and any duplicate-slot re-run below, check whether the response contains an `error` field. If it does, report the planner failure (including the `error` and any `hint`) to the customer and stop recommendation processing. Do not classify an error as a missing slot, make another recommendation call, build the table, or suggest relaxing requirements based on that error. One exception: an `Invalid use_case` error is a recoverable validation error, not a planner failure — call `list_use_cases` for the valid values, confirm the correct one with the customer, and re-run the recommendation call with it.
 
 Only after a successful call, map response slots: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
 
@@ -179,7 +179,7 @@ Track whether this call was **cluster-constrained** (`cluster_gpu_types` non-emp
 
 **Step 3 — Fallback (cluster-constrained calls only).**
 
-If Step 2 succeeded, was cluster-constrained, and a slot has no recommendation, make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ no cluster-constrained match" in the Cluster fit row. The constrained call found no recommendation under the current requirements and GPU filter; it does not establish that new hardware is needed.
+If Step 2 succeeded, was cluster-constrained, and one or more slots have no recommendation, make **one** additional `recommend_model` call with `preferred_gpu_types=[]` (all other parameters unchanged) and use its results for **all** missing slots — a single call returns every slot, so do not make one fallback call per missing slot. Each fallback slot is labelled "⚠ no cluster-constrained match" in the Cluster fit row. The constrained call found no recommendation under the current requirements and GPU filter; it does not establish that new hardware is needed.
 
 If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A missing slot from an unconstrained call means the planner found no result under the current requirements — show "—" in that slot.
 
@@ -200,13 +200,15 @@ If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A 
 
 - `Available ✓` — slot filled by a cluster-constrained call; a GPU of this type is present in the cluster. The GPU count per replica is not checked.
 - `⚠ no cluster-constrained match` — slot filled by the unconstrained fallback (Step 3); no recommendation matched the current requirements with the cluster GPU filter
-- `⚠ cluster GPU unknown` — slot filled by an unconstrained call because GPU inventory could not be determined; hardware availability unverified
+- `⚠ GPU availability unverified` — slot filled by an unconstrained call, either because GPU inventory could not be determined or because the customer chose to skip the hardware filter; no GPU filter was applied
 - `—` — no recommendation is available for that slot
+- A slot filled by a duplicate-slot re-run keeps the Cluster fit label of the call that originally filled it — the re-run uses the same `preferred_gpu_types` as that call, so its cluster-fit meaning is unchanged
 
-**If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint — do not relabel or copy data:
+**If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint and the same `preferred_gpu_types` as the call that filled the slot — do not relabel or copy data:
 
 | Duplicate slot | Tighter constraint to add |
 |---|---|
+| Balanced | `max_cost_per_month=<current_cost>` and `min_quality=<ceil(current_quality_score + 5)>` — same budget, higher quality |
 | Cost | `max_cost_per_month=<current_cost * 0.7>` |
 | Performance | `ttft_max_ms=<current_ttft * 0.7>` |
 | Quality | `min_quality=<ceil(current_quality_score + 5)>` |

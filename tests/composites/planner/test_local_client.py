@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -184,6 +185,26 @@ class TestLocalPlannerClientInit:
 
         assert exc_info.value.status_code == 502
         assert "Model Catalog sync failed" in exc_info.value.detail
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_catalog_normalization_sqlite_error(self, mock_planner_cls: MagicMock) -> None:
+        """SQLite failures after catalog sync preserve the planner error boundary."""
+        mock_planner_cls.return_value.sync_model_catalog.return_value = {
+            "benchmarks_added": 1,
+            "models_added": 1,
+        }
+        db_error = sqlite3.OperationalError("database is locked")
+
+        with (
+            patch.object(LocalPlannerClient, "_normalize_synced_benchmarks", side_effect=db_error),
+            pytest.raises(PlannerAPIError) as exc_info,
+        ):
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        mock_planner_cls.return_value.sync_model_catalog.assert_called_once()
+        assert exc_info.value.status_code == 502
+        assert "Model Catalog benchmark normalization failed" in exc_info.value.detail
+        assert exc_info.value.__cause__ is db_error
 
 
 class TestLocalPlannerRecommend:

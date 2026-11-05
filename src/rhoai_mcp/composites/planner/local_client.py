@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 from typing import Any
 
 from planner import (
@@ -47,7 +48,13 @@ class LocalPlannerClient:
         if model_catalog_url:
             try:
                 result = self._planner.sync_model_catalog(url=model_catalog_url)
-                self._normalize_synced_benchmarks()
+                try:
+                    self._normalize_synced_benchmarks()
+                except sqlite3.Error as e:
+                    raise PlannerAPIError(
+                        status_code=502,
+                        detail=f"Model Catalog benchmark normalization failed: {type(e).__name__}",
+                    ) from e
                 logger.info(
                     "Model Catalog sync: %d benchmarks added, %d models added",
                     result.get("benchmarks_added", 0),

@@ -139,10 +139,11 @@ class TestLocalPlannerClientInit:
             "models_added": 5,
             "errors": [],
         }
-        row = MagicMock(source="model_catalog", hardware="NVIDIA-A100-80GB")
-        row.to_dict.return_value = {"hardware": "NVIDIA-A100-80GB"}
         repo = mock_planner_cls.return_value._benchmark_repo
-        repo.get_all_benchmarks.return_value = [row]
+        conn = repo._get_connection.return_value
+        conn.execute.return_value.fetchall.return_value = [
+            {"id": "catalog-row", "hardware": "NVIDIA-A100-80GB"}
+        ]
 
         LocalPlannerClient(
             model_catalog_url="https://catalog.example.com",
@@ -152,9 +153,11 @@ class TestLocalPlannerClientInit:
             url="https://catalog.example.com",
         )
         mock_planner_cls.return_value.load_bundled_benchmarks.assert_not_called()
-        repo.replace_benchmarks.assert_called_once_with(
-            "model_catalog", [{"hardware": "A100-80"}], confidence_level="benchmarked"
+        conn.executemany.assert_called_once_with(
+            "UPDATE exported_summaries SET hardware = ? WHERE id = ?",
+            [("A100-80", "catalog-row")],
         )
+        repo.replace_benchmarks.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_import_error(self, mock_planner_cls: MagicMock) -> None:

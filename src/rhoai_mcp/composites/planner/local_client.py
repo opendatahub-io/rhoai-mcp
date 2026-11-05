@@ -71,22 +71,22 @@ class LocalPlannerClient:
             self._planner.load_bundled_benchmarks()
 
     def _normalize_synced_benchmarks(self) -> None:
-        """Store catalog GPU aliases under names used by the planner's SQL query."""
+        """Normalize catalog hardware in place, preserving benchmark metadata."""
         from planner.shared.utils import normalize_gpu_types
 
         repo = self._planner._benchmark_repo
-        rows = [row for row in repo.get_all_benchmarks() if row.source == "model_catalog"]
-        benchmarks = []
-        changed = False
+        conn = repo._get_connection()
+        rows = conn.execute(
+            "SELECT id, hardware FROM exported_summaries WHERE source = ?", ("model_catalog",)
+        ).fetchall()
+        updates = []
         for row in rows:
-            benchmark = row.to_dict()
-            names = normalize_gpu_types([row.hardware])
-            if len(names) == 1 and names[0] != row.hardware:
-                benchmark["hardware"] = names[0]
-                changed = True
-            benchmarks.append(benchmark)
-        if changed:
-            repo.replace_benchmarks("model_catalog", benchmarks, confidence_level="benchmarked")
+            names = normalize_gpu_types([row["hardware"]])
+            if len(names) == 1 and names[0] != row["hardware"]:
+                updates.append((names[0], row["id"]))
+        if updates:
+            with conn:
+                conn.executemany("UPDATE exported_summaries SET hardware = ? WHERE id = ?", updates)
 
     def _get_all_use_case_data(self) -> dict[str, Any]:
         """Return the use-case data loaded by the Planner instance."""

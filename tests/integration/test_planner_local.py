@@ -373,14 +373,32 @@ async def test_catalog_gpu_alias_is_ranked_before_category_limit(
         {
             **row.to_dict(),
             "hardware": "NVIDIA-A100-80GB" if i < 11 else "NVIDIA-H100-80GB-HBM3",
+            "type": "model_catalog",
         }
         for i, row in enumerate(rows[:12])
     ]
     if with_canonical_h100:
-        benchmarks.append({**rows[12].to_dict(), "hardware_count": 8})
+        benchmarks.append({**rows[12].to_dict(), "hardware_count": 8, "type": "model_catalog"})
     repo.reset()
     repo.load_benchmarks(benchmarks, source="model_catalog", confidence_level="benchmarked")
+    conn = repo._get_connection()
+    before = {
+        row["id"]: dict(row)
+        for row in conn.execute("SELECT * FROM exported_summaries WHERE source = 'model_catalog'")
+    }
+    assert before
+    assert all(row["type"] == "model_catalog" for row in before.values())
     client._normalize_synced_benchmarks()
+    after = {
+        row["id"]: dict(row)
+        for row in conn.execute("SELECT * FROM exported_summaries WHERE source = 'model_catalog'")
+    }
+    assert after.keys() == before.keys()
+    for row_id, row in after.items():
+        assert row == {
+            **before[row_id],
+            "hardware": "A100-80" if before[row_id]["hardware"] == "NVIDIA-A100-80GB" else "H100",
+        }
     assert {row.hardware for row in repo.get_all_benchmarks()} <= {"A100-80", "H100"}
 
     common = {

@@ -13,6 +13,6 @@ updates:
     ignore:
       # Major migrations need planning; Renovate blocks these too (see renovate.json).
       - dependency-name: "mcp"
-        versions: ["2.x"]
+        update-types: ["version-update:semver-major"]
       - dependency-name: "kubernetes"
-        versions: ["36.x", "37.x"]
+        update-types: ["version-update:semver-major"]

@@ -3,6 +3,8 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
     ModelRecommendation,
@@ -1355,6 +1357,76 @@ class TestPlanDeploymentTool:
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server_with_k8s())
         assert "plan_deployment" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_selected_recommendation_constraints_are_preserved(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        """The plan uses the selected query and checks its exact model and GPU config."""
+        generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_planner_cls.return_value.generate_config = generate_config
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+        result = mock_mcp._registered_tools["plan_deployment"](
+            category="quality",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            preferred_gpu_types=[],
+            selected_model_id="meta-llama/Llama-3.1-70B-Instruct",
+            selected_gpu_type="H100",
+            selected_gpu_count=2,
+            min_quality=85,
+            max_cost_per_month=3000,
+        )
+
+        assert result["ready"] is True
+        assert generate_config.await_args.kwargs["preferred_gpu_types"] == []
+        assert generate_config.await_args.kwargs["min_quality"] == 85
+        assert generate_config.await_args.kwargs["max_cost"] == 3000
+
+    @pytest.mark.parametrize(
+        ("selected_fields", "expected_error"),
+        [
+            ({"selected_model_id": "different/model"}, "model"),
+            ({"selected_gpu_type": "L4"}, "GPU"),
+            ({"selected_gpu_count": 1}, "GPU"),
+        ],
+    )
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_plan_rejects_different_selected_configuration(
+        self, mock_planner_cls: MagicMock, selected_fields: dict, expected_error: str
+    ) -> None:
+        """A regenerated plan cannot silently substitute a different selection."""
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+
+        result = mock_mcp._registered_tools["plan_deployment"](
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            **selected_fields,
+        )
+
+        assert expected_error in result["error"]
+        assert "suggested_deploy_params" not in result
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     @patch("rhoai_mcp.domains.inference.client.InferenceClient")

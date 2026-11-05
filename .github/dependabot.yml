@@ -10,3 +10,9 @@ updates:
       interval: "weekly"
     exclude-paths:
       - "requirements-cpu.txt"  # Generated separately with make generate-requirements-cpu.
+    ignore:
+      # Major migrations need planning; Renovate blocks these too (see renovate.json).
+      - dependency-name: "mcp"
+        versions: ["2.x"]
+      - dependency-name: "kubernetes"
+        versions: ["36.x", "37.x"]

@@ -7,6 +7,9 @@
   "ignorePaths": [
     "requirements-cpu.txt"
   ],
+  "enabledManagers": [
+    "dockerfile"
+  ],
   "packageRules": [
     {
       "description": "Review major updates individually instead of bundling them into the weekly group",

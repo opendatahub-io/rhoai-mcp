@@ -71,22 +71,62 @@ class LocalPlannerClient:
             self._planner.load_bundled_benchmarks()
 
     def _normalize_synced_benchmarks(self) -> None:
-        """Normalize catalog hardware in place, preserving benchmark metadata."""
+        """Normalize catalog hardware and configuration keys without rewriting rows."""
+        from planner.knowledge_base.loader import generate_config_id
         from planner.shared.utils import normalize_gpu_types
 
         repo = self._planner._benchmark_repo
         conn = repo._get_connection()
-        rows = conn.execute(
-            "SELECT id, hardware FROM exported_summaries WHERE source = ?", ("model_catalog",)
-        ).fetchall()
-        updates = []
-        for row in rows:
-            names = normalize_gpu_types([row["hardware"]])
-            if len(names) == 1 and names[0] != row["hardware"]:
-                updates.append((names[0], row["id"]))
-        if updates:
-            with conn:
-                conn.executemany("UPDATE exported_summaries SET hardware = ? WHERE id = ?", updates)
+        with conn:
+            rows = conn.execute(
+                "SELECT * FROM exported_summaries WHERE source = ?", ("model_catalog",)
+            ).fetchall()
+            non_catalog_keys = {
+                row["config_id"]
+                for row in conn.execute(
+                    "SELECT config_id FROM exported_summaries WHERE source != ?", ("model_catalog",)
+                )
+            }
+
+            by_key: dict[str, list[tuple[dict[str, Any], str]]] = {}
+            for stored_row in rows:
+                row = dict(stored_row)
+                names = normalize_gpu_types([row["hardware"]])
+                hardware = names[0] if len(names) == 1 else row["hardware"]
+                key = generate_config_id({**row, "hardware": hardware})
+                by_key.setdefault(key, []).append((row, hardware))
+
+            deletes: list[tuple[str]] = []
+            updates: list[tuple[str, str, str]] = []
+            for key, candidates in by_key.items():
+                # Keep an existing canonical row when aliases share a key.
+                candidates.sort(
+                    key=lambda item: (
+                        item[0]["hardware"] != item[1],
+                        item[0]["config_id"] != key,
+                        item[0]["id"],
+                    )
+                )
+                if key in non_catalog_keys:
+                    deletes.extend((row["id"],) for row, _ in candidates)
+                    continue
+                winner, hardware = candidates[0]
+                deletes.extend((row["id"],) for row, _ in candidates[1:])
+                if winner["hardware"] != hardware or winner["config_id"] != key:
+                    updates.append((hardware, key, winner["id"]))
+
+            if deletes:
+                conn.executemany("DELETE FROM exported_summaries WHERE id = ?", deletes)
+            if updates:
+                # Free old keys before assigning canonical keys under the unique index.
+                conn.executemany(
+                    "UPDATE exported_summaries SET config_id = ? WHERE id = ?",
+                    [(f"__normalizing__{row_id}", row_id) for _, _, row_id in updates],
+                )
+                conn.executemany(
+                    "UPDATE exported_summaries SET hardware = ?, config_id = ? WHERE id = ?",
+                    updates,
+                )
 
     def _get_all_use_case_data(self) -> dict[str, Any]:
         """Return the use-case data loaded by the Planner instance."""

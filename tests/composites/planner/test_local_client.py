@@ -139,25 +139,15 @@ class TestLocalPlannerClientInit:
             "models_added": 5,
             "errors": [],
         }
-        repo = mock_planner_cls.return_value._benchmark_repo
-        conn = repo._get_connection.return_value
-        conn.execute.return_value.fetchall.return_value = [
-            {"id": "catalog-row", "hardware": "NVIDIA-A100-80GB"}
-        ]
+        with patch.object(LocalPlannerClient, "_normalize_synced_benchmarks") as normalize:
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
 
-        LocalPlannerClient(
-            model_catalog_url="https://catalog.example.com",
-        )
+        normalize.assert_called_once_with()
 
         mock_planner_cls.return_value.sync_model_catalog.assert_called_once_with(
             url="https://catalog.example.com",
         )
         mock_planner_cls.return_value.load_bundled_benchmarks.assert_not_called()
-        conn.executemany.assert_called_once_with(
-            "UPDATE exported_summaries SET hardware = ? WHERE id = ?",
-            [("A100-80", "catalog-row")],
-        )
-        repo.replace_benchmarks.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_import_error(self, mock_planner_cls: MagicMock) -> None:

@@ -36,6 +36,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from planner.knowledge_base.loader import generate_config_id
 
 from rhoai_mcp.composites.planner.client import CATEGORY_MAP, PlannerAPIError
 from rhoai_mcp.composites.planner.local_client import LocalPlannerClient
@@ -395,9 +396,13 @@ async def test_catalog_gpu_alias_is_ranked_before_category_limit(
     }
     assert after.keys() == before.keys()
     for row_id, row in after.items():
+        expected_hardware = (
+            "A100-80" if before[row_id]["hardware"] == "NVIDIA-A100-80GB" else "H100"
+        )
         assert row == {
             **before[row_id],
-            "hardware": "A100-80" if before[row_id]["hardware"] == "NVIDIA-A100-80GB" else "H100",
+            "hardware": expected_hardware,
+            "config_id": generate_config_id({**before[row_id], "hardware": expected_hardware}),
         }
     assert {row.hardware for row in repo.get_all_benchmarks()} <= {"A100-80", "H100"}
 
@@ -434,6 +439,73 @@ async def test_catalog_gpu_alias_is_ranked_before_category_limit(
     )
     assert deployment.model_name == constrained.top_cost.model_name
     assert deployment.configs
+
+
+@pytest.mark.parametrize("with_canonical", [False, True])
+def test_catalog_alias_normalization_keeps_unique_config_identity(
+    with_canonical: bool,
+) -> None:
+    """Alias and canonical rows resolve to one key without losing winner metadata."""
+    client = LocalPlannerClient()
+    repo = client._planner._benchmark_repo
+    template = next(row for row in repo.get_all_benchmarks() if row.hardware == "H100")
+    alias = {
+        **template.to_dict(),
+        "hardware": "NVIDIA-H100-80GB-HBM3",
+        "type": "model_catalog",
+        "model_uri": "catalog://alias",
+    }
+    canonical = {
+        **template.to_dict(),
+        "hardware": "H100",
+        "type": "model_catalog",
+        "model_uri": "catalog://canonical",
+    }
+    repo.reset()
+    repo.load_benchmarks(
+        [alias, canonical] if with_canonical else [alias],
+        source="model_catalog",
+        confidence_level="benchmarked",
+    )
+    conn = repo._get_connection()
+    before = {
+        row["hardware"]: dict(row)
+        for row in conn.execute("SELECT * FROM exported_summaries WHERE source = 'model_catalog'")
+    }
+
+    client._normalize_synced_benchmarks()
+
+    rows = conn.execute("SELECT * FROM exported_summaries WHERE source = 'model_catalog'").fetchall()
+    assert len(rows) == 1
+    result = dict(rows[0])
+    original = before["H100" if with_canonical else "NVIDIA-H100-80GB-HBM3"]
+    assert result == {
+        **original,
+        "hardware": "H100",
+        "config_id": generate_config_id({**original, "hardware": "H100"}),
+    }
+    client._normalize_synced_benchmarks()
+    assert [dict(row) for row in conn.execute("SELECT * FROM exported_summaries")] == [result]
+    repo.load_benchmarks([canonical], source="model_catalog", confidence_level="benchmarked")
+    assert len(repo.get_all_benchmarks()) == 1
+
+
+def test_catalog_alias_does_not_duplicate_existing_benchmark_source() -> None:
+    """A canonical configuration from another source retains its unique key."""
+    client = LocalPlannerClient()
+    repo = client._planner._benchmark_repo
+    template = next(row for row in repo.get_all_benchmarks() if row.hardware == "H100")
+    canonical = {**template.to_dict(), "hardware": "H100"}
+    alias = {**template.to_dict(), "hardware": "NVIDIA-H100-80GB-HBM3", "type": "model_catalog"}
+    repo.reset()
+    repo.load_benchmarks([canonical], source="local", confidence_level="benchmarked")
+    repo.load_benchmarks([alias], source="model_catalog", confidence_level="benchmarked")
+    conn = repo._get_connection()
+    original = dict(conn.execute("SELECT * FROM exported_summaries WHERE source = 'local'").fetchone())
+
+    client._normalize_synced_benchmarks()
+
+    assert [dict(row) for row in conn.execute("SELECT * FROM exported_summaries")] == [original]
 
 
 # == MCP tool: recommend_model ================================================

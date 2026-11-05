@@ -18,6 +18,7 @@ from rhoai_mcp.composites.planner.client import (
     PlannerAPIError,
     _apply_priority_overrides,
     _filter_by_gpu,
+    _filter_ranked_lists,
     _parse_recommendation,
 )
 from rhoai_mcp.composites.planner.models import (
@@ -26,24 +27,6 @@ from rhoai_mcp.composites.planner.models import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class _GpuAliasBenchmarkRepository:
-    """Include vendor-prefixed benchmark hardware in Planner's GPU query."""
-
-    def __init__(self, repository: Any) -> None:
-        self._repository = repository
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._repository, name)
-
-    def find_configurations_meeting_slo(self, **kwargs: Any) -> Any:
-        gpu_types = kwargs.get("gpu_types")
-        if gpu_types:
-            kwargs["gpu_types"] = [
-                gpu for gpu_type in gpu_types for gpu in (gpu_type, f"NVIDIA-{gpu_type}")
-            ]
-        return self._repository.find_configurations_meeting_slo(**kwargs)
 
 
 class LocalPlannerClient:
@@ -60,20 +43,11 @@ class LocalPlannerClient:
         model_catalog_url: str | None = None,
     ) -> None:
         self._planner = Planner()
-        self._planner._config_finder.benchmark_repo = _GpuAliasBenchmarkRepository(
-            self._planner._benchmark_repo
-        )
-
-        # Pre-seed the gpu_normalizer singleton with the Planner's catalog
-        # to avoid a redundant ModelCatalog() construction on first
-        # normalize_gpu_types() call (llm-d-planner bug workaround).
-        import planner.shared.utils.gpu_normalizer as _gpu_norm
-
-        _gpu_norm._catalog_instance = self._planner._model_catalog
 
         if model_catalog_url:
             try:
                 result = self._planner.sync_model_catalog(url=model_catalog_url)
+                self._normalize_synced_benchmarks()
                 logger.info(
                     "Model Catalog sync: %d benchmarks added, %d models added",
                     result.get("benchmarks_added", 0),
@@ -95,6 +69,24 @@ class LocalPlannerClient:
                 "Set RHOAI_MCP_PLANNER_MODEL_CATALOG_URL for accurate recommendations."
             )
             self._planner.load_bundled_benchmarks()
+
+    def _normalize_synced_benchmarks(self) -> None:
+        """Store catalog GPU aliases under names used by the planner's SQL query."""
+        from planner.shared.utils import normalize_gpu_types
+
+        repo = self._planner._benchmark_repo
+        rows = [row for row in repo.get_all_benchmarks() if row.source == "model_catalog"]
+        benchmarks = []
+        changed = False
+        for row in rows:
+            benchmark = row.to_dict()
+            names = normalize_gpu_types([row.hardware])
+            if len(names) == 1 and names[0] != row.hardware:
+                benchmark["hardware"] = names[0]
+                changed = True
+            benchmarks.append(benchmark)
+        if changed:
+            repo.replace_benchmarks("model_catalog", benchmarks, confidence_level="benchmarked")
 
     def _get_all_use_case_data(self) -> dict[str, Any]:
         """Return the use-case data loaded by the Planner instance."""
@@ -253,12 +245,13 @@ class LocalPlannerClient:
             latency_list = ranked_data.get("lowest_latency", [])
             quality_list = ranked_data.get("best_quality", [])
 
+            after_filters = ranked.configs_after_filters
             if gpu_types_override:
-                allowed = set(gpu_types_override)
-                balanced_list = _filter_by_gpu(balanced_list, allowed)
-                cost_list = _filter_by_gpu(cost_list, allowed)
-                latency_list = _filter_by_gpu(latency_list, allowed)
-                quality_list = _filter_by_gpu(quality_list, allowed)
+                filtered, after_filters = _filter_ranked_lists(ranked_data, gpu_types_override)
+                balanced_list = filtered["balanced"]
+                cost_list = filtered["lowest_cost"]
+                latency_list = filtered["lowest_latency"]
+                quality_list = filtered["best_quality"]
 
             top_balanced = _parse_recommendation(balanced_list[0]) if balanced_list else None
             top_cost = _parse_recommendation(cost_list[0]) if cost_list else None
@@ -288,7 +281,7 @@ class LocalPlannerClient:
                 top_balanced=top_balanced,
                 top_quality=top_quality,
                 total_configs_evaluated=ranked.total_configs_evaluated,
-                configs_after_filters=ranked.configs_after_filters,
+                configs_after_filters=after_filters,
             )
 
         try:
@@ -365,7 +358,7 @@ class LocalPlannerClient:
 
             category_list = ranked_data.get(category_key, [])
             if preferred_gpu_types:
-                category_list = _filter_by_gpu(category_list, set(preferred_gpu_types))
+                category_list = _filter_by_gpu(category_list, preferred_gpu_types)
             if not category_list:
                 raise PlannerAPIError(
                     status_code=404,

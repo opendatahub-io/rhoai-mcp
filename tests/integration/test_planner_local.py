@@ -352,7 +352,7 @@ async def test_generate_config_invalid_category(local_client: LocalPlannerClient
 
 
 @pytest.mark.parametrize("with_canonical_h100", [False, True])
-async def test_vendor_prefixed_gpu_is_ranked_before_category_limit(
+async def test_catalog_gpu_alias_is_ranked_before_category_limit(
     with_canonical_h100: bool,
 ) -> None:
     """A compatible GPU must survive the planner's top-10 cutoff in both flows."""
@@ -370,13 +370,18 @@ async def test_vendor_prefixed_gpu_is_ranked_before_category_limit(
 
     rows = list(rows_by_model.values())[:13]
     benchmarks = [
-        {**row.to_dict(), "hardware": "A100-80" if i < 11 else "NVIDIA-H100"}
+        {
+            **row.to_dict(),
+            "hardware": "NVIDIA-A100-80GB" if i < 11 else "NVIDIA-H100-80GB-HBM3",
+        }
         for i, row in enumerate(rows[:12])
     ]
     if with_canonical_h100:
         benchmarks.append({**rows[12].to_dict(), "hardware_count": 8})
     repo.reset()
-    repo.load_benchmarks(benchmarks, confidence_level="benchmarked")
+    repo.load_benchmarks(benchmarks, source="model_catalog", confidence_level="benchmarked")
+    client._normalize_synced_benchmarks()
+    assert {row.hardware for row in repo.get_all_benchmarks()} <= {"A100-80", "H100"}
 
     common = {
         "use_case_override": "chatbot_conversational",
@@ -391,10 +396,11 @@ async def test_vendor_prefixed_gpu_is_ranked_before_category_limit(
 
     constrained = await client.recommend("unused", gpu_types_override=["H100"], **common)
     assert constrained.top_cost is not None
-    assert constrained.top_cost.gpu_config.gpu_type == "NVIDIA-H100"
+    assert constrained.top_cost.gpu_config.gpu_type == "H100"
 
     unavailable = await client.recommend("unused", gpu_types_override=["L4"], **common)
     assert unavailable.top_cost is None
+    assert unavailable.configs_after_filters == 0
 
     deployment = await client.generate_config(
         category="cost",

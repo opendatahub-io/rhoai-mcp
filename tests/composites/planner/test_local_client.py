@@ -139,6 +139,10 @@ class TestLocalPlannerClientInit:
             "models_added": 5,
             "errors": [],
         }
+        row = MagicMock(source="model_catalog", hardware="NVIDIA-A100-80GB")
+        row.to_dict.return_value = {"hardware": "NVIDIA-A100-80GB"}
+        repo = mock_planner_cls.return_value._benchmark_repo
+        repo.get_all_benchmarks.return_value = [row]
 
         LocalPlannerClient(
             model_catalog_url="https://catalog.example.com",
@@ -148,6 +152,9 @@ class TestLocalPlannerClientInit:
             url="https://catalog.example.com",
         )
         mock_planner_cls.return_value.load_bundled_benchmarks.assert_not_called()
+        repo.replace_benchmarks.assert_called_once_with(
+            "model_catalog", [{"hardware": "A100-80"}], confidence_level="benchmarked"
+        )
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_import_error(self, mock_planner_cls: MagicMock) -> None:
@@ -243,6 +250,28 @@ class TestLocalPlannerRecommend:
         assert result.top_performance is not None
         assert result.top_performance.gpu_config.gpu_type == "NVIDIA-A100-80"
         assert result.top_quality is None
+        assert result.configs_after_filters == 1
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_gpu_alias_and_case_match(self, mock_planner_cls: MagicMock) -> None:
+        """A100 family and case aliases survive the planner's canonical response."""
+        mock_planner = _make_mock_planner()
+        rec = mock_planner.generate_recommendations.return_value.model_dump.return_value[
+            "balanced"
+        ][0]
+        rec["gpu_config"]["gpu_type"] = "NVIDIA-A100-80GB"
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=50,
+            gpu_types_override=["a100"],
+        )
+
+        assert result.top_balanced is not None
+        assert result.configs_after_filters == 1
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_recommend_empty_gpu_override_leaves_rankings_unfiltered(

@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 from httpx import ConnectError, HTTPStatusError, RequestError, TimeoutException
+from planner.shared.utils.gpu_normalizer import normalize_gpu_types
 
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
@@ -87,19 +88,19 @@ def _apply_priority_overrides(
 
 
 def _gpu_type_matches(rec_data: dict[str, Any], allowed: set[str]) -> bool:
-    """Return True if rec_data's gpu_type (after NVIDIA- normalisation) is in allowed."""
+    """Return True if a recommendation's catalog GPU type is allowed."""
     gpu_config = rec_data.get("gpu_config") or {}
     gpu_type = gpu_config.get("gpu_type") if isinstance(gpu_config, dict) else None
     if not isinstance(gpu_type, str):
         return False
-    # Planner responses use vendor-prefixed names (e.g. "NVIDIA-H100");
-    # the public API uses short names ("H100"). Normalise before comparing.
-    return gpu_type.removeprefix("NVIDIA-") in allowed
+    normalized_gpu_types = set(normalize_gpu_types([gpu_type]))
+    return bool(normalized_gpu_types) and normalized_gpu_types <= allowed
 
 
 def _filter_by_gpu(recs: list[dict[str, Any]], allowed: set[str]) -> list[dict[str, Any]]:
     """Filter a recommendation list to only those with a GPU type in allowed."""
-    return [r for r in recs if _gpu_type_matches(r, allowed)]
+    normalized_allowed = set(normalize_gpu_types(list(allowed)))
+    return [r for r in recs if _gpu_type_matches(r, normalized_allowed)]
 
 
 class PlannerConnectionError(Exception):

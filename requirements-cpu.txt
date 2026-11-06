@@ -116,7 +116,7 @@ markupsafe==3.0.4
     #   -c constraints-lock.tmp
     #   jinja2
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-mcp==1.29.1
+mcp==1.30.0
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)

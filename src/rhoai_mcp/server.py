@@ -15,7 +15,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from rhoai_mcp.clients.base import K8sClient
-from rhoai_mcp.config import RHOAIConfig, get_config
+from rhoai_mcp.config import RHOAIConfig, TransportMode, get_config
 from rhoai_mcp.plugin_manager import PluginManager
 
 if TYPE_CHECKING:
@@ -240,13 +240,15 @@ class RHOAIServer:
                 yield
             finally:
                 logger.debug("MCP session ended")
-                # Close any port-forward connections opened during this session
-                try:
-                    from rhoai_mcp.utils.port_forward import PortForwardManager
+                # HTTP sessions share the port-forward manager; ending one must
+                # not close a forward still used by another session.
+                if self._config.transport == TransportMode.STDIO:
+                    try:
+                        from rhoai_mcp.utils.port_forward import PortForwardManager
 
-                    await PortForwardManager.get_instance().close_all()
-                except Exception as e:
-                    logger.warning(f"Error closing port-forward connections: {e}")
+                        await PortForwardManager.get_instance().close_all()
+                    except Exception as e:
+                        logger.warning(f"Error closing port-forward connections: {e}")
 
         return lifespan
 
@@ -273,10 +275,25 @@ class RHOAIServer:
     def shutdown(self) -> None:
         """Disconnect from Kubernetes and clean up resources."""
         logger.info("Shutting down RHOAI MCP server...")
+        self._close_port_forwards()
         if self._k8s_client:
             self._k8s_client.disconnect()
             self._k8s_client = None
         logger.info("RHOAI MCP server shut down")
+
+    @staticmethod
+    def _close_port_forwards() -> None:
+        """Terminate all port-forward subprocesses (sync, best-effort)."""
+        try:
+            from rhoai_mcp.utils.port_forward import PortForwardManager
+
+            mgr = PortForwardManager.get_instance()
+            for conn in mgr._connections.values():
+                if conn.process.returncode is None:
+                    conn.process.terminate()
+            mgr._connections.clear()
+        except Exception as e:
+            logger.warning(f"Error closing port-forward connections: {e}")
 
     def create_mcp(self) -> FastMCP:
         """Create and configure the FastMCP server."""

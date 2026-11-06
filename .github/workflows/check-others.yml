@@ -1,13 +1,6 @@
 name: check-others
 
 on:
-  pull_request:
-    paths:
-      - .github/workflows/check-others.yml
-      - .github/scripts/list_rhoai_releases.py
-      - tests/test_ci_list_rhoai_releases.py
-      - Makefile
-      - requirements-cpu.txt
   schedule:
     - cron: "23 6 * * *"
   workflow_dispatch:

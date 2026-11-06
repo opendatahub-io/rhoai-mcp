@@ -3,5 +3,32 @@
   "extends": [
     "github>opendatahub-io/renovate-config",
     "github>opendatahub-io/renovate-config//base-images"
+  ],
+  "ignorePaths": [
+    "requirements-cpu.txt"
+  ],
+  "enabledManagers": [
+    "dockerfile"
+  ],
+  "packageRules": [
+    {
+      "description": "Review major updates individually instead of bundling them into the weekly group",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "major updates",
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Do not propose major updates to mcp or kubernetes until the migration is planned",
+      "matchPackageNames": [
+        "mcp",
+        "kubernetes"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    }
   ]
 }

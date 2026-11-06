@@ -190,6 +190,36 @@ make run-stdio
 5. Add tests for new functionality
 6. Keep changes focused
 
+## Dependency Updates
+
+Two bots share the dependency work, each with its own lane:
+
+- **Dependabot** (`.github/dependabot.yml`) updates `pyproject.toml` /
+  `uv.lock` and the GitHub Actions used in `.github/workflows/`, on a
+  weekly schedule, one PR per dependency.
+- **Renovate** ([`renovate.json`](renovate.json), extending the shared
+  [opendatahub-io/renovate-config](https://github.com/opendatahub-io/renovate-config)
+  preset) updates the `Containerfile` base image only (`enabledManagers` is
+  scoped to `dockerfile`), on a weekly schedule. Its Dependency Dashboard is
+  [issue #104](https://github.com/opendatahub-io/rhoai-mcp/issues/104).
+
+Major updates to `mcp` and `kubernetes` are blocked in both configs until
+their migrations are planned.
+
+`requirements-cpu.txt` is a generated artifact: it is compiled from
+`pyproject.toml` and `uv.lock` against the Red Hat CPU package index, so no
+dependency bot updates it directly (Dependabot excludes it and Renovate
+ignores it).
+
+**Any PR that changes `pyproject.toml` or `uv.lock` (including automated
+dependency PRs) must run `make generate-requirements-cpu` and commit the
+regenerated `requirements-cpu.txt` before merging.** The
+[`check-requirements-cpu`](.github/workflows/check-requirements-cpu.yml)
+workflow regenerates the file and fails when the drift exceeds SemVer
+tolerance: added or removed packages, major or minor version changes on
+non-0.x packages, or a changed index URL. Patch-level and 0.x drift are
+tolerated.
+
 ## Questions?
 
 For questions, reach out to rhoai-mcp@redhat.com.

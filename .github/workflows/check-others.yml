@@ -4,7 +4,8 @@ on:
   pull_request:
     paths:
       - .github/workflows/check-others.yml
-      - .github/scripts/list_rhoai_branches.py
+      - .github/scripts/list_rhoai_releases.py
+      - tests/test_ci_list_rhoai_releases.py
       - Makefile
       - requirements-cpu.txt
   schedule:
@@ -19,31 +20,51 @@ jobs:
     if: github.repository == 'opendatahub-io/rhoai-mcp'
     runs-on: ubuntu-latest
     outputs:
-      branches: ${{ steps.branches.outputs.branches }}
-      latest-version: ${{ steps.branches.outputs.latest-version }}
+      releases: ${{ steps.releases.outputs.releases }}
+      latest-version: ${{ steps.releases.outputs.latest-version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Discover RHDS branches
-        id: branches
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
+        with:
+          version: 1.3.4
+      - name: Discover Quay releases
+        id: releases
         env:
-          GH_TOKEN: ${{ github.token }}
+          QUAY_READONLY_USERNAME: ${{ secrets.QUAY_READONLY_USERNAME }}
+          QUAY_READONLY_PASSWORD: ${{ secrets.QUAY_READONLY_PASSWORD }}
+        shell: bash
         run: |
-          branches=$(python3 .github/scripts/list_rhoai_branches.py)
-          echo "branches=$branches" >> "$GITHUB_OUTPUT"
-          latest_version=$(jq -r 'last // ""' <<< "$branches")
+          set -euo pipefail
+          if [[ -z "$QUAY_READONLY_USERNAME" || -z "$QUAY_READONLY_PASSWORD" ]]; then
+            echo '::error::QUAY_READONLY_USERNAME and QUAY_READONLY_PASSWORD secrets are required.'
+            exit 1
+          fi
+          releases=$(
+            printf '%s' "$QUAY_READONLY_PASSWORD" |
+              oras repo tags --username "$QUAY_READONLY_USERNAME" --password-stdin \
+                quay.io/rhoai/odh-rhoai-mcp-rhel9 |
+              python3 .github/scripts/list_rhoai_releases.py
+          )
+          if [[ "$releases" == '[]' ]]; then
+            echo '::error::No qualifying Quay release tags found.'
+            exit 1
+          fi
+          echo "releases=$releases" >> "$GITHUB_OUTPUT"
+          latest_version=$(jq -r 'last' <<< "$releases")
           echo "latest-version=$latest_version" >> "$GITHUB_OUTPUT"
 
   check-rhds-branch:
     needs: discover
-    if: needs.discover.outputs.branches != '[]'
+    if: needs.discover.outputs.releases != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        branch: ${{ fromJSON(needs.discover.outputs.branches) }}
+        branch: ${{ fromJSON(needs.discover.outputs.releases) }}
     name: check-rhds-branch (${{ matrix.branch }})
     steps:
       - name: Check RHDS image in params.env
@@ -78,7 +99,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$LATEST_VERSION" ]]; then
-            echo '::error::No qualifying RHDS release branches found; cannot determine latest version.'
+            echo '::error::No qualifying Quay release tags found; cannot determine latest version.'
             exit 1
           fi
           gh api --method GET \
@@ -120,7 +141,7 @@ jobs:
 
   notify-failure:
     needs: [discover, check-rhds-branch, check-model-metadata-imageref, check-requirements-cpu-index]
-    if: always() && contains(needs.*.result, 'failure')
+    if: always() && github.ref == 'refs/heads/main' && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     permissions: {}
     steps:

@@ -1,12 +1,15 @@
-"""List RHDS rhoai- branches at or above a minimum semantic version.
+"""List release tags published to the Quay image repository.
 
-Usage: python .github/scripts/list_rhoai_branches.py [--min-version 3.6-ea.2]
+Usage: oras repo tags REPOSITORY | python .github/scripts/list_rhoai_releases.py
 
-Requires an authenticated GitHub CLI (set GH_TOKEN in GitHub Actions).
-Prints a JSON array of full branch names, oldest version first. Missing patch
+Reads one tag per line from standard input, as emitted by oras repo tags.
+Prints a JSON array of release tags, oldest version first. Missing patch
 numbers are treated as zero; otherwise SemVer precedence applies, including
-prerelease identifiers and ignoring build metadata. Non-version branches are
-ignored. An empty result succeeds and prints [].
+prerelease identifiers. Only final releases and ea/alpha/beta/rc prereleases
+with an optional numeric identifier qualify; build and architecture tags are
+ignored. By default, releases start at rhoai-3.6-ea.2, when Technology Preview
+(TP) began; --min-version overrides this minimum. An empty result succeeds
+and prints [].
 """
 
 from __future__ import annotations
@@ -14,19 +17,20 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from collections.abc import Iterable
 
-REPOSITORY = "red-hat-data-services/rhoai-mcp"
 PREFIX = "rhoai-"
-DEFAULT_MIN_VERSION = "3.6-ea.2"
 
 _NUMBER = r"(?:0|[1-9][0-9]*)"
 _IDENTIFIERS = r"[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*"
 _VERSION = re.compile(
     rf"({_NUMBER})\.({_NUMBER})(?:\.({_NUMBER}))?"
     rf"(?:-({_IDENTIFIERS}))?(?:\+({_IDENTIFIERS}))?"
+)
+_RELEASE = re.compile(
+    rf"{_NUMBER}\.{_NUMBER}(?:\.{_NUMBER})?"
+    rf"(?:-(?:ea|alpha|beta|rc)(?:\.{_NUMBER})?)?"
 )
 # Compared lexicographically as (major, minor, patch, is_release, prerelease).
 # An omitted patch is zero. is_release is True for a final release, so it sorts
@@ -59,59 +63,40 @@ def version_key(version: str) -> VersionKey:
     return int(major), int(minor), int(patch or 0), prerelease is None, tuple(identifiers)
 
 
-def select_branches(branches: Iterable[str], min_version: str = DEFAULT_MIN_VERSION) -> list[str]:
-    """Filter exact-prefix release branches and sort by semantic precedence."""
-    minimum = version_key(min_version)
+def select_releases(tags: Iterable[str], min_version: str | None = None) -> list[str]:
+    """Exclude build tags and sort release tags by semantic precedence."""
+    minimum = version_key(min_version) if min_version is not None else None
     selected = []
-    for branch in branches:
-        if not branch.startswith(PREFIX):
+    for tag in set(tags):
+        if not tag.startswith(PREFIX):
             continue
-        try:
-            key = version_key(branch.removeprefix(PREFIX))
-        except ValueError:
+        version = tag.removeprefix(PREFIX)
+        if _RELEASE.fullmatch(version) is None:
             continue
-        if key >= minimum:
-            selected.append((key, branch))
-    return [branch for _, branch in sorted(selected)]
-
-
-def list_branches() -> list[str]:
-    """Read all pages of branch names without cloning or checking out the fork."""
-    result = subprocess.run(
-        [
-            "gh",
-            "api",
-            "--paginate",
-            f"repos/{REPOSITORY}/branches?per_page=100",
-            "--jq",
-            ".[].name",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.splitlines()
+        key = version_key(version)
+        if minimum is None or key >= minimum:
+            selected.append((key, tag))
+    return [tag for _, tag in sorted(selected)]
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--min-version", default=DEFAULT_MIN_VERSION)
+    parser.add_argument(
+        "--min-version",
+        default="3.6-ea.2",
+        help=(
+            "Minimum version without the rhoai- prefix (default: %(default)s, "
+            "when Technology Preview (TP) began); specify a version to override this minimum"
+        ),
+    )
     args = parser.parse_args(argv)
     try:
         version_key(args.min_version)
     except ValueError as exc:
         parser.error(str(exc))
 
-    try:
-        branches = select_branches(list_branches(), args.min_version)
-    except FileNotFoundError:
-        print("GitHub CLI (gh) is required but was not found.", file=sys.stderr)
-        return 1
-    except subprocess.CalledProcessError as exc:
-        print(f"Failed to list branches in {REPOSITORY}: {exc.stderr.strip()}", file=sys.stderr)
-        return 1
-
-    print(json.dumps(branches))
+    releases = select_releases(sys.stdin.read().splitlines(), args.min_version)
+    print(json.dumps(releases))
     return 0
 
 

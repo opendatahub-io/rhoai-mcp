@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import SecretStr
+from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -233,7 +234,7 @@ class RHOAIServer:
         """
 
         @asynccontextmanager
-        async def lifespan(_app: Any) -> AsyncIterator[None]:
+        async def lifespan(_app: Any) -> AsyncGenerator[None]:
             """Per-session lifespan - K8s is already connected."""
             logger.debug("MCP session started")
             try:
@@ -273,27 +274,50 @@ class RHOAIServer:
         logger.info(f"RHOAI MCP server ready with {healthy}/{total} plugins active")
 
     def shutdown(self) -> None:
-        """Disconnect from Kubernetes and clean up resources."""
+        """Disconnect from Kubernetes."""
         logger.info("Shutting down RHOAI MCP server...")
-        self._close_port_forwards()
         if self._k8s_client:
             self._k8s_client.disconnect()
             self._k8s_client = None
         logger.info("RHOAI MCP server shut down")
 
     @staticmethod
-    def _close_port_forwards() -> None:
-        """Terminate all port-forward subprocesses (sync, best-effort)."""
-        try:
-            from rhoai_mcp.utils.port_forward import PortForwardManager
+    def _with_port_forward_shutdown(app: Starlette) -> Starlette:
+        """Close shared port forwards when the HTTP app lifespan ends."""
+        original_lifespan = app.router.lifespan_context
 
-            mgr = PortForwardManager.get_instance()
-            for conn in mgr._connections.values():
-                if conn.process.returncode is None:
-                    conn.process.terminate()
-            mgr._connections.clear()
-        except Exception as e:
-            logger.warning(f"Error closing port-forward connections: {e}")
+        @asynccontextmanager
+        async def lifespan(app: Starlette) -> AsyncGenerator[Any]:
+            try:
+                async with original_lifespan(app) as state:
+                    yield state
+            finally:
+                try:
+                    from rhoai_mcp.utils.port_forward import PortForwardManager
+
+                    await PortForwardManager.get_instance().close_all()
+                except Exception as e:
+                    logger.warning(f"Error closing port-forward connections: {e}")
+
+        app.router.lifespan_context = lifespan
+        return app
+
+    def _install_http_shutdown(self, mcp: FastMCP) -> None:
+        """Attach process cleanup to HTTP app shutdown, not client sessions."""
+        if self._config.transport == TransportMode.SSE:
+            original_sse_app = mcp.sse_app
+
+            def sse_app(mount_path: str | None = None) -> Starlette:
+                return self._with_port_forward_shutdown(original_sse_app(mount_path))
+
+            mcp.sse_app = sse_app  # type: ignore[method-assign]
+        elif self._config.transport == TransportMode.STREAMABLE_HTTP:
+            original_http_app = mcp.streamable_http_app
+
+            def streamable_http_app() -> Starlette:
+                return self._with_port_forward_shutdown(original_http_app())
+
+            mcp.streamable_http_app = streamable_http_app  # type: ignore[method-assign]
 
     def create_mcp(self) -> FastMCP:
         """Create and configure the FastMCP server."""
@@ -326,6 +350,8 @@ class RHOAIServer:
 
         # Store reference
         self._mcp = mcp
+
+        self._install_http_shutdown(mcp)
 
         # Register tools, resources, and prompts from all plugins
         self._plugin_manager.register_all_tools(mcp, self)

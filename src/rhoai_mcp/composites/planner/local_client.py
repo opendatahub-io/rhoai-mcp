@@ -28,6 +28,7 @@ from rhoai_mcp.composites.planner.models import (
 )
 
 logger = logging.getLogger(__name__)
+_SERVICE_ACCOUNT_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
 
 class LocalPlannerClient:
@@ -49,7 +50,9 @@ class LocalPlannerClient:
             models_before = len(self._planner._model_catalog._models)
             try:
                 result = self._planner.sync_model_catalog(url=model_catalog_url)
-            except (ImportError, ValueError, PlannerError) as e:
+            except (ImportError, ValueError, PlannerError, OSError) as e:
+                if isinstance(e, OSError) and e.filename != _SERVICE_ACCOUNT_TOKEN_PATH:
+                    raise
                 logger.warning("Model Catalog sync failed (%s)", type(e).__name__)
                 self._load_bundled_benchmarks()
                 return

@@ -229,6 +229,33 @@ class TestLocalPlannerClientInit:
         mock_planner_cls.return_value.load_bundled_benchmarks.assert_called_once()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_catalog_service_account_token_read_error(
+        self, mock_planner_cls: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An unreadable mounted token falls back to bundled benchmarks."""
+        mock_planner_cls.return_value.sync_model_catalog.side_effect = PermissionError(
+            13, "Permission denied", "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        )
+
+        LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_called_once()
+        assert "Model Catalog sync failed (PermissionError)" in caplog.text
+        assert "Loading bundled synthetic benchmarks" in caplog.text
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_catalog_other_os_error_propagates(self, mock_planner_cls: MagicMock) -> None:
+        """Other sync I/O failures do not silently use bundled data."""
+        sync_error = OSError(5, "I/O error", "/var/lib/planner/benchmarks.db")
+        mock_planner_cls.return_value.sync_model_catalog.side_effect = sync_error
+
+        with pytest.raises(OSError) as exc_info:
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        assert exc_info.value is sync_error
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_normalization_sqlite_error(self, mock_planner_cls: MagicMock) -> None:
         """SQLite failures after catalog sync preserve the planner error boundary."""
         mock_planner_cls.return_value.sync_model_catalog.return_value = {

@@ -155,9 +155,9 @@ Call `get_cluster_resources`. Extract `gpu_info.products` — the list of GPU pr
 | "B200" | B200 |
 | "L4" | L4 |
 
-If `get_cluster_resources` succeeds and `products` is non-empty, map products to `cluster_gpu_types` using the table above and proceed to Step 2.
+If `get_cluster_resources` succeeds and at least one product maps to a supported GPU type, set `cluster_gpu_types` using the table above and proceed to Step 2.
 
-If `gpu_info` is missing or `products` is empty (which may indicate a permissions issue rather than a GPU-free cluster), **ask the customer**:
+If `get_cluster_resources` fails, `gpu_info` is missing, or `products` is empty or unmappable (which may indicate a permissions issue rather than a GPU-free cluster), **ask the customer**:
 
 > "I wasn't able to read GPU inventory from the cluster — this can happen if the service account doesn't have node-listing permissions. Could you tell me which GPU type your cluster has? (e.g. H100, A100-80, L4) Or if you're not sure, I can show configurations without a hardware filter."
 

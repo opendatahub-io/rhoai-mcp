@@ -161,8 +161,13 @@ If `gpu_info` is missing or `products` is empty (which may indicate a permission
 
 > "I wasn't able to read GPU inventory from the cluster — this can happen if the service account doesn't have node-listing permissions. Could you tell me which GPU type your cluster has? (e.g. H100, A100-80, L4) Or if you're not sure, I can show configurations without a hardware filter."
 
+**Wait for the customer's answer before calling `recommend_model`.** Tool unavailability alone is not permission to recommend without a hardware filter.
+
+When you have asked the question above, treat the customer's next reply as exactly one of these cases — a Phase 2 confirmation ("that looks right") or "go ahead" is a reply to the workload specification, not an answer to the GPU question:
+
 - If they provide a GPU type → set `cluster_gpu_types` to that value and proceed to Step 2.
-- If they say they don't know → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`).
+- If they say they don't know, are not sure, or explicitly request unfiltered configurations → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`).
+- If they only confirm the Phase 2 workload/SLOs or say "go ahead" → that is not an answer to the GPU question; ask it again and wait for an actual answer.
 
 **Step 2 — Primary call.**
 

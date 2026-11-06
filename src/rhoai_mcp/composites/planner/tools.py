@@ -604,6 +604,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         e2e_target_ms: int,
         preferred_gpu_types: list[str] | None = None,
         optimization_profile: str | None = None,
+        selected_model_id: str | None = None,
+        selected_gpu_type: str | None = None,
+        selected_gpu_count: int | None = None,
+        min_quality: int | None = None,
+        max_cost_per_month: float | None = None,
     ) -> dict[str, Any]:
         """Generate a deployment plan for the chosen recommendation.
 
@@ -633,6 +638,11 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 Valid: L4, A100-40, A100-80, H100, H200, B200.
             optimization_profile: Scoring profile. Valid values:
                 balanced, optimize_latency, optimize_cost, optimize_quality.
+            selected_model_id: Model ID confirmed by the customer. Reject a different model.
+            selected_gpu_type: GPU type of the selected recommendation.
+            selected_gpu_count: GPUs per replica of the selected recommendation.
+            min_quality: Minimum quality used for the selected recommendation.
+            max_cost_per_month: Cost ceiling used for the selected recommendation.
 
         Returns:
             Deployment plan with model, GPU config, runtime readiness,
@@ -684,6 +694,18 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                     "error": f"Invalid preferred_gpu_types {invalid}. Valid values: {valid}",
                 }
 
+        if selected_gpu_type is not None and selected_gpu_type not in VALID_GPU_TYPES:
+            return {"error": f"Invalid selected_gpu_type '{selected_gpu_type}'"}
+
+        if selected_gpu_count is not None and selected_gpu_count <= 0:
+            return {"error": "selected_gpu_count must be > 0"}
+
+        if min_quality is not None and not 0 <= min_quality <= 100:
+            return {"error": "min_quality must be between 0 and 100"}
+
+        if max_cost_per_month is not None and max_cost_per_month < 0:
+            return {"error": "max_cost_per_month must be >= 0"}
+
         if optimization_profile is not None and optimization_profile not in OPTIMIZATION_PROFILES:
             valid = ", ".join(sorted(OPTIMIZATION_PROFILES))
             return {
@@ -706,6 +728,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 e2e_target_ms=e2e_target_ms,
                 namespace=namespace,
                 preferred_gpu_types=preferred_gpu_types,
+                min_quality=min_quality,
+                max_cost=max_cost_per_month,
                 priority_weights=weights,
             )
         except PlannerConnectionError:
@@ -731,6 +755,24 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             gpu_config.get("tensor_parallel", 1) if isinstance(gpu_config, dict) else 1
         )
         replicas = gpu_config.get("replicas", 1) if isinstance(gpu_config, dict) else 1
+
+        if selected_model_id is not None and config_result.model_id != selected_model_id:
+            return {
+                "error": "Planner returned a different model than the selected recommendation",
+                "selected_model_id": selected_model_id,
+                "planned_model_id": config_result.model_id,
+            }
+
+        if (selected_gpu_type is not None and gpu_type != selected_gpu_type) or (
+            selected_gpu_count is not None and gpu_count != selected_gpu_count
+        ):
+            return {
+                "error": "Planner returned a different GPU configuration than the selected recommendation",
+                "selected_gpu_type": selected_gpu_type,
+                "selected_gpu_count": selected_gpu_count,
+                "planned_gpu_type": gpu_type,
+                "planned_gpu_count": gpu_count,
+            }
 
         # Estimate memory per replica from GPU type
         memory_per_replica = _gpu_memory_for_type(gpu_type, gpu_count)

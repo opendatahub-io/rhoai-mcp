@@ -65,7 +65,7 @@ Adapt based on what the customer provided when invoking `/navigator`:
   > "I'll help you find the right model for your use case in three steps:
   > 1. **Understand your requirements** — tell me what you're building and I'll ask a few quick questions
   > 2. **Confirm workload profile** — I'll show you the planner's workload model so you can confirm the response time targets before recommendations are fetched
-  > 3. **Model recommendations** — I'll query the llm-d planner and show you the top options ranked by cost, performance, and quality against your cluster's actual GPU availability
+  > 3. **Model recommendations** — I'll query the llm-d planner and show you the top options ranked by cost, performance, and quality using your cluster's GPU types as a filter
   >
   > Once you've picked a model, I'll tell you exactly how to continue with `/navigator-deploy` to find the optimal GPU configuration and deploy it.
   >
@@ -161,7 +161,7 @@ If `get_cluster_resources` is unavailable, fails, or returns missing, empty, or 
 **Wait for the customer's answer before calling `recommend_model`.** Tool unavailability alone is not permission to recommend without a hardware filter.
 
 - If they provide GPU types → map them using the table above, set `cluster_gpu_types` to those values, and proceed to Step 2. Ask for clarification if a supplied type is ambiguous or unsupported.
-- If they say they don't know or explicitly request unfiltered recommendations → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`).
+- If they say they don't know or explicitly request unfiltered recommendations → set `cluster_gpu_types = []` and proceed to Step 2 (unconstrained — `preferred_gpu_types=[]`; label these slots "⚠ GPU availability unverified").
 
 **Step 2 — Primary call.**
 
@@ -169,17 +169,21 @@ If `get_cluster_resources` is unavailable, fails, or returns missing, empty, or 
 recommend_model(text="<customer description>", use_case="<value>", user_count=<n>, preferred_gpu_types=[<cluster_gpu_types>])
 ```
 
-Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`). Map response slots: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality.
+Pass any SLO overrides confirmed in Phase 2 (`ttft_max_ms`, `itl_max_ms`, `e2e_max_ms`).
+
+**Check every `recommend_model` response before using it.** Immediately after the primary call, the fallback call, and any duplicate-slot re-run below, check whether the response contains an `error` field. If it does, report the planner failure (including the `error` and any `hint`) to the customer and stop recommendation processing. Do not classify an error as a missing slot, make another recommendation call, build the table, or suggest relaxing requirements based on that error. One exception: an `Invalid use_case` error is a recoverable validation error, not a planner failure — call `list_use_cases` for the valid values, confirm the correct one with the customer, and re-run the recommendation call with it.
+
+Only after a successful call, map response slots: `top_balanced` → Balanced, `top_cost` → Cost, `top_performance` → Performance, `top_quality` → Quality. For every cluster-constrained result, read the GPU type from its `gpu` value (for example, `2x NVIDIA-H100` means `H100`) and check that it is in `cluster_gpu_types`. Treat an out-of-cluster or missing GPU type as a missing constrained match, even if the slot key is present.
 
 Track whether this call was **cluster-constrained** (`cluster_gpu_types` non-empty) or **unconstrained** (`cluster_gpu_types = []`), as the Cluster fit label depends on it.
 
 **Step 3 — Fallback (cluster-constrained calls only).**
 
-If Step 2 was cluster-constrained and a slot returned `None` (no match on cluster hardware), make a second `recommend_model` call with `preferred_gpu_types=[]` and use the result for that slot, labelled "⚠ requires new hardware" in the Cluster fit row.
+If Step 2 succeeded, was cluster-constrained, and one or more slot keys are absent from `recommendations` or contain a GPU type outside `cluster_gpu_types`, make **one** additional `recommend_model` call with `preferred_gpu_types=[]` (all other parameters unchanged) and use its results for **all** missing slots — a single call returns every slot, so do not make one fallback call per missing slot. Each fallback slot is labelled "⚠ no cluster-constrained match" in the Cluster fit row. The constrained call found no usable recommendation on cluster hardware under the current requirements; it does not establish that new hardware is needed.
 
-If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A `None` slot from an unconstrained call means the planner found no result for this SLO/use-case combination — show "—" in that slot (not a hardware miss).
+If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A missing slot from an unconstrained call means the planner found no result under the current requirements — show "—" in that slot.
 
-**Build the table only after all slots have data (or confirmed "—").** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
+**Build the table only after all slots have data (or confirmed "—").** Fill in this exact template — replace every `[value]` and `[cluster fit]` placeholder. Do not add, remove, or rename any row or column.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -190,28 +194,34 @@ If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A 
 | Quality score | [value] | [value] | [value] | [value] |
 | Cost/month | [value] | [value] | [value] | [value] |
 | Meets SLO | [value] | [value] | [value] | [value] |
-| Cluster fit | Available ✓ / ⚠ requires new hardware / ⚠ cluster GPU unknown | | | |
+| Cluster fit | [cluster fit] | [cluster fit] | [cluster fit] | [cluster fit] |
 
-**Cluster fit values:**
-- `Available ✓` — slot filled by a cluster-constrained call; hardware is confirmed available
-- `⚠ requires new hardware` — slot filled by the unconstrained fallback (Step 3); cluster lacks this GPU
-- `⚠ cluster GPU unknown` — slot filled by an unconstrained call because GPU inventory could not be determined; hardware availability unverified
+**Cluster fit labels:** Replace each `[cluster fit]` with exactly one of these labels, independently for each column:
 
-**If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint — do not relabel or copy data:
+- `Available ✓` — slot filled by a cluster-constrained call **and** its returned GPU type is in `cluster_gpu_types`. The GPU count per replica is not checked.
+- `⚠ no cluster-constrained match` — slot filled by the unconstrained fallback (Step 3); no recommendation matched the current requirements with the cluster GPU filter
+- `⚠ GPU availability unverified` — slot filled by an unconstrained call, either because GPU inventory could not be determined or because the customer chose to skip the hardware filter; no GPU filter was applied
+- `—` — no recommendation is available for that slot
+- For a duplicate-slot re-run, check the returned GPU type again before keeping `Available ✓`. If a constrained re-run returns an out-of-cluster or missing GPU type, treat it as no valid re-run result.
+
+**If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint and the same `preferred_gpu_types` as the call that filled the slot — do not relabel or copy data:
 
 | Duplicate slot | Tighter constraint to add |
 |---|---|
+| Balanced | `max_cost_per_month=<current_cost>` and `min_quality=<ceil(current_quality_score + 5)>` — same budget, higher quality |
 | Cost | `max_cost_per_month=<current_cost * 0.7>` |
 | Performance | `ttft_max_ms=<current_ttft * 0.7>` |
 | Quality | `min_quality=<ceil(current_quality_score + 5)>` |
 
 Round the quality threshold up to an integer: a current score of 27.1 requires `min_quality=33`.
 
+For Balanced or Quality, if `ceil(current_quality_score + 5)` exceeds 100, skip that re-run and keep the original recommendation and its Cluster fit label. `min_quality` cannot exceed 100.
+
 If a re-run returns no result, show "—" in that slot and explain that no match was returned under that query's constraints. Do not infer that no cheaper, faster, or higher-quality alternatives exist.
 
-Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English. For fallback slots, note that the recommendation requires hardware not currently in the cluster.
+Add a **Reasoning** note per slot drawn from the `reasoning` field — one sentence each in plain English. For fallback slots, note that the displayed recommendation came from an unconstrained call after the cluster-constrained call found no match under the current requirements.
 
-Suggest a default based on the customer's stated priority, favouring cluster-available options. Ask them to confirm which model to proceed with.
+Suggest a default based on the customer's stated priority, favouring recommendations returned by the cluster-constrained call. Ask them to confirm which model to proceed with.
 
 **Wait for the customer's confirmation before proceeding.**
 
@@ -226,16 +236,21 @@ Once the customer confirms which model they want, output the following handoff b
 ```
 <!-- navigator-handoff
 model_id: <chosen model_id>
+selected_gpu_type: <GPU type of the chosen recommendation, without NVIDIA- prefix>
+selected_gpu_count: <GPU count per replica of the chosen recommendation>
 use_case: <use_case>
 user_count: <user_count>
 chosen_category: <balanced|cost|performance|quality>
-prompt_tokens: <from get_use_case_defaults workload.prompt_tokens>
-output_tokens: <from get_use_case_defaults workload.output_tokens>
-expected_qps: <from get_expected_rps expected_rps>
-ttft_target_ms: <confirmed SLO TTFT default or override>
-itl_target_ms: <confirmed SLO ITL default or override>
-e2e_target_ms: <confirmed SLO E2E default or override>
+prompt_tokens: <from the call that returned the chosen recommendation's specification.traffic_profile.prompt_tokens>
+output_tokens: <from the call that returned the chosen recommendation's specification.traffic_profile.output_tokens>
+expected_qps: <from the chosen recommendation's specification.traffic_profile.expected_qps>
+ttft_target_ms: <from the call that returned the chosen recommendation's specification.slo_targets.ttft_target_ms>
+itl_target_ms: <from the call that returned the chosen recommendation's specification.slo_targets.itl_target_ms>
+e2e_target_ms: <from the call that returned the chosen recommendation's specification.slo_targets.e2e_target_ms>
 cluster_gpu_types: <comma-separated list, or empty if unknown>
+selected_preferred_gpu_types: <comma-separated GPU types passed to the call that filled this slot, or empty for an unconstrained result>
+min_quality: <constraint used in the call that filled this slot, or none>
+max_cost_per_month: <constraint used in the call that filled this slot, or none>
 -->
 ```
 
@@ -255,7 +270,7 @@ This skill ends here. Do not attempt to plan or execute a deployment.
 | `get_use_case_defaults` | 2 | SLO targets and workload profile for the use case |
 | `get_expected_rps` | 2 | Expected and peak RPS for the user count |
 | `get_cluster_resources` | 3 | Discover cluster GPU inventory before calling recommend_model |
-| `recommend_model` | 3 | Ranked model slots — called with cluster GPUs, then unconstrained for any empty slots |
+| `recommend_model` | 3 | Ranked model slots — called with cluster GPUs, then unconstrained for missing slots only after a successful constrained call |
 
 ### Supporting tools
 | Tool | When to use |

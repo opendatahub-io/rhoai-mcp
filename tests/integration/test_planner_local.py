@@ -33,9 +33,10 @@ from __future__ import annotations
 import asyncio
 import os
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+from planner.knowledge_base.loader import generate_config_id
 
 from rhoai_mcp.composites.planner.client import CATEGORY_MAP, PlannerAPIError
 from rhoai_mcp.composites.planner.local_client import LocalPlannerClient
@@ -64,6 +65,24 @@ async def recommend_result(local_client: LocalPlannerClient) -> RecommendationRe
         user_count_override=1000,
         gpu_types_override=["H100", "A100-80"],
     )
+
+
+async def test_failed_catalog_sync_keeps_local_recommendations_available() -> None:
+    """A catalog outage still leaves the embedded planner with bundled data."""
+    with patch(
+        "planner.Planner.sync_model_catalog",
+        return_value={"benchmarks_added": 0, "models_added": 0, "errors": ["catalog unavailable"]},
+    ):
+        client = LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+    assert client._planner._benchmark_repo.get_all_benchmarks()
+    result = await client.recommend(
+        "unused — local mode ignores text",
+        use_case_override="chatbot_conversational",
+        user_count_override=1000,
+        gpu_types_override=["H100", "A100-80"],
+    )
+    assert result.total_configs_evaluated > 0
 
 
 @pytest.fixture(scope="module")
@@ -349,6 +368,162 @@ async def test_generate_config_invalid_category(local_client: LocalPlannerClient
             e2e_target_ms=5000,
         )
     assert exc_info.value.status_code == 400
+
+
+@pytest.mark.parametrize("with_canonical_h100", [False, True])
+async def test_catalog_gpu_alias_is_ranked_before_category_limit(
+    with_canonical_h100: bool,
+) -> None:
+    """A compatible GPU must survive the planner's top-10 cutoff in both flows."""
+    client = LocalPlannerClient()
+    repo = client._planner._benchmark_repo
+    rows_by_model = {}
+    for row in repo.get_all_benchmarks():
+        if (
+            row.hardware == "H100"
+            and row.hardware_count == 1
+            and (row.prompt_tokens, row.output_tokens) == (512, 256)
+        ):
+            rows_by_model.setdefault(row.model_hf_repo, row)
+    assert len(rows_by_model) >= 13
+
+    rows = list(rows_by_model.values())[:13]
+    benchmarks = [
+        {
+            **row.to_dict(),
+            "hardware": "NVIDIA-A100-80GB" if i < 11 else "NVIDIA-H100-80GB-HBM3",
+            "type": "model_catalog",
+        }
+        for i, row in enumerate(rows[:12])
+    ]
+    if with_canonical_h100:
+        benchmarks.append({**rows[12].to_dict(), "hardware_count": 8, "type": "model_catalog"})
+    repo.reset()
+    repo.load_benchmarks(benchmarks, source="model_catalog", confidence_level="benchmarked")
+    conn = repo._get_connection()
+    before = {
+        row["id"]: dict(row)
+        for row in conn.execute("SELECT * FROM exported_summaries WHERE source = 'model_catalog'")
+    }
+    assert before
+    assert all(row["type"] == "model_catalog" for row in before.values())
+    client._normalize_synced_benchmarks()
+    after = {
+        row["id"]: dict(row)
+        for row in conn.execute("SELECT * FROM exported_summaries WHERE source = 'model_catalog'")
+    }
+    assert after.keys() == before.keys()
+    for row_id, row in after.items():
+        expected_hardware = (
+            "A100-80" if before[row_id]["hardware"] == "NVIDIA-A100-80GB" else "H100"
+        )
+        assert row == {
+            **before[row_id],
+            "hardware": expected_hardware,
+            "config_id": generate_config_id({**before[row_id], "hardware": expected_hardware}),
+        }
+    assert {row.hardware for row in repo.get_all_benchmarks()} <= {"A100-80", "H100"}
+
+    common = {
+        "use_case_override": "chatbot_conversational",
+        "user_count_override": 1,
+        "ttft_override_ms": 5000,
+        "itl_override_ms": 1000,
+        "e2e_override_ms": 100000,
+    }
+    unrestricted = await client.recommend("unused", gpu_types_override=[], **common)
+    assert unrestricted.top_cost is not None
+    assert unrestricted.top_cost.gpu_config.gpu_type == "A100-80"
+
+    constrained = await client.recommend("unused", gpu_types_override=["H100"], **common)
+    assert constrained.top_cost is not None
+    assert constrained.top_cost.gpu_config.gpu_type == "H100"
+
+    unavailable = await client.recommend("unused", gpu_types_override=["L4"], **common)
+    assert unavailable.top_cost is None
+    assert unavailable.configs_after_filters == 0
+
+    deployment = await client.generate_config(
+        category="cost",
+        use_case="chatbot_conversational",
+        user_count=1,
+        prompt_tokens=512,
+        output_tokens=256,
+        expected_qps=0.1,
+        ttft_target_ms=5000,
+        itl_target_ms=1000,
+        e2e_target_ms=100000,
+        preferred_gpu_types=["H100"],
+    )
+    assert deployment.model_name == constrained.top_cost.model_name
+    assert deployment.configs
+
+
+@pytest.mark.parametrize("with_canonical", [False, True])
+def test_catalog_alias_normalization_keeps_unique_config_identity(
+    with_canonical: bool,
+) -> None:
+    """Alias and canonical rows resolve to one key without losing winner metadata."""
+    client = LocalPlannerClient()
+    repo = client._planner._benchmark_repo
+    template = next(row for row in repo.get_all_benchmarks() if row.hardware == "H100")
+    alias = {
+        **template.to_dict(),
+        "hardware": "NVIDIA-H100-80GB-HBM3",
+        "type": "model_catalog",
+        "model_uri": "catalog://alias",
+    }
+    canonical = {
+        **template.to_dict(),
+        "hardware": "H100",
+        "type": "model_catalog",
+        "model_uri": "catalog://canonical",
+    }
+    repo.reset()
+    repo.load_benchmarks(
+        [alias, canonical] if with_canonical else [alias],
+        source="model_catalog",
+        confidence_level="benchmarked",
+    )
+    conn = repo._get_connection()
+    before = {
+        row["hardware"]: dict(row)
+        for row in conn.execute("SELECT * FROM exported_summaries WHERE source = 'model_catalog'")
+    }
+
+    client._normalize_synced_benchmarks()
+
+    rows = conn.execute("SELECT * FROM exported_summaries WHERE source = 'model_catalog'").fetchall()
+    assert len(rows) == 1
+    result = dict(rows[0])
+    original = before["H100" if with_canonical else "NVIDIA-H100-80GB-HBM3"]
+    assert result == {
+        **original,
+        "hardware": "H100",
+        "config_id": generate_config_id({**original, "hardware": "H100"}),
+    }
+    client._normalize_synced_benchmarks()
+    assert [dict(row) for row in conn.execute("SELECT * FROM exported_summaries")] == [result]
+    repo.load_benchmarks([canonical], source="model_catalog", confidence_level="benchmarked")
+    assert len(repo.get_all_benchmarks()) == 1
+
+
+def test_catalog_alias_does_not_duplicate_existing_benchmark_source() -> None:
+    """A canonical configuration from another source retains its unique key."""
+    client = LocalPlannerClient()
+    repo = client._planner._benchmark_repo
+    template = next(row for row in repo.get_all_benchmarks() if row.hardware == "H100")
+    canonical = {**template.to_dict(), "hardware": "H100"}
+    alias = {**template.to_dict(), "hardware": "NVIDIA-H100-80GB-HBM3", "type": "model_catalog"}
+    repo.reset()
+    repo.load_benchmarks([canonical], source="local", confidence_level="benchmarked")
+    repo.load_benchmarks([alias], source="model_catalog", confidence_level="benchmarked")
+    conn = repo._get_connection()
+    original = dict(conn.execute("SELECT * FROM exported_summaries WHERE source = 'local'").fetchone())
+
+    client._normalize_synced_benchmarks()
+
+    assert [dict(row) for row in conn.execute("SELECT * FROM exported_summaries")] == [original]
 
 
 # == MCP tool: recommend_model ================================================

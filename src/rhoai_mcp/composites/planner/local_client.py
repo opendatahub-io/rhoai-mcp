@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 from typing import Any
 
 from planner import (
@@ -17,6 +18,8 @@ from rhoai_mcp.composites.planner.client import (
     CATEGORY_MAP,
     PlannerAPIError,
     _apply_priority_overrides,
+    _filter_by_gpu,
+    _filter_ranked_lists,
     _parse_recommendation,
 )
 from rhoai_mcp.composites.planner.models import (
@@ -25,13 +28,14 @@ from rhoai_mcp.composites.planner.models import (
 )
 
 logger = logging.getLogger(__name__)
+_SERVICE_ACCOUNT_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
 
 class LocalPlannerClient:
     """Embedded Planner client using in-process library calls.
 
     When a Model Catalog URL is provided, benchmarks are synced from it.
-    Otherwise, falls back to bundled synthetic benchmarks (with a warning).
+    Bundled synthetic benchmarks are loaded if no catalog data is available.
     Intent extraction is NOT supported — all required fields must be
     provided as explicit overrides by the calling agent.
     """
@@ -42,37 +46,124 @@ class LocalPlannerClient:
     ) -> None:
         self._planner = Planner()
 
-        # Pre-seed the gpu_normalizer singleton with the Planner's catalog
-        # to avoid a redundant ModelCatalog() construction on first
-        # normalize_gpu_types() call (llm-d-planner bug workaround).
-        import planner.shared.utils.gpu_normalizer as _gpu_norm
-
-        _gpu_norm._catalog_instance = self._planner._model_catalog
-
         if model_catalog_url:
+            models_before = len(self._planner._model_catalog._models)
             try:
                 result = self._planner.sync_model_catalog(url=model_catalog_url)
-                logger.info(
-                    "Model Catalog sync: %d benchmarks added, %d models added",
-                    result.get("benchmarks_added", 0),
-                    result.get("models_added", 0),
-                )
-            except ImportError as e:
+            except (ImportError, ValueError, PlannerError, OSError) as e:
+                if isinstance(e, OSError) and e.filename != _SERVICE_ACCOUNT_TOKEN_PATH:
+                    raise
+                logger.warning("Model Catalog sync failed (%s)", type(e).__name__)
+                self._load_bundled_benchmarks()
+                return
+
+            errors = result.get("errors", [])
+            if errors:
+                logger.warning("Model Catalog sync reported %d errors", len(errors))
+            try:
+                catalog_benchmarks = self._catalog_benchmark_count()
+            except sqlite3.Error as e:
                 raise PlannerAPIError(
                     status_code=502,
-                    detail=f"Model Catalog sync requires extra dependency: {e}",
+                    detail=f"Model Catalog benchmark inspection failed: {type(e).__name__}",
                 ) from e
-            except (ValueError, PlannerError) as e:
+            if catalog_benchmarks == 0:
+                logger.warning("Model Catalog sync produced no benchmarks")
+                self._load_bundled_benchmarks()
+                return
+
+            try:
+                self._normalize_synced_benchmarks()
+                catalog_benchmarks = self._catalog_benchmark_count()
+            except sqlite3.Error as e:
                 raise PlannerAPIError(
                     status_code=502,
-                    detail=f"Model Catalog sync failed: {e}",
+                    detail=f"Model Catalog benchmark normalization failed: {type(e).__name__}",
                 ) from e
-        else:
-            logger.warning(
-                "No Model Catalog URL configured; loading bundled synthetic benchmarks. "
-                "Set RHOAI_MCP_PLANNER_MODEL_CATALOG_URL for accurate recommendations."
+            models_added = len(self._planner._model_catalog._models) - models_before
+            logger.info(
+                "Model Catalog sync: %d catalog benchmarks available, %d model%s added",
+                catalog_benchmarks,
+                models_added,
+                "" if models_added == 1 else "s",
             )
-            self._planner.load_bundled_benchmarks()
+        else:
+            logger.warning("No Model Catalog URL configured")
+            self._load_bundled_benchmarks()
+
+    def _catalog_benchmark_count(self) -> int:
+        """Count catalog rows actually retained in the planner repository."""
+        conn = self._planner._benchmark_repo._get_connection()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM exported_summaries WHERE source = ?", ("model_catalog",)
+        ).fetchone()
+        return int(row[0])
+
+    def _load_bundled_benchmarks(self) -> None:
+        logger.warning(
+            "Loading bundled synthetic benchmarks. "
+            "Check RHOAI_MCP_PLANNER_MODEL_CATALOG_URL and catalog connectivity "
+            "for accurate recommendations."
+        )
+        self._planner.load_bundled_benchmarks()
+
+    def _normalize_synced_benchmarks(self) -> None:
+        """Normalize catalog hardware and configuration keys without rewriting rows."""
+        from planner.knowledge_base.loader import generate_config_id
+        from planner.shared.utils import normalize_gpu_types
+
+        repo = self._planner._benchmark_repo
+        conn = repo._get_connection()
+        with conn:
+            rows = conn.execute(
+                "SELECT * FROM exported_summaries WHERE source = ?", ("model_catalog",)
+            ).fetchall()
+            non_catalog_keys = {
+                row["config_id"]
+                for row in conn.execute(
+                    "SELECT config_id FROM exported_summaries WHERE source != ?", ("model_catalog",)
+                )
+            }
+
+            by_key: dict[str, list[tuple[dict[str, Any], str]]] = {}
+            for stored_row in rows:
+                row = dict(stored_row)
+                names = normalize_gpu_types([row["hardware"]])
+                hardware = names[0] if len(names) == 1 else row["hardware"]
+                key = generate_config_id({**row, "hardware": hardware})
+                by_key.setdefault(key, []).append((row, hardware))
+
+            deletes: list[tuple[str]] = []
+            updates: list[tuple[str, str, str]] = []
+            for key, candidates in by_key.items():
+                # Keep an existing canonical row when aliases share a key.
+                candidates.sort(
+                    key=lambda item: (
+                        item[0]["hardware"] != item[1],
+                        item[0]["config_id"] != key,
+                        item[0]["id"],
+                    )
+                )
+                if key in non_catalog_keys:
+                    deletes.extend((row["id"],) for row, _ in candidates)
+                    continue
+                winner, hardware = candidates[0]
+                deletes.extend((row["id"],) for row, _ in candidates[1:])
+                if winner["hardware"] != hardware or winner["config_id"] != key:
+                    updates.append((hardware, key, winner["id"]))
+
+            if deletes:
+                conn.executemany("DELETE FROM exported_summaries WHERE id = ?", deletes)
+            if updates:
+                # Free old keys before assigning canonical keys under the unique index.
+                conn.executemany(
+                    "UPDATE exported_summaries SET config_id = ? WHERE id = ?",
+                    [(f"__normalizing__{row_id}", row_id) for _, _, row_id in updates],
+                )
+                conn.executemany(
+                    "UPDATE exported_summaries SET hardware = ?, config_id = ? WHERE id = ?",
+                    updates,
+                )
 
     def _get_all_use_case_data(self) -> dict[str, Any]:
         """Return the use-case data loaded by the Planner instance."""
@@ -231,6 +322,14 @@ class LocalPlannerClient:
             latency_list = ranked_data.get("lowest_latency", [])
             quality_list = ranked_data.get("best_quality", [])
 
+            after_filters = ranked.configs_after_filters
+            if gpu_types_override:
+                filtered, after_filters = _filter_ranked_lists(ranked_data, gpu_types_override)
+                balanced_list = filtered["balanced"]
+                cost_list = filtered["lowest_cost"]
+                latency_list = filtered["lowest_latency"]
+                quality_list = filtered["best_quality"]
+
             top_balanced = _parse_recommendation(balanced_list[0]) if balanced_list else None
             top_cost = _parse_recommendation(cost_list[0]) if cost_list else None
             top_performance = _parse_recommendation(latency_list[0]) if latency_list else None
@@ -259,7 +358,7 @@ class LocalPlannerClient:
                 top_balanced=top_balanced,
                 top_quality=top_quality,
                 total_configs_evaluated=ranked.total_configs_evaluated,
-                configs_after_filters=ranked.configs_after_filters,
+                configs_after_filters=after_filters,
             )
 
         try:
@@ -335,6 +434,8 @@ class LocalPlannerClient:
             ranked_data = ranked.model_dump()
 
             category_list = ranked_data.get(category_key, [])
+            if preferred_gpu_types:
+                category_list = _filter_by_gpu(category_list, preferred_gpu_types)
             if not category_list:
                 raise PlannerAPIError(
                     status_code=404,

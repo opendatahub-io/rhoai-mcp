@@ -34,7 +34,7 @@ class LocalPlannerClient:
     """Embedded Planner client using in-process library calls.
 
     When a Model Catalog URL is provided, benchmarks are synced from it.
-    Otherwise, falls back to bundled synthetic benchmarks (with a warning).
+    Bundled synthetic benchmarks are loaded if no catalog data is available.
     Intent extraction is NOT supported — all required fields must be
     provided as explicit overrides by the calling agent.
     """
@@ -46,36 +46,63 @@ class LocalPlannerClient:
         self._planner = Planner()
 
         if model_catalog_url:
+            models_before = len(self._planner._model_catalog._models)
             try:
                 result = self._planner.sync_model_catalog(url=model_catalog_url)
-                try:
-                    self._normalize_synced_benchmarks()
-                except sqlite3.Error as e:
-                    raise PlannerAPIError(
-                        status_code=502,
-                        detail=f"Model Catalog benchmark normalization failed: {type(e).__name__}",
-                    ) from e
-                logger.info(
-                    "Model Catalog sync: %d benchmarks added, %d models added",
-                    result.get("benchmarks_added", 0),
-                    result.get("models_added", 0),
-                )
-            except ImportError as e:
+            except (ImportError, ValueError, PlannerError) as e:
+                logger.warning("Model Catalog sync failed (%s)", type(e).__name__)
+                self._load_bundled_benchmarks()
+                return
+
+            errors = result.get("errors", [])
+            if errors:
+                logger.warning("Model Catalog sync reported %d errors", len(errors))
+            try:
+                catalog_benchmarks = self._catalog_benchmark_count()
+            except sqlite3.Error as e:
                 raise PlannerAPIError(
                     status_code=502,
-                    detail=f"Model Catalog sync requires extra dependency: {e}",
+                    detail=f"Model Catalog benchmark inspection failed: {type(e).__name__}",
                 ) from e
-            except (ValueError, PlannerError) as e:
+            if catalog_benchmarks == 0:
+                logger.warning("Model Catalog sync produced no benchmarks")
+                self._load_bundled_benchmarks()
+                return
+
+            try:
+                self._normalize_synced_benchmarks()
+                catalog_benchmarks = self._catalog_benchmark_count()
+            except sqlite3.Error as e:
                 raise PlannerAPIError(
                     status_code=502,
-                    detail=f"Model Catalog sync failed: {e}",
+                    detail=f"Model Catalog benchmark normalization failed: {type(e).__name__}",
                 ) from e
-        else:
-            logger.warning(
-                "No Model Catalog URL configured; loading bundled synthetic benchmarks. "
-                "Set RHOAI_MCP_PLANNER_MODEL_CATALOG_URL for accurate recommendations."
+            models_added = len(self._planner._model_catalog._models) - models_before
+            logger.info(
+                "Model Catalog sync: %d catalog benchmarks available, %d model%s added",
+                catalog_benchmarks,
+                models_added,
+                "" if models_added == 1 else "s",
             )
-            self._planner.load_bundled_benchmarks()
+        else:
+            logger.warning("No Model Catalog URL configured")
+            self._load_bundled_benchmarks()
+
+    def _catalog_benchmark_count(self) -> int:
+        """Count catalog rows actually retained in the planner repository."""
+        conn = self._planner._benchmark_repo._get_connection()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM exported_summaries WHERE source = ?", ("model_catalog",)
+        ).fetchone()
+        return int(row[0])
+
+    def _load_bundled_benchmarks(self) -> None:
+        logger.warning(
+            "Loading bundled synthetic benchmarks. "
+            "Check RHOAI_MCP_PLANNER_MODEL_CATALOG_URL and catalog connectivity "
+            "for accurate recommendations."
+        )
+        self._planner.load_bundled_benchmarks()
 
     def _normalize_synced_benchmarks(self) -> None:
         """Normalize catalog hardware and configuration keys without rewriting rows."""

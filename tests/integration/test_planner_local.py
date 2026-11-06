@@ -33,7 +33,7 @@ from __future__ import annotations
 import asyncio
 import os
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from planner.knowledge_base.loader import generate_config_id
@@ -65,6 +65,24 @@ async def recommend_result(local_client: LocalPlannerClient) -> RecommendationRe
         user_count_override=1000,
         gpu_types_override=["H100", "A100-80"],
     )
+
+
+async def test_failed_catalog_sync_keeps_local_recommendations_available() -> None:
+    """A catalog outage still leaves the embedded planner with bundled data."""
+    with patch(
+        "planner.Planner.sync_model_catalog",
+        return_value={"benchmarks_added": 0, "models_added": 0, "errors": ["catalog unavailable"]},
+    ):
+        client = LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+    assert client._planner._benchmark_repo.get_all_benchmarks()
+    result = await client.recommend(
+        "unused — local mode ignores text",
+        use_case_override="chatbot_conversational",
+        user_count_override=1000,
+        gpu_types_override=["H100", "A100-80"],
+    )
+    assert result.total_configs_evaluated > 0
 
 
 @pytest.fixture(scope="module")

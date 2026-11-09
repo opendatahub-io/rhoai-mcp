@@ -1,5 +1,6 @@
 """Tests for OIDC integration in server.py."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -227,3 +228,71 @@ class TestGetPerMessageToken:
                 assert result.get_secret_value() == "same-token"
         finally:
             request_ctx.reset(ctx_token)
+
+
+class TestAuthAppWrapping:
+    """Transport app builders must be wrapped by OIDCAuthMiddleware (RHAI-14618).
+
+    Under mcp 2.x the app builders take keyword-only arguments and no
+    ``mount_path``; the wrappers installed by ``_setup_auth()`` must forward
+    whatever the SDK passes and still apply the auth middleware. Tool-filtering
+    installation is stubbed out here — its v2 port is RHAI-14627 (story 3.1).
+    """
+
+    def _make_server(self) -> RHOAIServer:
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_token_mode="token-review",
+            oidc_kube_auth_strategy="impersonation",
+            mock_cluster=True,
+            transport=TransportMode.SSE,
+        )
+        server = RHOAIServer(config)
+        mock_k8s = MagicMock()
+        mock_k8s.is_connected = True
+        mock_k8s._api_client = MagicMock()
+        server._k8s_client = mock_k8s
+        return server
+
+    @staticmethod
+    def _setup_auth(mcp: Any, server: RHOAIServer) -> None:
+        """Run _setup_auth with tool filtering stubbed (v2 port pending, 3.1)."""
+        with patch.object(server, "_install_tool_filtering"):
+            server._setup_auth(mcp)
+
+    def test_sse_app_wrapped_in_oidc_middleware(self) -> None:
+        from mcp.server.mcpserver import MCPServer
+
+        from rhoai_mcp.auth.middleware import OIDCAuthMiddleware
+
+        server = self._make_server()
+        mcp = MCPServer(name="wrap-test")
+        self._setup_auth(mcp, server)
+
+        app = mcp.sse_app()
+        assert isinstance(app, OIDCAuthMiddleware)
+
+    def test_sse_app_forwards_v2_kwargs(self) -> None:
+        """The wrapper forwards v2's keyword-only sse_app arguments (no mount_path)."""
+        from mcp.server.mcpserver import MCPServer
+
+        from rhoai_mcp.auth.middleware import OIDCAuthMiddleware
+
+        server = self._make_server()
+        mcp = MCPServer(name="wrap-test")
+        self._setup_auth(mcp, server)
+
+        app = mcp.sse_app(sse_path="/sse", message_path="/messages/")
+        assert isinstance(app, OIDCAuthMiddleware)
+
+    def test_streamable_http_app_wrapped_in_oidc_middleware(self) -> None:
+        from mcp.server.mcpserver import MCPServer
+
+        from rhoai_mcp.auth.middleware import OIDCAuthMiddleware
+
+        server = self._make_server()
+        mcp = MCPServer(name="wrap-test")
+        self._setup_auth(mcp, server)
+
+        app = mcp.streamable_http_app()
+        assert isinstance(app, OIDCAuthMiddleware)

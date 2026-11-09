@@ -105,13 +105,13 @@ class TestToolFiltering:
 
 
 def _make_tool(name: str) -> MCPTool:
-    return MCPTool(name=name, description=f"Tool {name}", inputSchema={"type": "object"})
+    return MCPTool(name=name, description=f"Tool {name}", input_schema={"type": "object"})
 
 
-def _make_list_tools_result(names: list[str]) -> mcp_types.ServerResult:
-    """Build a ServerResult wrapping a ListToolsResult."""
+def _make_list_tools_result(names: list[str]) -> mcp_types.ListToolsResult:
+    """Build a ListToolsResult (v2 handlers return concrete result types)."""
     tools = [_make_tool(n) for n in names]
-    return mcp_types.ServerResult(mcp_types.ListToolsResult(tools=tools))
+    return mcp_types.ListToolsResult(tools=tools)
 
 
 class TestToolFilteringEnforcement:
@@ -138,7 +138,7 @@ class TestToolFilteringEnforcement:
         server, mcp = self._create_server_with_filtering()
         lowlevel = mcp._mcp_server
 
-        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ServerResult:
+        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ListToolsResult:
             return _make_list_tools_result(["tool_a", "tool_b", "tool_c"])
 
         # Reinstall filtering over our mock
@@ -151,7 +151,7 @@ class TestToolFilteringEnforcement:
         with patch.object(server, "get_allowed_tools", return_value=({"tool_a"}, governed)):
             result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
 
-        names = [t.name for t in result.root.tools]
+        names = [t.name for t in result.tools]
         assert names == ["tool_a"]
 
     async def test_list_tools_passes_ungoverned_tools(self) -> None:
@@ -159,7 +159,7 @@ class TestToolFilteringEnforcement:
         server, mcp = self._create_server_with_filtering()
         lowlevel = mcp._mcp_server
 
-        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ServerResult:
+        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ListToolsResult:
             return _make_list_tools_result(["governed_ok", "governed_deny", "ungoverned"])
 
         lowlevel.request_handlers[mcp_types.ListToolsRequest] = mock_original
@@ -170,7 +170,7 @@ class TestToolFilteringEnforcement:
         with patch.object(server, "get_allowed_tools", return_value=({"governed_ok"}, governed)):
             result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
 
-        names = [t.name for t in result.root.tools]
+        names = [t.name for t in result.tools]
         assert sorted(names) == ["governed_ok", "ungoverned"]
 
     async def test_list_tools_returns_all_when_no_filtering(self) -> None:
@@ -178,7 +178,7 @@ class TestToolFilteringEnforcement:
         server, mcp = self._create_server_with_filtering()
         lowlevel = mcp._mcp_server
 
-        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ServerResult:
+        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ListToolsResult:
             return _make_list_tools_result(["tool_a", "tool_b"])
 
         lowlevel.request_handlers[mcp_types.ListToolsRequest] = mock_original
@@ -188,7 +188,7 @@ class TestToolFilteringEnforcement:
         with patch.object(server, "get_allowed_tools", return_value=None):
             result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
 
-        names = [t.name for t in result.root.tools]
+        names = [t.name for t in result.tools]
         assert "tool_a" in names
         assert "tool_b" in names
 
@@ -197,7 +197,7 @@ class TestToolFilteringEnforcement:
         server, mcp = self._create_server_with_filtering()
         lowlevel = mcp._mcp_server
 
-        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ServerResult:
+        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ListToolsResult:
             return _make_list_tools_result(["tool_a"])
 
         lowlevel.request_handlers[mcp_types.ListToolsRequest] = mock_original
@@ -207,10 +207,10 @@ class TestToolFilteringEnforcement:
         with patch.object(server, "get_allowed_tools", side_effect=RuntimeError("fail")):
             result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
 
-        assert result.root.tools == []
+        assert result.tools == []
 
     async def test_call_tool_denied_returns_error_result(self) -> None:
-        """call_tool handler returns CallToolResult(isError=True) for denied tools."""
+        """call_tool handler returns CallToolResult(is_error=True) for denied tools."""
         server, mcp = self._create_server_with_filtering()
         lowlevel = mcp._mcp_server
 
@@ -224,10 +224,9 @@ class TestToolFilteringEnforcement:
         with patch.object(server, "get_allowed_tools", return_value=({"tool_a"}, governed)):
             result = await handler(req)
 
-        call_result = result.root
-        assert isinstance(call_result, mcp_types.CallToolResult)
-        assert call_result.isError is True
-        assert "not permitted" in call_result.content[0].text
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert result.is_error is True
+        assert "not permitted" in result.content[0].text
 
     async def test_call_tool_allowed_passes_through(self) -> None:
         """call_tool handler passes through to original for allowed tools."""
@@ -235,11 +234,9 @@ class TestToolFilteringEnforcement:
         lowlevel = mcp._mcp_server
 
         # Replace original call handler with a mock
-        mock_result = mcp_types.ServerResult(
-            mcp_types.CallToolResult(
-                content=[mcp_types.TextContent(type="text", text="ok")],
-                isError=False,
-            )
+        mock_result = mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text="ok")],
+            is_error=False,
         )
         original_call_handler = AsyncMock(return_value=mock_result)
         lowlevel.request_handlers[mcp_types.CallToolRequest] = original_call_handler
@@ -263,11 +260,9 @@ class TestToolFilteringEnforcement:
         server, mcp = self._create_server_with_filtering()
         lowlevel = mcp._mcp_server
 
-        mock_result = mcp_types.ServerResult(
-            mcp_types.CallToolResult(
-                content=[mcp_types.TextContent(type="text", text="ok")],
-                isError=False,
-            )
+        mock_result = mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text="ok")],
+            is_error=False,
         )
         original_call_handler = AsyncMock(return_value=mock_result)
         lowlevel.request_handlers[mcp_types.CallToolRequest] = original_call_handler

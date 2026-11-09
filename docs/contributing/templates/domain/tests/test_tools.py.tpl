@@ -10,12 +10,12 @@ from rhoai_mcp.domains.{{DOMAIN_NAME}}.tools import register_tools
 class TestRegisterTools:
     """Test that register_tools registers the expected tools."""
 
-    def test_registers_expected_tools(self) -> None:
+    async def test_registers_expected_tools(self) -> None:
         """register_tools should add list and get tools."""
         mcp = MCPServer("test")
         server = MagicMock()
         register_tools(mcp, server)
 
-        tool_names = [t.name for t in mcp._tool_manager.list_tools()]
+        tool_names = [t.name for t in await mcp.list_tools()]
         assert "list_{{RESOURCE_NAME}}s" in tool_names
         assert "get_{{RESOURCE_NAME}}" in tool_names

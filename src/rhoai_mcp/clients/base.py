@@ -22,6 +22,7 @@ from rhoai_mcp.utils.errors import (
     NotManagedByMCPError,
     ReadOnlyError,
     RHOAIError,
+    ValidationError,
 )
 from rhoai_mcp.utils.labels import RHOAILabels
 
@@ -200,12 +201,12 @@ class K8sClient:
     def _validate_header_value(value: str, field: str) -> str:
         """Validate a value is safe for use in HTTP headers (CWE-113)."""
         if "\r" in value or "\n" in value or "\x00" in value:
-            raise ValueError(f"Invalid {field}: control characters are not allowed")
+            raise ValidationError(f"Invalid {field}: control characters are not allowed")
         stripped = value.strip()
         if not stripped:
-            raise ValueError(f"Invalid {field}: empty value")
+            raise ValidationError(f"Invalid {field}: empty value")
         if stripped != value:
-            raise ValueError(f"Invalid {field}: leading or trailing whitespace is not allowed")
+            raise ValidationError(f"Invalid {field}: leading or trailing whitespace is not allowed")
         return value
 
     def create_impersonating_client(self, username: str, groups: list[str]) -> K8sClient:
@@ -218,7 +219,7 @@ class K8sClient:
         Impersonate-Group header using HTTPHeaderDict.
         """
         if not self._api_client:
-            raise RuntimeError("Cannot impersonate: client not connected")
+            raise RHOAIError("Cannot impersonate: client not connected")
 
         from urllib3._collections import HTTPHeaderDict
 
@@ -248,7 +249,7 @@ class K8sClient:
     def create_user_token_client(self, token: SecretStr) -> K8sClient:
         """Create a new K8sClient that authenticates with the given bearer token."""
         if not self._api_client:
-            raise RuntimeError("Cannot create user-token client: client not connected")
+            raise RHOAIError("Cannot create user-token client: client not connected")
 
         configuration = client.Configuration()
         configuration.host = self._api_client.configuration.host

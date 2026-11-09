@@ -1,7 +1,9 @@
 """Exceptions for Model Registry operations."""
 
+from mcp.server.mcpserver.exceptions import ToolError
 
-class ModelRegistryError(Exception):
+
+class ModelRegistryError(ToolError):
     """Base exception for Model Registry errors.
 
     Raised when there's a problem communicating with the Model Registry

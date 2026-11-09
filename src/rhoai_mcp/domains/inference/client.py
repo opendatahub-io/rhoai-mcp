@@ -8,6 +8,7 @@ from rhoai_mcp.domains.inference.models import (
     InferenceService,
     InferenceServiceCreate,
 )
+from rhoai_mcp.utils.errors import ValidationError
 from rhoai_mcp.utils.labels import RHOAILabels
 
 if TYPE_CHECKING:
@@ -321,7 +322,7 @@ class InferenceClient:
                     break
 
         if not created_runtime:
-            raise ValueError(f"Template '{template_name}' does not contain a ServingRuntime")
+            raise ValidationError(f"Template '{template_name}' does not contain a ServingRuntime")
 
         return {
             "created": True,

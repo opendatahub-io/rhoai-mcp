@@ -16,10 +16,12 @@ import time
 from dataclasses import dataclass, field
 from typing import ClassVar
 
+from mcp.server.mcpserver.exceptions import ToolError
+
 logger = logging.getLogger(__name__)
 
 
-class PortForwardError(Exception):
+class PortForwardError(ToolError):
     """Error during port-forward operation."""
 
     pass

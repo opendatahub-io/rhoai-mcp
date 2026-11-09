@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx2
 from httpx2 import ConnectError, HTTPStatusError, RequestError, TimeoutException
+from mcp.server.mcpserver.exceptions import ToolError
 
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
@@ -102,11 +103,11 @@ def _filter_by_gpu(recs: list[dict[str, Any]], allowed: set[str]) -> list[dict[s
     return [r for r in recs if _gpu_type_matches(r, allowed)]
 
 
-class PlannerConnectionError(Exception):
+class PlannerConnectionError(ToolError):
     """Raised when Planner service is unreachable."""
 
 
-class PlannerAPIError(Exception):
+class PlannerAPIError(ToolError):
     """Raised when Planner API returns an error response."""
 
     def __init__(self, status_code: int, detail: str) -> None:

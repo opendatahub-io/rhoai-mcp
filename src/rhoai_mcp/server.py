@@ -471,17 +471,41 @@ class RHOAIServer:
         Monkey-patching methods on the MCPServer instance has no effect because
         the lowlevel server's request_handlers dict still holds the original
         closures. We must wrap the handlers in that dict directly.
+
+        Raises:
+            RuntimeError: if the SDK's ListToolsRequest/CallToolRequest
+                handlers are absent or cannot be replaced — i.e. the SDK's
+                dispatch internals changed and filtering would silently
+                no-op (RHOAIENG-95548, Risk B).
         """
         from mcp import types as mcp_types
 
         server = self
         lowlevel = mcp._mcp_server  # noqa: SLF001
 
-        # Wrap list_tools handler
+        # The SDK must have registered its own handlers for both enforcement
+        # points. If either is missing, the SDK's dispatch internals changed
+        # and this patch would silently no-op — every tool would become
+        # visible and callable for every authenticated user
+        # (RHOAIENG-95548, Risk B). Fail loudly instead, and never install a
+        # partial filter (list-only or call-only).
         original_list_handler = lowlevel.request_handlers.get(mcp_types.ListToolsRequest)
-        if original_list_handler is None:
-            logger.warning("No ListToolsRequest handler registered, skipping tool filtering")
-            return
+        original_call_handler = lowlevel.request_handlers.get(mcp_types.CallToolRequest)
+        if original_list_handler is None or original_call_handler is None:
+            missing = [
+                request.__name__
+                for request, handler in (
+                    (mcp_types.ListToolsRequest, original_list_handler),
+                    (mcp_types.CallToolRequest, original_call_handler),
+                )
+                if handler is None
+            ]
+            raise RuntimeError(
+                "RBAC tool filtering could not be installed: no handler registered for "
+                f"{', '.join(missing)} in the lowlevel server's request_handlers. "
+                "The MCP SDK's dispatch internals may have changed; refusing to run "
+                "with RBAC enforcement silently disabled."
+            )
 
         async def filtered_list_handler(req: mcp_types.ListToolsRequest) -> mcp_types.ServerResult:
             result = await original_list_handler(req)
@@ -504,11 +528,6 @@ class RHOAIServer:
         lowlevel.request_handlers[mcp_types.ListToolsRequest] = filtered_list_handler
 
         # Wrap call_tool handler
-        original_call_handler = lowlevel.request_handlers.get(mcp_types.CallToolRequest)
-        if original_call_handler is None:
-            logger.warning("No CallToolRequest handler registered, skipping call filtering")
-            return
-
         async def filtered_call_handler(req: mcp_types.CallToolRequest) -> mcp_types.ServerResult:
             tool_name = req.params.name
             try:
@@ -544,6 +563,12 @@ class RHOAIServer:
             return await original_call_handler(req)
 
         lowlevel.request_handlers[mcp_types.CallToolRequest] = filtered_call_handler
+
+        # Verify the wrappers landed in the mapping the SDK dispatch actually
+        # reads. If request_handlers were a copy or shadowed by another
+        # attribute, the assignments above would silently bypass RBAC.
+        assert lowlevel.request_handlers[mcp_types.ListToolsRequest] is filtered_list_handler
+        assert lowlevel.request_handlers[mcp_types.CallToolRequest] is filtered_call_handler
         logger.info("Tool-level RBAC filtering installed (request_handlers patched)")
 
     def _register_core_resources(self, mcp: MCPServer) -> None:

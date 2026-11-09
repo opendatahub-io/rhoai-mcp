@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.server.mcpserver import MCPServer
 from pydantic import SecretStr
@@ -507,60 +507,56 @@ class RHOAIServer:
                 "with RBAC enforcement silently disabled."
             )
 
-        async def filtered_list_handler(req: mcp_types.ListToolsRequest) -> mcp_types.ServerResult:
+        async def filtered_list_handler(
+            req: mcp_types.ListToolsRequest,
+        ) -> mcp_types.ListToolsResult:
             result = await original_list_handler(req)
             try:
                 check = await asyncio.to_thread(server.get_allowed_tools)
             except Exception:
                 logger.error("RBAC check failed, denying all tools", exc_info=True)
-                return mcp_types.ServerResult(mcp_types.ListToolsResult(tools=[]))
+                return mcp_types.ListToolsResult(tools=[])
             if check is None:
-                return result
+                return cast(mcp_types.ListToolsResult, result)
             allowed, governed = check
-            list_result = result.root
-            assert isinstance(list_result, mcp_types.ListToolsResult)
-            all_tools = list_result.tools
+            all_tools = result.tools
             # Tools with permission mappings must pass RBAC; unmapped tools are allowed
             filtered = [t for t in all_tools if t.name in allowed or t.name not in governed]
             logger.info("Tool filtering: %d/%d tools allowed", len(filtered), len(all_tools))
-            return mcp_types.ServerResult(mcp_types.ListToolsResult(tools=filtered))
+            return mcp_types.ListToolsResult(tools=filtered)
 
         lowlevel.request_handlers[mcp_types.ListToolsRequest] = filtered_list_handler
 
         # Wrap call_tool handler
-        async def filtered_call_handler(req: mcp_types.CallToolRequest) -> mcp_types.ServerResult:
+        async def filtered_call_handler(req: mcp_types.CallToolRequest) -> mcp_types.CallToolResult:
             tool_name = req.params.name
             try:
                 check = await asyncio.to_thread(server.get_allowed_tools)
             except Exception:
                 logger.error("RBAC check failed for tool '%s'", tool_name, exc_info=True)
-                return mcp_types.ServerResult(
-                    mcp_types.CallToolResult(
-                        content=[
-                            mcp_types.TextContent(
-                                type="text",
-                                text=f"Tool '{tool_name}' is not permitted: RBAC check failed",
-                            )
-                        ],
-                        isError=True,
-                    )
+                return mcp_types.CallToolResult(
+                    content=[
+                        mcp_types.TextContent(
+                            type="text",
+                            text=f"Tool '{tool_name}' is not permitted: RBAC check failed",
+                        )
+                    ],
+                    is_error=True,
                 )
             if check is not None:
                 allowed, governed = check
                 # Only enforce for tools with permission mappings
                 if tool_name in governed and tool_name not in allowed:
-                    return mcp_types.ServerResult(
-                        mcp_types.CallToolResult(
-                            content=[
-                                mcp_types.TextContent(
-                                    type="text",
-                                    text=f"Tool '{tool_name}' is not permitted for the current user",
-                                )
-                            ],
-                            isError=True,
-                        )
+                    return mcp_types.CallToolResult(
+                        content=[
+                            mcp_types.TextContent(
+                                type="text",
+                                text=f"Tool '{tool_name}' is not permitted for the current user",
+                            )
+                        ],
+                        is_error=True,
                     )
-            return await original_call_handler(req)
+            return cast(mcp_types.CallToolResult, await original_call_handler(req))
 
         lowlevel.request_handlers[mcp_types.CallToolRequest] = filtered_call_handler
 

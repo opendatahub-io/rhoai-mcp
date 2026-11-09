@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import httpx
-from httpx import ConnectError, HTTPStatusError, RequestError, TimeoutException
+import httpx2
+from httpx2 import ConnectError, HTTPStatusError, RequestError, TimeoutException
 
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
@@ -136,7 +136,7 @@ class PlannerClient:
         """Make an HTTP request to Planner."""
         url = f"{self._base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx2.AsyncClient(timeout=self._timeout) as client:
                 kwargs: dict[str, Any] = {"params": params}
                 if method.upper() in ("POST", "PUT", "PATCH"):
                     kwargs["json"] = json
@@ -538,7 +538,7 @@ class PlannerClient:
     def health_check(self) -> tuple[bool, str]:
         """Check if Planner service is available."""
         try:
-            with httpx.Client(timeout=self._timeout) as client:
+            with httpx2.Client(timeout=self._timeout) as client:
                 response = client.get(f"{self._base_url}/health", params=None)
                 response.raise_for_status()
             return True, "Planner available"

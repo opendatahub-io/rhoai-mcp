@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 from kubernetes.client import ApiException  # type: ignore[import-untyped]
 
 from rhoai_mcp.domains.model_registry.auth import (
@@ -327,7 +327,7 @@ async def probe_api_type(
     headers = build_auth_headers(config, requires_auth_override=requires_auth)
     verify = get_tls_verify(config, url)
 
-    async with httpx.AsyncClient(
+    async with httpx2.AsyncClient(
         base_url=url,
         timeout=10,  # Short timeout for probing
         headers=headers,

@@ -307,15 +307,15 @@ class RHOAIServer:
         if self._config.transport == TransportMode.SSE:
             original_sse_app = mcp.sse_app
 
-            def sse_app(mount_path: str | None = None) -> Starlette:
-                return self._with_port_forward_shutdown(original_sse_app(mount_path))
+            def sse_app(*args: Any, **kwargs: Any) -> Starlette:
+                return self._with_port_forward_shutdown(original_sse_app(*args, **kwargs))
 
             mcp.sse_app = sse_app  # type: ignore[method-assign]
         elif self._config.transport == TransportMode.STREAMABLE_HTTP:
             original_http_app = mcp.streamable_http_app
 
-            def streamable_http_app() -> Starlette:
-                return self._with_port_forward_shutdown(original_http_app())
+            def streamable_http_app(*args: Any, **kwargs: Any) -> Starlette:
+                return self._with_port_forward_shutdown(original_http_app(*args, **kwargs))
 
             mcp.streamable_http_app = streamable_http_app  # type: ignore[method-assign]
 
@@ -432,8 +432,8 @@ class RHOAIServer:
 
         original_sse_app = mcp.sse_app
 
-        def patched_sse_app(mount_path: str | None = None) -> Any:
-            app = original_sse_app(mount_path)
+        def patched_sse_app(*args: Any, **kwargs: Any) -> Any:
+            app = original_sse_app(*args, **kwargs)
             return OIDCAuthMiddleware(
                 app,
                 validator=validator,
@@ -446,8 +446,8 @@ class RHOAIServer:
         if hasattr(mcp, "streamable_http_app"):
             original_http_app = mcp.streamable_http_app
 
-            def patched_http_app() -> Any:
-                app = original_http_app()
+            def patched_http_app(*args: Any, **kwargs: Any) -> Any:
+                app = original_http_app(*args, **kwargs)
                 return OIDCAuthMiddleware(
                     app,
                     validator=validator,

@@ -2,9 +2,17 @@
 
 from typing import Any
 
+from mcp.server.mcpserver.exceptions import ToolError
 
-class RHOAIError(Exception):
-    """Base exception for RHOAI MCP operations."""
+
+class RHOAIError(ToolError):
+    """Base exception for RHOAI MCP operations.
+
+    Inherits from the SDK's ToolError so user-facing guidance raised deep
+    inside clients and domains crosses the tool boundary verbatim: mcp 2.x
+    scrubs the message of any exception that is not a ToolError down to
+    "Error executing tool <name>" (RHAI-14623).
+    """
 
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         super().__init__(message)

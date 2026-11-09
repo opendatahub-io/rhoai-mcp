@@ -8,6 +8,7 @@ from pydantic import SecretStr
 
 from rhoai_mcp.config import RHOAIConfig, TransportMode
 from rhoai_mcp.server import RHOAIServer
+from rhoai_mcp.utils.errors import RHOAIError
 
 
 class TestServerOIDCIntegration:
@@ -30,7 +31,7 @@ class TestServerOIDCIntegration:
         server._k8s_client = MagicMock()
         server._k8s_client.is_connected = True
         # Without user context under OIDC, should fail closed
-        with pytest.raises(RuntimeError, match="no UserContext is set"):
+        with pytest.raises(RHOAIError, match="no UserContext is set"):
             _ = server.k8s
 
     def test_k8s_property_returns_impersonating_client_with_user_context(self) -> None:
@@ -112,7 +113,7 @@ class TestServerOIDCIntegration:
         # No token set
         token = UserContext.set_current(ctx)
         try:
-            with pytest.raises(RuntimeError, match="no token is available"):
+            with pytest.raises(RHOAIError, match="no token is available"):
                 _ = server.k8s
         finally:
             UserContext.reset_current(token)

@@ -18,6 +18,7 @@ from starlette.responses import JSONResponse
 from rhoai_mcp.clients.base import K8sClient
 from rhoai_mcp.config import RHOAIConfig, TransportMode, get_config
 from rhoai_mcp.plugin_manager import PluginManager
+from rhoai_mcp.utils.errors import RHOAIError
 
 if TYPE_CHECKING:
     pass
@@ -89,10 +90,10 @@ class RHOAIServer:
         the shared SA client.
 
         Raises:
-            RuntimeError: If server is not running.
+            RHOAIError: If server is not running.
         """
         if self._k8s_client is None:
-            raise RuntimeError("Server not running. K8s client not available.")
+            raise RHOAIError("Server not running. K8s client not available.")
 
         if self._config.oidc_enabled:
             from rhoai_mcp.auth.user_context import UserContext
@@ -100,7 +101,7 @@ class RHOAIServer:
 
             ctx = UserContext.current()
             if ctx is None:
-                raise RuntimeError(
+                raise RHOAIError(
                     "OIDC is enabled but no UserContext is set. "
                     "Refusing to fall back to service-account client."
                 )
@@ -108,7 +109,7 @@ class RHOAIServer:
             if self._config.oidc_kube_auth_strategy == OIDCKubeAuthStrategy.USER_TOKEN:
                 token = _get_per_message_token(ctx.token) or ctx.token
                 if not token:
-                    raise RuntimeError(
+                    raise RHOAIError(
                         "OIDC user-token strategy is active but no token is available "
                         "(neither per-message request_ctx nor UserContext.token)."
                     )
@@ -123,10 +124,10 @@ class RHOAIServer:
         """Get the MCP server instance.
 
         Raises:
-            RuntimeError: If server is not initialized.
+            RHOAIError: If server is not initialized.
         """
         if self._mcp is None:
-            raise RuntimeError("Server not initialized.")
+            raise RHOAIError("Server not initialized.")
         return self._mcp
 
     @property
@@ -134,10 +135,10 @@ class RHOAIServer:
         """Get the plugin manager.
 
         Raises:
-            RuntimeError: If server is not initialized.
+            RHOAIError: If server is not initialized.
         """
         if self._plugin_manager is None:
-            raise RuntimeError("Server not initialized.")
+            raise RHOAIError("Server not initialized.")
         return self._plugin_manager
 
     @property

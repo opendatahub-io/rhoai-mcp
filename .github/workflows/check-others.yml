@@ -15,6 +15,7 @@ jobs:
     outputs:
       releases: ${{ steps.releases.outputs.releases }}
       latest-version: ${{ steps.releases.outputs.latest-version }}
+      rhds-branches: ${{ steps.rhds-branches.outputs.branches }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -50,14 +51,37 @@ jobs:
           latest_version=$(jq -r 'last' <<< "$releases")
           echo "latest-version=$latest_version" >> "$GITHUB_OUTPUT"
 
+      - name: Discover RHDS release branches
+        id: rhds-branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branches=$(gh api --paginate repos/red-hat-data-services/rhoai-mcp/branches --jq '.[].name' | python3 .github/scripts/list_rhds_release_branches.py)
+          if [[ "$branches" == '[]' ]]; then
+            echo '::error::No RHDS release branches from 3.6-ea.2 onward found.'
+            exit 1
+          fi
+          echo "branches=$branches" >> "$GITHUB_OUTPUT"
+
+      - name: Check Quay releases have RHDS branches
+        env:
+          RELEASES: ${{ steps.releases.outputs.releases }}
+          BRANCHES: ${{ steps.rhds-branches.outputs.branches }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$BRANCHES" | jq -r '.[]' | python3 .github/scripts/list_rhds_release_branches.py --required-releases "$RELEASES" > /dev/null
+
   check-rhds-branch:
     needs: discover
-    if: needs.discover.outputs.releases != '[]'
+    if: needs.discover.outputs.rhds-branches != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        branch: ${{ fromJSON(needs.discover.outputs.releases) }}
+        branch: ${{ fromJSON(needs.discover.outputs.rhds-branches) }}
     name: check-rhds-branch (${{ matrix.branch }})
     steps:
       - name: Check RHDS image in params.env
@@ -72,7 +96,7 @@ jobs:
             -f ref="$BRANCH" \
             -H 'Accept: application/vnd.github.raw+json' > params.env
 
-          expected="registry.redhat.io/rhoai/odh-rhoai-mcp-rhel9:$BRANCH"
+          expected="registry.redhat.io/rhoai/odh-rhoai-mcp-rhel9:v${BRANCH#rhoai-}"
           actual=$(sed -n 's/^RHOAI_MCP_IMAGE=//p' params.env)
           if [[ "$actual" != "$expected" ]]; then
             printf '::error::%s: expected RHOAI_MCP_IMAGE=%s; got %s\n' "$BRANCH" "$expected" "$actual"
@@ -99,7 +123,7 @@ jobs:
             repos/opendatahub-io/model-metadata-collection/contents/input/mcp_servers/redhat/rhoai-mcp-server.yaml \
             -H 'Accept: application/vnd.github.raw+json' > rhoai-mcp-server.yaml
 
-          expected="oci://registry.redhat.io/rhoai/odh-rhoai-mcp-rhel9:$LATEST_VERSION"
+          expected="oci://registry.redhat.io/rhoai/odh-rhoai-mcp-rhel9:v${LATEST_VERSION#rhoai-}"
           if ! EXPECTED_URI="$expected" yq -e '
             (.artifacts | length == 1) and (.artifacts[0].uri == strenv(EXPECTED_URI))
           ' rhoai-mcp-server.yaml > /dev/null; then
@@ -126,8 +150,10 @@ jobs:
             echo '::error::MMORTARI_WORKFLOW_SLACK_WEBHOOK is not available'
             exit 1
           fi
-          payload=$(jq -n --argjson jobs "$JOBS" '
-            {text: ("check-others failed\n" +
+          payload=$(jq -n --argjson jobs "$JOBS" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg run_id "$GITHUB_RUN_ID" '
+            {text: ("check-others failed\n<\($run_url)|Workflow run \($run_id)>\n" +
               ($jobs | to_entries | map("\(.key): \(.value.result)") | join("\n")))}
           ')
           if ! curl --fail --silent --max-time 30 \

@@ -21,6 +21,7 @@ import sys
 from collections.abc import Iterable
 
 PREFIX = "rhoai-"
+DEFAULT_MIN_VERSION = "3.6-ea.2"
 
 _NUMBER = r"(?:0|[1-9][0-9]*)"
 _IDENTIFIERS = r"[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*"
@@ -83,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--min-version",
-        default="3.6-ea.2",
+        default=DEFAULT_MIN_VERSION,
         help=(
             "Minimum version without the rhoai- prefix (default: %(default)s, "
             "when Technology Preview (TP) began); specify a version to override this minimum"

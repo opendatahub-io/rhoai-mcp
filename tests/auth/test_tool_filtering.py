@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from mcp import types as mcp_types
+from mcp.server.mcpserver import MCPServer
 from mcp.types import Tool as MCPTool
 
 from rhoai_mcp.auth.user_context import UserContext
@@ -166,9 +167,7 @@ class TestToolFilteringEnforcement:
 
         handler = lowlevel.request_handlers[mcp_types.ListToolsRequest]
         governed = {"governed_ok", "governed_deny"}
-        with patch.object(
-            server, "get_allowed_tools", return_value=({"governed_ok"}, governed)
-        ):
+        with patch.object(server, "get_allowed_tools", return_value=({"governed_ok"}, governed)):
             result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
 
         names = [t.name for t in result.root.tools]
@@ -286,3 +285,69 @@ class TestToolFilteringEnforcement:
 
         assert result == mock_result
         original_call_handler.assert_called_once_with(req)
+
+
+class TestToolFilteringInstallation:
+    """Tripwire for the *installation* of RBAC tool filtering (RHAI-14595).
+
+    Silent-bypass failure mode (RHOAIENG-95548, Risk B): if the MCP SDK
+    changes internals so that ``_install_tool_filtering()`` no longer
+    replaces the lowlevel request handlers — the ``request_handlers`` dict
+    renamed, populated lazily, keyed by different request classes, or no
+    longer read by dispatch — the patch silently no-ops. Nothing raises:
+    every authenticated user simply sees and can call every tool. These
+    tests convert that silent bypass into a loud CI failure: they must
+    FAIL (never skip) when installation does not take effect.
+    """
+
+    def _make_server(self) -> RHOAIServer:
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_token_mode="token-review",
+            oidc_kube_auth_strategy="impersonation",
+            mock_cluster=True,
+            transport=TransportMode.SSE,
+        )
+        server = RHOAIServer(config)
+        mock_k8s = MagicMock()
+        mock_k8s.is_connected = True
+        mock_k8s._api_client = MagicMock()
+        server._k8s_client = mock_k8s
+        return server
+
+    @staticmethod
+    def _bare_mcp() -> MCPServer:
+        """A bare MCPServer whose lowlevel server holds the SDK's own handlers."""
+        return MCPServer(name="rbac-install-tripwire")
+
+    def test_setup_auth_replaces_sdk_handlers(self) -> None:
+        """_setup_auth() must swap the SDK's own handlers for RBAC wrappers.
+
+        If _install_tool_filtering() no-ops (early return, dispatch moved
+        elsewhere), the dict still holds the SDK originals and this test
+        fails — the silent RBAC bypass becomes visible in CI.
+        """
+        server = self._make_server()
+        mcp = self._bare_mcp()
+        lowlevel = mcp._mcp_server
+        sdk_list_handler = lowlevel.request_handlers[mcp_types.ListToolsRequest]
+        sdk_call_handler = lowlevel.request_handlers[mcp_types.CallToolRequest]
+
+        server._setup_auth(mcp)
+
+        assert lowlevel.request_handlers[mcp_types.ListToolsRequest] is not sdk_list_handler
+        assert lowlevel.request_handlers[mcp_types.CallToolRequest] is not sdk_call_handler
+
+    def test_install_raises_when_sdk_handlers_missing(self) -> None:
+        """A missing SDK handler must raise, not warn-and-skip.
+
+        Simulates SDK drift: if the lowlevel server no longer exposes the
+        CallToolRequest handler, warn-and-return would leave every tool
+        callable for every user. Installation must fail loudly instead.
+        """
+        server = self._make_server()
+        mcp = self._bare_mcp()
+        del mcp._mcp_server.request_handlers[mcp_types.CallToolRequest]
+
+        with pytest.raises(RuntimeError, match="RBAC tool filtering"):
+            server._install_tool_filtering(mcp)

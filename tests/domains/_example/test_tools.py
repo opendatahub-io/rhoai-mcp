@@ -10,13 +10,13 @@ from rhoai_mcp.domains._example.tools import register_tools
 class TestRegisterTools:
     """Test that register_tools registers the expected tools."""
 
-    def test_registers_list_and_get(self) -> None:
+    async def test_registers_list_and_get(self) -> None:
         """register_tools should add list_example_items and get_example_item."""
         mcp = MCPServer("test")
         server = MagicMock()
         register_tools(mcp, server)
 
-        tool_names = [t.name for t in mcp._tool_manager.list_tools()]
+        tool_names = [t.name for t in await mcp.list_tools()]
         assert "list_example_items" in tool_names
         assert "get_example_item" in tool_names
 
@@ -45,12 +45,12 @@ class TestListExampleItems:
 
         register_tools(mcp, server)
 
-        # Call the tool via the MCP tool manager
-        result = await mcp._tool_manager.call_tool("list_example_items", {"namespace": "ns"})
-        # call_tool returns the dict directly in this MCPServer version
-        assert result["total"] == 1
-        assert len(result["items"]) == 1
-        assert result["items"][0]["name"] == "item-1"
+        # Call the tool via the public API; dict results arrive in structured_content
+        result = await mcp.call_tool("list_example_items", {"namespace": "ns"})
+        assert result.is_error is False
+        assert result.structured_content["total"] == 1
+        assert len(result.structured_content["items"]) == 1
+        assert result.structured_content["items"][0]["name"] == "item-1"
 
 
 class TestGetExampleItem:
@@ -74,11 +74,11 @@ class TestGetExampleItem:
 
         register_tools(mcp, server)
 
-        result = await mcp._tool_manager.call_tool(
-            "get_example_item", {"name": "item-1", "namespace": "ns"}
-        )
-        assert result["name"] == "item-1"
-        assert result["namespace"] == "ns"
-        assert result["display_name"] == "Item One"
-        assert result["data"] == {"key": "val"}
-        assert "_source" in result
+        result = await mcp.call_tool("get_example_item", {"name": "item-1", "namespace": "ns"})
+        assert result.is_error is False
+        item = result.structured_content
+        assert item["name"] == "item-1"
+        assert item["namespace"] == "ns"
+        assert item["display_name"] == "Item One"
+        assert item["data"] == {"key": "val"}
+        assert "_source" in item

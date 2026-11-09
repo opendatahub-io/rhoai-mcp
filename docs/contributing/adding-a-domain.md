@@ -420,7 +420,7 @@ For core API domains (no CRDs), override the health check to return a simple suc
 Mirror the source structure under `tests/domains/<name>/`. The standard test approach:
 
 1. **Mock the K8s client** with `unittest.mock.MagicMock`.
-2. **Test tools** by calling them through `MCPServer._tool_manager.call_tool()`.
+2. **Test tools** by calling them through the public `MCPServer.call_tool()` API.
 3. **Test models** by constructing mock K8s objects and calling `from_k8s()`.
 4. **Test the client** by mocking the underlying K8s API calls.
 
@@ -454,11 +454,11 @@ class TestListWidgets:
 
         register_tools(mcp, server)
 
-        result = await mcp._tool_manager.call_tool(
-            "list_widgets", {"namespace": "ns"}
-        )
-        assert result["total"] == 1
-        assert len(result["items"]) == 1
+        result = await mcp.call_tool("list_widgets", {"namespace": "ns"})
+        # dict results arrive in structured_content; errors arrive as is_error
+        assert result.is_error is False
+        assert result.structured_content["total"] == 1
+        assert len(result.structured_content["items"]) == 1
 ```
 
 See: [`tests/domains/_example/test_tools.py`](../../tests/domains/_example/test_tools.py)

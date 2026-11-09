@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-import httpx
+import httpx2
 
 from rhoai_mcp.domains.model_registry.auth import (
     _is_running_in_cluster,
@@ -124,7 +124,7 @@ class ModelRegistryClient:
         """
         self._config = config
         self._discovery = discovery_result
-        self._http_client: httpx.AsyncClient | None = None
+        self._http_client: httpx2.AsyncClient | None = None
 
     def _get_base_url(self) -> str:
         """Get the base URL for API calls."""
@@ -141,14 +141,14 @@ class ModelRegistryClient:
         requires_auth_override = self._discovery.requires_auth if self._discovery else False
         return build_auth_headers(self._config, requires_auth_override=requires_auth_override)
 
-    async def _get_client(self) -> httpx.AsyncClient:
+    async def _get_client(self) -> httpx2.AsyncClient:
         """Get or create HTTP client with appropriate auth and SSL settings."""
         if self._http_client is None:
             headers = self._get_auth_headers()
             base_url = self._get_base_url()
             verify = get_tls_verify(self._config, base_url)
 
-            self._http_client = httpx.AsyncClient(
+            self._http_client = httpx2.AsyncClient(
                 base_url=base_url,
                 timeout=self._config.model_registry_timeout,
                 headers=headers,
@@ -230,15 +230,15 @@ class ModelRegistryClient:
             next_token = data.get("nextPageToken")
             return models, next_token
 
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             raise ModelRegistryConnectionError(
                 _format_connection_error(self._get_base_url(), e)
             ) from e
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             raise ModelRegistryConnectionError(
                 f"Timeout connecting to Model Registry at {self._get_base_url()}: {e}"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to list models: {e}") from e
 
     async def get_registered_model(self, model_id: str) -> RegisteredModel:
@@ -265,15 +265,15 @@ class ModelRegistryClient:
             response.raise_for_status()
             return self._parse_registered_model(response.json())
 
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             raise ModelRegistryConnectionError(
                 _format_connection_error(self._get_base_url(), e)
             ) from e
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             raise ModelRegistryConnectionError(
                 f"Timeout connecting to Model Registry at {self._get_base_url()}: {e}"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model: {e}") from e
 
     async def get_registered_model_by_name(self, name: str) -> RegisteredModel | None:
@@ -372,15 +372,15 @@ class ModelRegistryClient:
             next_token = data.get("nextPageToken")
             return versions, next_token
 
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             raise ModelRegistryConnectionError(
                 _format_connection_error(self._get_base_url(), e)
             ) from e
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             raise ModelRegistryConnectionError(
                 f"Timeout connecting to Model Registry at {self._get_base_url()}: {e}"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model versions: {e}") from e
 
     async def get_model_version(self, version_id: str) -> ModelVersion:
@@ -405,15 +405,15 @@ class ModelRegistryClient:
             response.raise_for_status()
             return self._parse_model_version(response.json())
 
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             raise ModelRegistryConnectionError(
                 _format_connection_error(self._get_base_url(), e)
             ) from e
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             raise ModelRegistryConnectionError(
                 f"Timeout connecting to Model Registry at {self._get_base_url()}: {e}"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model version: {e}") from e
 
     async def get_model_artifacts(self, version_id: str) -> list[ModelArtifact]:
@@ -442,15 +442,15 @@ class ModelRegistryClient:
                 artifacts.append(self._parse_model_artifact(item))
             return artifacts
 
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             raise ModelRegistryConnectionError(
                 _format_connection_error(self._get_base_url(), e)
             ) from e
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             raise ModelRegistryConnectionError(
                 f"Timeout connecting to Model Registry at {self._get_base_url()}: {e}"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get artifacts: {e}") from e
 
     def _parse_timestamp(self, timestamp_str: str | None) -> datetime | None:

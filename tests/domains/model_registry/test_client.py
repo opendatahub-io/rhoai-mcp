@@ -259,11 +259,11 @@ class TestModelRegistryClient:
         client: ModelRegistryClient,
     ) -> None:
         """Test handling connection errors."""
-        import httpx
+        import httpx2
 
         with patch.object(client, "_get_client") as mock_get_client:
             mock_http = AsyncMock()
-            mock_http.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+            mock_http.get = AsyncMock(side_effect=httpx2.ConnectError("Connection refused"))
             mock_get_client.return_value = mock_http
 
             with pytest.raises(ModelRegistryConnectionError):
@@ -275,14 +275,14 @@ class TestModelRegistryClient:
         client: ModelRegistryClient,
     ) -> None:
         """Test handling HTTP errors."""
-        import httpx
+        import httpx2
 
         mock_response = MagicMock()
         mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        mock_response.raise_for_status.side_effect = httpx2.HTTPStatusError(
             "Internal Server Error",
-            request=MagicMock(spec=httpx.Request),
-            response=MagicMock(spec=httpx.Response),
+            request=MagicMock(spec=httpx2.Request),
+            response=MagicMock(spec=httpx2.Response),
         )
 
         with patch.object(client, "_get_client") as mock_get_client:

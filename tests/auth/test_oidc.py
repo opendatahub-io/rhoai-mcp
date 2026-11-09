@@ -333,7 +333,7 @@ class TestDiscovery:
             "jwks_uri": "https://example.com/.well-known/jwks.json",
         }
 
-        with patch("rhoai_mcp.auth.oidc.httpx.AsyncClient") as mock_client_class:
+        with patch("rhoai_mcp.auth.oidc.httpx2.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 

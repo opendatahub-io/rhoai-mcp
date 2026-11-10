@@ -31,7 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     branches = select_branches(sys.stdin.read().splitlines())
     missing = sorted(set(required) - set(branches))
     if missing:
-        print(f"::error::Quay releases missing RHDS branches: {', '.join(missing)}", file=sys.stderr)
+        print(
+            f"::error::Quay releases missing RHDS branches: {', '.join(missing)}",
+            file=sys.stderr,
+        )
         return 1
     print(json.dumps(branches))
     return 0

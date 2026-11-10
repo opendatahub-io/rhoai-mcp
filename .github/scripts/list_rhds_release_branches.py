@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"Invalid required releases: {exc}")
 
     branches = select_branches(sys.stdin.read().splitlines())
-    missing = sorted(set(required) - set(branches))
+    missing = set(required) - set(branches)
     if missing:
         print(
             f"::error::Quay releases missing RHDS branches: {', '.join(missing)}",

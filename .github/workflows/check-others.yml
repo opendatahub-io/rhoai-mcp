@@ -71,7 +71,6 @@ jobs:
 
   check-rhds-branch:
     needs: discover
-    if: needs.discover.outputs.rhds-branches != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

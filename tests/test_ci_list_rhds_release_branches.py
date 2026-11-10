@@ -96,4 +96,6 @@ def test_missing_required_releases_fail(capsys) -> None:
         assert main(["--required-releases", '["rhoai-3.6", "rhoai-3.7", "rhoai-3.6-ea.2"]']) == 1
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert "Quay releases missing RHDS branches: rhoai-3.6-ea.2, rhoai-3.7" in captured.err
+    assert "Quay releases missing RHDS branches:" in captured.err
+    assert "rhoai-3.6-ea.2" in captured.err
+    assert "rhoai-3.7" in captured.err

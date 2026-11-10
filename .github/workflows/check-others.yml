@@ -77,6 +77,9 @@ jobs:
       fail-fast: false
       matrix:
         branch: ${{ fromJSON(needs.discover.outputs.rhds-branches) }}
+        exclude:
+          - branch: rhoai-3.6-ea.2
+          - branch: rhoai-3.6
     name: check-rhds-branch (${{ matrix.branch }})
     steps:
       - name: Check RHDS image in params.env

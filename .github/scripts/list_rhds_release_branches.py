@@ -17,7 +17,9 @@ def select_branches(names: Iterable[str]) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--required-releases", default="[]", help="JSON array of required release tags")
+    parser.add_argument(
+        "--required-releases", default="[]", help="JSON array of required release tags"
+    )
     args = parser.parse_args(argv)
     try:
         required = json.loads(args.required_releases)

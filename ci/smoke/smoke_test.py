@@ -32,7 +32,10 @@ DEPLOYER_TOKEN = os.environ["SMOKE_DEPLOYER_TOKEN"]
 
 GOVERNED_READ_TOOL = "list_inference_services"
 GOVERNED_DEPLOY_TOOL = "deploy_model"
-UNGOVERNED_TOOL = "rhoai_suggest_tools"
+# Ungoverned meta-composite tool (no K8s permission mapping) — note the
+# gateway imports these with a "rhoai_" prefix; the server's own name is
+# unprefixed.
+UNGOVERNED_TOOL = "suggest_tools"
 
 
 def parse_body(text: str) -> dict:

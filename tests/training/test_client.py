@@ -6,7 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from rhoai_mcp.domains.training.client import TrainingClient, _get_gpu_product
+from rhoai_mcp.domains.cluster.client import ClusterClient, _get_gpu_product
+from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.crds import TrainingCRDs
 from rhoai_mcp.domains.training.models import (
     TrainingState,
@@ -280,6 +281,14 @@ class TestGetGpuProduct:
         assert result == "Tesla-T4"
 
 
+def test_training_client_delegates_cluster_inventory() -> None:
+    """The existing training client entry point remains compatible."""
+    k8s = MagicMock()
+    k8s.core_v1.list_node.return_value.items = []
+    assert TrainingClient(k8s).get_cluster_resources().node_count == 0
+    k8s.core_v1.list_node.assert_called_once_with()
+
+
 class TestGetClusterResourcesGpu:
     """Test get_cluster_resources GPU product extraction."""
 
@@ -291,12 +300,12 @@ class TestGetClusterResourcesGpu:
         return mock
 
     @pytest.fixture
-    def client(self, mock_k8s: MagicMock) -> TrainingClient:
+    def client(self, mock_k8s: MagicMock) -> ClusterClient:
         """Create a TrainingClient with mocked K8sClient."""
-        return TrainingClient(mock_k8s)
+        return ClusterClient(mock_k8s)
 
     def test_extracts_gpu_product_from_node_labels(
-        self, client: TrainingClient, mock_k8s: MagicMock
+        self, client: ClusterClient, mock_k8s: MagicMock
     ) -> None:
         """Test GPU product is extracted from node labels."""
         node = _make_mock_node(
@@ -314,7 +323,7 @@ class TestGetClusterResourcesGpu:
         assert resources.nodes[0].gpu_product == "Tesla-T4"
 
     def test_handles_mixed_gpu_types(
-        self, client: TrainingClient, mock_k8s: MagicMock
+        self, client: ClusterClient, mock_k8s: MagicMock
     ) -> None:
         """Test tracking multiple GPU products in cluster."""
         node1 = _make_mock_node(
@@ -340,7 +349,7 @@ class TestGetClusterResourcesGpu:
         assert resources.nodes[1].gpu_product == "NVIDIA-A100-SXM4-40GB"
 
     def test_handles_node_without_gpu_labels(
-        self, client: TrainingClient, mock_k8s: MagicMock
+        self, client: ClusterClient, mock_k8s: MagicMock
     ) -> None:
         """Test handles GPU nodes without product labels."""
         node = _make_mock_node(
@@ -359,7 +368,7 @@ class TestGetClusterResourcesGpu:
         assert resources.nodes[0].gpu_count == 1
 
     def test_handles_non_gpu_nodes(
-        self, client: TrainingClient, mock_k8s: MagicMock
+        self, client: ClusterClient, mock_k8s: MagicMock
     ) -> None:
         """Test handles nodes without GPUs."""
         node = _make_mock_node(
@@ -376,7 +385,7 @@ class TestGetClusterResourcesGpu:
         assert resources.nodes[0].gpu_count == 0
 
     def test_deduplicates_gpu_products(
-        self, client: TrainingClient, mock_k8s: MagicMock
+        self, client: ClusterClient, mock_k8s: MagicMock
     ) -> None:
         """Test same GPU product on multiple nodes is not duplicated."""
         node1 = _make_mock_node(

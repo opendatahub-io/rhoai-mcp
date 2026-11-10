@@ -103,3 +103,32 @@ def test_minimum_tool_count(all_tools: dict[str, object]) -> None:
     assert len(all_tools) >= 40, (
         f"Expected at least 40 tools, got {len(all_tools)}: {sorted(all_tools.keys())}"
     )
+
+
+@pytest.mark.parametrize(
+    "plugins",
+    [None, ["cluster-composites"], ["training"], ["training", "cluster-composites"]],
+)
+def test_cluster_resources_registration_and_permissions(plugins: list[str] | None) -> None:
+    """The shared tool is exposed once and governed in every supported configuration."""
+    from rhoai_mcp.config import RHOAIConfig
+
+    pm = PluginManager()
+    pm.load_core_plugins(enabled_plugins=RHOAIConfig().enabled_plugins if plugins is None else plugins)
+    mcp = MagicMock()
+    names: list[str] = []
+
+    def capture_tool(*_args: object, **kwargs: object) -> object:
+        def decorator(func: object) -> object:
+            assert callable(func)
+            names.append(str(kwargs.get("name") or func.__name__))
+            return func
+
+        return decorator
+
+    mcp.tool = capture_tool
+    pm.register_all_tools(mcp, RHOAIServer())
+    assert names.count("get_cluster_resources") == 1
+    assert pm.collect_tool_permissions()["get_cluster_resources"] == [
+        {"apiGroup": "", "resource": "nodes", "verb": "list"}
+    ]

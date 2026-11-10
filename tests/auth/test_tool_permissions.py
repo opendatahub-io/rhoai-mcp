@@ -57,6 +57,9 @@ class TestToolPermissionDeclarations:
             meta = plugin.rhoai_get_plugin_metadata()
             perms = plugin.rhoai_get_tool_permissions()
             for tool_name in perms:
+                if tool_name == "get_cluster_resources" and tool_name in seen:
+                    assert {seen[tool_name], meta.name} == {"training", "cluster-composites"}
+                    continue
                 assert tool_name not in seen, (
                     f"Duplicate tool '{tool_name}' in {meta.name} and {seen[tool_name]}"
                 )

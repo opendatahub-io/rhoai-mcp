@@ -154,7 +154,7 @@ except Exception as e:
 **Purpose:** Complete cluster exploration with all projects and resource summaries in one call.
 
 **Implementation notes:**
-- Uses `TrainingClient.get_cluster_resources()` for GPU info
+- Uses `ClusterClient.get_cluster_resources()` for GPU info
 - Iterates projects and extracts `resource_summary` from Project model
 - Health checks are simple heuristics (e.g., "all workbenches stopped")
 

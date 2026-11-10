@@ -578,10 +578,9 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
 
         # Step 5: Check GPU availability
         try:
-            from rhoai_mcp.domains.training.client import TrainingClient
+            from rhoai_mcp.domains.cluster.client import ClusterClient
 
-            training_client = TrainingClient(server.k8s)
-            cluster_resources = training_client.get_cluster_resources()
+            cluster_resources = ClusterClient(server.k8s).get_cluster_resources()
             if cluster_resources.gpu_info:
                 if cluster_resources.gpu_info.available < resource_requirements.get("gpu", 0):
                     warnings.append(

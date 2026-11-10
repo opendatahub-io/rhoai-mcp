@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 
+from rhoai_mcp.domains.cluster.client import ClusterClient
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.models import (
     GPU_MEMORY_ESTIMATES,
@@ -151,7 +152,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
         # Check 1: Cluster connectivity
         resources = None
         try:
-            resources = client.get_cluster_resources()
+            resources = ClusterClient(server.k8s).get_cluster_resources()
             checks.append(
                 {
                     "name": "Cluster connectivity",
@@ -493,7 +494,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         # Check cluster connectivity and GPUs
         try:
-            resources = client.get_cluster_resources()
+            resources = ClusterClient(server.k8s).get_cluster_resources()
             if not resources.has_gpus:
                 issues.append("No GPUs available in cluster")
                 prereq_passed = False

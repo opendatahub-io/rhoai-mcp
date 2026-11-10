@@ -401,5 +401,3 @@ class TrainingClient:
             },
             "spec": spec,
         }
-
-

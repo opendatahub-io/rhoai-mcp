@@ -46,5 +46,3 @@ class ClusterResources(BaseModel):
     def has_gpus(self) -> bool:
         """Check if cluster has GPUs available."""
         return self.gpu_info is not None and self.gpu_info.total > 0
-
-

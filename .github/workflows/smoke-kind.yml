@@ -48,6 +48,16 @@ jobs:
           kubectl apply -f ci/kind/manifests.yaml
           kubectl -n rhoai-mcp-smoke rollout status deployment/rhoai-mcp --timeout=180s
 
+      - name: Diagnose deployment failure
+        if: failure()
+        run: |
+          kubectl -n rhoai-mcp-smoke get pods -o wide || true
+          kubectl -n rhoai-mcp-smoke describe deployment rhoai-mcp || true
+          for pod in $(kubectl -n rhoai-mcp-smoke get pods -o name); do
+            kubectl -n rhoai-mcp-smoke describe "$pod" || true
+            kubectl -n rhoai-mcp-smoke logs "$pod" --all-containers --tail=100 || true
+          done
+
       - name: Run smoke checks
         run: |
           kubectl -n rhoai-mcp-smoke port-forward svc/rhoai-mcp 8000:8000 &

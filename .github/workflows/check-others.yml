@@ -55,24 +55,19 @@ jobs:
         id: rhds-branches
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASES: ${{ steps.releases.outputs.releases }}
         shell: bash
         run: |
           set -euo pipefail
-          branches=$(gh api --paginate repos/red-hat-data-services/rhoai-mcp/branches --jq '.[].name' | python3 .github/scripts/list_rhds_release_branches.py)
+          branches=$(
+            gh api --paginate repos/red-hat-data-services/rhoai-mcp/branches --jq '.[].name' |
+              python3 .github/scripts/list_rhds_release_branches.py --required-releases "$RELEASES"
+          )
           if [[ "$branches" == '[]' ]]; then
             echo '::error::No RHDS release branches from 3.6-ea.2 onward found.'
             exit 1
           fi
           echo "branches=$branches" >> "$GITHUB_OUTPUT"
-
-      - name: Check Quay releases have RHDS branches
-        env:
-          RELEASES: ${{ steps.releases.outputs.releases }}
-          BRANCHES: ${{ steps.rhds-branches.outputs.branches }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s\n' "$BRANCHES" | jq -r '.[]' | python3 .github/scripts/list_rhds_release_branches.py --required-releases "$RELEASES" > /dev/null
 
   check-rhds-branch:
     needs: discover

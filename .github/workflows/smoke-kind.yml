@@ -1,0 +1,67 @@
+name: Smoke E2E (KinD)
+
+# In-repo smoke lane (RHAI-14598): deploys the server into a KinD cluster
+# in token-review mode with two RBAC personas and asserts the golden path —
+# boot/health, RBAC list-filtering and call-denial, and one token-rotation
+# case — via a raw JSON-RPC client (SDK-agnostic, inert to the SDK v2
+# migration). Deliberately smoke-level: no gateway, no model-serving tool
+# calls, no JWT/OIDC mode — that breadth stays in opendatahub-tests.
+# Layering is documented in README.md ("Testing layers").
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Create KinD cluster
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        with:
+          cluster_name: rhoai-mcp-smoke
+
+      - name: Build server image
+        run: docker build -f Containerfile -t rhoai-mcp:smoke .
+
+      - name: Load image into KinD
+        run: kind load docker-image rhoai-mcp:smoke --name rhoai-mcp-smoke
+
+      - name: Deploy server and personas
+        run: |
+          kubectl apply -f ci/kind/manifests.yaml
+          kubectl -n rhoai-mcp-smoke rollout status deployment/rhoai-mcp --timeout=180s
+
+      - name: Run smoke checks
+        run: |
+          kubectl -n rhoai-mcp-smoke port-forward svc/rhoai-mcp 8000:8000 &
+          PORT_FORWARD_PID=$!
+          # Wait for the port-forward to accept connections
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then break; fi
+            sleep 2
+          done
+          export SMOKE_BASE_URL=http://127.0.0.1:8000
+          export SMOKE_READER_TOKEN="$(kubectl -n rhoai-mcp-smoke create token smoke-reader)"
+          export SMOKE_READER_TOKEN_2="$(kubectl -n rhoai-mcp-smoke create token smoke-reader)"
+          export SMOKE_DEPLOYER_TOKEN="$(kubectl -n rhoai-mcp-smoke create token smoke-deployer)"
+          python3 ci/smoke/smoke_test.py
+          STATUS=$?
+          kill $PORT_FORWARD_PID
+          exit $STATUS

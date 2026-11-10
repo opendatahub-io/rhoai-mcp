@@ -1,0 +1,222 @@
+# KinD smoke-lane deployment for rhoai-mcp (RHAI-14598).
+#
+# Deploys the server in token-review mode with two RBAC personas,
+# mirroring the odh-tests rhoai_mcp/conftest.py recipe — no OIDC/Dex
+# needed. The smoke client (ci/smoke/smoke_test.py) talks raw JSON-RPC
+# over streamable-http against the port-forwarded Service.
+#
+# Governed tools used by the smoke assertions (see src/rhoai_mcp/domains/permissions.py):
+#   deploy_model          -> create serving.kserve.io/inferenceservices   (deployer only)
+#   list_inference_services -> list serving.kserve.io/inferenceservices   (both personas)
+#
+# Apply with: kubectl apply -f ci/kind/manifests.yaml
+# The Deployment expects image `rhoai-mcp:smoke` loaded into the KinD node
+# (imagePullPolicy: Never).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rhoai-mcp-smoke
+  labels:
+    app.kubernetes.io/name: rhoai-mcp
+---
+# Server identity: may impersonate users (impersonation strategy), validate
+# caller tokens (TokenReview), and evaluate caller permissions (SubjectAccessReview).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rhoai-mcp
+  namespace: rhoai-mcp-smoke
+  labels:
+    app.kubernetes.io/component: serviceaccount
+    app.kubernetes.io/name: rhoai-mcp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rhoai-mcp-smoke-server
+rules:
+  - apiGroups: [""]
+    resources: ["users", "groups", "serviceaccounts"]
+    verbs: ["impersonate"]
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhoai-mcp-smoke-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rhoai-mcp-smoke-server
+subjects:
+  - kind: ServiceAccount
+    name: rhoai-mcp
+    namespace: rhoai-mcp-smoke
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhoai-mcp-config
+  namespace: rhoai-mcp-smoke
+data:
+  RHOAI_MCP_HOST: "0.0.0.0"
+  RHOAI_MCP_PORT: "8000"
+  RHOAI_MCP_LOG_LEVEL: "INFO"
+  RHOAI_MCP_TRANSPORT: "streamable-http"
+  RHOAI_MCP_AUTH_MODE: "auto"
+  RHOAI_MCP_OIDC_ENABLED: "true"
+  RHOAI_MCP_OIDC_TOKEN_MODE: "token-review"
+  RHOAI_MCP_READ_ONLY_MODE: "false"
+  RHOAI_MCP_ENABLE_DANGEROUS_OPERATIONS: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rhoai-mcp
+  namespace: rhoai-mcp-smoke
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: rhoai-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/name: rhoai-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: server
+        app.kubernetes.io/name: rhoai-mcp
+    spec:
+      serviceAccountName: rhoai-mcp
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: rhoai-mcp
+          image: rhoai-mcp:smoke
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: rhoai-mcp-config
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rhoai-mcp
+  namespace: rhoai-mcp-smoke
+spec:
+  selector:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: rhoai-mcp
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+---
+# Persona: smoke-reader — get/list on KServe resources. Sees governed
+# read tools; deploy_model is filtered from tools/list and denied on call.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: smoke-reader
+  namespace: rhoai-mcp-smoke
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rhoai-mcp-smoke-reader
+rules:
+  - apiGroups: ["serving.kserve.io"]
+    resources: ["inferenceservices", "servingruntimes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhoai-mcp-smoke-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rhoai-mcp-smoke-reader
+subjects:
+  - kind: ServiceAccount
+    name: smoke-reader
+    namespace: rhoai-mcp-smoke
+---
+# Persona: smoke-deployer — adds create/delete, so deploy_model is
+# visible in tools/list for this caller.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: smoke-deployer
+  namespace: rhoai-mcp-smoke
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rhoai-mcp-smoke-deployer
+rules:
+  - apiGroups: ["serving.kserve.io"]
+    resources: ["inferenceservices", "servingruntimes"]
+    verbs: ["get", "list", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhoai-mcp-smoke-deployer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rhoai-mcp-smoke-deployer
+subjects:
+  - kind: ServiceAccount
+    name: smoke-deployer
+    namespace: rhoai-mcp-smoke

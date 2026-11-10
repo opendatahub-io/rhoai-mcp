@@ -31,6 +31,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Later steps run repository code and docker build on PR content —
+          # do not leave the GITHUB_TOKEN in .git/config (CWE-522).
+          persist-credentials: false
 
       - name: Create KinD cluster
         uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
@@ -60,18 +64,27 @@ jobs:
 
       - name: Run smoke checks
         run: |
+          set -euo pipefail
           kubectl -n rhoai-mcp-smoke port-forward svc/rhoai-mcp 8000:8000 &
           PORT_FORWARD_PID=$!
-          # Wait for the port-forward to accept connections
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8000/health > /dev/null; then break; fi
+          trap 'kill "$PORT_FORWARD_PID" 2>/dev/null || true' EXIT
+
+          # Wait for the port-forward to accept connections; fail loudly on timeout
+          ready=0
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then ready=1; break; fi
             sleep 2
           done
-          export SMOKE_BASE_URL=http://127.0.0.1:8000
-          export SMOKE_READER_TOKEN="$(kubectl -n rhoai-mcp-smoke create token smoke-reader)"
-          export SMOKE_READER_TOKEN_2="$(kubectl -n rhoai-mcp-smoke create token smoke-reader)"
-          export SMOKE_DEPLOYER_TOKEN="$(kubectl -n rhoai-mcp-smoke create token smoke-deployer)"
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::server never became reachable on the port-forward"
+            exit 1
+          fi
+
+          # Assign separately from export so a failed kubectl aborts loudly
+          SMOKE_BASE_URL=http://127.0.0.1:8000
+          SMOKE_READER_TOKEN="$(kubectl -n rhoai-mcp-smoke create token smoke-reader)"
+          SMOKE_READER_TOKEN_2="$(kubectl -n rhoai-mcp-smoke create token smoke-reader)"
+          SMOKE_DEPLOYER_TOKEN="$(kubectl -n rhoai-mcp-smoke create token smoke-deployer)"
+          export SMOKE_BASE_URL SMOKE_READER_TOKEN SMOKE_READER_TOKEN_2 SMOKE_DEPLOYER_TOKEN
+
           python3 ci/smoke/smoke_test.py
-          STATUS=$?
-          kill $PORT_FORWARD_PID
-          exit $STATUS

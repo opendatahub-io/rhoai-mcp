@@ -1,7 +1,7 @@
 # MCP v2 RBAC & Auth Redesign — Design Doc
 
 **Story:** 1.6 / [RHAI-14612](https://redhat.atlassian.net/browse/RHAI-14612) · **Status:** DRAFT — everything final except the two 1.3 ratification slots (owner meeting 2026-11-11)
-**Inputs:** 1.1 (RHAI-14607), 1.2 (RHAI-14608), 1.4 (RHAI-14610), 1.5 (RHAI-14611); consolidated evidence in the fpj-dev-notes `mcp-v2-branch-findings` record. Verified against installed mcp 2.3.0.
+**Inputs:** 1.1 ([RHAI-14607](https://redhat.atlassian.net/browse/RHAI-14607)), 1.2 ([RHAI-14608](https://redhat.atlassian.net/browse/RHAI-14608)), 1.4 ([RHAI-14610](https://redhat.atlassian.net/browse/RHAI-14610)), 1.5 ([RHAI-14611](https://redhat.atlassian.net/browse/RHAI-14611)) — findings recorded on those stories. Verified against installed mcp 2.3.0.
 **Implements:** 3.1 (RHAI-14627), 3.2 (RHAI-14629), 3.3 (RHAI-14630), 3.4 (RHAI-14631), 3.5 (RHAI-14632), 3.6 (RHAI-14633)
 
 ---

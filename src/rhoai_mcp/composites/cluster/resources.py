@@ -1,8 +1,4 @@
-"""Shared cluster resource inventory tool.
-
-idempotent registration method with content originally from src/rhoai_mcp/domains/training/tools/discovery.py
-moving from Training domain, to Cluster domain.
-"""
+"""Cluster resource inventory tool."""
 
 from typing import TYPE_CHECKING, Any
 
@@ -15,9 +11,7 @@ if TYPE_CHECKING:
 
 
 def register_cluster_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
-    """Register the inventory tool once when either or both plugins are enabled."""
-    if mcp.__dict__.get("_rhoai_cluster_resources_registered", False):
-        return
+    """Register the cluster resource inventory tool."""
 
     @mcp.tool()
     def get_cluster_resources() -> dict[str, Any]:
@@ -65,5 +59,3 @@ def register_cluster_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
         ]
 
         return result
-
-    mcp.__dict__["_rhoai_cluster_resources_registered"] = True

@@ -134,14 +134,7 @@ STORAGE_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
-CLUSTER_RESOURCES_PERMISSIONS: dict[str, list[dict[str, str]]] = {
-    "get_cluster_resources": [
-        {"apiGroup": "", "resource": "nodes", "verb": "list"},
-    ],
-}
-
 TRAINING_PERMISSIONS: dict[str, list[dict[str, str]]] = {
-    **CLUSTER_RESOURCES_PERMISSIONS,
     # discovery tools
     "list_training_jobs": [
         {"apiGroup": "kubeflow.org", "resource": "trainjobs", "verb": "list"},

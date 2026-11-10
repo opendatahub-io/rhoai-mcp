@@ -88,10 +88,6 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         v = Verbosity.from_str(verbosity)
         return ResponseBuilder.training_job_detail(job, v)
 
-    from rhoai_mcp.composites.cluster.resources import register_cluster_resources
-
-    register_cluster_resources(mcp, server)
-
     @mcp.tool()
     def list_training_runtimes(namespace: str | None = None) -> dict[str, Any]:
         """List available training runtimes.

@@ -4,7 +4,9 @@ import re
 from unittest.mock import MagicMock
 
 import pytest
+from mcp.server.fastmcp import FastMCP
 
+from rhoai_mcp.config import RHOAIConfig
 from rhoai_mcp.plugin_manager import PluginManager
 from rhoai_mcp.server import RHOAIServer
 
@@ -106,29 +108,27 @@ def test_minimum_tool_count(all_tools: dict[str, object]) -> None:
 
 
 @pytest.mark.parametrize(
-    "plugins",
-    [None, ["cluster-composites"], ["training"], ["training", "cluster-composites"]],
+    ("plugins", "expected"),
+    [
+        (RHOAIConfig.model_fields["enabled_plugins"].get_default(), True),
+        (["cluster-composites"], True),
+        (["training"], False),
+    ],
 )
-def test_cluster_resources_registration_and_permissions(plugins: list[str] | None) -> None:
-    """The shared tool is exposed once and governed in every supported configuration."""
-    from rhoai_mcp.config import RHOAIConfig
-
+@pytest.mark.asyncio
+async def test_cluster_resources_registration_and_permissions(
+    plugins: list[str] | None, expected: bool
+) -> None:
+    """Only the cluster plugin exposes and governs the inventory tool."""
     pm = PluginManager()
-    pm.load_core_plugins(enabled_plugins=RHOAIConfig().enabled_plugins if plugins is None else plugins)
-    mcp = MagicMock()
-    names: list[str] = []
-
-    def capture_tool(*_args: object, **kwargs: object) -> object:
-        def decorator(func: object) -> object:
-            assert callable(func)
-            names.append(str(kwargs.get("name") or func.__name__))
-            return func
-
-        return decorator
-
-    mcp.tool = capture_tool
+    pm.load_core_plugins(enabled_plugins=plugins)
+    mcp = FastMCP("test")
     pm.register_all_tools(mcp, RHOAIServer())
-    assert names.count("get_cluster_resources") == 1
-    assert pm.collect_tool_permissions()["get_cluster_resources"] == [
-        {"apiGroup": "", "resource": "nodes", "verb": "list"}
-    ]
+    names = [tool.name for tool in await mcp.list_tools()]
+    permissions = pm.collect_tool_permissions()
+    assert names.count("get_cluster_resources") == int(expected)
+    assert ("get_cluster_resources" in permissions) is expected
+    if expected:
+        assert permissions["get_cluster_resources"] == [
+            {"apiGroup": "", "resource": "nodes", "verb": "list"}
+        ]

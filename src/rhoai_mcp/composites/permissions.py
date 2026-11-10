@@ -5,10 +5,10 @@ Keys are tool function names (matching @mcp.tool() decorated functions),
 values are lists of permission dicts with apiGroup, resource, and verb.
 """
 
-from rhoai_mcp.domains.permissions import CLUSTER_RESOURCES_PERMISSIONS
-
 CLUSTER_PERMISSIONS: dict[str, list[dict[str, str]]] = {
-    **CLUSTER_RESOURCES_PERMISSIONS,
+    "get_cluster_resources": [
+        {"apiGroup": "", "resource": "nodes", "verb": "list"},
+    ],
     "cluster_summary": [
         {"apiGroup": "project.openshift.io", "resource": "projects", "verb": "list"},
         {"apiGroup": "kubeflow.org", "resource": "notebooks", "verb": "list"},

@@ -251,8 +251,5 @@ class PluginManager:
                 for tool_name, perms in mapping.items():
                     if not perms:
                         continue
-                    existing = merged.setdefault(tool_name, [])
-                    for perm in perms:
-                        if perm not in existing:
-                            existing.append(perm)
+                    merged.setdefault(tool_name, []).extend(perms)
         return merged

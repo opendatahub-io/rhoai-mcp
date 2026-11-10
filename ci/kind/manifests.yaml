@@ -107,6 +107,10 @@ spec:
         - name: rhoai-mcp
           image: rhoai-mcp:smoke
           imagePullPolicy: Never
+          # The image CMD defaults to --transport stdio, which overrides the
+          # env var and is incompatible with OIDC — pass the transport
+          # explicitly (expanded from the config map env).
+          args: ["--transport", "$(RHOAI_MCP_TRANSPORT)"]
           envFrom:
             - configMapRef:
                 name: rhoai-mcp-config

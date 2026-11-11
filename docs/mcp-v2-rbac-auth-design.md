@@ -1,6 +1,6 @@
 # MCP v2 RBAC & Auth Redesign — Design Doc
 
-**Story:** [RHAI-14612](https://redhat.atlassian.net/browse/RHAI-14612) · **Status:** DRAFT — everything final except the two [RHAI-14609](https://redhat.atlassian.net/browse/RHAI-14609) ratification slots (owner meeting 2026-11-11)
+**Story:** [RHAI-14612](https://redhat.atlassian.net/browse/RHAI-14612) · **Status:** FINAL — [RHAI-14609](https://redhat.atlassian.net/browse/RHAI-14609) ratified 2026-11-11; Epic 3 implements against this document
 **Inputs:** [RHAI-14607](https://redhat.atlassian.net/browse/RHAI-14607), [RHAI-14608](https://redhat.atlassian.net/browse/RHAI-14608), [RHAI-14610](https://redhat.atlassian.net/browse/RHAI-14610), [RHAI-14611](https://redhat.atlassian.net/browse/RHAI-14611) — findings recorded on those stories. Verified against installed mcp 2.3.0.
 **Implements:** [RHAI-14627](https://redhat.atlassian.net/browse/RHAI-14627), [RHAI-14629](https://redhat.atlassian.net/browse/RHAI-14629), [RHAI-14630](https://redhat.atlassian.net/browse/RHAI-14630), [RHAI-14631](https://redhat.atlassian.net/browse/RHAI-14631), [RHAI-14632](https://redhat.atlassian.net/browse/RHAI-14632), [RHAI-14633](https://redhat.atlassian.net/browse/RHAI-14633)
 
@@ -45,7 +45,7 @@ Semantics (carried over from v1 exactly — same `get_allowed_tools()` contract,
 
 **UserContext ordering (RHAI-14608, verified by test):** under Streamable HTTP — stateless and stateful — `OIDCAuthMiddleware` populates `UserContext` before dispatch reaches the middleware, so `RBACMiddleware` reads `UserContext.current()` directly. Under SSE (legacy), dispatch runs in the GET /sse task: `UserContext` reflects connection time, per-message identity comes from `ctx.meta` (see §3), and the SDK pins each session to the creating credential (mismatched POST → 404).
 
-**Dual enforcement (list + call):** ⏳ *PENDING RHAI-14609 RATIFICATION — owner meeting 2026-11-11.* Recommendation on the table: keep both (call enforcement is the security boundary; list filtering is UX and the gateway broker's catalog import depends on it). If call-time-only is chosen instead, `_filter_list` drops out and the broker-team impact needs an RHAI-14636 follow-up.
+**Dual enforcement (list + call) — RATIFIED ([RHAI-14609](https://redhat.atlassian.net/browse/RHAI-14609), 2026-11-11):** keep both. Call enforcement is the security boundary — a client can invoke any tool by name regardless of what `tools/list` showed — and list filtering is the UX half plus the gateway broker's catalog-import dependency. One middleware covers both points via `ctx.method`.
 
 ## 2. Install verification (implements RHAI-14629)
 
@@ -105,8 +105,8 @@ Watch items (for the RHAI-14640 eval runs, not design constraints): 4 MiB reques
 | [RHAI-14632](https://redhat.atlassian.net/browse/RHAI-14632) | ctx threading, unchanged from plan; grep audit |
 | [RHAI-14633](https://redhat.atlassian.net/browse/RHAI-14633) | Rotation tests on both transport channels (§3) |
 
-## 8. Pending ratification & sign-off
+## 8. Ratification & sign-off
 
-- ⏳ **RHAI-14609 dual enforcement** — owner meeting 2026-11-11; recommendation: keep both
-- ⏳ **RHAI-14609 interception ratification** — same meeting; recommendation: the `ServerMiddleware` approach above (evolved Option A — cleaner than the v1-era wrap-after-registration, zero private API)
-- Sign-off: RBAC/OIDC owner + Epic 3 executor (to be recorded on RHAI-14612 after the meeting)
+- ✅ **RHAI-14609 dual enforcement — ratified 2026-11-11:** keep both (list filtering + call enforcement)
+- ✅ **RHAI-14609 interception approach — ratified 2026-11-11:** the `ServerMiddleware` design above (evolved Option A — cleaner than the v1-era wrap-after-registration, zero private API)
+- ✅ **Sign-offs (2026-11-11):** RBAC/OIDC owner — Matteo Mortari; Epic 3 executor — Frank Jansen. Recorded on [RHAI-14609](https://redhat.atlassian.net/browse/RHAI-14609) and [RHAI-14612](https://redhat.atlassian.net/browse/RHAI-14612).

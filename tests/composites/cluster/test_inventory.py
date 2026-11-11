@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from rhoai_mcp.composites.cluster.resources import register_cluster_resources
+from rhoai_mcp.composites.cluster.inventory import register_cluster_resources
 
 
 @pytest.mark.asyncio

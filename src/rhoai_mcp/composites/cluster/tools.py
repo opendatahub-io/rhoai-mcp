@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     """Register cluster composite tools with the MCP server."""
-    from rhoai_mcp.composites.cluster.resources import register_cluster_resources
+    from rhoai_mcp.composites.cluster.inventory import register_cluster_resources
 
     register_cluster_resources(mcp, server)
 

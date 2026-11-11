@@ -65,8 +65,25 @@ The semantics map field-for-field onto RFC 7662's introspection response:
 | `active: false` (revoked/expired/unknown) | `status.authenticated: false` |
 | `username` | `status.user.username` |
 | `sub` | `status.user.uid` |
-| `groups` / `scope` | `status.user.groups` (plus OCP User groups, merged) |
+| `groups` | `status.user.groups` (plus OCP User groups, merged) |
 | client authentication to the introspection endpoint | the server's ServiceAccount credentials (RBAC: `create tokenreviews`) |
+
+**What TokenReview does *not* carry over: OAuth scopes.** TokenReview returns the
+caller's identity (username, groups) — not the token's scope restrictions. An
+OpenShift OAuth token can be issued with narrowed scopes (e.g. `user:info`,
+`user:check-access`) that limit what the token itself may do; TokenReview
+validates the identity without exposing those limits. This matters for the
+kube-auth strategy choice:
+
+- **`user-token` strategy** forwards the caller's original token to the K8s API,
+  which enforces the token's own scopes on every call — a scope-limited token
+  stays scope-limited.
+- **`impersonation` strategy** re-creates the user's *full* identity using the
+  server's SA credentials, which drops the token's scope restrictions: a holder
+  of a scope-limited token gains the user's broader permissions through the
+  server (CWE-269). Use `user-token` for OpenShift deployments where scoped
+  tokens are issued; impersonation remains the requirement for JWT mode (see
+  the configuration reference) and appropriate where tokens are not scoped.
 
 Why no standard endpoint exists, and why that is correct: an RFC 7662 facade in
 front of TokenReview would add a URL shape without changing a single semantic —
@@ -90,12 +107,23 @@ cite. This note is that citation.
 
 - **Cluster scoping** is the token's boundary: the API server that issued the
   token is the only one that will validate it. A token cannot be replayed
-  against a different cluster.
-- **Per-caller RBAC** is enforced on every tool call regardless of token
-  validity: a valid token authorizes the caller to act *as themselves*, within
-  their own Kubernetes permissions. This is a damage bound (no privilege
-  escalation), not a confused-deputy defense — audience restriction plays that
-  role for JWT mode, and has no equivalent (or need) for cluster-scoped tokens.
+  against a different cluster. Note the granularity: TokenReview mode binds
+  tokens to the *cluster*, not to this specific deployment — no
+  `spec.audiences` is sent, so any cluster-valid token is accepted by any
+  rhoai-mcp deployment in that cluster. This is the same property that makes
+  the `user-token` pass-through spec-compliant (see [ARCHITECTURE.md](ARCHITECTURE.md),
+  "MCP Spec Compliance"): the K8s API server is the token's native audience and
+  this server is part of the cluster's infrastructure. The bound on
+  cross-deployment use within a cluster is per-caller RBAC plus the caller's
+  own token permissions — identity preservation, not escalation.
+- **Per-caller RBAC** is enforced for every *governed* tool — a tool with a
+  permission mapping in its domain — on both `tools/list` (filtered from view)
+  and `tools/call` (denied before dispatch). Tools without a permission mapping
+  are allowed by design; for those, access control is enforced by the K8s API
+  itself on the actual resource operations, under the caller's own credentials
+  or impersonated identity. A valid token authorizes the caller to act *as
+  themselves*, within their own Kubernetes permissions — a damage bound (no
+  privilege escalation), not a confused-deputy defense.
 - **Audit and TTL** bound residual risk: TokenReview calls are audited in the
   API server log, and tokens expire per the platform's OAuth configuration.
 
@@ -109,12 +137,19 @@ cite. This note is that citation.
 | `RHOAI_MCP_OIDC_AUDIENCE` | jwt | Expected `aud` — set to this deployment's resource URL (see above) |
 | `RHOAI_MCP_OIDC_REQUIRED_SCOPES` | both | Advertised in the RFC 9728 metadata |
 | `RHOAI_MCP_OIDC_RESOURCE_URL` | both | This server's external URL (the RFC 9728 `resource`) |
-| `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY` | both | `user-token` (forward caller's token to K8s) or `impersonation` (SA + `Impersonate-*` headers) |
+| `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY` | both | `user-token` (forward caller's token to K8s) or `impersonation` (SA + `Impersonate-*` headers). **JWT mode requires `impersonation`** — startup validation rejects `user-token` with `jwt`, because audience-bound JWTs must not be forwarded to the K8s API (see ARCHITECTURE.md, "MCP Spec Compliance") |
 | `RHOAI_MCP_OIDC_OCP_API_URL` | token-review | API server URL for the metadata document |
 
 The server's own permissions in `token-review` mode: `create` on
 `authentication.k8s.io/tokenreviews`, `create` on
-`authorization.k8s.io/subjectaccessreviews` (per-caller RBAC checks), and —
-when using the impersonation strategy — `impersonate` on
-users/groups/serviceaccounts. See the kustomize overlays under `deploy/` for
-the canonical RBAC manifests.
+`authorization.k8s.io/subjectaccessreviews` (per-caller RBAC checks), and
+`get` on `user.openshift.io/users` (fetching OCP group memberships for the
+authenticated user). The canonical
+[`deploy/kustomize/overlays/openshift-oidc`](../deploy/kustomize/overlays/openshift-oidc/README.md)
+overlay grants exactly these — it covers **`token-review` mode only**.
+
+**JWT-mode deployments must add the impersonation RBAC themselves**: the
+`impersonation` strategy additionally requires `impersonate` on
+users/groups/serviceaccounts (core API group), which the canonical overlay
+does not grant. Without it, the server starts (JWT mode forces the
+impersonation strategy) but every tool call fails Kubernetes authorization.

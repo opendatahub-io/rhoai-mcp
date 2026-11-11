@@ -115,8 +115,10 @@ def check(name: str, fn) -> None:
         failures.append(f"{name}: {exc}")
         print(f"FAIL {name}: {exc}")
     except Exception as exc:  # noqa: BLE001
-        failures.append(f"{name}: {exc!r}")
-        print(f"FAIL {name}: {exc!r}")
+        # Safe details only — exception reprs can embed response bodies
+        detail = f"{type(exc).__name__}"
+        failures.append(f"{name}: {detail}")
+        print(f"FAIL {name}: {detail}")
     else:
         print(f"PASS {name}")
 
@@ -191,6 +193,9 @@ def check_token_rotation_mid_session() -> None:
         READER_TOKEN_2, session, UNGOVERNED_TOOL, {"intent": "list data science projects"}
     )
     assert result.get("isError") is not True, "call with rotated token failed"
+    # Assert on result data so an empty-but-not-isError result cannot pass
+    structured = result.get("structuredContent")
+    assert isinstance(structured, dict) and structured, "rotated-token call returned no result data"
 
 
 def main() -> int:

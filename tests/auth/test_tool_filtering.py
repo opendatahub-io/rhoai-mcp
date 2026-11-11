@@ -1,13 +1,23 @@
-"""Tests for per-user tool list filtering."""
+"""Tests for per-user RBAC enforcement (RHAI-14627).
 
+Covers the RBACMiddleware (the ratified 1.6 design: one ServerMiddleware
+for both enforcement points, installed via the public
+MCPServer(middleware=[...]) constructor parameter), the get_allowed_tools
+logic it delegates to, and both enforcement points driven end-to-end
+through the real dispatch path.
+"""
+
+import asyncio
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx2
 import pytest
-from mcp import types as mcp_types
+import uvicorn
 from mcp.server.mcpserver import MCPServer
-from mcp.types import Tool as MCPTool
 
+from rhoai_mcp.auth.rbac_middleware import RBACMiddleware
 from rhoai_mcp.auth.user_context import UserContext
 from rhoai_mcp.config import RHOAIConfig, TransportMode
 from rhoai_mcp.server import RHOAIServer
@@ -104,245 +114,247 @@ class TestToolFiltering:
             UserContext.reset_current(token)
 
 
-def _make_tool(name: str) -> MCPTool:
-    return MCPTool(name=name, description=f"Tool {name}", input_schema={"type": "object"})
+# --- RBACMiddleware unit tests -------------------------------------------------
+#
+# The middleware operates on the JSON-RPC wire surface: ctx.params is the raw
+# params dict and call_next returns the wire-shaped result dict.
 
 
-def _make_list_tools_result(names: list[str]) -> mcp_types.ListToolsResult:
-    """Build a ListToolsResult (v2 handlers return concrete result types)."""
-    tools = [_make_tool(n) for n in names]
-    return mcp_types.ListToolsResult(tools=tools)
+def _ctx(method: str, params: Any = None) -> SimpleNamespace:
+    return SimpleNamespace(method=method, params=params)
 
 
-class TestToolFilteringEnforcement:
-    """Tests that request_handlers are patched for RBAC filtering."""
+def _list_result(names: list[str]) -> dict[str, Any]:
+    return {"tools": [{"name": n, "description": f"Tool {n}"} for n in names]}
 
-    def _create_server_with_filtering(self) -> tuple["RHOAIServer", Any]:
-        """Create an RHOAIServer with tool filtering installed, return (server, mcp)."""
-        config = RHOAIConfig(
-            oidc_enabled=True,
-            oidc_issuer_url="https://idp.example.com",
-            oidc_kube_auth_strategy="impersonation",
-            mock_cluster=True,
-            transport=TransportMode.SSE,
-        )
-        server = RHOAIServer(config)
-        mcp = server.create_mcp()
-        server._k8s_client = MagicMock()
-        server._k8s_client.is_connected = True
-        server._install_tool_filtering(mcp)
-        return server, mcp
 
-    async def test_list_tools_filtered_by_allowed_set(self) -> None:
-        """list_tools handler only returns governed tools the user is allowed to use."""
-        server, mcp = self._create_server_with_filtering()
-        lowlevel = mcp._mcp_server
+def _middleware(
+    allowed: set[str] | None, governed: set[str] | None = None
+) -> tuple[RBACMiddleware, MagicMock]:
+    server = MagicMock()
+    if allowed is None:
+        server.get_allowed_tools.return_value = None  # OIDC disabled
+    else:
+        server.get_allowed_tools.return_value = (allowed, governed or set())
+    return RBACMiddleware(server), server
 
-        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ListToolsResult:
-            return _make_list_tools_result(["tool_a", "tool_b", "tool_c"])
 
-        # Reinstall filtering over our mock
-        lowlevel.request_handlers[mcp_types.ListToolsRequest] = mock_original
-        server._install_tool_filtering(mcp)
+class TestRBACMiddlewareCall:
+    async def test_denied_call_does_not_dispatch(self) -> None:
+        """A governed, disallowed tool is denied before the handler runs."""
+        mw, _ = _middleware(allowed={"tool_a"}, governed={"tool_a", "tool_b"})
+        call_next = AsyncMock(return_value={"content": [], "isError": False})
 
-        handler = lowlevel.request_handlers[mcp_types.ListToolsRequest]
-        # tool_a allowed, tool_b and tool_c governed but denied
-        governed = {"tool_a", "tool_b", "tool_c"}
-        with patch.object(server, "get_allowed_tools", return_value=({"tool_a"}, governed)):
-            result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
+        result = await mw(_ctx("tools/call", {"name": "tool_b", "arguments": {}}), call_next)
 
-        names = [t.name for t in result.tools]
-        assert names == ["tool_a"]
+        call_next.assert_not_awaited()
+        assert result["isError"] is True
+        assert "not permitted for the current user" in result["content"][0]["text"]
+        assert "tool_b" in result["content"][0]["text"]
 
-    async def test_list_tools_passes_ungoverned_tools(self) -> None:
-        """list_tools handler allows tools without permission mappings."""
-        server, mcp = self._create_server_with_filtering()
-        lowlevel = mcp._mcp_server
-
-        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ListToolsResult:
-            return _make_list_tools_result(["governed_ok", "governed_deny", "ungoverned"])
-
-        lowlevel.request_handlers[mcp_types.ListToolsRequest] = mock_original
-        server._install_tool_filtering(mcp)
-
-        handler = lowlevel.request_handlers[mcp_types.ListToolsRequest]
-        governed = {"governed_ok", "governed_deny"}
-        with patch.object(server, "get_allowed_tools", return_value=({"governed_ok"}, governed)):
-            result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
-
-        names = [t.name for t in result.tools]
-        assert sorted(names) == ["governed_ok", "ungoverned"]
-
-    async def test_list_tools_returns_all_when_no_filtering(self) -> None:
-        """list_tools handler returns all tools when get_allowed_tools returns None."""
-        server, mcp = self._create_server_with_filtering()
-        lowlevel = mcp._mcp_server
-
-        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ListToolsResult:
-            return _make_list_tools_result(["tool_a", "tool_b"])
-
-        lowlevel.request_handlers[mcp_types.ListToolsRequest] = mock_original
-        server._install_tool_filtering(mcp)
-
-        handler = lowlevel.request_handlers[mcp_types.ListToolsRequest]
-        with patch.object(server, "get_allowed_tools", return_value=None):
-            result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
-
-        names = [t.name for t in result.tools]
-        assert "tool_a" in names
-        assert "tool_b" in names
-
-    async def test_list_tools_returns_empty_on_rbac_failure(self) -> None:
-        """list_tools handler returns empty list when RBAC check raises."""
-        server, mcp = self._create_server_with_filtering()
-        lowlevel = mcp._mcp_server
-
-        async def mock_original(_req: mcp_types.ListToolsRequest) -> mcp_types.ListToolsResult:
-            return _make_list_tools_result(["tool_a"])
-
-        lowlevel.request_handlers[mcp_types.ListToolsRequest] = mock_original
-        server._install_tool_filtering(mcp)
-
-        handler = lowlevel.request_handlers[mcp_types.ListToolsRequest]
-        with patch.object(server, "get_allowed_tools", side_effect=RuntimeError("fail")):
-            result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
-
-        assert result.tools == []
-
-    async def test_call_tool_denied_returns_error_result(self) -> None:
-        """call_tool handler returns CallToolResult(is_error=True) for denied tools."""
-        server, mcp = self._create_server_with_filtering()
-        lowlevel = mcp._mcp_server
-
-        handler = lowlevel.request_handlers[mcp_types.CallToolRequest]
-        req = mcp_types.CallToolRequest(
-            method="tools/call",
-            params=mcp_types.CallToolRequestParams(name="tool_b", arguments={}),
+    async def test_allowed_call_passes_through(self) -> None:
+        mw, _ = _middleware(allowed={"tool_a"}, governed={"tool_a", "tool_b"})
+        call_next = AsyncMock(
+            return_value={"content": [{"type": "text", "text": "ok"}], "isError": False}
         )
 
-        governed = {"tool_a", "tool_b"}
-        with patch.object(server, "get_allowed_tools", return_value=({"tool_a"}, governed)):
-            result = await handler(req)
+        result = await mw(_ctx("tools/call", {"name": "tool_a", "arguments": {}}), call_next)
 
-        assert isinstance(result, mcp_types.CallToolResult)
-        assert result.is_error is True
-        assert "not permitted" in result.content[0].text
+        call_next.assert_awaited_once()
+        assert result["isError"] is False
 
-    async def test_call_tool_allowed_passes_through(self) -> None:
-        """call_tool handler passes through to original for allowed tools."""
-        server, mcp = self._create_server_with_filtering()
-        lowlevel = mcp._mcp_server
+    async def test_ungoverned_call_passes_through(self) -> None:
+        """Tools without permission mappings are allowed."""
+        mw, _ = _middleware(allowed=set(), governed={"governed_tool"})
+        call_next = AsyncMock(return_value={"content": [], "isError": False})
 
-        # Replace original call handler with a mock
-        mock_result = mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(type="text", text="ok")],
-            is_error=False,
-        )
-        original_call_handler = AsyncMock(return_value=mock_result)
-        lowlevel.request_handlers[mcp_types.CallToolRequest] = original_call_handler
-        server._install_tool_filtering(mcp)
-
-        handler = lowlevel.request_handlers[mcp_types.CallToolRequest]
-        req = mcp_types.CallToolRequest(
-            method="tools/call",
-            params=mcp_types.CallToolRequestParams(name="tool_a", arguments={"x": "1"}),
+        result = await mw(
+            _ctx("tools/call", {"name": "ungoverned_tool", "arguments": {}}), call_next
         )
 
-        governed = {"tool_a", "tool_b"}
-        with patch.object(server, "get_allowed_tools", return_value=({"tool_a"}, governed)):
-            result = await handler(req)
+        call_next.assert_awaited_once()
+        assert result["isError"] is False
 
-        assert result == mock_result
-        original_call_handler.assert_called_once_with(req)
+    async def test_denied_on_rbac_failure(self) -> None:
+        """Fail-closed: an RBAC check failure denies the call."""
+        server = MagicMock()
+        server.get_allowed_tools.side_effect = RuntimeError("SAR unavailable")
+        mw = RBACMiddleware(server)
+        call_next = AsyncMock()
 
-    async def test_call_tool_ungoverned_passes_through(self) -> None:
-        """call_tool handler allows tools without permission mappings."""
-        server, mcp = self._create_server_with_filtering()
-        lowlevel = mcp._mcp_server
+        result = await mw(_ctx("tools/call", {"name": "tool_a", "arguments": {}}), call_next)
 
-        mock_result = mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(type="text", text="ok")],
-            is_error=False,
+        call_next.assert_not_awaited()
+        assert result["isError"] is True
+        assert "RBAC check failed" in result["content"][0]["text"]
+
+    async def test_no_filtering_when_oidc_disabled(self) -> None:
+        """get_allowed_tools() None means no enforcement."""
+        mw, _ = _middleware(allowed=None)
+        call_next = AsyncMock(return_value={"content": [], "isError": False})
+
+        result = await mw(_ctx("tools/call", {"name": "anything", "arguments": {}}), call_next)
+
+        call_next.assert_awaited_once()
+        assert result["isError"] is False
+
+    async def test_malformed_params_pass_through(self) -> None:
+        """Malformed requests fall through to the SDK's own validation."""
+        mw, _ = _middleware(allowed={"tool_a"}, governed={"tool_a", "tool_b"})
+        call_next = AsyncMock(return_value={"content": [], "isError": False})
+
+        await mw(_ctx("tools/call", {"arguments": {}}), call_next)
+        assert call_next.await_count == 1
+
+        result = await mw(_ctx("tools/call", "not-a-dict"), call_next)
+        assert call_next.await_count == 2
+        assert result["isError"] is False
+
+
+class TestRBACMiddlewareList:
+    async def test_list_filters_governed_denied(self) -> None:
+        mw, _ = _middleware(allowed={"tool_a"}, governed={"tool_a", "tool_b"})
+        call_next = AsyncMock(return_value=_list_result(["tool_a", "tool_b", "tool_c"]))
+
+        result = await mw(_ctx("tools/list", {}), call_next)
+
+        assert [t["name"] for t in result["tools"]] == ["tool_a", "tool_c"]
+        # A fresh result dict — the original is not mutated
+        assert call_next.return_value["tools"][1]["name"] == "tool_b"
+
+    async def test_list_passes_ungoverned(self) -> None:
+        mw, _ = _middleware(allowed={"governed_ok"}, governed={"governed_ok", "governed_deny"})
+        call_next = AsyncMock(
+            return_value=_list_result(["governed_ok", "governed_deny", "ungoverned"])
         )
-        original_call_handler = AsyncMock(return_value=mock_result)
-        lowlevel.request_handlers[mcp_types.CallToolRequest] = original_call_handler
-        server._install_tool_filtering(mcp)
 
-        handler = lowlevel.request_handlers[mcp_types.CallToolRequest]
-        req = mcp_types.CallToolRequest(
-            method="tools/call",
-            params=mcp_types.CallToolRequestParams(name="ungoverned_tool", arguments={}),
-        )
+        result = await mw(_ctx("tools/list", {}), call_next)
 
-        governed = {"tool_a"}
-        with patch.object(server, "get_allowed_tools", return_value=({"tool_a"}, governed)):
-            result = await handler(req)
+        assert [t["name"] for t in result["tools"]] == ["governed_ok", "ungoverned"]
 
-        assert result == mock_result
-        original_call_handler.assert_called_once_with(req)
+    async def test_list_passthrough_when_no_filtering(self) -> None:
+        mw, _ = _middleware(allowed=None)
+        original = _list_result(["tool_a", "tool_b"])
+        call_next = AsyncMock(return_value=original)
+
+        result = await mw(_ctx("tools/list", {}), call_next)
+
+        assert result is original
+
+    async def test_list_empty_on_rbac_failure(self) -> None:
+        """Fail-closed: an RBAC check failure yields an empty tool list."""
+        server = MagicMock()
+        server.get_allowed_tools.side_effect = RuntimeError("SAR unavailable")
+        mw = RBACMiddleware(server)
+        call_next = AsyncMock(return_value=_list_result(["tool_a"]))
+
+        result = await mw(_ctx("tools/list", {}), call_next)
+
+        assert result["tools"] == []
+
+    async def test_non_tool_method_passes_through(self) -> None:
+        mw, _ = _middleware(allowed={"tool_a"}, governed={"tool_a"})
+        call_next = AsyncMock(return_value={"serverInfo": {}})
+
+        result = await mw(_ctx("initialize", {"protocolVersion": "2025-03-26"}), call_next)
+
+        call_next.assert_awaited_once()
+        assert result == {"serverInfo": {}}
 
 
-class TestToolFilteringInstallation:
-    """Tripwire for the *installation* of RBAC tool filtering (RHAI-14595).
+class TestRBACEnforcementEndToEnd:
+    """Both enforcement points through the real dispatch path.
 
-    Silent-bypass failure mode (RHOAIENG-95548, Risk B): if the MCP SDK
-    changes internals so that ``_install_tool_filtering()`` no longer
-    replaces the lowlevel request handlers — the ``request_handlers`` dict
-    renamed, populated lazily, keyed by different request classes, or no
-    longer read by dispatch — the patch silently no-ops. Nothing raises:
-    every authenticated user simply sees and can call every tool. These
-    tests convert that silent bypass into a loud CI failure: they must
-    FAIL (never skip) when installation does not take effect.
+    Drives a real MCPServer (with RBACMiddleware installed via the public
+    constructor parameter) over streamable-http with raw JSON-RPC — the
+    permanent regression coverage RHAI-14629 promotes from the RHAI-14595
+    tripwire: if the middleware is not installed or not enforcing, these
+    fail rather than skip.
     """
 
-    def _make_server(self) -> RHOAIServer:
-        config = RHOAIConfig(
-            oidc_enabled=True,
-            oidc_token_mode="token-review",
-            oidc_kube_auth_strategy="impersonation",
-            mock_cluster=True,
-            transport=TransportMode.SSE,
-        )
-        server = RHOAIServer(config)
-        mock_k8s = MagicMock()
-        mock_k8s.is_connected = True
-        mock_k8s._api_client = MagicMock()
-        server._k8s_client = mock_k8s
-        return server
-
     @staticmethod
-    def _bare_mcp() -> MCPServer:
-        """A bare MCPServer whose lowlevel server holds the SDK's own handlers."""
-        return MCPServer(name="rbac-install-tripwire")
+    def _build_mcp() -> MCPServer:
+        server = MagicMock()
+        server.get_allowed_tools.return_value = ({"visible_tool"}, {"visible_tool", "hidden_tool"})
+        mcp = MCPServer(name="rbac-e2e", middleware=[RBACMiddleware(server)])
 
-    def test_setup_auth_replaces_sdk_handlers(self) -> None:
-        """_setup_auth() must swap the SDK's own handlers for RBAC wrappers.
+        @mcp.tool()
+        def hidden_tool() -> dict[str, str]:
+            """Governed tool the caller is denied."""
+            return {"hidden": "never runs"}
 
-        If _install_tool_filtering() no-ops (early return, dispatch moved
-        elsewhere), the dict still holds the SDK originals and this test
-        fails — the silent RBAC bypass becomes visible in CI.
-        """
-        server = self._make_server()
-        mcp = self._bare_mcp()
-        lowlevel = mcp._mcp_server
-        sdk_list_handler = lowlevel.request_handlers[mcp_types.ListToolsRequest]
-        sdk_call_handler = lowlevel.request_handlers[mcp_types.CallToolRequest]
+        @mcp.tool()
+        def visible_tool() -> dict[str, str]:
+            """Governed tool the caller may use."""
+            return {"visible": "yes"}
 
-        server._setup_auth(mcp)
+        return mcp
 
-        assert lowlevel.request_handlers[mcp_types.ListToolsRequest] is not sdk_list_handler
-        assert lowlevel.request_handlers[mcp_types.CallToolRequest] is not sdk_call_handler
+    async def test_enforcement_through_dispatch(self) -> None:
+        mcp = self._build_mcp()
+        app = mcp.streamable_http_app(json_response=True, stateless_http=True)
 
-    def test_install_raises_when_sdk_handlers_missing(self) -> None:
-        """A missing SDK handler must raise, not warn-and-skip.
+        config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
+        server = uvicorn.Server(config)
+        task = asyncio.create_task(server.serve())
+        while not server.started:
+            await asyncio.sleep(0.05)
+        port = server.servers[0].sockets[0].getsockname()[1]
+        try:
+            headers = {"Content-Type": "application/json", "Accept": "application/json"}
+            async with httpx2.AsyncClient(base_url=f"http://127.0.0.1:{port}") as client:
+                await client.post(
+                    "/mcp",
+                    headers=headers,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2025-03-26",
+                            "capabilities": {},
+                            "clientInfo": {"name": "rbac-e2e", "version": "0"},
+                        },
+                    },
+                )
 
-        Simulates SDK drift: if the lowlevel server no longer exposes the
-        CallToolRequest handler, warn-and-return would leave every tool
-        callable for every user. Installation must fail loudly instead.
-        """
-        server = self._make_server()
-        mcp = self._bare_mcp()
-        del mcp._mcp_server.request_handlers[mcp_types.CallToolRequest]
+                # tools/list: the governed-denied tool is filtered from view
+                resp = await client.post(
+                    "/mcp",
+                    headers=headers,
+                    json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+                )
+                names = [t["name"] for t in resp.json()["result"]["tools"]]
+                assert "visible_tool" in names
+                assert "hidden_tool" not in names, "RBAC list filtering not enforced"
 
-        with pytest.raises(RuntimeError, match="RBAC tool filtering"):
-            server._install_tool_filtering(mcp)
+                # tools/call: the governed-denied tool is denied before dispatch
+                resp = await client.post(
+                    "/mcp",
+                    headers=headers,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 3,
+                        "method": "tools/call",
+                        "params": {"name": "hidden_tool", "arguments": {}},
+                    },
+                )
+                result = resp.json()["result"]
+                assert result["isError"] is True, "RBAC call denial not enforced"
+                assert "not permitted" in result["content"][0]["text"]
+
+                # tools/call: the allowed tool runs
+                resp = await client.post(
+                    "/mcp",
+                    headers=headers,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 4,
+                        "method": "tools/call",
+                        "params": {"name": "visible_tool", "arguments": {}},
+                    },
+                )
+                assert resp.json()["result"]["isError"] is False
+        finally:
+            server.should_exit = True
+            await task

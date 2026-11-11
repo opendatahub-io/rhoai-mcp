@@ -19,11 +19,13 @@ Exit code 0 iff every check passes.
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import sys
 import urllib.error
 import urllib.request
+from typing import Any
 
 BASE_URL = os.environ.get("SMOKE_BASE_URL", "http://127.0.0.1:8000")
 READER_TOKEN = os.environ["SMOKE_READER_TOKEN"]
@@ -43,13 +45,17 @@ def parse_body(text: str) -> dict:
     stripped = text.strip()
     if stripped.startswith("{"):
         return json.loads(stripped)
-    data_lines = [line.removeprefix("data: ") for line in text.splitlines() if line.startswith("data: ")]
+    data_lines = [
+        line.removeprefix("data: ") for line in text.splitlines() if line.startswith("data: ")
+    ]
     if not data_lines:
-        raise AssertionError(f"no JSON or SSE data in response: {text[:200]!r}")
+        raise AssertionError("no JSON or SSE data in response body")
     return json.loads(data_lines[0])
 
 
-def rpc(method: str, params: dict, token: str, session_id: str | None = None, msg_id: int = 1) -> tuple[dict, dict]:
+def rpc(
+    method: str, params: dict, token: str, session_id: str | None = None, msg_id: int = 1
+) -> tuple[dict, Any]:
     """POST one JSON-RPC message; return (parsed body, response headers)."""
     payload = {"jsonrpc": "2.0", "id": msg_id, "method": method}
     if params is not None:
@@ -65,7 +71,7 @@ def rpc(method: str, params: dict, token: str, session_id: str | None = None, ms
         f"{BASE_URL}/mcp", data=json.dumps(payload).encode(), headers=headers, method="POST"
     )
     with urllib.request.urlopen(request, timeout=30) as response:
-        return parse_body(response.read().decode()), dict(response.headers.items())
+        return parse_body(response.read().decode()), response.headers
 
 
 def initialize(token: str) -> str:
@@ -78,21 +84,22 @@ def initialize(token: str) -> str:
         },
         token,
     )
-    assert body.get("error") is None, f"initialize failed: {body}"
-    session_id = headers.get("Mcp-Session-Id") or headers.get("mcp-session-id")
-    assert session_id, f"no session id in initialize response headers: {headers}"
+    assert body.get("error") is None, "initialize returned an error response"
+    # http.client headers are case-insensitive
+    session_id = headers.get("Mcp-Session-Id")
+    assert session_id, "initialize response missing the session id"
     return session_id
 
 
 def tool_names(token: str, session_id: str) -> set[str]:
     body, _ = rpc("tools/list", {}, token, session_id)
-    assert body.get("error") is None, f"tools/list failed: {body}"
+    assert body.get("error") is None, "tools/list returned an error response"
     return {t["name"] for t in body["result"]["tools"]}
 
 
 def call_tool(token: str, session_id: str, name: str, arguments: dict) -> dict:
     body, _ = rpc("tools/call", {"name": name, "arguments": arguments}, token, session_id)
-    assert body.get("error") is None, f"tools/call protocol error: {body}"
+    assert body.get("error") is None, "tools/call returned a protocol error"
     return body["result"]
 
 
@@ -123,7 +130,10 @@ def check_unauthenticated_rejected() -> None:
     request = urllib.request.Request(
         f"{BASE_URL}/mcp",
         data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}).encode(),
-        headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        },
         method="POST",
     )
     try:
@@ -153,28 +163,34 @@ def check_reader_list_filtered() -> None:
 def check_reader_call_denied() -> None:
     session = initialize(READER_TOKEN)
     result = call_tool(READER_TOKEN, session, GOVERNED_DEPLOY_TOOL, {})
-    assert result.get("isError") is True, f"denial not signaled: {result}"
+    assert result.get("isError") is True, "denial not signaled as isError"
     text = json.dumps(result)
-    assert "not permitted" in text, f"denial text missing: {result}"
+    assert "not permitted" in text, "denial text missing from the error response"
 
 
 def check_ungoverned_call_succeeds() -> None:
     session = initialize(READER_TOKEN)
-    result = call_tool(READER_TOKEN, session, UNGOVERNED_TOOL, {"intent": "list data science projects"})
-    assert result.get("isError") is not True, f"ungoverned call failed: {result}"
+    result = call_tool(
+        READER_TOKEN, session, UNGOVERNED_TOOL, {"intent": "list data science projects"}
+    )
+    assert result.get("isError") is not True, "ungoverned tool call failed"
 
 
 def check_token_rotation_mid_session() -> None:
     """A freshly minted token on message N+1 is honored on N+1 (RHAI-14633's smoke case)."""
-    assert READER_TOKEN != READER_TOKEN_2, "rotation check needs two distinct tokens"
+    assert not hmac.compare_digest(READER_TOKEN, READER_TOKEN_2), (
+        "rotation check needs two distinct tokens"
+    )
     session = initialize(READER_TOKEN)
     before = tool_names(READER_TOKEN, session)
     # Same session, new bearer: identity must validate and the filtered
     # view must be identical (still the reader persona).
     after = tool_names(READER_TOKEN_2, session)
     assert after == before, "filtered tool list changed across token rotation"
-    result = call_tool(READER_TOKEN_2, session, UNGOVERNED_TOOL, {"intent": "list data science projects"})
-    assert result.get("isError") is not True, f"call with rotated token failed: {result}"
+    result = call_tool(
+        READER_TOKEN_2, session, UNGOVERNED_TOOL, {"intent": "list data science projects"}
+    )
+    assert result.get("isError") is not True, "call with rotated token failed"
 
 
 def main() -> int:

@@ -49,23 +49,23 @@ jobs:
 
       - name: Deploy server and personas
         run: |
-          kubectl apply -f ci/kind/manifests.yaml
-          kubectl -n rhoai-mcp-smoke rollout status deployment/rhoai-mcp --timeout=180s
+          kubectl apply -k ci/kind
+          kubectl -n rhoai-mcp rollout status deployment/rhoai-mcp --timeout=180s
 
       - name: Diagnose deployment failure
         if: failure()
         run: |
-          kubectl -n rhoai-mcp-smoke get pods -o wide || true
-          kubectl -n rhoai-mcp-smoke describe deployment rhoai-mcp || true
-          for pod in $(kubectl -n rhoai-mcp-smoke get pods -o name); do
-            kubectl -n rhoai-mcp-smoke describe "$pod" || true
-            kubectl -n rhoai-mcp-smoke logs "$pod" --all-containers --tail=100 || true
+          kubectl -n rhoai-mcp get pods -o wide || true
+          kubectl -n rhoai-mcp describe deployment rhoai-mcp || true
+          for pod in $(kubectl -n rhoai-mcp get pods -o name); do
+            kubectl -n rhoai-mcp describe "$pod" || true
+            kubectl -n rhoai-mcp logs "$pod" --all-containers --tail=100 || true
           done
 
       - name: Run smoke checks
         run: |
           set -euo pipefail
-          kubectl -n rhoai-mcp-smoke port-forward svc/rhoai-mcp 8000:8000 &
+          kubectl -n rhoai-mcp port-forward svc/rhoai-mcp 8000:8000 &
           PORT_FORWARD_PID=$!
           trap 'kill "$PORT_FORWARD_PID" 2>/dev/null || true' EXIT
 
@@ -82,9 +82,9 @@ jobs:
 
           # Assign separately from export so a failed kubectl aborts loudly
           SMOKE_BASE_URL=http://127.0.0.1:8000
-          SMOKE_READER_TOKEN="$(kubectl -n rhoai-mcp-smoke create token smoke-reader)"
-          SMOKE_READER_TOKEN_2="$(kubectl -n rhoai-mcp-smoke create token smoke-reader)"
-          SMOKE_DEPLOYER_TOKEN="$(kubectl -n rhoai-mcp-smoke create token smoke-deployer)"
+          SMOKE_READER_TOKEN="$(kubectl -n rhoai-mcp create token smoke-reader)"
+          SMOKE_READER_TOKEN_2="$(kubectl -n rhoai-mcp create token smoke-reader)"
+          SMOKE_DEPLOYER_TOKEN="$(kubectl -n rhoai-mcp create token smoke-deployer)"
           export SMOKE_BASE_URL SMOKE_READER_TOKEN SMOKE_READER_TOKEN_2 SMOKE_DEPLOYER_TOKEN
 
           python3 ci/smoke/smoke_test.py

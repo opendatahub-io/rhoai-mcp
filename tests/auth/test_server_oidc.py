@@ -257,9 +257,8 @@ class TestAuthAppWrapping:
 
     @staticmethod
     def _setup_auth(mcp: Any, server: RHOAIServer) -> None:
-        """Run _setup_auth with tool filtering stubbed (v2 port pending, 3.1)."""
-        with patch.object(server, "_install_tool_filtering"):
-            server._setup_auth(mcp)
+        """Run _setup_auth (RBAC enforcement is constructor-installed now)."""
+        server._setup_auth(mcp)
 
     def test_sse_app_wrapped_in_oidc_middleware(self) -> None:
         from mcp.server.mcpserver import MCPServer

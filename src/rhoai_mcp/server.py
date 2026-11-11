@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from mcp.server.mcpserver import MCPServer
 from pydantic import SecretStr
@@ -15,6 +14,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from rhoai_mcp.auth.rbac_middleware import RBACMiddleware
 from rhoai_mcp.clients.base import K8sClient
 from rhoai_mcp.config import RHOAIConfig, TransportMode, get_config
 from rhoai_mcp.plugin_manager import PluginManager
@@ -347,6 +347,10 @@ class RHOAIServer:
             "interact with RHOAI environments including workbenches, "
             "model serving, pipelines, and data connections.",
             lifespan=self._create_lifespan(),
+            # Dual-point RBAC enforcement via the public middleware parameter
+            # (RHAI-14627 / the ratified 1.6 design) — replaces the v1
+            # request_handlers monkey-patch. No-ops when OIDC is disabled.
+            middleware=[RBACMiddleware(self)],
         )
 
         # Store reference
@@ -460,113 +464,10 @@ class RHOAIServer:
 
         logger.info("Auth middleware will be attached when transport app is created")
 
-        # Install tool-level RBAC filtering
-        self._install_tool_filtering(mcp)
+        # Tool-level RBAC enforcement is installed at construction time via
+        # the RBACMiddleware (see create_mcp) — nothing to patch here.
 
         logger.info("Authentication enabled")
-
-    def _install_tool_filtering(self, mcp: MCPServer) -> None:
-        """Patch lowlevel request handlers to enforce per-user RBAC filtering.
-
-        MCPServer registers protocol handlers via closures at setup time.
-        Monkey-patching methods on the MCPServer instance has no effect because
-        the lowlevel server's request_handlers dict still holds the original
-        closures. We must wrap the handlers in that dict directly.
-
-        Raises:
-            RuntimeError: if the SDK's ListToolsRequest/CallToolRequest
-                handlers are absent or cannot be replaced — i.e. the SDK's
-                dispatch internals changed and filtering would silently
-                no-op (RHOAIENG-95548, Risk B).
-        """
-        from mcp import types as mcp_types
-
-        server = self
-        lowlevel = mcp._mcp_server  # noqa: SLF001
-
-        # The SDK must have registered its own handlers for both enforcement
-        # points. If either is missing, the SDK's dispatch internals changed
-        # and this patch would silently no-op — every tool would become
-        # visible and callable for every authenticated user
-        # (RHOAIENG-95548, Risk B). Fail loudly instead, and never install a
-        # partial filter (list-only or call-only).
-        original_list_handler = lowlevel.request_handlers.get(mcp_types.ListToolsRequest)
-        original_call_handler = lowlevel.request_handlers.get(mcp_types.CallToolRequest)
-        if original_list_handler is None or original_call_handler is None:
-            missing = [
-                request.__name__
-                for request, handler in (
-                    (mcp_types.ListToolsRequest, original_list_handler),
-                    (mcp_types.CallToolRequest, original_call_handler),
-                )
-                if handler is None
-            ]
-            raise RuntimeError(
-                "RBAC tool filtering could not be installed: no handler registered for "
-                f"{', '.join(missing)} in the lowlevel server's request_handlers. "
-                "The MCP SDK's dispatch internals may have changed; refusing to run "
-                "with RBAC enforcement silently disabled."
-            )
-
-        async def filtered_list_handler(
-            req: mcp_types.ListToolsRequest,
-        ) -> mcp_types.ListToolsResult:
-            result = await original_list_handler(req)
-            try:
-                check = await asyncio.to_thread(server.get_allowed_tools)
-            except Exception:
-                logger.error("RBAC check failed, denying all tools", exc_info=True)
-                return mcp_types.ListToolsResult(tools=[])
-            if check is None:
-                return cast(mcp_types.ListToolsResult, result)
-            allowed, governed = check
-            all_tools = result.tools
-            # Tools with permission mappings must pass RBAC; unmapped tools are allowed
-            filtered = [t for t in all_tools if t.name in allowed or t.name not in governed]
-            logger.info("Tool filtering: %d/%d tools allowed", len(filtered), len(all_tools))
-            return mcp_types.ListToolsResult(tools=filtered)
-
-        lowlevel.request_handlers[mcp_types.ListToolsRequest] = filtered_list_handler
-
-        # Wrap call_tool handler
-        async def filtered_call_handler(req: mcp_types.CallToolRequest) -> mcp_types.CallToolResult:
-            tool_name = req.params.name
-            try:
-                check = await asyncio.to_thread(server.get_allowed_tools)
-            except Exception:
-                logger.error("RBAC check failed for tool '%s'", tool_name, exc_info=True)
-                return mcp_types.CallToolResult(
-                    content=[
-                        mcp_types.TextContent(
-                            type="text",
-                            text=f"Tool '{tool_name}' is not permitted: RBAC check failed",
-                        )
-                    ],
-                    is_error=True,
-                )
-            if check is not None:
-                allowed, governed = check
-                # Only enforce for tools with permission mappings
-                if tool_name in governed and tool_name not in allowed:
-                    return mcp_types.CallToolResult(
-                        content=[
-                            mcp_types.TextContent(
-                                type="text",
-                                text=f"Tool '{tool_name}' is not permitted for the current user",
-                            )
-                        ],
-                        is_error=True,
-                    )
-            return cast(mcp_types.CallToolResult, await original_call_handler(req))
-
-        lowlevel.request_handlers[mcp_types.CallToolRequest] = filtered_call_handler
-
-        # Verify the wrappers landed in the mapping the SDK dispatch actually
-        # reads. If request_handlers were a copy or shadowed by another
-        # attribute, the assignments above would silently bypass RBAC.
-        assert lowlevel.request_handlers[mcp_types.ListToolsRequest] is filtered_list_handler
-        assert lowlevel.request_handlers[mcp_types.CallToolRequest] is filtered_call_handler
-        logger.info("Tool-level RBAC filtering installed (request_handlers patched)")
 
     def _register_core_resources(self, mcp: MCPServer) -> None:
         """Register core MCP resources for cluster information."""

@@ -8,7 +8,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from pydantic import SecretStr
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -26,47 +26,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _get_per_message_token(session_token: SecretStr | None) -> SecretStr | None:
-    """Extract the Bearer token from the current MCP per-message request context."""
-    try:
-        from mcp.server.lowlevel.server import request_ctx
-
-        req_context = request_ctx.get()
-        if req_context is None:
-            return None
-        req = req_context.request
-        if req is None:
-            return None
-    except ImportError:
-        logger.warning(
-            "mcp.server.lowlevel.server.request_ctx not available "
-            "(MCP SDK 2.x?). Per-message token extraction disabled — "
-            "using session-level token. Mid-session token refresh inactive."
-        )
-        return None
-    except LookupError:
-        return None
-
-    auth_header = ""
-    if hasattr(req, "headers"):
-        auth_header = req.headers.get("authorization", "")
-    if not auth_header.lower().startswith("bearer "):
-        return None
-
-    per_message_token = SecretStr(auth_header[7:])
-
-    if (
-        session_token is not None
-        and per_message_token.get_secret_value() != session_token.get_secret_value()
-    ):
-        logger.warning(
-            "Bearer token changed mid-session — using per-message token. "
-            "This may indicate token refresh mid session."
-        )
-
-    return per_message_token
-
-
 class RHOAIServer:
     """RHOAI MCP Server with pluggy-based plugin system."""
 
@@ -81,16 +40,29 @@ class RHOAIServer:
         """Get server configuration."""
         return self._config
 
-    @property
-    def k8s(self) -> K8sClient:
-        """Get the Kubernetes client.
+    def get_k8s(self, ctx: Context | None = None) -> K8sClient:
+        """Per-request Kubernetes client for the calling user (RHAI-14631).
 
-        When OIDC is enabled, returns a client authenticated as the current
-        user (via user-token or impersonation strategy). Otherwise returns
-        the shared SA client.
+        Token precedence per the 1.6 design: the per-message request
+        headers when the transport carries them (SSE attaches each POST's
+        Request to the message metadata — ``ctx.request_context.meta``),
+        else ``UserContext.token`` (per-POST fresh under Streamable HTTP;
+        connection-time under SSE, bounded by the SDK's session-owner
+        pinning).
+
+        Args:
+            ctx: the tool call's Context. None falls back to UserContext
+                only (used by the deprecated ``k8s`` property).
+
+        Returns:
+            The shared SA client when OIDC is disabled; otherwise a client
+            authenticated as the current user (user-token or impersonation
+            strategy).
 
         Raises:
-            RHOAIError: If server is not running.
+            RHOAIError: If server is not running, no UserContext is set
+                under OIDC, or no token is available for the user-token
+                strategy.
         """
         if self._k8s_client is None:
             raise RHOAIError("Server not running. K8s client not available.")
@@ -99,25 +71,59 @@ class RHOAIServer:
             from rhoai_mcp.auth.user_context import UserContext
             from rhoai_mcp.config import OIDCKubeAuthStrategy
 
-            ctx = UserContext.current()
-            if ctx is None:
+            user_context = UserContext.current()
+            if user_context is None:
                 raise RHOAIError(
                     "OIDC is enabled but no UserContext is set. "
                     "Refusing to fall back to service-account client."
                 )
 
             if self._config.oidc_kube_auth_strategy == OIDCKubeAuthStrategy.USER_TOKEN:
-                token = _get_per_message_token(ctx.token) or ctx.token
+                token = self._per_message_token(ctx) or user_context.token
                 if not token:
                     raise RHOAIError(
                         "OIDC user-token strategy is active but no token is available "
-                        "(neither per-message request_ctx nor UserContext.token)."
+                        "(neither the per-message request nor UserContext.token)."
                     )
                 return self._k8s_client.create_user_token_client(token)
             else:
-                return self._k8s_client.create_impersonating_client(ctx.username, ctx.groups)
+                return self._k8s_client.create_impersonating_client(
+                    user_context.username, user_context.groups
+                )
 
         return self._k8s_client
+
+    @staticmethod
+    def _per_message_token(ctx: Context | None) -> SecretStr | None:
+        """Bearer token from the per-message request, when the transport carries it.
+
+        SSE attaches each POST's Starlette Request to the message metadata
+        (``ctx.request_context.meta.request_context``); Streamable HTTP and
+        stdio leave ``meta`` None — the per-POST ``UserContext`` covers
+        streamable, and stdio has no per-message requests. Uses only public
+        attribute access; no SDK private imports (replaces the v1
+        ``request_ctx`` ContextVar mechanism, which no longer exists in v2).
+        """
+        if ctx is None or ctx.request_context is None:
+            return None
+        meta = getattr(ctx.request_context, "meta", None)
+        request = getattr(meta, "request_context", None) if meta is not None else None
+        headers = getattr(request, "headers", None)
+        if not headers:
+            return None
+        auth_header = headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            return None
+        return SecretStr(auth_header[7:])
+
+    @property
+    def k8s(self) -> K8sClient:
+        """Deprecated: per-request Kubernetes client without a Context.
+
+        Retained until RHAI-14632 (3.5) threads ``ctx`` through every tool;
+        new code must use :meth:`get_k8s`.
+        """
+        return self.get_k8s(None)
 
     @property
     def mcp(self) -> MCPServer:

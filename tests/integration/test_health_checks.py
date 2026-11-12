@@ -8,6 +8,7 @@ ALL_PLUGIN_NAMES = {
     "projects",
     "notebooks",
     "inference",
+    "automl",
     "pipelines",
     "connections",
     "storage",

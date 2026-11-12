@@ -212,18 +212,13 @@ def check_token_rotation_mid_session() -> None:
         "--restart=Never",
         "--command",
         "--",
-        "sleep",
-        "600",
+        "python",
+        "-c",
+        "import time; time.sleep(600)",
     )
     try:
-        _kubectl(
-            "wait",
-            "--for=condition=Ready",
-            "pod/smoke-token-rotator",
-            "-n",
-            "rhoai-mcp",
-            "--timeout=60s",
-        )
+        # Bound-token validation checks the pod's existence (name+uid), not
+        # its readiness — no need to wait for the pod to run.
         pod_uid = _kubectl(
             "get", "pod", "smoke-token-rotator", "-n", "rhoai-mcp", "-o", "jsonpath={.metadata.uid}"
         )

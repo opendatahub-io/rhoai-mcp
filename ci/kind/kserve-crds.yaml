@@ -1,0 +1,61 @@
+# Minimal KServe CRD stubs for the smoke cluster (RHAI-14633).
+#
+# The smoke personas grant RBAC on serving.kserve.io resources, and the
+# rotation test asserts a governed, Kubernetes-backed tool call returns
+# real result data (list_inference_services). Bare KinD has no KServe
+# installed, so these definitions register the resource types with a
+# permissive schema — enough for authenticated API listing to return an
+# empty list. No controller: nothing reconciles these resources, which
+# is fine — the tests only read.
+#
+# Versions match src/rhoai_mcp/domains/inference/crds.py:
+#   inferenceservices serving.kserve.io/v1beta1
+#   servingruntimes   serving.kserve.io/v1alpha1
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: inferenceservices.serving.kserve.io
+spec:
+  group: serving.kserve.io
+  scope: Namespaced
+  names:
+    plural: inferenceservices
+    singular: inferenceservice
+    kind: InferenceService
+    listKind: InferenceServiceList
+    shortNames:
+      - isvc
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: servingruntimes.serving.kserve.io
+spec:
+  group: serving.kserve.io
+  scope: Namespaced
+  names:
+    plural: servingruntimes
+    singular: servingruntime
+    kind: ServingRuntime
+    listKind: ServingRuntimeList
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}

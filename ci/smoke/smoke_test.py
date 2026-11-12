@@ -179,23 +179,117 @@ def check_ungoverned_call_succeeds() -> None:
 
 
 def check_token_rotation_mid_session() -> None:
-    """A freshly minted token on message N+1 is honored on N+1 (RHAI-14633's smoke case)."""
-    assert not hmac.compare_digest(READER_TOKEN, READER_TOKEN_2), (
-        "rotation check needs two distinct tokens"
+    """A rotated token on message N+1 is honored on N+1, with no cached auth (RHAI-14633).
+
+    Proves per-message authentication on the session-based transport: a
+    short-TTL token is used to open a session, then expires; the expired
+    token is rejected (the server is not caching authentication at the
+    session level) while a freshly minted token continues the same session
+    — including a governed, Kubernetes-backed tool call whose result data
+    is asserted, so an empty result cannot pass.
+    """
+    import subprocess
+    import time
+
+    # Mint a short-TTL token so expiry (the only practical invalidation for
+    # projected tokens) is under the test's control.
+    ttl_seconds = 45
+    short_token = subprocess.run(
+        [
+            "kubectl",
+            "create",
+            "token",
+            "smoke-reader",
+            "-n",
+            "rhoai-mcp",
+            f"--duration={ttl_seconds}s",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert short_token and not hmac.compare_digest(short_token, READER_TOKEN), (
+        "rotation check needs a distinct short-TTL token"
     )
-    session = initialize(READER_TOKEN)
-    before = tool_names(READER_TOKEN, session)
-    # Same session, new bearer: identity must validate and the filtered
-    # view must be identical (still the reader persona).
-    after = tool_names(READER_TOKEN_2, session)
+
+    session = initialize(short_token)
+    before = tool_names(short_token, session)
+    assert GOVERNED_READ_TOOL in before, "short-TTL token lacked the reader persona"
+
+    # Let the token expire, then prove the server re-authenticates per message
+    time.sleep(ttl_seconds + 10)
+    try:
+        tool_names(short_token, session)
+        raise AssertionError(
+            "expired token still accepted — authentication is cached at session level"
+        )
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 401, f"expired token got HTTP {exc.code}, expected 401"
+
+    # The fresh token continues the SAME session: filtered view unchanged
+    after = tool_names(READER_TOKEN, session)
     assert after == before, "filtered tool list changed across token rotation"
-    result = call_tool(
-        READER_TOKEN_2, session, UNGOVERNED_TOOL, {"intent": "list data science projects"}
-    )
-    assert result.get("isError") is not True, "call with rotated token failed"
-    # Assert on result data so an empty-but-not-isError result cannot pass
+
+    # A governed, Kubernetes-backed call with the rotated token returns
+    # real result data (the smoke cluster registers the KServe CRDs, so
+    # an authorized list reaches the API and returns an empty list).
+    result = call_tool(READER_TOKEN, session, GOVERNED_READ_TOOL, {})
+    assert result.get("isError") is not True, "governed call with rotated token failed"
     structured = result.get("structuredContent")
-    assert isinstance(structured, dict) and structured, "rotated-token call returned no result data"
+    assert isinstance(structured, dict), "governed call returned no structured result data"
+
+
+def check_rolebinding_freshness() -> None:
+    """A live RoleBinding change is picked up on the next call (RHAI-14633).
+
+    Opens a session as the reader, grants the deployer's ClusterRole
+    mid-session, and asserts the NEXT tools/list reflects the grant —
+    proving RBAC is re-evaluated per call, never a closure-captured set.
+    Then revokes the grant and asserts the view reverts.
+    """
+    import subprocess
+
+    binding = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRoleBinding",
+        "metadata": {"name": "rhoai-mcp-smoke-reader-deployer-grant"},
+        "roleRef": {
+            "apiGroup": "rbac.authorization.k8s.io",
+            "kind": "ClusterRole",
+            "name": "rhoai-mcp-smoke-deployer",
+        },
+        "subjects": [
+            {
+                "kind": "ServiceAccount",
+                "name": "smoke-reader",
+                "namespace": "rhoai-mcp",
+            }
+        ],
+    }
+
+    def kubectl(*args: str, stdin: str | None = None) -> None:
+        subprocess.run(["kubectl", *args], check=True, capture_output=True, text=True, input=stdin)
+
+    session = initialize(READER_TOKEN)
+    names = tool_names(READER_TOKEN, session)
+    assert GOVERNED_DEPLOY_TOOL not in names, "precondition: deploy tool visible before grant"
+
+    try:
+        kubectl("apply", "-f", "-", stdin=json.dumps(binding))
+        names = tool_names(READER_TOKEN, session)
+        assert GOVERNED_DEPLOY_TOOL in names, (
+            "grant not visible on the next call — RBAC is cached, not re-evaluated per call"
+        )
+    finally:
+        kubectl(
+            "delete",
+            "clusterrolebinding",
+            "rhoai-mcp-smoke-reader-deployer-grant",
+            "--ignore-not-found",
+        )
+
+    names = tool_names(READER_TOKEN, session)
+    assert GOVERNED_DEPLOY_TOOL not in names, "revocation not visible on the next call"
 
 
 def main() -> int:
@@ -206,6 +300,7 @@ def main() -> int:
     check("T05 reader tools/call is denied", check_reader_call_denied)
     check("T06 ungoverned tool call succeeds", check_ungoverned_call_succeeds)
     check("T07 token rotation honored mid-session", check_token_rotation_mid_session)
+    check("T08 RoleBinding freshness on next call", check_rolebinding_freshness)
 
     if failures:
         print(f"\n{len(failures)} check(s) FAILED")

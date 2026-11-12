@@ -214,6 +214,8 @@ def check_token_rotation_mid_session() -> None:
     """
     # A dummy pod to bind the throwaway token to: deleting the pod
     # invalidates the token deterministically.
+    # TokenRequest validation requires the bound pod to run as the same
+    # ServiceAccount the token is minted for.
     _kubectl(
         "run",
         "smoke-token-rotator",
@@ -221,6 +223,8 @@ def check_token_rotation_mid_session() -> None:
         "rhoai-mcp",
         "--image=rhoai-mcp:smoke",
         "--restart=Never",
+        "--overrides",
+        '{"spec":{"serviceAccountName":"smoke-reader"}}',
         "--command",
         "--",
         "python",

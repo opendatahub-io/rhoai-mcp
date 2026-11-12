@@ -6,7 +6,7 @@ import hashlib
 import re
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.models import (
@@ -127,6 +127,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         model_id: str,
         dataset_id: str,
         checkpoint_storage: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Check prerequisites before starting a training job.
 
@@ -143,7 +144,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns:
             Status report with any actions needed.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         checks = []
         actions_needed = []
         all_passed = True
@@ -225,7 +226,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         # Check 4: Checkpoint storage (if specified)
         if checkpoint_storage:
             try:
-                pvc = server.k8s.get_pvc(checkpoint_storage, namespace)
+                pvc = server.get_k8s(ctx).get_pvc(checkpoint_storage, namespace)
                 phase = pvc.status.phase if pvc.status else "Unknown"
                 if phase == "Bound":
                     checks.append(
@@ -307,6 +308,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         dataset_id: str,
         runtime_name: str,
         pvc_name: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Validate a training configuration before job creation.
 
@@ -330,14 +332,14 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         try:
             from rhoai_mcp.domains.training.crds import TrainingCRDs
 
-            server.k8s.get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, runtime_name)
+            server.get_k8s(ctx).get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, runtime_name)
         except Exception:
             errors.append(f"Runtime '{runtime_name}' not found")
 
         # Validate PVC if specified
         if pvc_name:
             try:
-                pvc = server.k8s.get_pvc(pvc_name, namespace)
+                pvc = server.get_k8s(ctx).get_pvc(pvc_name, namespace)
                 if pvc.status.phase != "Bound":
                     warnings.append(f"PVC '{pvc_name}' is not bound (current: {pvc.status.phase})")
             except Exception:
@@ -371,6 +373,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         namespace: str,
         token: str,
         secret_name: str = "hf-token",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Set up HuggingFace credentials for model/dataset access.
 
@@ -401,14 +404,14 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         try:
             # Check if secret exists
             try:
-                server.k8s.get_secret(secret_name, namespace)
+                server.get_k8s(ctx).get_secret(secret_name, namespace)
                 # Secret exists, delete it first
-                server.k8s.delete_secret(secret_name, namespace)
+                server.get_k8s(ctx).delete_secret(secret_name, namespace)
             except Exception:
                 pass  # Secret doesn't exist
 
             # Create the secret
-            server.k8s.create_secret(
+            server.get_k8s(ctx).create_secret(
                 name=secret_name,
                 namespace=namespace,
                 data={"token": token},
@@ -442,6 +445,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         method: str = "lora",
         create_storage: bool = True,
         storage_size_gb: int = 100,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Complete pre-flight setup for a training job in a single call.
 
@@ -489,7 +493,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         resource_estimate = _estimate_resources_internal(model_id, method)
 
         # Step 2: Check prerequisites
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
 
         # Check cluster connectivity and GPUs
         try:
@@ -524,7 +528,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             try:
                 from rhoai_mcp.domains.training.crds import TrainingCRDs
 
-                server.k8s.get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, runtime_name)
+                server.get_k8s(ctx).get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, runtime_name)
             except Exception:
                 issues.append(f"Runtime '{runtime_name}' not found")
                 prereq_passed = False
@@ -543,7 +547,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         storage_exists = False
 
         try:
-            pvc = server.k8s.get_pvc(pvc_name, namespace)
+            pvc = server.get_k8s(ctx).get_pvc(pvc_name, namespace)
             if pvc.status and pvc.status.phase == "Bound":
                 storage_exists = True
         except NotFoundError:
@@ -554,7 +558,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             allowed, reason = server.config.is_operation_allowed("create")
             if allowed:
                 result = create_training_pvc(
-                    k8s=server.k8s,
+                    k8s=server.get_k8s(ctx),
                     namespace=namespace,
                     pvc_name=pvc_name,
                     size_gb=storage_size_gb,
@@ -563,7 +567,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
                     storage_created = result.get("created", False)
                     # Verify PVC is actually Bound before considering it ready
                     try:
-                        pvc = server.k8s.get_pvc(pvc_name, namespace)
+                        pvc = server.get_k8s(ctx).get_pvc(pvc_name, namespace)
                         if pvc.status and pvc.status.phase == "Bound":
                             storage_exists = True
                         else:

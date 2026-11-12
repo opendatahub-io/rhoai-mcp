@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.training.client import TrainingClient
 
@@ -21,7 +21,9 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register training monitoring tools with the MCP server."""
 
     @mcp.tool()
-    def get_training_progress(namespace: str, name: str) -> dict[str, Any]:
+    def get_training_progress(
+        namespace: str, name: str, ctx: Context | None = None
+    ) -> dict[str, Any]:
         """Get real-time training progress for a job.
 
         Returns detailed progress information parsed from the trainer status
@@ -35,7 +37,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns:
             Training progress information with metrics.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         job = client.get_training_job(namespace, name)
 
         if not job.progress:
@@ -69,6 +71,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         container: str = "trainer",
         tail_lines: int = 100,
         previous: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get logs from a training job.
 
@@ -86,7 +89,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns:
             Training logs and any detected issues.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         logs = client.get_training_logs(
             namespace, name, container=container, tail_lines=tail_lines, previous=previous
         )
@@ -103,7 +106,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         }
 
     @mcp.tool()
-    def get_job_events(namespace: str, name: str) -> dict[str, Any]:
+    def get_job_events(namespace: str, name: str, ctx: Context | None = None) -> dict[str, Any]:
         """Get Kubernetes events for a training job.
 
         Returns events related to the training job, grouped by type.
@@ -117,7 +120,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns:
             List of events with issue detection and suggestions.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         events = client.get_job_events(namespace, name)
 
         # Group events by type
@@ -163,6 +166,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     def manage_checkpoints(
         namespace: str,
         job_name: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get checkpoint information for a training job.
 
@@ -179,7 +183,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         # Get checkpoint info from annotation
         from rhoai_mcp.domains.training.crds import TrainingCRDs
 
-        resource = server.k8s.get(TrainingCRDs.TRAIN_JOB, job_name, namespace=namespace)
+        resource = server.get_k8s(ctx).get(TrainingCRDs.TRAIN_JOB, job_name, namespace=namespace)
 
         annotations = getattr(resource.metadata, "annotations", {}) or {}
         checkpoint_annotation = annotations.get(CHECKPOINT_ANNOTATION, "")

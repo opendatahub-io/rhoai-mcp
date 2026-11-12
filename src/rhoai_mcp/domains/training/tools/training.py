@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.models import PeftMethod
@@ -31,6 +31,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         gpus_per_node: int = 1,
         checkpoint_dir: str | None = None,
         confirmed: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a training job for model fine-tuning.
 
@@ -107,7 +108,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             }
 
         # Create the training job
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         job = client.create_training_job(
             namespace=namespace,
             name=job_name,
@@ -147,6 +148,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         env_vars: dict[str, str] | None = None,
         volume_mounts: list[dict[str, str]] | None = None,
         confirmed: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Run a training job using a custom container image.
 
@@ -241,7 +243,9 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             "spec": spec,
         }
 
-        resource = server.k8s.create(TrainingCRDs.TRAIN_JOB, body=body, namespace=namespace)
+        resource = server.get_k8s(ctx).create(
+            TrainingCRDs.TRAIN_JOB, body=body, namespace=namespace
+        )
 
         return {
             "success": True,
@@ -255,6 +259,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         namespace: str,
         job_name: str,
         error_message: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Analyze a training failure and suggest remediation.
 
@@ -269,7 +274,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns:
             Diagnosis and suggested fixes.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
 
         # Get job details
         job = client.get_training_job(namespace, job_name)

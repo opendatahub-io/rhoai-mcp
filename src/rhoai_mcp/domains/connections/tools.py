@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.connections.client import ConnectionClient
 from rhoai_mcp.domains.connections.models import S3DataConnectionCreate
@@ -27,6 +27,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         limit: int | None = None,
         offset: int = 0,
         verbosity: str = "standard",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """List data connections in a Data Science Project with pagination.
 
@@ -43,7 +44,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Paginated list of data connections with metadata (credentials masked).
         """
-        client = ConnectionClient(server.k8s)
+        client = ConnectionClient(server.get_k8s(ctx))
         all_items = client.list_data_connections(namespace)
 
         # Apply config limits
@@ -63,7 +64,9 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         return PaginatedResponse.build(items, total, offset, effective_limit)
 
     @mcp.tool()
-    def get_data_connection(name: str, namespace: str) -> dict[str, Any]:
+    def get_data_connection(
+        name: str, namespace: str, ctx: Context | None = None
+    ) -> dict[str, Any]:
         """Get detailed information about a data connection.
 
         Sensitive values like secret keys are masked for security.
@@ -75,7 +78,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Data connection details with masked credentials.
         """
-        client = ConnectionClient(server.k8s)
+        client = ConnectionClient(server.get_k8s(ctx))
         conn = client.get_data_connection(name, namespace, mask_secrets=True)
 
         return {
@@ -105,6 +108,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         aws_s3_bucket: str,
         display_name: str | None = None,
         aws_default_region: str = "us-east-1",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create an S3 data connection.
 
@@ -129,7 +133,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = ConnectionClient(server.k8s)
+        client = ConnectionClient(server.get_k8s(ctx))
         request = S3DataConnectionCreate(
             name=name,
             namespace=namespace,
@@ -156,6 +160,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         confirm: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Delete a data connection.
 
@@ -182,7 +187,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
                 ),
             }
 
-        client = ConnectionClient(server.k8s)
+        client = ConnectionClient(server.get_k8s(ctx))
         try:
             client.delete_data_connection(name, namespace)
         except NotManagedByMCPError as e:

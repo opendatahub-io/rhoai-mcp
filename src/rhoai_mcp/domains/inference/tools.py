@@ -5,7 +5,7 @@ import re
 import shlex
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.inference.client import InferenceClient
 from rhoai_mcp.domains.inference.models import InferenceServiceCreate
@@ -190,6 +190,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         limit: int | None = None,
         offset: int = 0,
         verbosity: str = "standard",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """List deployed models in a Data Science Project with pagination.
 
@@ -206,7 +207,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Paginated list of deployed models with metadata.
         """
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         all_items = client.list_inference_services(namespace)
 
         # Apply config limits
@@ -230,6 +231,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         verbosity: str = "full",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get detailed information about a deployed model.
 
@@ -242,7 +244,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Model deployment information at the requested verbosity level.
         """
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         isvc = client.get_inference_service(name, namespace)
 
         v = Verbosity.from_str(verbosity)
@@ -263,6 +265,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         memory_request: str = "4Gi",
         memory_limit: str = "8Gi",
         gpu_count: int = 0,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Deploy a model as an InferenceService.
 
@@ -291,7 +294,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         request = InferenceServiceCreate(
             name=name,
             namespace=namespace,
@@ -322,6 +325,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         confirm: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Delete a deployed model.
 
@@ -342,7 +346,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
                 "message": f"To delete model deployment '{name}', set confirm=True.",
             }
 
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         try:
             client.delete_inference_service(name, namespace)
         except NotManagedByMCPError as e:
@@ -366,6 +370,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     def list_serving_runtimes(
         namespace: str,
         include_templates: bool = True,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """List available model serving runtimes.
 
@@ -385,7 +390,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             List of available serving runtimes with supported model formats.
             Runtimes from templates will have 'requires_instantiation: true'.
         """
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         runtimes = client.list_serving_runtimes(namespace, include_templates)
 
         # Separate existing and template-based runtimes for clarity
@@ -408,6 +413,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     def create_serving_runtime(
         namespace: str,
         template_name: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a serving runtime from a platform template.
 
@@ -430,7 +436,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         try:
             result = client.instantiate_serving_runtime_template(
                 template_name=template_name,
@@ -457,7 +463,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             }
 
     @mcp.tool()
-    def get_model_endpoint(name: str, namespace: str) -> dict[str, Any]:
+    def get_model_endpoint(name: str, namespace: str, ctx: Context | None = None) -> dict[str, Any]:
         """Get the inference endpoint URL for a deployed model.
 
         Returns the URL that can be used to send prediction requests
@@ -470,7 +476,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Model endpoint information including URL and status.
         """
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         result = client.get_model_endpoint(name, namespace)
 
         if result["status"] == "Ready":
@@ -486,6 +492,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         model_id: str,
         storage_uri: str | None = None,
         model_format: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Complete pre-flight preparation for model deployment in one call.
 
@@ -524,7 +531,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             model_format = model_info.get("format", "pytorch")
 
         # Step 2: Get available runtimes (including templates)
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         runtimes = client.list_serving_runtimes(namespace, include_templates=True)
 
         if not runtimes:
@@ -580,7 +587,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         try:
             from rhoai_mcp.domains.training.client import TrainingClient
 
-            training_client = TrainingClient(server.k8s)
+            training_client = TrainingClient(server.get_k8s(ctx))
             cluster_resources = training_client.get_cluster_resources()
             if cluster_resources.gpu_info:
                 if cluster_resources.gpu_info.available < resource_requirements.get("gpu", 0):
@@ -595,7 +602,9 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
 
         # Step 6: Resolve storage_uri from catalog if not provided
         if not storage_uri:
-            resolved_uri = await _resolve_catalog_storage_uri(server.config, server.k8s, model_id)
+            resolved_uri = await _resolve_catalog_storage_uri(
+                server.config, server.get_k8s(ctx), model_id
+            )
             if resolved_uri:
                 storage_uri = resolved_uri
 
@@ -607,7 +616,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
 
                 pvc_name = storage_uri.replace("pvc://", "").split("/")[0]
                 try:
-                    pvc = server.k8s.get_pvc(pvc_name, namespace)
+                    pvc = server.get_k8s(ctx).get_pvc(pvc_name, namespace)
                     pvc_phase = pvc.status.phase if pvc.status else "Unknown"
                     if pvc_phase != "Bound":
                         issues.append(f"PVC '{pvc_name}' is not bound (status: {pvc_phase})")
@@ -621,7 +630,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             elif storage_uri.startswith("oci://") or storage_uri.startswith("docker://"):
                 registry = _extract_oci_registry(storage_uri)
                 if registry:
-                    _check_pull_secrets(server.k8s, namespace, registry, warnings)
+                    _check_pull_secrets(server.get_k8s(ctx), namespace, registry, warnings)
                 else:
                     issues.append(
                         f"Could not determine OCI registry from storage_uri: {storage_uri}"
@@ -680,6 +689,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         namespace: str,
         model_format: str,
         storage_uri: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Pre-flight checks before model deployment.
 
@@ -700,7 +710,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
 
         # Check 1: Namespace exists
         try:
-            server.k8s.core_v1.read_namespace(namespace)
+            server.get_k8s(ctx).core_v1.read_namespace(namespace)
             checks.append(
                 {
                     "name": "Namespace",
@@ -734,7 +744,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             all_passed = False
 
         # Check 2: Serving runtime availability
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         runtimes = client.list_serving_runtimes(namespace)
 
         compatible = [
@@ -768,7 +778,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
 
             pvc_name = storage_uri.replace("pvc://", "").split("/")[0]
             try:
-                pvc = server.k8s.get_pvc(pvc_name, namespace)
+                pvc = server.get_k8s(ctx).get_pvc(pvc_name, namespace)
                 pvc_phase = pvc.status.phase if pvc.status else "Unknown"
                 if pvc_phase == "Bound":
                     checks.append(
@@ -809,7 +819,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             registry = _extract_oci_registry(storage_uri)
             warnings: list[str] = []
             if registry:
-                _check_pull_secrets(server.k8s, namespace, registry, warnings)
+                _check_pull_secrets(server.get_k8s(ctx), namespace, registry, warnings)
                 checks.append(
                     {
                         "name": "Storage",
@@ -903,6 +913,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         namespace: str,
         model_format: str,
         model_size_gb: float | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Recommend the best serving runtime for a model.
 
@@ -917,7 +928,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Runtime recommendation with alternatives.
         """
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         runtimes = client.list_serving_runtimes(namespace)
 
         if not runtimes:
@@ -971,6 +982,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         sample_input: dict[str, Any] | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Test a deployed model's inference endpoint.
 
@@ -985,7 +997,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Endpoint test results with accessibility status.
         """
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
 
         try:
             isvc = client.get_inference_service(name, namespace)

@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.projects.client import ProjectClient
 from rhoai_mcp.domains.projects.models import ProjectCreate
@@ -26,6 +26,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         limit: int | None = None,
         offset: int = 0,
         verbosity: str = "standard",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """List Data Science Projects in the cluster with pagination.
 
@@ -41,7 +42,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Paginated list of projects with metadata.
         """
-        client = ProjectClient(server.k8s)
+        client = ProjectClient(server.get_k8s(ctx))
         projects = client.list_projects()
 
         # Apply config limits
@@ -65,6 +66,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         include_resources: bool = True,
         verbosity: str = "full",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get detailed information about a Data Science Project.
 
@@ -77,7 +79,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Project information at the requested verbosity level.
         """
-        client = ProjectClient(server.k8s)
+        client = ProjectClient(server.get_k8s(ctx))
         project = client.get_project(name, include_summary=include_resources)
 
         v = Verbosity.from_str(verbosity)
@@ -89,6 +91,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         display_name: str | None = None,
         description: str | None = None,
         enable_modelmesh: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a new Data Science Project.
 
@@ -110,7 +113,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = ProjectClient(server.k8s)
+        client = ProjectClient(server.get_k8s(ctx))
         request = ProjectCreate(
             name=name,
             display_name=display_name,
@@ -133,6 +136,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     def delete_data_science_project(
         name: str,
         confirm: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Delete a Data Science Project.
 
@@ -158,7 +162,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
                 ),
             }
 
-        client = ProjectClient(server.k8s)
+        client = ProjectClient(server.get_k8s(ctx))
         try:
             client.delete_project(name)
         except NotManagedByMCPError as e:
@@ -181,6 +185,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     def set_model_serving_mode(
         name: str,
         enable_modelmesh: bool,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Set the model serving mode for a project.
 
@@ -201,7 +206,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = ProjectClient(server.k8s)
+        client = ProjectClient(server.get_k8s(ctx))
         project = client.set_model_serving_mode(name, enable_modelmesh)
 
         mode = "multi-model (ModelMesh)" if enable_modelmesh else "single-model (KServe)"

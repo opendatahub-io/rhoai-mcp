@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.notebooks.client import NotebookClient
 from rhoai_mcp.domains.notebooks.models import WorkbenchCreate
@@ -27,6 +27,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         limit: int | None = None,
         offset: int = 0,
         verbosity: str = "standard",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """List workbenches in a Data Science Project with pagination.
 
@@ -43,7 +44,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Paginated list of workbenches with metadata.
         """
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         workbenches = client.list_workbenches(namespace)
 
         # Apply config limits
@@ -67,6 +68,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         verbosity: str = "full",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get detailed information about a workbench.
 
@@ -79,7 +81,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Workbench information at the requested verbosity level.
         """
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         wb = client.get_workbench(name, namespace)
 
         v = Verbosity.from_str(verbosity)
@@ -100,6 +102,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         storage_size: str = "10Gi",
         data_connections: list[str] | None = None,
         additional_pvcs: list[str] | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a new workbench (notebook environment).
 
@@ -129,7 +132,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         request = WorkbenchCreate(
             name=name,
             namespace=namespace,
@@ -157,7 +160,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         }
 
     @mcp.tool()
-    def start_workbench(name: str, namespace: str) -> dict[str, Any]:
+    def start_workbench(name: str, namespace: str, ctx: Context | None = None) -> dict[str, Any]:
         """Start a stopped workbench.
 
         Removes the kubeflow-resource-stopped annotation to allow the
@@ -175,7 +178,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         wb = client.start_workbench(name, namespace)
 
         return {
@@ -187,7 +190,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         }
 
     @mcp.tool()
-    def stop_workbench(name: str, namespace: str) -> dict[str, Any]:
+    def stop_workbench(name: str, namespace: str, ctx: Context | None = None) -> dict[str, Any]:
         """Stop a running workbench.
 
         Adds the kubeflow-resource-stopped annotation which causes the
@@ -205,7 +208,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         wb = client.stop_workbench(name, namespace)
 
         return {
@@ -221,6 +224,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         confirm: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Delete a workbench.
 
@@ -247,7 +251,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
                 ),
             }
 
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         try:
             client.delete_workbench(name, namespace)
         except NotManagedByMCPError as e:
@@ -268,7 +272,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         }
 
     @mcp.tool()
-    def list_notebook_images() -> list[dict[str, Any]]:
+    def list_notebook_images(ctx: Context | None = None) -> list[dict[str, Any]]:
         """List available notebook images.
 
         Returns the standard RHOAI notebook images that can be used
@@ -277,7 +281,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             List of available images with display names and descriptions.
         """
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         images = client.list_notebook_images()
 
         return [
@@ -291,7 +295,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         ]
 
     @mcp.tool()
-    def get_workbench_url(name: str, namespace: str) -> dict[str, Any]:
+    def get_workbench_url(name: str, namespace: str, ctx: Context | None = None) -> dict[str, Any]:
         """Get the access URL for a workbench.
 
         Returns the OAuth-protected route URL for accessing the workbench
@@ -304,7 +308,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             The workbench URL and current status.
         """
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         wb = client.get_workbench(name, namespace)
 
         return {

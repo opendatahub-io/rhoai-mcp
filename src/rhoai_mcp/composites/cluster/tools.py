@@ -6,7 +6,7 @@ overviews that reduce token usage significantly compared to full resource listin
 
 from typing import TYPE_CHECKING
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.composites.cluster.models import (
     ClusterSummary,
@@ -25,7 +25,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register cluster composite tools with the MCP server."""
 
     @mcp.tool()
-    def cluster_summary() -> ClusterSummary:
+    def cluster_summary(ctx: Context | None = None) -> ClusterSummary:
         """Get a compact cluster overview optimized for context windows.
 
         Returns a minimal summary of the entire cluster including project count,
@@ -37,7 +37,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         """
         from rhoai_mcp.domains.projects.client import ProjectClient
 
-        k8s = server.k8s
+        k8s = server.get_k8s(ctx)
         project_client = ProjectClient(k8s)
 
         # Get all projects
@@ -77,7 +77,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         )
 
     @mcp.tool()
-    def project_summary(namespace: str) -> ProjectSummary:
+    def project_summary(namespace: str, ctx: Context | None = None) -> ProjectSummary:
         """Get a compact project status optimized for context windows.
 
         Returns a minimal summary of a specific project including workbench,
@@ -91,7 +91,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         """
         from rhoai_mcp.domains.projects.client import ProjectClient
 
-        k8s = server.k8s
+        k8s = server.get_k8s(ctx)
         project_client = ProjectClient(k8s)
 
         # Get project with resource summary
@@ -123,6 +123,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         resource_type: str,
         name: str,
         namespace: str,
+        ctx: Context | None = None,
     ) -> ResourceStatus:
         """Get quick status check for any resource.
 
@@ -138,12 +139,13 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Minimal status information for the resource.
         """
-        return _get_resource_status(server, resource_type, name, namespace)
+        return _get_resource_status(server, ctx, resource_type, name, namespace)
 
     @mcp.tool()
     def list_resource_names(
         resource_type: str,
         namespace: str | None = None,
+        ctx: Context | None = None,
     ) -> ResourceNameList:
         """List just resource names without full metadata.
 
@@ -159,12 +161,13 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             List of resource names.
         """
-        return _list_resource_names(server, resource_type, namespace)
+        return _list_resource_names(server, ctx, resource_type, namespace)
 
     @mcp.tool()
     def multi_resource_status(
         namespace: str,
         resources: list[dict[str, str]],
+        ctx: Context | None = None,
     ) -> MultiResourceStatusResult:
         """Get status for multiple resources in a single call.
 
@@ -197,7 +200,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
                 continue
 
             try:
-                status = _get_resource_status(server, res_type, res_name, namespace)
+                status = _get_resource_status(server, ctx, res_type, res_name, namespace)
                 results.append(status)
             except Exception as e:
                 results.append(
@@ -219,6 +222,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     def explore_cluster(
         include_resources: bool = True,
         include_health: bool = True,
+        ctx: Context | None = None,
     ) -> dict:
         """Complete cluster exploration in one call.
 
@@ -238,7 +242,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         """
         from rhoai_mcp.domains.projects.client import ProjectClient
 
-        k8s = server.k8s
+        k8s = server.get_k8s(ctx)
         project_client = ProjectClient(k8s)
 
         # Get cluster resources
@@ -336,6 +340,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         resource_type: str,
         name: str,
         namespace: str,
+        ctx: Context | None = None,
     ) -> dict:
         """Comprehensive diagnostic for any resource in one call.
 
@@ -374,13 +379,13 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         }
 
         if resource_type in ("workbench", "notebook"):
-            result.update(_diagnose_workbench(server, name, namespace))
+            result.update(_diagnose_workbench(server, ctx, name, namespace))
         elif resource_type in ("model", "inference", "inferenceservice"):
-            result.update(_diagnose_model(server, name, namespace))
+            result.update(_diagnose_model(server, ctx, name, namespace))
         elif resource_type in ("training", "training_job", "trainjob"):
-            result.update(_diagnose_training_job(server, name, namespace))
+            result.update(_diagnose_training_job(server, ctx, name, namespace))
         elif resource_type in ("pipeline", "dspa"):
-            result.update(_diagnose_pipeline(server, name, namespace))
+            result.update(_diagnose_pipeline(server, ctx, name, namespace))
         else:
             result["issues_detected"].append(f"Unknown resource type: {resource_type}")
             result["suggested_fixes"].append("Use one of: workbench, model, training_job, pipeline")
@@ -393,6 +398,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         verbosity: str = "standard",
+        ctx: Context | None = None,
     ) -> dict:
         """Get any RHOAI resource by type.
 
@@ -415,7 +421,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             from rhoai_mcp.domains.notebooks.client import NotebookClient
             from rhoai_mcp.utils.response import ResponseBuilder, Verbosity
 
-            nb_client = NotebookClient(server.k8s)
+            nb_client = NotebookClient(server.get_k8s(ctx))
             wb = nb_client.get_workbench(name, namespace)
             v = Verbosity.from_str(verbosity)
             return ResponseBuilder.workbench_detail(wb, v)
@@ -424,7 +430,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             from rhoai_mcp.domains.inference.client import InferenceClient
             from rhoai_mcp.utils.response import ResponseBuilder, Verbosity
 
-            inf_client = InferenceClient(server.k8s)
+            inf_client = InferenceClient(server.get_k8s(ctx))
             isvc = inf_client.get_inference_service(name, namespace)
             v = Verbosity.from_str(verbosity)
             return ResponseBuilder.inference_service_detail(isvc, v)
@@ -433,7 +439,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             from rhoai_mcp.domains.training.client import TrainingClient
             from rhoai_mcp.utils.response import ResponseBuilder, Verbosity
 
-            tr_client = TrainingClient(server.k8s)
+            tr_client = TrainingClient(server.get_k8s(ctx))
             job = tr_client.get_training_job(namespace, name)
             v = Verbosity.from_str(verbosity)
             return ResponseBuilder.training_job_detail(job, v)
@@ -441,14 +447,14 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if resource_type in ("connection", "data_connection"):
             from rhoai_mcp.domains.connections.client import ConnectionClient
 
-            conn_client = ConnectionClient(server.k8s)
+            conn_client = ConnectionClient(server.get_k8s(ctx))
             conn = conn_client.get_data_connection(name, namespace, mask_secrets=True)
             return dict(conn.model_dump())
 
         if resource_type in ("storage", "pvc"):
             from rhoai_mcp.domains.storage.client import StorageClient
 
-            st_client = StorageClient(server.k8s)
+            st_client = StorageClient(server.get_k8s(ctx))
             storage_list = st_client.list_storage(namespace)
             for s in storage_list:
                 if s.get("name") == name:
@@ -471,6 +477,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         resource_type: str,
         namespace: str | None = None,
         limit: int | None = None,
+        ctx: Context | None = None,
     ) -> dict:
         """List any RHOAI resource type.
 
@@ -486,7 +493,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Paginated list of resources.
         """
-        names_result = _list_resource_names(server, resource_type, namespace)
+        names_result = _list_resource_names(server, ctx, resource_type, namespace)
 
         if names_result.error:
             return {"error": names_result.error, "valid_types": names_result.valid_types}
@@ -513,6 +520,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         confirm: bool = False,
+        ctx: Context | None = None,
     ) -> dict:
         """Perform lifecycle actions on any resource type.
 
@@ -548,11 +556,11 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
 
         # Dispatch to appropriate handler
         if resource_type in ("workbench", "notebook"):
-            return _manage_workbench(server, action, name, namespace)
+            return _manage_workbench(server, ctx, action, name, namespace)
         elif resource_type in ("model", "inference", "inferenceservice"):
-            return _manage_model(server, action, name, namespace)
+            return _manage_model(server, ctx, action, name, namespace)
         elif resource_type in ("training", "training_job", "trainjob"):
-            return _manage_training_job(server, action, name, namespace)
+            return _manage_training_job(server, ctx, action, name, namespace)
 
         return {
             "error": f"Resource type '{resource_type}' does not support lifecycle management",
@@ -560,7 +568,12 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         }
 
 
-def _diagnose_workbench(server: "RHOAIServer", name: str, namespace: str) -> dict:
+def _diagnose_workbench(
+    server: "RHOAIServer",
+    ctx: Context | None,
+    name: str,
+    namespace: str,
+) -> dict:
     """Diagnose a workbench."""
     from rhoai_mcp.domains.notebooks.client import NotebookClient
 
@@ -575,7 +588,7 @@ def _diagnose_workbench(server: "RHOAIServer", name: str, namespace: str) -> dic
     }
 
     try:
-        client = NotebookClient(server.k8s)
+        client = NotebookClient(server.get_k8s(ctx))
         wb = client.get_workbench(name, namespace)
         result["resource"] = {
             "name": wb.metadata.name,
@@ -669,7 +682,12 @@ def _diagnose_workbench(server: "RHOAIServer", name: str, namespace: str) -> dic
     return result
 
 
-def _diagnose_model(server: "RHOAIServer", name: str, namespace: str) -> dict:
+def _diagnose_model(
+    server: "RHOAIServer",
+    ctx: Context | None,
+    name: str,
+    namespace: str,
+) -> dict:
     """Diagnose a model deployment."""
     from rhoai_mcp.domains.inference.client import InferenceClient
 
@@ -684,7 +702,7 @@ def _diagnose_model(server: "RHOAIServer", name: str, namespace: str) -> dict:
     }
 
     try:
-        client = InferenceClient(server.k8s)
+        client = InferenceClient(server.get_k8s(ctx))
         isvc = client.get_inference_service(name, namespace)
         result["resource"] = {
             "name": isvc.metadata.name,
@@ -765,7 +783,12 @@ def _diagnose_model(server: "RHOAIServer", name: str, namespace: str) -> dict:
     return result
 
 
-def _diagnose_training_job(server: "RHOAIServer", name: str, namespace: str) -> dict:
+def _diagnose_training_job(
+    server: "RHOAIServer",
+    ctx: Context | None,
+    name: str,
+    namespace: str,
+) -> dict:
     """Diagnose a training job."""
     from rhoai_mcp.domains.training.client import TrainingClient
 
@@ -780,7 +803,7 @@ def _diagnose_training_job(server: "RHOAIServer", name: str, namespace: str) -> 
     }
 
     try:
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         job = client.get_training_job(namespace, name)
 
         result["resource"] = {
@@ -826,6 +849,7 @@ def _diagnose_training_job(server: "RHOAIServer", name: str, namespace: str) -> 
 
 def _diagnose_pipeline(
     server: "RHOAIServer",
+    ctx: Context | None,
     name: str,  # noqa: ARG001
     namespace: str,
 ) -> dict:
@@ -843,7 +867,7 @@ def _diagnose_pipeline(
     }
 
     try:
-        client = PipelineClient(server.k8s)
+        client = PipelineClient(server.get_k8s(ctx))
         pipeline = client.get_pipeline_server(namespace)
 
         if pipeline is None:
@@ -859,11 +883,17 @@ def _diagnose_pipeline(
     return result
 
 
-def _manage_workbench(server: "RHOAIServer", action: str, name: str, namespace: str) -> dict:
+def _manage_workbench(
+    server: "RHOAIServer",
+    ctx: Context | None,
+    action: str,
+    name: str,
+    namespace: str,
+) -> dict:
     """Manage workbench lifecycle."""
     from rhoai_mcp.domains.notebooks.client import NotebookClient
 
-    client = NotebookClient(server.k8s)
+    client = NotebookClient(server.get_k8s(ctx))
 
     if action == "start":
         wb = client.start_workbench(name, namespace)
@@ -881,11 +911,17 @@ def _manage_workbench(server: "RHOAIServer", action: str, name: str, namespace: 
         return {"error": f"Action '{action}' not supported for workbenches"}
 
 
-def _manage_model(server: "RHOAIServer", action: str, name: str, namespace: str) -> dict:
+def _manage_model(
+    server: "RHOAIServer",
+    ctx: Context | None,
+    action: str,
+    name: str,
+    namespace: str,
+) -> dict:
     """Manage model lifecycle."""
     from rhoai_mcp.domains.inference.client import InferenceClient
 
-    client = InferenceClient(server.k8s)
+    client = InferenceClient(server.get_k8s(ctx))
 
     if action == "delete":
         try:
@@ -897,11 +933,17 @@ def _manage_model(server: "RHOAIServer", action: str, name: str, namespace: str)
         return {"error": f"Action '{action}' not supported for models (only delete)"}
 
 
-def _manage_training_job(server: "RHOAIServer", action: str, name: str, namespace: str) -> dict:
+def _manage_training_job(
+    server: "RHOAIServer",
+    ctx: Context | None,
+    action: str,
+    name: str,
+    namespace: str,
+) -> dict:
     """Manage training job lifecycle."""
     from rhoai_mcp.domains.training.client import TrainingClient
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
 
     if action == "suspend":
         client.suspend_training_job(namespace, name)
@@ -921,6 +963,7 @@ def _manage_training_job(server: "RHOAIServer", action: str, name: str, namespac
 
 def _get_resource_status(
     server: "RHOAIServer",
+    ctx: Context | None,
     resource_type: str,
     name: str,
     namespace: str,
@@ -931,7 +974,7 @@ def _get_resource_status(
     if resource_type in ("workbench", "notebook"):
         from rhoai_mcp.domains.notebooks.client import NotebookClient
 
-        notebook_client = NotebookClient(server.k8s)
+        notebook_client = NotebookClient(server.get_k8s(ctx))
         wb = notebook_client.get_workbench(name, namespace)
         return ResourceStatus(
             name=wb.metadata.name,
@@ -943,7 +986,7 @@ def _get_resource_status(
     if resource_type in ("model", "inferenceservice", "inference"):
         from rhoai_mcp.domains.inference.client import InferenceClient
 
-        inference_client = InferenceClient(server.k8s)
+        inference_client = InferenceClient(server.get_k8s(ctx))
         isvc = inference_client.get_inference_service(name, namespace)
         return ResourceStatus(
             name=isvc.metadata.name,
@@ -955,7 +998,7 @@ def _get_resource_status(
     if resource_type in ("pipeline", "dspa"):
         from rhoai_mcp.domains.pipelines.client import PipelineClient
 
-        pipeline_client = PipelineClient(server.k8s)
+        pipeline_client = PipelineClient(server.get_k8s(ctx))
         result = pipeline_client.get_pipeline_server(namespace)
         if result is None:
             return ResourceStatus(
@@ -973,7 +1016,7 @@ def _get_resource_status(
     if resource_type in ("storage", "pvc"):
         from rhoai_mcp.domains.storage.client import StorageClient
 
-        storage_client = StorageClient(server.k8s)
+        storage_client = StorageClient(server.get_k8s(ctx))
         all_storage = storage_client.list_storage(namespace)
         for s in all_storage:
             if s.get("name") == name:
@@ -992,7 +1035,7 @@ def _get_resource_status(
     if resource_type in ("connection", "data_connection", "secret"):
         from rhoai_mcp.domains.connections.client import ConnectionClient
 
-        connection_client = ConnectionClient(server.k8s)
+        connection_client = ConnectionClient(server.get_k8s(ctx))
         conn = connection_client.get_data_connection(name, namespace, mask_secrets=True)
         return ResourceStatus(
             name=conn.metadata.name,
@@ -1004,7 +1047,7 @@ def _get_resource_status(
     if resource_type in ("training", "training_job", "trainjob", "train_job"):
         from rhoai_mcp.domains.training.client import TrainingClient
 
-        training_client = TrainingClient(server.k8s)
+        training_client = TrainingClient(server.get_k8s(ctx))
         job = training_client.get_training_job(namespace, name)
         progress_str = None
         if job.progress:
@@ -1034,6 +1077,7 @@ def _get_resource_status(
 
 def _list_resource_names(
     server: "RHOAIServer",
+    ctx: Context | None,
     resource_type: str,
     namespace: str | None,
 ) -> ResourceNameList:
@@ -1043,7 +1087,7 @@ def _list_resource_names(
     if resource_type in ("project", "projects"):
         from rhoai_mcp.domains.projects.client import ProjectClient
 
-        project_client = ProjectClient(server.k8s)
+        project_client = ProjectClient(server.get_k8s(ctx))
         projects = project_client.list_projects()
         return ResourceNameList(
             type="projects",
@@ -1055,7 +1099,7 @@ def _list_resource_names(
     if resource_type in ("runtime", "runtimes", "training_runtime", "training_runtimes"):
         from rhoai_mcp.domains.training.client import TrainingClient
 
-        training_client = TrainingClient(server.k8s)
+        training_client = TrainingClient(server.get_k8s(ctx))
         runtimes = training_client.list_cluster_training_runtimes()
         if namespace:
             runtimes.extend(training_client.list_training_runtimes(namespace))
@@ -1076,7 +1120,7 @@ def _list_resource_names(
     if resource_type in ("workbench", "workbenches", "notebook", "notebooks"):
         from rhoai_mcp.domains.notebooks.client import NotebookClient
 
-        notebook_client = NotebookClient(server.k8s)
+        notebook_client = NotebookClient(server.get_k8s(ctx))
         workbenches = notebook_client.list_workbenches(namespace)
         return ResourceNameList(
             type="workbenches",
@@ -1088,7 +1132,7 @@ def _list_resource_names(
     if resource_type in ("model", "models", "inferenceservice", "inferenceservices"):
         from rhoai_mcp.domains.inference.client import InferenceClient
 
-        inference_client = InferenceClient(server.k8s)
+        inference_client = InferenceClient(server.get_k8s(ctx))
         models = inference_client.list_inference_services(namespace)
         return ResourceNameList(
             type="models",
@@ -1100,7 +1144,7 @@ def _list_resource_names(
     if resource_type in ("storage", "pvc", "pvcs"):
         from rhoai_mcp.domains.storage.client import StorageClient
 
-        storage_client = StorageClient(server.k8s)
+        storage_client = StorageClient(server.get_k8s(ctx))
         storage = storage_client.list_storage(namespace)
         return ResourceNameList(
             type="storage",
@@ -1112,7 +1156,7 @@ def _list_resource_names(
     if resource_type in ("connection", "connections", "data_connection", "data_connections"):
         from rhoai_mcp.domains.connections.client import ConnectionClient
 
-        connection_client = ConnectionClient(server.k8s)
+        connection_client = ConnectionClient(server.get_k8s(ctx))
         connections = connection_client.list_data_connections(namespace)
         return ResourceNameList(
             type="connections",
@@ -1130,7 +1174,7 @@ def _list_resource_names(
     ):
         from rhoai_mcp.domains.training.client import TrainingClient
 
-        training_client = TrainingClient(server.k8s)
+        training_client = TrainingClient(server.get_k8s(ctx))
         jobs = training_client.list_training_jobs(namespace)
         return ResourceNameList(
             type="training_jobs",

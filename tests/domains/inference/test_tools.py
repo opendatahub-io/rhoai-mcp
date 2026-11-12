@@ -26,6 +26,8 @@ def _register_tools(mock_server: MagicMock) -> dict[str, Any]:
         return decorator
 
     mcp.tool = capture_tool
+    # tools call server.get_k8s(ctx); return the configured k8s mock
+    mock_server.get_k8s = MagicMock(return_value=mock_server.k8s)
     register_tools(mcp, mock_server)
     return registered_tools
 
@@ -37,6 +39,7 @@ class TestPrepareModelDeploymentCatalogLookup:
     def mock_server(self) -> MagicMock:
         """Create a mock server with k8s client."""
         server = MagicMock()
+        server.get_k8s = MagicMock(return_value=server.k8s)
         server.config.model_registry_enabled = True
         # Mock k8s client for list_serving_runtimes
         mock_runtime = MagicMock()

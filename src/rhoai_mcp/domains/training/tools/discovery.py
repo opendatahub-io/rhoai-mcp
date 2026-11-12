@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.utils.response import (
@@ -25,6 +25,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         limit: int | None = None,
         offset: int = 0,
         verbosity: str = "standard",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """List training jobs in a namespace with pagination.
 
@@ -41,7 +42,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Paginated list of training jobs with metadata.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         jobs = client.list_training_jobs(namespace)
 
         # Apply config limits
@@ -67,6 +68,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         namespace: str,
         name: str,
         verbosity: str = "full",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get detailed information about a specific training job.
 
@@ -82,14 +84,14 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Training job information at the requested verbosity level.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         job = client.get_training_job(namespace, name)
 
         v = Verbosity.from_str(verbosity)
         return ResponseBuilder.training_job_detail(job, v)
 
     @mcp.tool()
-    def get_cluster_resources() -> dict[str, Any]:
+    def get_cluster_resources(ctx: Context | None = None) -> dict[str, Any]:
         """Get cluster-wide compute resources available for training.
 
         Returns information about CPU, memory, and GPU resources across
@@ -99,7 +101,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Cluster resource summary including CPU, memory, and GPU info.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         resources = client.get_cluster_resources()
 
         result: dict[str, Any] = {
@@ -136,7 +138,9 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         return result
 
     @mcp.tool()
-    def list_training_runtimes(namespace: str | None = None) -> dict[str, Any]:
+    def list_training_runtimes(
+        namespace: str | None = None, ctx: Context | None = None
+    ) -> dict[str, Any]:
         """List available training runtimes.
 
         Training runtimes define the container images, frameworks, and
@@ -149,7 +153,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             List of available training runtimes.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
 
         # Always get cluster-scoped runtimes
         runtimes = client.list_cluster_training_runtimes()

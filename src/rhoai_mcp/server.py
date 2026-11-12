@@ -116,14 +116,19 @@ class RHOAIServer:
             return None
         return SecretStr(auth_header[7:])
 
-    @property
-    def k8s(self) -> K8sClient:
-        """Deprecated: per-request Kubernetes client without a Context.
+    def get_shared_k8s(self) -> K8sClient:
+        """The shared service-account Kubernetes client.
 
-        Retained until RHAI-14632 (3.5) threads ``ctx`` through every tool;
-        new code must use :meth:`get_k8s`.
+        For server-level operations that are not on behalf of a calling
+        user: startup health checks, CRD discovery. Per-request tool code
+        must use :meth:`get_k8s` instead.
+
+        Raises:
+            RHOAIError: If server is not running.
         """
-        return self.get_k8s(None)
+        if self._k8s_client is None:
+            raise RHOAIError("Server not running. K8s client not available.")
+        return self._k8s_client
 
     @property
     def mcp(self) -> MCPServer:

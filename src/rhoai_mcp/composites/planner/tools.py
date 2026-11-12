@@ -7,7 +7,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.composites.planner.client import (
     CATEGORY_MAP,
@@ -604,6 +604,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         e2e_target_ms: int,
         preferred_gpu_types: list[str] | None = None,
         optimization_profile: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Generate a deployment plan for the chosen recommendation.
 
@@ -748,7 +749,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         try:
             from rhoai_mcp.domains.inference.client import InferenceClient
 
-            inference_client = InferenceClient(server.k8s)
+            inference_client = InferenceClient(server.get_k8s(ctx))
             runtimes = inference_client.list_serving_runtimes(namespace, include_templates=True)
 
             # Look for a vLLM runtime
@@ -826,6 +827,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         tensor_parallel: int = 1,
         replicas: int = 1,
         display_name: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Deploy the chosen model configuration to RHOAI.
 
@@ -906,7 +908,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         )
 
         try:
-            inference_client = InferenceClient(server.k8s)
+            inference_client = InferenceClient(server.get_k8s(ctx))
             isvc = inference_client.deploy_model(request)
         except Exception as e:
             logger.warning("deploy_model failed: %s", type(e).__name__)

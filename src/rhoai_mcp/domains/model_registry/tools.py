@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.model_registry.benchmarks import (
     BenchmarkExtractor,
@@ -97,7 +97,7 @@ def _create_cached_registry_discovery(
 def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register Model Registry tools with the MCP server."""
 
-    async def _get_api_type() -> tuple[str, str, bool]:
+    async def _get_api_type(ctx: Context | None = None) -> tuple[str, str, bool]:
         """Get the detected API type, URL, and auth requirement, with caching.
 
         Returns:
@@ -117,7 +117,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         requires_auth = False
 
         if server.config.model_registry_discovery_mode == ModelRegistryDiscoveryMode.AUTO:
-            discovery = ModelRegistryDiscovery(server.k8s)
+            discovery = ModelRegistryDiscovery(server.get_k8s(ctx))
             # Use async discovery with port-forward for outside-cluster access
             result = await discovery.discover_with_port_forward(fallback_url=url)
             if result:
@@ -174,6 +174,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         offset: int = 0,
         verbosity: str = "standard",
         source_label: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Browse available models in the Model Catalog or Model Registry with pagination.
 
@@ -200,7 +201,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
 
         try:
             # Detect which API is available
-            api_type, url, requires_auth = await _get_api_type()
+            api_type, url, requires_auth = await _get_api_type(ctx)
 
             all_items: list[dict[str, Any]] = []
 
@@ -410,6 +411,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         model_name: str,
         version_name: str | None = None,
         gpu_type: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get benchmark data for a model.
 
@@ -441,7 +443,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             return {"error": "Model Registry is disabled"}
 
         try:
-            api_type, url, requires_auth = await _get_api_type()
+            api_type, url, requires_auth = await _get_api_type(ctx)
 
             if api_type == "model_catalog":
                 discovery_result = _create_cached_catalog_discovery(url)
@@ -486,6 +488,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     async def get_validation_metrics(
         model_name: str,
         version_name: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get validation metrics for a specific model version.
 
@@ -515,7 +518,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             return {"error": "Model Registry is disabled"}
 
         try:
-            api_type, url, requires_auth = await _get_api_type()
+            api_type, url, requires_auth = await _get_api_type(ctx)
 
             if api_type == "model_catalog":
                 discovery_result = _create_cached_catalog_discovery(url)
@@ -564,6 +567,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     @mcp.tool()
     async def find_benchmarks_by_gpu(
         gpu_type: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Find all benchmarks for a specific GPU type.
 
@@ -589,7 +593,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             return {"error": "Model Registry is disabled"}
 
         try:
-            api_type, url, requires_auth = await _get_api_type()
+            api_type, url, requires_auth = await _get_api_type(ctx)
 
             if api_type == "model_catalog":
                 discovery_result = _create_cached_catalog_discovery(url)
@@ -631,7 +635,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         }
 
     @mcp.tool()
-    async def list_catalog_sources() -> dict[str, Any]:
+    async def list_catalog_sources(ctx: Context | None = None) -> dict[str, Any]:
         """List available sources in the Model Catalog.
 
         Sources are categories or providers of models in the Red Hat AI
@@ -647,7 +651,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             return {"error": "Model Registry is disabled"}
 
         try:
-            api_type, url, requires_auth = await _get_api_type()
+            api_type, url, requires_auth = await _get_api_type(ctx)
 
             if api_type != "model_catalog":
                 return {
@@ -674,6 +678,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     async def get_catalog_model_artifacts(
         model_name: str,
         source_id: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get artifacts (storage URIs) for a model in the Model Catalog.
 
@@ -695,7 +700,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
             return {"error": "Model Registry is disabled"}
 
         try:
-            api_type, url, requires_auth = await _get_api_type()
+            api_type, url, requires_auth = await _get_api_type(ctx)
 
             if api_type != "model_catalog":
                 return {

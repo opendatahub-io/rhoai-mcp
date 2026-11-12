@@ -31,6 +31,7 @@ class TestListExampleItems:
         server.config.max_list_limit = 100
         server.config.default_list_limit = None
         server.k8s = MagicMock()
+        server.get_k8s = MagicMock(return_value=server.k8s)
 
         # Mock ConfigMap list
         cm = MagicMock()
@@ -61,6 +62,7 @@ class TestGetExampleItem:
         mcp = MCPServer("test")
         server = MagicMock()
         server.k8s = MagicMock()
+        server.get_k8s = MagicMock(return_value=server.k8s)
 
         cm = MagicMock()
         cm.metadata.name = "item-1"

@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.pipelines.client import PipelineClient
 from rhoai_mcp.domains.pipelines.models import PipelineServerCreate
@@ -16,7 +16,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register pipeline tools with the MCP server."""
 
     @mcp.tool()
-    def get_pipeline_server(namespace: str) -> dict[str, Any]:
+    def get_pipeline_server(namespace: str, ctx: Context | None = None) -> dict[str, Any]:
         """Get the pipeline server status for a Data Science Project.
 
         Each project can have one Data Science Pipelines Application (DSPA)
@@ -28,7 +28,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Pipeline server status, or indication that none exists.
         """
-        client = PipelineClient(server.k8s)
+        client = PipelineClient(server.get_k8s(ctx))
         result = client.get_pipeline_server(namespace)
 
         if result is None:
@@ -52,6 +52,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         object_storage_bucket: str,
         object_storage_endpoint: str,
         object_storage_region: str = "us-east-1",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a pipeline server for a Data Science Project.
 
@@ -75,7 +76,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = PipelineClient(server.k8s)
+        client = PipelineClient(server.get_k8s(ctx))
         request = PipelineServerCreate(
             namespace=namespace,
             object_storage_secret=object_storage_secret,
@@ -96,6 +97,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     def delete_pipeline_server(
         namespace: str,
         confirm: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Delete the pipeline server from a Data Science Project.
 
@@ -121,7 +123,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
                 ),
             }
 
-        client = PipelineClient(server.k8s)
+        client = PipelineClient(server.get_k8s(ctx))
         # Get the DSPA name first
         existing = client.get_pipeline_server(namespace)
         if not existing:

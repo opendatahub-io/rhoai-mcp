@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.models import TrainJobStatus
@@ -19,7 +19,9 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register training lifecycle tools with the MCP server."""
 
     @mcp.tool()
-    def suspend_training_job(namespace: str, name: str) -> dict[str, Any]:
+    def suspend_training_job(
+        namespace: str, name: str, ctx: Context | None = None
+    ) -> dict[str, Any]:
         """Suspend a running training job.
 
         Stops the training pods gracefully while preserving checkpoints
@@ -38,7 +40,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         if not allowed:
             return {"error": reason}
 
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         client.suspend_training_job(namespace, name)
 
         return {
@@ -49,7 +51,9 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         }
 
     @mcp.tool()
-    def resume_training_job(namespace: str, name: str) -> dict[str, Any]:
+    def resume_training_job(
+        namespace: str, name: str, ctx: Context | None = None
+    ) -> dict[str, Any]:
         """Resume a suspended training job.
 
         Restarts the training pods for a previously suspended job.
@@ -68,7 +72,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         if not allowed:
             return {"error": reason}
 
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         client.resume_training_job(namespace, name)
 
         return {
@@ -79,7 +83,9 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         }
 
     @mcp.tool()
-    def delete_training_job(namespace: str, name: str, confirm: bool = False) -> dict[str, Any]:
+    def delete_training_job(
+        namespace: str, name: str, confirm: bool = False, ctx: Context | None = None
+    ) -> dict[str, Any]:
         """Delete a training job.
 
         Permanently removes the training job and associated resources.
@@ -106,7 +112,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
                 ),
             }
 
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         try:
             client.delete_training_job(namespace, name)
         except NotManagedByMCPError as e:
@@ -127,6 +133,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         target_status: str = "Completed",
         timeout_seconds: int = 3600,
         poll_interval: int = 10,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Wait for a training job to reach a target status.
 
@@ -144,7 +151,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns:
             Final status and whether target was reached.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         start_time = time.time()
 
         # Map target status to enum
@@ -189,7 +196,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             time.sleep(poll_interval)
 
     @mcp.tool()
-    def get_job_spec(namespace: str, name: str) -> dict[str, Any]:
+    def get_job_spec(namespace: str, name: str, ctx: Context | None = None) -> dict[str, Any]:
         """Get the complete specification of a training job.
 
         Returns the full YAML/JSON specification of a TrainJob resource.
@@ -205,7 +212,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         """
         from rhoai_mcp.domains.training.crds import TrainingCRDs
 
-        resource = server.k8s.get(TrainingCRDs.TRAIN_JOB, name, namespace=namespace)
+        resource = server.get_k8s(ctx).get(TrainingCRDs.TRAIN_JOB, name, namespace=namespace)
 
         # Convert to dict, handling the dynamic resource format
         spec = dict(resource.spec) if hasattr(resource.spec, "items") else resource.spec

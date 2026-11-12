@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains._example.client import ExampleClient
 from rhoai_mcp.utils.response import PaginatedResponse, paginate
@@ -19,6 +19,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         namespace: str,
         limit: int | None = None,
         offset: int = 0,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """List example items (ConfigMaps labelled rhoai.io/example=true).
 
@@ -32,7 +33,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Paginated list of example items.
         """
-        client = ExampleClient(server.k8s)
+        client = ExampleClient(server.get_k8s(ctx))
         all_items = client.list_items(namespace)
 
         effective_limit = limit
@@ -48,6 +49,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
     def get_example_item(
         name: str,
         namespace: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get a single example item by name.
 
@@ -58,7 +60,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Example item details.
         """
-        client = ExampleClient(server.k8s)
+        client = ExampleClient(server.get_k8s(ctx))
         item = client.get_item(name, namespace)
 
         return {

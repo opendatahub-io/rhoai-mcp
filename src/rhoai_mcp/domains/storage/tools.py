@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.storage.client import StorageClient
 from rhoai_mcp.domains.storage.models import StorageCreate
@@ -27,6 +27,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         limit: int | None = None,
         offset: int = 0,
         verbosity: str = "standard",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """List persistent storage (PVCs) in a Data Science Project with pagination.
 
@@ -40,7 +41,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns:
             Paginated list of PVCs with metadata.
         """
-        client = StorageClient(server.k8s)
+        client = StorageClient(server.get_k8s(ctx))
         all_items = client.list_storage(namespace)
 
         # Apply config limits
@@ -67,6 +68,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         display_name: str | None = None,
         access_mode: str = "ReadWriteOnce",
         storage_class: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a new persistent storage volume (PVC).
 
@@ -89,7 +91,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         if not allowed:
             return {"error": reason}
 
-        client = StorageClient(server.k8s)
+        client = StorageClient(server.get_k8s(ctx))
         request = StorageCreate(
             name=name,
             namespace=namespace,
@@ -114,6 +116,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         name: str,
         namespace: str,
         confirm: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Delete a persistent storage volume (PVC).
 
@@ -140,7 +143,7 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
                 ),
             }
 
-        client = StorageClient(server.k8s)
+        client = StorageClient(server.get_k8s(ctx))
         try:
             client.delete_storage(name, namespace)
         except NotManagedByMCPError as e:

@@ -119,7 +119,7 @@ class BasePlugin:
             crd = crd_map[crd_kind]
             try:
                 # Try to get the resource to verify CRD exists
-                server.k8s.get_resource(crd)
+                server.get_shared_k8s().get_resource(crd)
             except Exception:
                 missing_crds.append(crd_kind)
 

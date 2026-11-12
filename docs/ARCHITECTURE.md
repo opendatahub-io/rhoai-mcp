@@ -86,6 +86,11 @@ Composite plugins follow the same pattern and are registered in `composites/regi
 
 ## Authentication
 
+For how the two token-validation modes (`jwt` and `token-review`) map onto the
+MCP spec's authorization pathways — including why TokenReview is the
+OpenShift-native equivalent of RFC 7662 Token Introspection — see
+[docs/auth.md](auth.md).
+
 ### OIDC Auth Strategies
 
 When OIDC is enabled (`RHOAI_MCP_OIDC_ENABLED=true`), the server validates each request's Bearer token and then uses one of two strategies to authenticate Kubernetes API calls on behalf of the user:

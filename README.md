@@ -199,7 +199,7 @@ export RHOAI_MCP_API_TOKEN=sha256~xxxxx
 ```
 
 For multi-user deployments, the OpenShift OIDC overlays add caller-level authentication: each request's bearer token is validated via K8s TokenReview, a SubjectAccessReview pre-flight filters tools based on the caller's RBAC, and resource access is ultimately enforced by the K8s API against the caller's own token.
-See [`deploy/kustomize/overlays/openshift-oidc/README.md`](deploy/kustomize/overlays/openshift-oidc/README.md) for OIDC configuration details.
+See [`deploy/kustomize/overlays/openshift-oidc/README.md`](deploy/kustomize/overlays/openshift-oidc/README.md) for OIDC configuration details, and [`docs/auth.md`](docs/auth.md) for how the validation modes map onto the MCP spec's authorization pathways.
 
 ### Transport
 

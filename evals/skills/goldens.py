@@ -23,7 +23,7 @@ import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from evals.agent.runner import REPO_ROOT, ScriptedTurn
 from evals.skills.agreement import SelectionExpectation
@@ -129,6 +129,34 @@ class Golden:
     notes: list[str] = field(default_factory=list)
     expectation: SelectionExpectation | None = None
 
+    def snapshot(self) -> dict[str, object]:
+        """Persist the scenario's grading intent with the execution."""
+        return {
+            "id": self.id,
+            "skill": self.skill,
+            "description": self.description,
+            "script": [{"name": turn.name, "prompt": turn.prompt} for turn in self.script],
+            "confirmation_reply": self.confirmation_reply,
+            "approval_reply": self.approval_reply,
+            "selection_reply": self.selection_reply,
+            "hardware_reply": self.hardware_reply,
+            "consent_given": self.consent_given,
+            "expect_handoff": self.expect_handoff,
+            "expectation": asdict(self.expectation) if self.expectation else None,
+        }
+
+    @classmethod
+    def from_snapshot(cls, snapshot: dict[str, Any]) -> Golden:
+        """Restore intent without executing the original script or checkpoints."""
+        data = dict(snapshot)
+        data["script"] = [ScriptedTurn(**turn) for turn in data["script"]]
+        expectation = data.get("expectation")
+        if isinstance(expectation, dict):
+            expectation = dict(expectation)
+            expectation["cluster_gpu_types"] = tuple(expectation["cluster_gpu_types"])
+            data["expectation"] = SelectionExpectation(**expectation)
+        return cls(**data)
+
     def grade(self, transcript: AgentTranscript) -> CheckReport:
         """Grade using this golden's own intent and gate replies."""
         confirmation = (
@@ -220,10 +248,7 @@ class Golden:
 # Shared reply fragments
 # --------------------------------------------------------------------------- #
 
-#: `get_cluster_resources` is absent from the default plugin set, so Phase 3
-#: takes the documented ask-the-customer branch. Supplying GPUs here is what
-#: unblocks `recommend_model`. The automated-discovery branch and the GPU
-#: mapping table stay unexercised until that tool ships (plan §3.1).
+#: Customer inventory for cases where cluster discovery is denied or incomplete.
 GPU_REPLY = "The cluster has NVIDIA A100 80GB GPUs."
 
 CONFIRM_REPLY = "Confirmed. Go ahead and show me the model recommendations."
@@ -277,7 +302,6 @@ NAVIGATOR_HAPPY_PATH = Golden(
             checkpoint=requires_tools("recommend_model"),
         ),
     ],
-    notes=["GPU discovery branch unexercised: get_cluster_resources not in default plugin set"],
 )
 
 
@@ -318,7 +342,6 @@ NAVIGATOR_VAGUE_REQUIREMENTS = Golden(
             checkpoint=requires_tools("recommend_model"),
         ),
     ],
-    notes=["GPU discovery branch unexercised: get_cluster_resources not in default plugin set"],
 )
 
 

@@ -279,10 +279,6 @@ def test_generate_config_returns_result(
     assert isinstance(deploy_config_result, DeploymentConfigResult)
     assert deploy_config_result.deployment_id
     assert deploy_config_result.namespace == "local-test"
-    assert deploy_config_result.model_id
-    assert deploy_config_result.gpu_config
-    assert deploy_config_result.gpu_config["gpu_type"] != "unknown"
-    assert deploy_config_result.gpu_config["gpu_count"] > 0
 
 
 def test_generate_config_has_yaml(

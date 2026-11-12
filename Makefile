@@ -179,39 +179,14 @@ eval-trend: ## Show eval score trends over time
 # Skill evaluations (Pydantic AI agent over stdio; no LCORE/compose needed)
 # =============================================================================
 
-eval-skills: ## Run Navigator goldens, deterministic checks only (no judge cost)
-	uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
+eval-skills: ## Run both skill suites with deterministic checks
+	uv run --group skill-eval pytest evals/skills -v -s --reruns 0
 
-eval-skills-judge: ## Run Navigator with the default EnMaaS DeepSeek judge (agent costs vary)
-	RHOAI_EVAL_SKILL_JUDGE=1 uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
+eval-skills-judge: ## Run both skill suites with the judge
+	RHOAI_EVAL_SKILL_JUDGE=1 uv run --group skill-eval pytest evals/skills -v -s --reruns 0
 
-eval-skills-matrix: ## Run Navigator's 2 goldens across 4 EnMaaS models (8 conversations)
-	RHOAI_EVAL_AGENT_MODELS=matrix RHOAI_EVAL_SKILL_JUDGE=1 \
-		uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
-
-eval-rescore: ## Re-score saved artifacts, no agent run (usage: make eval-rescore ARGS="--run <id> --judge")
+eval-rescore: ## Re-evaluate a saved attempt (ARGS="--attempt <id> [--judge]")
 	uv run --group skill-eval python -m evals.skills.rescore $(ARGS)
-
-eval-calibrate: ## Score frozen examples with EnMaaS DeepSeek by default; no agent run
-	uv run --group skill-eval python -m evals.skills.calibrate $(ARGS)
-
-eval-show: ## Print a saved attempt's trajectory (usage: make eval-show ARGS="--attempt <id>")
-	uv run --group skill-eval python -m evals.skills.show $(ARGS)
-
-MLFLOW_PORT ?= 5000
-MLFLOW_STORE ?= sqlite:///$(CURDIR)/.mlflow/mlflow.db
-
-mlflow-up: ## Start a local MLflow server (UI + OTLP ingestion at /v1/traces)
-	@mkdir -p $(CURDIR)/.mlflow
-	@echo "MLflow UI:  http://127.0.0.1:$(MLFLOW_PORT)"
-	@echo "OTLP:       http://127.0.0.1:$(MLFLOW_PORT)/v1/traces"
-	uv run --no-project --with mlflow mlflow server \
-		--host 127.0.0.1 --port $(MLFLOW_PORT) --backend-store-uri $(MLFLOW_STORE)
-
-eval-skills-traced: ## Run Navigator goldens exporting OTel traces to the local MLflow
-	RHOAI_EVAL_OTLP_ENDPOINT=http://127.0.0.1:$(MLFLOW_PORT)/v1/traces \
-	RHOAI_EVAL_MLFLOW_EXPERIMENT_ID=$${RHOAI_EVAL_MLFLOW_EXPERIMENT_ID:-0} \
-		uv run --group skill-eval --group trace pytest evals/skills/test_navigator.py -v -s --reruns 0
 
 # =============================================================================
 # Requirements

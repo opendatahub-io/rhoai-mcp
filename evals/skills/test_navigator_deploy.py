@@ -32,7 +32,6 @@ async def test_navigator_deploy_golden(
     skill_recorder: Any,
     skill_eval_config: Any,
     judge_llm: Any,
-    tracing_session: Any,
 ) -> None:
     """Run one navigator-deploy golden and assert only after recording."""
     outcome = await run_attempt(
@@ -41,20 +40,9 @@ async def test_navigator_deploy_golden(
         recorder=skill_recorder,
         config=skill_eval_config,
         judge=judge_llm,
-        tracing=tracing_session,
     )
 
-    if outcome.tools_outside_allowlist:
-        print(
-            f"\n[observation] {golden.id}: tools outside declared allowed-tools: "
-            f"{outcome.tools_outside_allowlist}"
-        )
-    if outcome.report.unexercised:
-        print(
-            f"\n[coverage] {golden.id}: unexercised branches: "
-            + ", ".join(f"{c.name} ({c.detail})" for c in outcome.report.unexercised)
-        )
-
+    assert outcome.eligible, outcome.failure_summary()
     assert outcome.routing_ok, outcome.failure_summary()
     assert outcome.report.passed, outcome.failure_summary()
 

@@ -33,7 +33,7 @@ def conversation(
             call_id=f"r{i}",
             name="recommend_model",
             raw_name="recommend_model",
-            arguments={"preferred_gpu_types": []},
+            arguments={"preferred_gpu_types": ["A100-80"]},
             kind="mcp",
             turn_index=index,
         )
@@ -77,6 +77,7 @@ def test_empty_hardware_marker_cannot_match_an_unrelated_user_turn(reply: str) -
 
 def test_explicit_unfiltered_consent_is_a_valid_hardware_gate() -> None:
     transcript = conversation([5])
+    transcript.tool_calls[0].arguments["preferred_gpu_types"] = []
     reply = "I do not know the GPUs; show recommendations without a hardware filter."
     transcript.turns[4].content = reply
     assert status(transcript, reply) == "pass"
@@ -104,10 +105,79 @@ def test_real_failure_pattern_is_caught_even_after_a_correct_handoff() -> None:
             call_id="premature",
             name="recommend_model",
             raw_name="recommend_model",
-            arguments={"preferred_gpu_types": []},
+            arguments={"preferred_gpu_types": ["A100-80"]},
             kind="mcp",
             turn_index=hardware_at - 1,
         ),
     )
     report = NAVIGATOR_HAPPY_PATH.grade(transcript)
     assert {c.name for c in report.failures} == {CHECK}
+
+
+def discovery(result: Any, *, outcome: str = "success", index: int = 2) -> ToolCallRecord:
+    return ToolCallRecord(
+        call_id="discovery",
+        name="get_cluster_resources",
+        raw_name="get_cluster_resources",
+        arguments={},
+        kind="mcp",
+        turn_index=index,
+        structured_result=result,
+        outcome=outcome,
+    )
+
+
+def test_successful_discovery_allows_filtered_recommendation_before_customer_reply() -> None:
+    transcript = conversation([3])
+    transcript.tool_calls.insert(
+        0,
+        discovery(
+            {
+                "has_gpus": True,
+                "gpu_info": {
+                    "product": "NVIDIA A100 80GB",
+                    "total": 4,
+                },
+            }
+        ),
+    )
+    assert status(transcript) == "pass"
+    transcript.tool_calls[-1].arguments["preferred_gpu_types"] = []
+    assert status(transcript) == "fail"
+
+
+@pytest.mark.parametrize(
+    "result,outcome",
+    [
+        ({"error": "permission denied"}, "denied"),
+        (
+            {
+                "error": "permission denied",
+                "has_gpus": True,
+                "gpu_info": {"product": "A100", "total": 4},
+            },
+            "success",
+        ),
+        ({"has_gpus": True, "gpu_info": {"total": 4}}, "success"),
+        ({"has_gpus": True, "gpu_info": {"product": "unknown", "total": 4}}, "success"),
+        ({"has_gpus": False}, "success"),
+    ],
+)
+def test_denied_or_incomplete_discovery_needs_customer_inventory(result: Any, outcome: str) -> None:
+    transcript = conversation([3])
+    transcript.tool_calls.insert(0, discovery(result, outcome=outcome))
+    assert status(transcript) == "fail"
+    transcript.tool_calls[-1].turn_index = 5
+    assert status(transcript) == "pass"
+
+
+def test_unfiltered_recommendation_requires_explicit_consent() -> None:
+    transcript = conversation([5])
+    transcript.tool_calls[0].arguments["preferred_gpu_types"] = []
+    assert status(transcript) == "fail"
+    transcript.turns[4].content = "Go ahead."
+    assert status(transcript, "Go ahead.") == "fail"
+    transcript.turns[4].content = "Do not show recommendations without a hardware filter."
+    assert status(transcript, transcript.turns[4].content) == "fail"
+    transcript.turns[4].content = "Show recommendations without a hardware filter."
+    assert status(transcript, transcript.turns[4].content) == "pass"

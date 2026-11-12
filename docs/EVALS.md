@@ -45,10 +45,6 @@ This replaces the earlier self-instrumentation approach (`ENABLE_EVALUATION` hoo
 
 ## Running Evaluations
 
-For the stdio skill-evaluation path, see [judge configuration and score
-interpretation](./JUDGE-SCORING.md). It documents the EnMaaS DeepSeek default,
-item-based MCP scoring, and G-Eval fidelity's default 0–10 scale.
-
 ### Make targets
 
 ```bash
@@ -89,23 +85,22 @@ All variables use the `RHOAI_EVAL_` prefix and can be set in `.env.eval` or as e
 | `LLM_MODEL` | `gpt-4o` | Model name for the agent LLM |
 | `LLM_API_KEY` | (none) | API key for the agent LLM |
 | `LLM_BASE_URL` | (none) | Base URL for vLLM or Azure endpoints |
-| `EVAL_PROVIDER` | `enmaas` | Judge LLM provider (see [Supported Providers](#supported-providers)) |
-| `EVAL_MODEL` | `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017` | Model name for the DeepEval judge LLM |
-| `EVAL_API_KEY` | (none) | Explicit judge credential; EnMaaS otherwise uses `ENMAAS_KEY` |
+| `EVAL_PROVIDER` | `openai` | Judge LLM provider (see [Supported Providers](#supported-providers)) |
+| `EVAL_MODEL` | `gpt-4o` | Model name for the DeepEval judge LLM |
+| `EVAL_API_KEY` | (none) | API key for the judge LLM |
 | `EVAL_MODEL_BASE_URL` | (none) | Base URL for a custom judge endpoint |
 | `VERTEX_PROJECT_ID` | (none) | Google Cloud project ID (for `anthropic-vertex` and `google-vertex`) |
 | `VERTEX_LOCATION` | `us-central1` | Google Cloud region (for `anthropic-vertex` and `google-vertex`) |
 | `CLUSTER_MODE` | `mock` | `mock` (no cluster needed) or `live` (real cluster) |
-| `MCP_USE_THRESHOLD` | `0.6` | Minimum MCP-use score; validate per judge/metric version |
-| `TASK_COMPLETION_THRESHOLD` | `0.75` | Minimum completion score; validate per judge/metric version |
+| `MCP_USE_THRESHOLD` | `0.5` | Minimum score for MCP tool usage metrics (0.0-1.0) |
+| `TASK_COMPLETION_THRESHOLD` | `0.6` | Minimum score for task completion metrics (0.0-1.0) |
 | `MAX_AGENT_TURNS` | `20` | Maximum LLM turns per scenario (1-100) |
 
 ### Supported Providers
 
 | Provider | Value | SDK | Notes |
 |----------|-------|-----|-------|
-| EnMaaS | `enmaas` | `openai` | Default judge endpoint; uses `ENMAAS_KEY`. |
-| OpenAI | `openai` | `openai` | Uses OpenAI API directly when explicitly selected. |
+| OpenAI | `openai` | `openai` | Default. Uses OpenAI API directly. |
 | vLLM | `vllm` | `openai` | OpenAI-compatible. Requires `LLM_BASE_URL`. |
 | Azure OpenAI | `azure` | `openai` | OpenAI-compatible. Requires `LLM_BASE_URL`. |
 | Anthropic | `anthropic` | `anthropic` | Claude models via direct API. |
@@ -417,10 +412,9 @@ RHOAI_EVAL_EVAL_MODEL_BASE_URL=http://localhost:8001/v1
 
 The GitHub Actions workflow (`.github/workflows/eval.yml`) runs mock-cluster evals on manual dispatch:
 
-- **Trigger:** `workflow_dispatch` with `inference_model`, `judge_provider`, and `judge_model` inputs
-- **Judge defaults:** `enmaas` and `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017`
+- **Trigger:** `workflow_dispatch` with `agent_provider`, `agent_model`, `judge_provider`, and `judge_model` inputs
+- **Defaults:** `openai` provider, `gpt-4o-mini` for the agent, `gpt-4o` for the judge
 - **Required secrets:** Depends on provider selection:
-  - EnMaaS judge: `ENMAAS_KEY`
   - OpenAI/vLLM/Azure: `OPENAI_API_KEY`
   - Anthropic: `ANTHROPIC_API_KEY`
   - Google: `GOOGLE_API_KEY`
@@ -430,11 +424,13 @@ The GitHub Actions workflow (`.github/workflows/eval.yml`) runs mock-cluster eva
 To trigger manually from the GitHub UI or CLI:
 
 ```bash
-# Default EnMaaS DeepSeek judge
-gh workflow run eval.yml
+# Default (OpenAI)
+gh workflow run eval.yml --field agent_model=gpt-4o --field judge_model=gpt-4o
 
-# Explicit OpenAI judge override (paid)
+# Anthropic agent, OpenAI judge
 gh workflow run eval.yml \
+  --field agent_provider=anthropic \
+  --field agent_model=claude-sonnet-4-20250514 \
   --field judge_provider=openai \
   --field judge_model=gpt-4o
 ```
@@ -449,18 +445,20 @@ Maintainers can trigger evals directly from a pull request by commenting `@run_e
 
 1. The workflow adds an `eyes` reaction to acknowledge the comment
 2. The PR's head branch is checked out (not the default branch)
-3. Evals run with the EnMaaS DeepSeek judge and the LCS inference configuration
+3. Evals run using `google-genai` / `gemini-2.0-flash` for both the agent and judge LLMs
 4. Results are posted as a PR comment with the markdown summary table
 5. A `rocket` reaction is added on success, or `thumbsdown` on failure
 
-**Required judge secret:** `ENMAAS_KEY`. The LCS inference service has separate credentials.
+**Required secret:** `GOOGLE_API_KEY` (Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)).
 
 **Default configuration for `@run_evals`:**
 
 | Setting | Value |
 |---------|-------|
-| Judge provider | `enmaas` |
-| Judge model | `rits/deepseek-ai/DeepSeek-V4.1-Flash-1017` |
+| Agent provider | `google-genai` |
+| Agent model | `gemini-2.0-flash` |
+| Judge provider | `google-genai` |
+| Judge model | `gemini-2.0-flash` |
 | Cluster mode | `mock` |
 
 The `workflow_dispatch` trigger remains available for full provider/model flexibility.
@@ -510,46 +508,6 @@ uv run --group eval python -m evals.reporting.cli compare --scenario cluster_exp
 # Trend for a specific provider, last 5 records, markdown output
 uv run --group eval python -m evals.reporting.cli trend --provider openai/gpt-4o --last 5 --format markdown
 ```
-
-### Navigator Model Comparison
-
-Navigator comparisons require an explicit frozen sweep or original run IDs;
-the CLI does not combine unrelated skill history. Reporting reads saved scores
-and native agent messages without running models or judges.
-
-```bash
-# Compare the new sequential four-model, eight-conversation Navigator cohort
-make eval-compare ARGS="--cohort docs/temp/navigator-serial-sweep-results.json --artifacts-root evals/results --format markdown --output docs/temp/navigator-serial-model-comparison.md"
-
-# Export the same comparison as JSON
-make eval-compare ARGS="--cohort docs/temp/navigator-serial-sweep-results.json --artifacts-root evals/results --format json --output docs/temp/navigator-serial-model-comparison.json"
-
-# Alternatively, select original run IDs from the JSONL history
-uv run --group eval python -m evals.reporting compare \
-  --run-id c1aed9dbd1c1 --run-id 6427f23f8fe9 \
-  --run-id 934ca554d04f --run-id b77ef7e8878d \
-  --scenario navigator-happy-path --last 1
-```
-
-`--file` selects a different JSONL history; use it with run IDs, not `--cohort`.
-`--artifacts-root` resolves native files as `<root>/<original-run>/<attempt>`
-when recorded absolute paths belong to another checkout. Without native
-artifacts, scores remain visible and usage is `n/a`. `--last` limits attempts
-per model/golden. Selected models must have matching golden sets and sampling
-proportions, source/skill/scenario hashes, judge, rubric, and metric cutoffs;
-each agent's API/settings must remain stable. Dry runs, rescores, and duplicate
-attempts are excluded. Historical verdicts and files remain unchanged.
-
-The report separates tool-use, completion, and fitness (skill fidelity) scores
-from routing, hard checks, and overall passes. It compares user turns, model
-responses, MCP calls/errors, skill loads, agent token usage, and elapsed seconds.
-Means show measured/selected coverage; missing values are `n/a` or JSON `null`.
-Reasoning tokens are included in output, and cached tokens in input. Tokenizers
-and provider accounting differ; SDK price estimates are not billed EnMaaS cost.
-Agent time excludes scoring; total time is their sum per conversation, not
-cohort wall-clock duration. Scheduling overlaps are disclosed when the cohort
-contains them; run-ID selection has no scheduling manifest. A single attempt
-per model/golden is a smoke comparison, not a reliability estimate or ranking.
 
 ### JSONL Record Format
 
@@ -647,3 +605,25 @@ For more detail on what the agent is doing, enable debug logging:
 ```bash
 RHOAI_EVAL_LLM_MODEL=gpt-4o uv run --group eval pytest evals/ -v -m "eval and not live" --tb=long -s --log-cli-level=DEBUG
 ```
+
+## Replayable skill evaluations
+
+The skill suite runs Pydantic AI with both Navigator skills available for discovery and the real MCP server over stdio with a fresh mock cluster per attempt. Set `ENMAAS_KEY` for the default `enmaas-deepseek` agent. The independently configured judge defaults to EnMaaS DeepSeek; environment variables or `.env.eval` can override it. Commented shared settings in `.env.eval.example` leave the legacy and skill defaults intact.
+
+Set `RHOAI_EVAL_AGENT_MODELS=all` to select all four EnMaaS profiles, or provide a comma-separated list of profile IDs.
+
+```bash
+uv sync --group skill-eval
+make eval-skills                 # all four scenarios, checks only
+make eval-skills-judge           # all four scenarios, checks and judge
+make eval-rescore ARGS="--attempt <attempt-id>"
+make eval-rescore ARGS="--attempt <attempt-id> --judge"
+```
+
+Live checks-only runs still call the agent. Replay reads saved evidence and never starts an agent or MCP; checks-only replay needs no credentials or network, while judged replay calls the configured judge. Use `uv run --group skill-eval pytest evals/skills/test_navigator_deploy.py -k withheld -v -s` to select a subset. `--run <run-id>` replays a whole run.
+
+Each attempt writes `evals/results/<run-id>/<attempt-id>/artifact.json` and `messages.json`, including partial histories, tool schemas, errors, delivered instructions, generation settings and scenario intent. Each scoring appends to `evals/results/skill_history.jsonl` with the original run and attempt IDs and a new scoring ID. Older artifacts without an intent snapshot are accepted only when their scenario hash matches the current definition. Scores contain the evaluator revision, checks and rubric versions, judge configuration and original generation hashes. Read the JSONL directly to inspect prior results.
+
+`CHECKS ONLY` means judging was skipped; it is not an overall pass. A judged pass requires a completed execution, correct routing, all mandatory checks and all three required metrics. Execution errors, failed checks, judge errors and unexercised branches are shown separately. See [judge scoring](JUDGE-SCORING.md).
+
+The production Navigator skill and planner corrections from the research branch are prerequisites for reproducing its earlier live results and need separate review: see commits `f7ce269` and `4a41e9e` and the planner changes in the preserved reference `f91a661`. The suite here evaluates the skills and server present in the checkout. The historical investigation and migration evidence remain available in that commit, including `docs/temp/deepseek-item-judge-migration.md`; they do not validate changed scripts.

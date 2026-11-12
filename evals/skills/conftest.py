@@ -67,34 +67,20 @@ def skill_eval_config() -> EvalConfig:
     Note this does **not** require the LCS settings: the stdio path ignores
     ``lcs_url`` and ``rhoai_mcp_url`` entirely.
     """
-    from evals.config import EvalConfig
+    from evals.skills.config import SkillEvalConfig
 
-    return EvalConfig()
+    return SkillEvalConfig()
 
 
 @pytest.fixture(scope="session")
 def skill_recorder(skill_eval_config: EvalConfig, skill_run_id: str) -> EvalRecorder:
     """Recorder writing one JSONL line per attempt, including failures."""
     from evals.reporting.recorder import EvalRecorder
+    from evals.skills.attempt import SKILL_RESULTS_PATH
 
-    recorder = EvalRecorder(skill_eval_config)
+    recorder = EvalRecorder(skill_eval_config, path=SKILL_RESULTS_PATH)
     recorder.run_id = skill_run_id
     return recorder
-
-
-@pytest.fixture(scope="session")
-def tracing_session() -> Any:
-    """OTel tracing, if ``RHOAI_EVAL_OTLP_ENDPOINT`` is set.
-
-    Yields a disabled no-op session otherwise, so tests never branch on it. The
-    teardown flush matters: ``BatchSpanProcessor`` buffers, so without it a
-    short run exits before its spans reach the collector.
-    """
-    from evals.agent.tracing import setup_tracing
-
-    session = setup_tracing()
-    yield session
-    session.shutdown()
 
 
 @pytest.fixture(scope="session")

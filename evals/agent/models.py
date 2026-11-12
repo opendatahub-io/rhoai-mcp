@@ -6,8 +6,7 @@ selected explicitly by spec. Keeping the matrix parameterised this way is also
 what lets a later EvalHub BYOF adapter map ``JobSpec.model.url`` /
 ``JobSpec.model.name`` straight onto a spec (plan §5).
 
-The roster below is the outcome of the Phase 0 tool-calling probe
-(``evals.agent.probe_tool_calling``); see ``docs/temp/phase0-model-probe.md``.
+
 """
 
 from __future__ import annotations
@@ -149,7 +148,7 @@ class AgentModelSpec:
 SPECS: dict[str, AgentModelSpec] = {
     spec.id: spec
     for spec in (
-        # --- Direct OpenAI, cost-efficient tier: the matrix default ---
+        # --- Direct OpenAI, cost-efficient tier ---
         AgentModelSpec(
             id="openai-sol",
             model_name="gpt-5.6-sol",
@@ -159,19 +158,6 @@ SPECS: dict[str, AgentModelSpec] = {
             # Rejected outright by this family; see AgentModelSpec.temperature
             # for why no matrix cell requests one.
             temperature=None,
-        ),
-        # Diagnostic fallback, deliberately out of the matrix. Chat Completions
-        # is the only route that needs an explicit opt-out of reasoning for this
-        # family, and reasoning off is a downgrade on a phase-gated task - this
-        # exists to isolate a suspected Responses-API problem, not as a peer.
-        AgentModelSpec(
-            id="openai-sol-chat",
-            model_name="gpt-5.6-sol",
-            base_url=None,
-            api_key_env="OPENAI_API_KEY",
-            api="chat",
-            temperature=0.0,
-            extra_settings={"openai_reasoning_effort": "none"},
         ),
         # --- Direct OpenAI, stronger fallback: promote only if -sol underperforms ---
         AgentModelSpec(
@@ -223,16 +209,14 @@ SPECS: dict[str, AgentModelSpec] = {
     )
 }
 
-#: Used when ``RHOAI_EVAL_AGENT_MODELS`` is unset: one EnMaaS GPT model.
-DEFAULT_SPEC_IDS: tuple[str, ...] = ("enmaas-sol",)
-
-#: The full sweep once the one-model path is green (plan §3.4).
+#: EnMaaS profiles used when all agents are selected.
 MATRIX_SPEC_IDS: tuple[str, ...] = (
     "enmaas-sol",
     "enmaas-opus",
     "enmaas-glm",
     "enmaas-deepseek",
 )
+DEFAULT_SPEC_IDS: tuple[str, ...] = ("enmaas-deepseek",)
 
 
 def get_spec(spec_id: str) -> AgentModelSpec:
@@ -252,8 +236,7 @@ def get_spec(spec_id: str) -> AgentModelSpec:
 def selected_specs(raw: str | None = None) -> list[AgentModelSpec]:
     """Resolve the specs to run from ``RHOAI_EVAL_AGENT_MODELS``.
 
-    Accepts a comma-separated list of spec ids, or the literal ``matrix`` /
-    ``all`` shorthands, so CI can run one model per job.
+    Accepts ``all`` or a comma-separated list of spec ids.
 
     Args:
         raw: Override for the environment variable, mainly for tests.
@@ -264,10 +247,8 @@ def selected_specs(raw: str | None = None) -> list[AgentModelSpec]:
     value = (raw if raw is not None else os.environ.get(MODELS_ENV_VAR, "")).strip()
     if not value:
         ids: tuple[str, ...] = DEFAULT_SPEC_IDS
-    elif value == "matrix":
-        ids = MATRIX_SPEC_IDS
     elif value == "all":
-        ids = tuple(SPECS)
+        ids = MATRIX_SPEC_IDS
     else:
         ids = tuple(part.strip() for part in value.split(",") if part.strip())
     return [get_spec(spec_id) for spec_id in ids]

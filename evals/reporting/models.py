@@ -44,6 +44,7 @@ class EnvironmentRecord:
     mcp_use_threshold: float
     task_completion_threshold: float
     eval_model_base_url: str = ""
+    fidelity_threshold: float = 0.8
 
 
 @dataclass
@@ -116,3 +117,5 @@ class EvalRecord:
     skill_sha: str = ""
     scenario_sha: str = ""
     rubric_version: str = ""
+    checks_version: str = ""
+    generation_git: dict[str, str] = field(default_factory=dict)

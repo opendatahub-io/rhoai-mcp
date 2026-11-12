@@ -182,7 +182,7 @@ If Step 2 was cluster-constrained and a slot returned `None` (no match on cluste
 
 If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A `None` slot from an unconstrained call means the planner found no result for this SLO/use-case combination — show "—" in that slot (not a hardware miss).
 
-**Build the table only after all slots have data (or confirmed "—").** Fill in this exact template — replace every `[value]` and `[cluster fit]` placeholder. Do not add, remove, or rename any row or column.
+**Build the table only after all slots have data (or confirmed "—").** Fill in this exact template — replace every `[value]` placeholder. Do not add, remove, or rename any row or column.
 
 | | Balanced | Cost | Performance | Quality |
 |---|---|---|---|---|
@@ -193,14 +193,12 @@ If Step 2 was unconstrained (`cluster_gpu_types = []`), skip Step 3 entirely. A 
 | Quality score | [value] | [value] | [value] | [value] |
 | Cost/month | [value] | [value] | [value] | [value] |
 | Meets SLO | [value] | [value] | [value] | [value] |
-| Cluster fit | [cluster fit] | [cluster fit] | [cluster fit] | [cluster fit] |
+| Cluster fit | Available ✓ / ⚠ requires new hardware / ⚠ cluster GPU unknown | | | |
 
-**Cluster fit labels:** Replace each `[cluster fit]` with exactly one of these labels, independently for each column:
-
+**Cluster fit values:**
 - `Available ✓` — slot filled by a cluster-constrained call; hardware is confirmed available
 - `⚠ requires new hardware` — slot filled by the unconstrained fallback (Step 3); cluster lacks this GPU
 - `⚠ cluster GPU unknown` — slot filled by an unconstrained call because GPU inventory could not be determined; hardware availability unverified
-- `—` — no recommendation is available for that slot
 
 **If the same model appears in multiple slots**, re-run `recommend_model` for the duplicated slot(s) only, using a tighter constraint — do not relabel or copy data:
 
@@ -228,8 +226,6 @@ Suggest a default based on the customer's stated priority, favouring cluster-ava
 
 Once the customer confirms which model they want, output the following handoff block verbatim (filling in the values from this session), then close with the prompt below. The handoff block lets `/navigator-deploy` skip Phases 1–3 entirely.
 
-Preserve the chosen recommendation's capacity target: copy `specification.traffic_profile.expected_qps` from the successful `recommend_model` response that supplied the chosen slot. This value already includes the planner's capacity buffer and minimum. Copy it unchanged. Keep the average and peak rates shown in Phase 2 as workload context.
-
 ```
 <!-- navigator-handoff
 model_id: <chosen model_id>
@@ -238,7 +234,7 @@ user_count: <user_count>
 chosen_category: <balanced|cost|performance|quality>
 prompt_tokens: <from get_use_case_defaults workload.prompt_tokens>
 output_tokens: <from get_use_case_defaults workload.output_tokens>
-expected_qps: <from the selected recommend_model response's specification.traffic_profile.expected_qps>
+expected_qps: <from get_expected_rps expected_rps>
 ttft_target_ms: <confirmed SLO TTFT default or override>
 itl_target_ms: <confirmed SLO ITL default or override>
 e2e_target_ms: <confirmed SLO E2E default or override>

@@ -21,7 +21,7 @@ import pytest
 pytest.importorskip("pydantic_ai", reason="requires the skill-eval dependency group")
 
 from evals.agent import runner  # noqa: E402
-from evals.agent.models import MATRIX_SPEC_IDS, AgentModelSpec, get_spec  # noqa: E402
+from evals.agent.models import AgentModelSpec, get_spec  # noqa: E402
 from evals.agent.transcript import (  # noqa: E402
     AgentTranscript,
     AttemptArtifact,
@@ -116,7 +116,7 @@ def install_agent(monkeypatch: pytest.MonkeyPatch) -> Callable[..., tuple[Memory
     return install
 
 
-@pytest.mark.parametrize("spec_id", MATRIX_SPEC_IDS)
+@pytest.mark.parametrize("spec_id", ["enmaas-sol", "enmaas-opus", "enmaas-glm", "enmaas-deepseek"])
 async def test_build_agent_delivers_shared_discovery_policy_without_preloading_a_skill(
     monkeypatch: pytest.MonkeyPatch, spec_id: str
 ) -> None:

@@ -38,6 +38,7 @@ def record_from_dict(data: dict[str, Any]) -> EvalRecord:
         mcp_use_threshold=env.get("mcp_use_threshold", 0.5),
         task_completion_threshold=env.get("task_completion_threshold", 0.6),
         eval_model_base_url=env.get("eval_model_base_url", ""),
+        fidelity_threshold=env.get("fidelity_threshold", 0.8),
     )
     nested = {"environment", "git", "metrics", "checks"}
     values = {

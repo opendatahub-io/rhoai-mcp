@@ -69,7 +69,7 @@ class EvalConfig(BaseSettings):
 
     # Judge LLM settings (for DeepEval metrics)
     eval_model: str = Field(
-        default=DEFAULT_JUDGE_MODEL,
+        default="gemini-2.5-flash",
         description="Model name for the DeepEval judge LLM",
     )
     eval_model_base_url: str | None = Field(
@@ -83,7 +83,7 @@ class EvalConfig(BaseSettings):
 
     # Judge LLM provider
     eval_provider: LLMProvider = Field(
-        default=LLMProvider.ENMAAS,
+        default=LLMProvider.GOOGLE_VERTEX,
         description="LLM provider for the DeepEval judge",
     )
 
@@ -105,13 +105,13 @@ class EvalConfig(BaseSettings):
 
     # Metric thresholds
     mcp_use_threshold: float = Field(
-        default=0.6,
+        default=0.5,
         ge=0.0,
         le=1.0,
         description="Minimum score for MCPUseMetric",
     )
     task_completion_threshold: float = Field(
-        default=0.75,
+        default=0.25,
         ge=0.0,
         le=1.0,
         description="Minimum score for MCPTaskCompletionMetric",

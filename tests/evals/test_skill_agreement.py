@@ -392,6 +392,7 @@ def test_unrelated_later_slot_rerun_does_not_replace_customer_selection() -> Non
                 use_case="chatbot_conversational",
                 user_count=50,
                 min_quality=90,
+                preferred_gpu_types=["A100-80"],
             )
         ),
         returns(result("recommend_model", "rerun", rerun)),
@@ -640,7 +641,7 @@ def test_documented_unconstrained_fallback_is_allowed_after_empty_slot() -> None
         returns(result("recommend_model", "primary", primary)),
     ]
 
-    assert grade(messages).passed
+    assert "navigator_recommend_after_hardware_confirmation" in failures(grade(messages))
 
 
 def test_a_different_chosen_category_uses_its_own_slot() -> None:

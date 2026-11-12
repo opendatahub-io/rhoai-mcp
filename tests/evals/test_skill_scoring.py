@@ -10,14 +10,15 @@ from unittest.mock import patch
 def test_normal_scoring_keeps_item_evidence_without_extra_judge_calls() -> None:
     from pathlib import Path
 
+    from evals.agent.transcript import from_pydantic_ai
     from evals.config import EvalConfig
     from evals.metrics.scorecards import Scorecard
     from evals.skills.attempt import _score
     from evals.skills.checks import CheckReport
 
     from tests.evals.test_conversation_metrics import UnusedJudge
-    from tests.evals.test_judge_calibration import approved_source
     from tests.evals.test_scorecards import card
+    from tests.evals.test_skill_agreement import workflow
 
     class ItemJudge(UnusedJudge):
         def __init__(self) -> None:
@@ -39,7 +40,7 @@ def test_normal_scoring_keeps_item_evidence_without_extra_judge_calls() -> None:
         return_value=SimpleNamespace(mcp_tools=lambda: []),
     ):
         records, _ = _score(
-            approved_source(),
+            from_pydantic_ai(workflow(deploy=True)),
             Path("unused"),
             "navigator-deploy",
             EvalConfig(_env_file=None),

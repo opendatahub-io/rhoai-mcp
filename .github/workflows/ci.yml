@@ -84,10 +84,15 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --locked --group skill-eval --group trace
+        run: uv sync --locked --group skill-eval
+
+      - name: Check retained eval code
+        run: |
+          uv run --locked --group skill-eval ruff check evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
+          uv run --locked --group skill-eval ruff format --check evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
 
       - name: Run offline eval harness tests
-        run: uv run --locked --group skill-eval --group trace pytest tests/evals -v --tb=short
+        run: uv run --locked --group skill-eval pytest tests/evals -v --tb=short
 
   test:
     name: Test (Python ${{ matrix.python-version }})

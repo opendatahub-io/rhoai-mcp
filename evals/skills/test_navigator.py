@@ -33,7 +33,6 @@ async def test_navigator_golden(
     skill_recorder: Any,
     skill_eval_config: Any,
     judge_llm: Any,
-    tracing_session: Any,
 ) -> None:
     """Run one navigator golden and assert only after it has been recorded."""
     outcome = await run_attempt(
@@ -42,23 +41,11 @@ async def test_navigator_golden(
         recorder=skill_recorder,
         config=skill_eval_config,
         judge=judge_llm,
-        tracing=tracing_session,
     )
 
     # Reported, never a gate: allowed-tools is optional per the agentskills spec
     # and unimplemented by the harness (plan §3.2).
-    if outcome.tools_outside_allowlist:
-        print(
-            f"\n[observation] {golden.id}: tools outside declared allowed-tools: "
-            f"{outcome.tools_outside_allowlist}"
-        )
-    if outcome.report.unexercised:
-        print(
-            f"\n[coverage] {golden.id}: unexercised branches: "
-            + ", ".join(f"{c.name} ({c.detail})" for c in outcome.report.unexercised)
-        )
-
-    # Routing is a hard gate: without it there is no skill under test.
+    assert outcome.eligible, outcome.failure_summary()
     assert outcome.routing_ok, outcome.failure_summary()
     # Hard workflow checks decide pass/fail independently of any judge.
     assert outcome.report.passed, outcome.failure_summary()

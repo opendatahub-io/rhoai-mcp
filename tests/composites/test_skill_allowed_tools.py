@@ -31,9 +31,6 @@ SKILLS_DIR = REPO_ROOT / ".claude" / "skills"
 MCP_TOOL_PREFIX = "mcp__"
 MCP_TOOL_RE = re.compile(rf"^{MCP_TOOL_PREFIX}(?P<server>.+?)__(?P<tool>.+)$")
 
-#: Known, accepted gaps between skill allowlists and default tools.
-KNOWN_UNRESOLVED: dict[str, str] = {}
-
 
 def default_plugins() -> list[str]:
     """The shipped ``enabled_plugins`` default, read from the config itself.
@@ -121,7 +118,7 @@ def test_every_allowed_tool_resolves_under_the_default_plugin_set(
             # Otherwise not an MCP tool reference (e.g. a built-in).
             continue
         tool = match.group("tool")
-        if tool not in default_tool_names and tool not in KNOWN_UNRESOLVED:
+        if tool not in default_tool_names:
             unresolved.append(entry)
 
     assert not unparsable, (
@@ -132,34 +129,5 @@ def test_every_allowed_tool_resolves_under_the_default_plugin_set(
     assert not unresolved, (
         f"{skill_md.parent.name} declares tools absent from the default server: "
         f"{unresolved}. Either expose the tool from a default plugin, enable the "
-        f"owning plugin by default, or amend the skill. If the gap is a deliberate "
-        f"deferral, add it to KNOWN_UNRESOLVED with a reason."
+        f"owning plugin by default, or amend the skill."
     )
-
-
-def test_known_gaps_are_still_gaps(default_tool_names: set[str]) -> None:
-    """A fixed gap must be removed from the allowlist, not left to rot.
-
-    Without this, ``KNOWN_UNRESOLVED`` would silently keep suppressing a check
-    for a tool that now exists, and the next real regression would hide behind a
-    stale exemption.
-    """
-    resolved_now = sorted(t for t in KNOWN_UNRESOLVED if t in default_tool_names)
-
-    assert not resolved_now, (
-        f"These tools are now exposed by default and must be removed from "
-        f"KNOWN_UNRESOLVED: {resolved_now}"
-    )
-
-
-def test_known_gaps_are_actually_declared_by_some_skill() -> None:
-    """Guards against an exemption outliving the skill that needed it."""
-    declared: set[str] = set()
-    for skill_md in skill_files():
-        for entry in parse_allowed_tools(skill_md):
-            match = MCP_TOOL_RE.match(entry)
-            if match:
-                declared.add(match.group("tool"))
-
-    orphaned = sorted(set(KNOWN_UNRESOLVED) - declared)
-    assert not orphaned, f"KNOWN_UNRESOLVED entries no skill declares: {orphaned}"

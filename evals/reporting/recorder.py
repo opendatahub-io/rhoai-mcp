@@ -121,7 +121,8 @@ def metric_records_from(eval_result: Any) -> tuple[list[MetricRecord], bool]:
 
 
 def overall_passed(
-    *, checks_passed: bool, routing_ok: bool, metrics: list[MetricRecord], dry_run: bool
+    *, checks_passed: bool, routing_ok: bool, metrics: list[MetricRecord], dry_run: bool,
+    required_metrics: set[str] | None = None,
 ) -> bool:
     """Decide the attempt's verdict (plan §3.5).
 
@@ -137,6 +138,8 @@ def overall_passed(
     if dry_run:
         return False
     if not metrics:
+        return False
+    if required_metrics is not None and not required_metrics.issubset({m.name for m in metrics}):
         return False
     return all(m.success for m in metrics)
 

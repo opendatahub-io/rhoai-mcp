@@ -17,6 +17,7 @@ Three principles the result model exists to enforce:
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
@@ -398,8 +399,7 @@ def check_navigator(
             it. ``None`` reports that ordering check as unexercised.
         expect_handoff: Whether this golden reaches the handoff block.
         hardware_reply: Scripted user reply supplying inventory or explicitly
-            permitting an unfiltered search. None leaves this branch unexercised;
-            automatic discovery is outside this customer-reply check.
+            permitting an unfiltered search. Discovery can also satisfy the gate.
     """
     report = CheckReport()
     routed = check_routing(transcript, "navigator", report)
@@ -483,21 +483,71 @@ def _check_hardware_confirmation(
     transcript: AgentTranscript, report: CheckReport, hardware_reply: str | None
 ) -> None:
     name = "navigator_recommend_after_hardware_confirmation"
-    if hardware_reply is None:
-        report.add(name, "unexercised", "golden did not identify a customer hardware reply")
-        return
     recommendations = [c for c in transcript.mcp_tool_calls if c.name == "recommend_model"]
     if not recommendations:
         report.add(name, "n/a", "recommend_model never called")
         return
-    hardware_at = (
-        find_user_turn_index(transcript, hardware_reply) if hardware_reply.strip() else None
-    )
-    premature = [c for c in recommendations if hardware_at is None or c.turn_index <= hardware_at]
+    hardware_at = find_user_turn_index(transcript, hardware_reply) if hardware_reply else None
+    reply = hardware_reply or ""
+    inventory = bool(re.search(r"\b(?:A100|H100|H200|B200|L4|V100)\b", reply, re.I))
+
+    def usable(call: ToolCallRecord) -> bool:
+        if call.name != "get_cluster_resources" or call.is_error or call.outcome != "success":
+            return False
+        value = call.structured_result
+        if not isinstance(value, dict):
+            try:
+                value = json.loads(call.result_text or "")
+            except (ValueError, TypeError):
+                return False
+        if not isinstance(value, dict) or value.get("error") or value.get("has_gpus") is not True:
+            return False
+        info = value.get("gpu_info")
+        if not isinstance(info, dict):
+            return False
+        products = info.get("products") or info.get("product")
+        names = products if isinstance(products, list) else [products]
+        identified = any(
+            isinstance(n, str) and n.strip().lower() not in {"", "unknown", "n/a"} for n in names
+        )
+        total = info.get("total")
+        return (
+            identified
+            and isinstance(total, (int, float))
+            and not isinstance(total, bool)
+            and total > 0
+        )
+
+    discoveries = [c for c in transcript.mcp_tool_calls if usable(c)]
+    if hardware_reply is None and not discoveries:
+        report.add(name, "unexercised", "no configured hardware reply or usable discovery")
+        return
+    premature = []
+    for call in recommendations:
+        filtered = bool(call.arguments.get("preferred_gpu_types"))
+        customer_before = hardware_at is not None and hardware_at < call.turn_index
+        discovered = any(c.turn_index < call.turn_index for c in discoveries)
+        consent = any(
+            not re.search(r"\b(?:not|never|don't|do not)\b", clause, re.I)
+            and re.search(
+                r"\b(?:show|proceed|continue|recommend|search|allow)\b.{0,100}"
+                r"\b(?:without (?:a )?(?:hardware |gpu )?filter|unfiltered|unconstrained)\b",
+                clause,
+                re.I,
+            )
+            for turn in transcript.turns[: call.turn_index]
+            if turn.role == "user"
+            for clause in re.split(r"[.;!?]", turn.content)
+        )
+        if not (
+            (filtered and (discovered or (customer_before and inventory)))
+            or (not filtered and consent)
+        ):
+            premature.append(call)
     report.check(
         name,
-        hardware_at is not None and not premature,
-        f"recommendations before customer hardware inventory/consent: "
+        not premature,
+        f"recommendations without usable inventory or explicit unfiltered consent: "
         f"{[(c.call_id, c.turn_index) for c in premature]}; hardware reply at {hardware_at}",
     )
 

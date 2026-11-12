@@ -37,7 +37,7 @@ from evals.reporting.models import (
     MetricRecord,
 )
 from evals.reporting.recorder import metric_records_from, overall_passed
-from evals.skills.checks import CheckReport, tools_outside_allowlist
+from evals.skills.checks import CheckReport
 from evals.skills.goldens import RUBRIC_VERSION, Golden
 
 if TYPE_CHECKING:
@@ -47,6 +47,8 @@ if TYPE_CHECKING:
     from evals.reporting.recorder import EvalRecorder
 
 RESULTS_ROOT = REPO_ROOT / "evals" / "results"
+SKILL_RESULTS_PATH = RESULTS_ROOT / "skill_history.jsonl"
+CHECKS_VERSION = "v2-gpu-discovery"
 
 
 @dataclass
@@ -56,6 +58,7 @@ class AttemptOutcome:
     golden: Golden
     spec_id: str
     attempt_id: str
+    scoring_id: str
     outcome: str
     passed: bool
     report: CheckReport
@@ -63,10 +66,10 @@ class AttemptOutcome:
     artifact_path: Path
     metrics: list[MetricRecord] = field(default_factory=list)
     routing_ok: bool = False
+    eligible: bool = False
     dry_run: bool = True
     error: str | None = None
     error_stage: str | None = None
-    tools_outside_allowlist: list[str] = field(default_factory=list)
 
     def failure_summary(self) -> str:
         """A assertion message that names what actually went wrong."""
@@ -95,31 +98,18 @@ async def run_attempt(
     config: EvalConfig,
     judge: Any = None,
     results_root: Path | None = None,
-    tracing: Any = None,
 ) -> AttemptOutcome:
-    """Execute, persist, score and record one golden/model attempt.
-
-    When ``tracing`` is an enabled session, the whole conversation runs inside a
-    single parent span so its turns form one trace, and the resulting trace id
-    is stored on the record and artifact for correlation (plan §3.6).
-    """
-    from evals.agent.tracing import TracingSession, instrumentation
+    """Execute, persist, score and record one golden/model attempt."""
 
     attempt_id = uuid.uuid4().hex[:12]
     root = results_root or RESULTS_ROOT
-    session = tracing if tracing is not None else TracingSession()
 
     agent_started = time.monotonic()
-    # Each scripted turn becomes its own trace, grouped into one MLflow session
-    # by attempt id; the runner owns those spans since it owns the turn loop.
     result = await run_conversation(
         spec,
         golden.script,
         run_id=recorder.run_id,
         attempt_id=attempt_id,
-        extra_capabilities=instrumentation(session),
-        tracing=session,
-        golden_id=golden.id,
     )
     agent_seconds = time.monotonic() - agent_started
 
@@ -129,12 +119,13 @@ async def run_attempt(
             "golden_id": golden.id,
             "skill": golden.skill,
             "scenario_sha": golden.scenario_sha(),
+            "scenario_snapshot": golden.snapshot(),
+            "generation_git": asdict(recorder.git),
             "selection_expectation": asdict(golden.expectation)
             if golden.expectation is not None
             else None,
             "skill_sha": golden.skill_sha(),
             "rubric_version": RUBRIC_VERSION,
-            "trace_session_id": result.trace_session_id,
             **spec.describe(),
         }
     )
@@ -153,7 +144,6 @@ async def run_attempt(
         run_error_stage=result.error_stage,
         turns=result.turns_completed,
         agent_seconds=agent_seconds,
-        trace_id=result.trace_session_id,
     )
 
 
@@ -170,7 +160,6 @@ def score_artifact(
     run_error_stage: str | None = None,
     turns: int | None = None,
     agent_seconds: float = 0.0,
-    trace_id: str | None = None,
 ) -> AttemptOutcome:
     """Grade and record a saved attempt.
 
@@ -201,13 +190,27 @@ def score_artifact(
 
     artifact = AttemptArtifact.load(artifact_path)
     meta = artifact.metadata
+    snapshot = meta.get("scenario_snapshot")
+    if snapshot is not None:
+        saved = Golden.from_snapshot(snapshot)
+        if (
+            saved.id != golden.id
+            or saved.skill != golden.skill
+            or saved.scenario_sha() != meta.get("scenario_sha")
+        ):
+            raise ValueError("saved scenario snapshot does not match artifact identity or hash")
+        golden = saved
+    elif not meta.get("scenario_sha") or meta["scenario_sha"] != golden.scenario_sha():
+        raise ValueError(
+            "incompatible artifact: missing scenario snapshot and scenario hash does not match"
+        )
     transcript = artifact.transcript()
     dry_run = judge is None
 
     report = golden.grade(transcript)
     routing_ok = golden.skill in transcript.skills_loaded
 
-    outcome = run_outcome if run_outcome is not None else meta.get("outcome", OUTCOME_EVALUATED)
+    outcome = run_outcome if run_outcome is not None else meta.get("outcome", "unknown")
     if outcome == OUTCOME_EVALUATED and not routing_ok:
         outcome = OUTCOME_ROUTING_FAILURE
 
@@ -224,22 +227,36 @@ def score_artifact(
             scenario=golden.description,
         )
 
+    error = run_error if run_error is not None else (meta.get("error") or None)
+    from evals.skills.rubrics import NAVIGATOR_DEPLOY_FIDELITY_NAME, NAVIGATOR_FIDELITY_NAME
+
+    required_metrics = {
+        "Conversation MCP Use",
+        "Conversation MCP Task Completion",
+        (NAVIGATOR_FIDELITY_NAME if golden.skill == "navigator" else NAVIGATOR_DEPLOY_FIDELITY_NAME)
+        + " [Conversational GEval]",
+    }
+    eligible = (
+        outcome == OUTCOME_EVALUATED
+        and not error
+        and int(meta.get("turns_completed", 0) or 0) >= len(golden.script)
+    )
     passed = overall_passed(
         checks_passed=report.passed,
-        routing_ok=routing_ok,
+        routing_ok=routing_ok and eligible,
         metrics=metrics,
         dry_run=dry_run,
+        required_metrics=required_metrics,
     )
 
-    outside = tools_outside_allowlist(transcript, golden.allowed_tools())
     resolved_spec = spec_id or str(meta.get("id") or meta.get("spec_id") or "unknown")
-    error = run_error if run_error is not None else (meta.get("error") or None)
     error_stage = (
         run_error_stage if run_error_stage is not None else (meta.get("error_stage") or None)
     )
 
+    scoring_id = uuid.uuid4().hex[:12]
     record = EvalRecord(
-        run_id=recorder.run_id,
+        run_id=artifact.run_id,
         timestamp=datetime.now(UTC).isoformat(),
         scenario=golden.id,
         git=recorder.git,
@@ -261,7 +278,7 @@ def score_artifact(
         duration_seconds=round(scoring_seconds, 2),
         # Reused, not regenerated: this identifies the agent run being scored.
         attempt_id=artifact.attempt_id,
-        scoring_id=uuid.uuid4().hex[:12],
+        scoring_id=scoring_id,
         skill=golden.skill,
         golden_id=golden.id,
         skills_loaded=transcript.skills_loaded,
@@ -272,19 +289,19 @@ def score_artifact(
         artifact_path=str(artifact_path),
         dry_run=dry_run,
         agent_seconds=round(agent_seconds, 2),
-        skill_sha=golden.skill_sha(),
-        scenario_sha=golden.scenario_sha(),
+        skill_sha=str(meta.get("skill_sha", "")),
+        scenario_sha=str(meta.get("scenario_sha", "")),
         rubric_version=RUBRIC_VERSION,
-        # A re-score runs no agent and so has no trace of its own; carrying the
-        # original attempt's id lets it point back at that trace (plan §3.6).
-        trace_id=trace_id if trace_id is not None else str(meta.get("trace_session_id", "")),
+        checks_version=CHECKS_VERSION,
+        generation_git=meta.get("generation_git", {}),
     )
     recorder.write(record)
 
-    return AttemptOutcome(
+    result = AttemptOutcome(
         golden=golden,
         spec_id=resolved_spec,
         attempt_id=artifact.attempt_id,
+        scoring_id=scoring_id,
         outcome=outcome,
         passed=passed,
         report=report,
@@ -292,11 +309,40 @@ def score_artifact(
         artifact_path=artifact_path,
         metrics=metrics,
         routing_ok=routing_ok,
+        eligible=eligible,
         dry_run=dry_run,
         error=error,
         error_stage=error_stage,
-        tools_outside_allowlist=outside,
     )
+    print(render_outcome(result))
+    return result
+
+
+def render_outcome(outcome: AttemptOutcome) -> str:
+    """Render the same concise result for live runs and replay."""
+    status = "CHECKS ONLY" if outcome.dry_run else ("PASS" if outcome.passed else "FAIL")
+    scores = {m.name: f"{m.score:.4f}" if m.score >= 0 else "ERROR" for m in outcome.metrics}
+    use = scores.get("Conversation MCP Use", "-")
+    complete = scores.get("Conversation MCP Task Completion", "-")
+    fidelity = next((value for key, value in scores.items() if "Skill Fidelity" in key), "-")
+    checks = "pass" if outcome.report.passed else "fail"
+    lines = [
+        "SCENARIO  AGENT  STATUS  CHECKS  USE  COMPLETE  FIDELITY",
+        f"{outcome.golden.id}  {outcome.spec_id}  {status}  {checks}  {use}  {complete}  {fidelity}",
+    ]
+    lines.append(
+        f"attempt={outcome.attempt_id} scoring={outcome.scoring_id} artifact={outcome.artifact_path}"
+    )
+    if outcome.error:
+        lines.append(f"ERROR [{outcome.error_stage}]: {outcome.error}")
+    for check in (
+        outcome.report.failures + outcome.report.unexercised + outcome.report.not_applicable
+    ):
+        lines.append(f"{check.status.upper()} {check.name}: {check.detail}")
+    for metric in outcome.metrics:
+        if not metric.success:
+            lines.append(f"METRIC {metric.name}: {metric.reason}")
+    return "\n".join(lines)
 
 
 def _score(
@@ -315,7 +361,7 @@ def _score(
     whose preconditions are absent is recorded ``n/a`` with the specific missing
     precondition rather than silently skipped (plan §3.3).
     """
-    from deepeval.evaluate import AsyncConfig, CacheConfig, evaluate
+    from deepeval.evaluate import AsyncConfig, CacheConfig, DisplayConfig, evaluate
 
     from evals.agent.transcript import AttemptArtifact
     from evals.deepeval_helpers import (
@@ -358,6 +404,7 @@ def _score(
             test_cases=[case],
             metrics=metrics,
             async_config=AsyncConfig(run_async=False),
+            display_config=DisplayConfig(show_indicator=False, print_results=False),
             # Metric names are stable across versions; do not reuse old scores.
             cache_config=CacheConfig(use_cache=False, write_cache=False),
         )
@@ -400,7 +447,7 @@ def _score_fidelity(
     Conditional on routing — with no skill loaded there is nothing to adhere to,
     so the result is ``n/a`` with a reason, never 0.0.
     """
-    from deepeval.evaluate import AsyncConfig, evaluate
+    from deepeval.evaluate import AsyncConfig, CacheConfig, DisplayConfig, evaluate
 
     from evals.deepeval_helpers import (
         build_mcp_server_from_schemas,
@@ -430,7 +477,11 @@ def _score_fidelity(
     )
     try:
         result = evaluate(
-            test_cases=[case], metrics=[metric], async_config=AsyncConfig(run_async=False)
+            test_cases=[case],
+            metrics=[metric],
+            async_config=AsyncConfig(run_async=False),
+            display_config=DisplayConfig(show_indicator=False, print_results=False),
+            cache_config=CacheConfig(use_cache=False, write_cache=False),
         )
     except Exception as exc:  # noqa: BLE001
         report.add("skill_fidelity", "n/a", f"rubric failed: {type(exc).__name__}: {exc}")

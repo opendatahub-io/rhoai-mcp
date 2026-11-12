@@ -6,10 +6,9 @@ on:
       judge_provider:
         description: "Judge LLM provider"
         required: false
-        default: "enmaas"
+        default: "google-vertex"
         type: choice
         options:
-          - enmaas
           - google-vertex
           - google-genai
           - openai
@@ -20,7 +19,7 @@ on:
       judge_model:
         description: "Judge LLM model for DeepEval metrics"
         required: false
-        default: "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+        default: "gemini-2.5-flash"
         type: string
       inference_model:
         description: "Inference model for Llama Stack agent"
@@ -65,18 +64,15 @@ jobs:
     env:
       # Judge LLM settings
       RHOAI_EVAL_EVAL_PROVIDER: >-
-        ${{ inputs.judge_provider || 'enmaas' }}
+        ${{ inputs.judge_provider || 'google-vertex' }}
       RHOAI_EVAL_EVAL_MODEL: >-
-        ${{ inputs.judge_model || 'rits/deepseek-ai/DeepSeek-V4.1-Flash-1017' }}
-      ENMAAS_KEY: ${{ secrets.ENMAAS_KEY }}
+        ${{ inputs.judge_model || 'gemini-2.5-flash' }}
       RHOAI_EVAL_EVAL_API_KEY: >-
         ${{ (inputs.judge_provider == 'anthropic' || inputs.judge_provider == 'anthropic-vertex')
               && secrets.ANTHROPIC_API_KEY
             || (inputs.judge_provider == 'openai' || inputs.judge_provider == 'vllm' || inputs.judge_provider == 'azure')
               && secrets.OPENAI_API_KEY
-            || (inputs.judge_provider == 'google-vertex' || inputs.judge_provider == 'google-genai')
-              && secrets.GOOGLE_API_KEY
-            || '' }}
+            || secrets.GOOGLE_API_KEY }}
       RHOAI_EVAL_VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
       RHOAI_EVAL_VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
       # LCS endpoint (container service)
@@ -121,14 +117,6 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --group eval
-
-      - name: Check EnMaaS judge credential
-        if: env.RHOAI_EVAL_EVAL_PROVIDER == 'enmaas'
-        run: |
-          if [ -z "$ENMAAS_KEY" ]; then
-            echo "::error::Set the ENMAAS_KEY repository secret for the DeepSeek judge."
-            exit 1
-          fi
 
       - name: Restore eval history cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0

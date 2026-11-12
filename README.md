@@ -171,6 +171,17 @@ When [required](deploy/kustomize/overlays/openshift-oidc/README.md), apply the N
 oc apply -f deploy/kustomize/overlays/openshift/networkpolicy.yaml
 ```
 
+## Testing Layers
+
+Behavioral testing is split across two layers with different scopes:
+
+| Layer | What it covers | Where |
+|---|---|---|
+| **In-repo smoke lane** (`Smoke E2E (KinD)` workflow) | Golden path on every PR: server boot and health, RBAC list-filtering and call-denial for two personas, and a token-rotation case — the server deployed into a KinD cluster in token-review mode, driven by a raw JSON-RPC client ([`ci/smoke/smoke_test.py`](ci/smoke/smoke_test.py)). SDK-agnostic on purpose: the client uses no MCP SDK, so the lane is inert to SDK upgrades. Runs in ~5–15 minutes. | [`.github/workflows/smoke-kind.yml`](.github/workflows/smoke-kind.yml) |
+| **Full E2E suite** (opendatahub-tests) | Post-deployment breadth: the MCP Gateway path, model-serving tool calls against real components, JWT/OIDC mode, and the full RBAC matrix — against productized, digest-pinned images on a real cluster. | [`opendatahub-tests`](https://github.com/opendatahub-io/opendatahub-tests) `tests/rhoai_mcp/` |
+
+The smoke lane is deliberately *not* a duplicate of the full suite: no gateway, no model-serving tool calls, no JWT/OIDC mode. It exists so that `main` (and long-lived branches) get behavioral signal at merge time without waiting on a deployment.
+
 ## Configuration
 
 The server can be configured via environment variables (with `RHOAI_MCP_` prefix) or a `.env` file.

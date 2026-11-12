@@ -10,6 +10,7 @@ import os
 from typing import TYPE_CHECKING
 
 from rhoai_mcp.domains.permissions import (
+    AUTOML_PERMISSIONS,
     CONNECTIONS_PERMISSIONS,
     INFERENCE_PERMISSIONS,
     NOTEBOOKS_PERMISSIONS,
@@ -127,6 +128,37 @@ class InferencePlugin(BasePlugin):
             InferenceCRDs.SERVING_RUNTIME,
             InferenceCRDs.TEMPLATE,
         ]
+
+
+class AutoMLPlugin(BasePlugin):
+    """Plugin for exposed AutoGluon classification and regression deployments."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            PluginMetadata(
+                name="automl",
+                version="0.1.0",
+                description="Exposed AutoGluon deployment discovery and prediction",
+                maintainer="rhoai-mcp@redhat.com",
+                requires_crds=["InferenceService"],
+            )
+        )
+
+    @hookimpl
+    def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+        from rhoai_mcp.domains.automl.tools import register_tools
+
+        register_tools(mcp, server)
+
+    @hookimpl
+    def rhoai_get_tool_permissions(self) -> dict[str, list[dict[str, str]]]:
+        return AUTOML_PERMISSIONS
+
+    @hookimpl
+    def rhoai_get_crd_definitions(self) -> list[CRDDefinition]:
+        from rhoai_mcp.domains.inference.crds import InferenceCRDs
+
+        return [InferenceCRDs.INFERENCE_SERVICE]
 
 
 class PipelinesPlugin(BasePlugin):
@@ -404,6 +436,7 @@ def get_core_plugins() -> list[BasePlugin]:
         ProjectsPlugin(),
         NotebooksPlugin(),
         InferencePlugin(),
+        AutoMLPlugin(),
         PipelinesPlugin(),
         ConnectionsPlugin(),
         StoragePlugin(),

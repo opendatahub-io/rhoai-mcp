@@ -610,6 +610,8 @@ RHOAI_EVAL_LLM_MODEL=gpt-4o uv run --group eval pytest evals/ -v -m "eval and no
 
 The skill suite runs Pydantic AI with both Navigator skills available for discovery and the real MCP server over stdio with a fresh mock cluster per attempt. Set `ENMAAS_KEY` for the default `enmaas-deepseek` agent. The independently configured judge defaults to EnMaaS DeepSeek; environment variables or `.env.eval` can override it. Commented shared settings in `.env.eval.example` leave the legacy and skill defaults intact.
 
+Pytest runs and Makefile recipes opt out of DeepEval telemetry by default, including `make eval-rescore`. Set `DEEPEVAL_TELEMETRY_OPT_OUT=NO` explicitly to enable it. Non-pytest commands run outside Make require the variable to be set separately.
+
 Set `RHOAI_EVAL_AGENT_MODELS=all` to select all four EnMaaS profiles, or provide a comma-separated list of profile IDs.
 
 ```bash

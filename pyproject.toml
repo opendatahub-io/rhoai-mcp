@@ -111,7 +111,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-ra -q"
+pythonpath = ["."]
+# Load the eval-specific defaults early, before third-party plugins are imported.
+addopts = "-p evals.pytest_defaults -ra -q"
 markers = [
     "eval: MCP evaluation tests (require LLM provider)",
     "live: tests requiring a live OpenShift cluster",

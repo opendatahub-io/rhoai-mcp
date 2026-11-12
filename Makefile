@@ -18,6 +18,9 @@ PORT ?= 8000
 KUBECONFIG ?= $(HOME)/.kube/config
 LOG_LEVEL ?= INFO
 
+# Disable DeepEval telemetry for all Makefile recipes unless explicitly overridden.
+export DEEPEVAL_TELEMETRY_OPT_OUT ?= YES
+
 # Build platform (force linux/amd64 for consistent builds across host architectures)
 PLATFORM ?= linux/amd64
 

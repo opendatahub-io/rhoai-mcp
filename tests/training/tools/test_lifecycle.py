@@ -23,6 +23,7 @@ class TestLifecycleTools:
         """Create a mock RHOAIServer."""
         server = MagicMock()
         server.k8s = MagicMock()
+        server.get_k8s = MagicMock(return_value=server.k8s)
         server.k8s.core_v1 = MagicMock()
         server.config.is_operation_allowed.return_value = (True, None)
         server.config.read_only_mode = False

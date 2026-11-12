@@ -322,7 +322,7 @@ class ModelRegistryPlugin(BasePlugin):
         if server.config.model_registry_discovery_mode == ModelRegistryDiscoveryMode.AUTO:
             from rhoai_mcp.domains.model_registry.discovery import ModelRegistryDiscovery
 
-            discovery = ModelRegistryDiscovery(server.k8s)
+            discovery = ModelRegistryDiscovery(server.get_shared_k8s())
             result = discovery.discover(fallback_url=server.config.model_registry_url)
 
             if result:

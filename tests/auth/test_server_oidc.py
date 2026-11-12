@@ -17,8 +17,8 @@ class TestServerOIDCIntegration:
         server = RHOAIServer(config)
         server.create_mcp()
         # Should return the shared mock client
-        assert server.k8s is not None
-        assert server.k8s.is_connected
+        assert server.get_k8s(None) is not None
+        assert server.get_k8s(None).is_connected
 
     def test_k8s_property_raises_when_no_user_context_under_oidc(self) -> None:
         config = RHOAIConfig(
@@ -32,7 +32,7 @@ class TestServerOIDCIntegration:
         server._k8s_client.is_connected = True
         # Without user context under OIDC, should fail closed
         with pytest.raises(RHOAIError, match="no UserContext is set"):
-            _ = server.k8s
+            server.get_k8s(None)
 
     def test_k8s_property_returns_impersonating_client_with_user_context(self) -> None:
         from rhoai_mcp.auth.user_context import UserContext
@@ -54,7 +54,7 @@ class TestServerOIDCIntegration:
         ctx = UserContext(username="alice", groups=["team-a"])
         token = UserContext.set_current(ctx)
         try:
-            result = server.k8s
+            result = server.get_k8s(None)
             mock_client.create_impersonating_client.assert_called_once_with("alice", ["team-a"])
             assert result is mock_imp_client
         finally:
@@ -81,7 +81,7 @@ class TestServerOIDCIntegration:
         ctx = UserContext(username="alice", groups=["team-a"], token=SecretStr("alice-token"))
         token = UserContext.set_current(ctx)
         try:
-            result = server.k8s
+            result = server.get_k8s(None)
             mock_client.create_user_token_client.assert_called_once()
             call_token = mock_client.create_user_token_client.call_args[0][0]
             assert call_token.get_secret_value() == "alice-token"
@@ -110,7 +110,7 @@ class TestServerOIDCIntegration:
         token = UserContext.set_current(ctx)
         try:
             with pytest.raises(RHOAIError, match="no token is available"):
-                _ = server.k8s
+                server.get_k8s(None)
         finally:
             UserContext.reset_current(token)
 
@@ -135,7 +135,7 @@ class TestServerOIDCIntegration:
         ctx = UserContext(username="bob", groups=["team-b"], token=SecretStr("bob-token"))
         token = UserContext.set_current(ctx)
         try:
-            result = server.k8s
+            result = server.get_k8s(None)
             mock_client.create_impersonating_client.assert_called_once_with("bob", ["team-b"])
             mock_client.create_user_token_client.assert_not_called()
             assert result is mock_imp_client
@@ -309,15 +309,3 @@ class TestGetK8sTokenPrecedence:
         finally:
             UserContext.reset_current(token)
 
-    def test_k8s_property_delegates_to_get_k8s(self) -> None:
-        from rhoai_mcp.auth.user_context import UserContext
-
-        server = self._make_server()
-        ctx = UserContext(username="alice", groups=[], token=SecretStr("session-token"))
-        token = UserContext.set_current(ctx)
-        try:
-            _client = server.k8s  # noqa: F841 — exercising the deprecated property
-            call_token = server._k8s_client.create_user_token_client.call_args[0][0]
-            assert call_token.get_secret_value() == "session-token"
-        finally:
-            UserContext.reset_current(token)

@@ -24,7 +24,7 @@ def register_core_resources(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns overall cluster status including RHOAI operator status,
         available components, and loaded plugins.
         """
-        k8s = server.k8s
+        k8s = server.get_k8s(None)
         pm = server._plugin_manager
 
         result: dict[str, Any] = {
@@ -109,7 +109,7 @@ def register_core_resources(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns the list of AcceleratorProfile resources that define
         available GPU types and configurations.
         """
-        k8s = server.k8s
+        k8s = server.get_k8s(None)
 
         try:
             accelerators = k8s.list_resources(CRDs.ACCELERATOR_PROFILE)

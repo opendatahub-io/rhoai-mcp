@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.cluster.client import ClusterClient
 from rhoai_mcp.domains.training.client import TrainingClient
@@ -73,6 +73,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         previous: bool = False,
         # Delete parameter
         confirm: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Unified training operations using action parameter.
 
@@ -142,16 +143,17 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         # Route to appropriate handler
         # At this point, namespace is validated for actions that require it
         if action_lower == "list":
-            return _action_list(server, namespace)  # type: ignore[arg-type]
+            return _action_list(server, ctx, namespace)  # type: ignore[arg-type]
         elif action_lower == "get":
-            return _action_get(server, namespace, name)
+            return _action_get(server, ctx, namespace, name)
         elif action_lower == "status":
-            return _action_status(server, namespace, name)
+            return _action_status(server, ctx, namespace, name)
         elif action_lower == "progress":
-            return _action_progress(server, namespace, name)
+            return _action_progress(server, ctx, namespace, name)
         elif action_lower == "create":
             return _action_create(
                 server,
+                ctx,
                 namespace,
                 name,
                 model_id,
@@ -167,24 +169,24 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
                 confirmed,
             )
         elif action_lower == "suspend":
-            return _action_suspend(server, namespace, name)
+            return _action_suspend(server, ctx, namespace, name)
         elif action_lower == "resume":
-            return _action_resume(server, namespace, name)
+            return _action_resume(server, ctx, namespace, name)
         elif action_lower == "delete":
-            return _action_delete(server, namespace, name, confirm)
+            return _action_delete(server, ctx, namespace, name, confirm)
         elif action_lower == "logs":
-            return _action_logs(server, namespace, name, container, tail_lines, previous)
+            return _action_logs(server, ctx, namespace, name, container, tail_lines, previous)
         elif action_lower == "events":
-            return _action_events(server, namespace, name)
+            return _action_events(server, ctx, namespace, name)
         elif action_lower == "checkpoints":
-            return _action_checkpoints(server, namespace, name)
+            return _action_checkpoints(server, ctx, namespace, name)
         elif action_lower == "estimate":
-            return _action_estimate(server, model_id, method)
+            return _action_estimate(server, ctx, model_id, method)
         elif action_lower == "validate":
-            return _action_validate(server, namespace, model_id, dataset_id, runtime_name)
+            return _action_validate(server, ctx, namespace, model_id, dataset_id, runtime_name)
         elif action_lower == "prerequisites":
             return _action_prerequisites(
-                server, namespace, model_id, dataset_id, checkpoint_storage
+                server, ctx, namespace, model_id, dataset_id, checkpoint_storage
             )
 
         return {"error": f"Action '{action_lower}' not implemented"}
@@ -208,9 +210,9 @@ _VALID_ACTIONS = {
 }
 
 
-def _action_list(server: RHOAIServer, namespace: str) -> dict[str, Any]:
+def _action_list(server: RHOAIServer, ctx: Context | None, namespace: str) -> dict[str, Any]:
     """List training jobs."""
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     jobs = client.list_training_jobs(namespace)
 
     return {
@@ -229,12 +231,17 @@ def _action_list(server: RHOAIServer, namespace: str) -> dict[str, Any]:
     }
 
 
-def _action_get(server: RHOAIServer, namespace: str | None, name: str | None) -> dict[str, Any]:
+def _action_get(
+    server: RHOAIServer,
+    ctx: Context | None,
+    namespace: str | None,
+    name: str | None,
+) -> dict[str, Any]:
     """Get training job details."""
     if namespace is None or name is None:
         return {"error": "namespace and name are required for get action"}
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     job = client.get_training_job(namespace, name)
 
     result: dict[str, Any] = {
@@ -265,12 +272,17 @@ def _action_get(server: RHOAIServer, namespace: str | None, name: str | None) ->
     return result
 
 
-def _action_status(server: RHOAIServer, namespace: str | None, name: str | None) -> dict[str, Any]:
+def _action_status(
+    server: RHOAIServer,
+    ctx: Context | None,
+    namespace: str | None,
+    name: str | None,
+) -> dict[str, Any]:
     """Quick status check."""
     if namespace is None or name is None:
         return {"error": "namespace and name are required for status action"}
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     job = client.get_training_job(namespace, name)
 
     return {
@@ -283,13 +295,16 @@ def _action_status(server: RHOAIServer, namespace: str | None, name: str | None)
 
 
 def _action_progress(
-    server: RHOAIServer, namespace: str | None, name: str | None
+    server: RHOAIServer,
+    ctx: Context | None,
+    namespace: str | None,
+    name: str | None,
 ) -> dict[str, Any]:
     """Get training progress."""
     if namespace is None or name is None:
         return {"error": "namespace and name are required for progress action"}
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     job = client.get_training_job(namespace, name)
 
     if not job.progress:
@@ -318,6 +333,7 @@ def _action_progress(
 
 def _action_create(
     server: RHOAIServer,
+    ctx: Context | None,
     namespace: str | None,
     name: str | None,
     model_id: str | None,
@@ -389,7 +405,7 @@ def _action_create(
         }
 
     # Create the job
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     job = client.create_training_job(
         namespace=namespace,
         name=job_name,
@@ -415,12 +431,17 @@ def _action_create(
     }
 
 
-def _action_suspend(server: RHOAIServer, namespace: str | None, name: str | None) -> dict[str, Any]:
+def _action_suspend(
+    server: RHOAIServer,
+    ctx: Context | None,
+    namespace: str | None,
+    name: str | None,
+) -> dict[str, Any]:
     """Suspend a training job."""
     if namespace is None or name is None:
         return {"error": "namespace and name are required for suspend action"}
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     client.suspend_training_job(namespace, name)
 
     return {
@@ -432,12 +453,17 @@ def _action_suspend(server: RHOAIServer, namespace: str | None, name: str | None
     }
 
 
-def _action_resume(server: RHOAIServer, namespace: str | None, name: str | None) -> dict[str, Any]:
+def _action_resume(
+    server: RHOAIServer,
+    ctx: Context | None,
+    namespace: str | None,
+    name: str | None,
+) -> dict[str, Any]:
     """Resume a training job."""
     if namespace is None or name is None:
         return {"error": "namespace and name are required for resume action"}
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     client.resume_training_job(namespace, name)
 
     return {
@@ -450,7 +476,11 @@ def _action_resume(server: RHOAIServer, namespace: str | None, name: str | None)
 
 
 def _action_delete(
-    server: RHOAIServer, namespace: str | None, name: str | None, confirm: bool
+    server: RHOAIServer,
+    ctx: Context | None,
+    namespace: str | None,
+    name: str | None,
+    confirm: bool,
 ) -> dict[str, Any]:
     """Delete a training job."""
     if namespace is None or name is None:
@@ -466,7 +496,7 @@ def _action_delete(
             "message": f"To delete '{name}', call training(action='delete', confirm=True, ...).",
         }
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     try:
         client.delete_training_job(namespace, name)
     except NotManagedByMCPError as e:
@@ -483,6 +513,7 @@ def _action_delete(
 
 def _action_logs(
     server: RHOAIServer,
+    ctx: Context | None,
     namespace: str | None,
     name: str | None,
     container: str,
@@ -493,7 +524,7 @@ def _action_logs(
     if namespace is None or name is None:
         return {"error": "namespace and name are required for logs action"}
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     logs = client.get_training_logs(
         namespace, name, container=container, tail_lines=tail_lines, previous=previous
     )
@@ -507,12 +538,17 @@ def _action_logs(
     }
 
 
-def _action_events(server: RHOAIServer, namespace: str | None, name: str | None) -> dict[str, Any]:
+def _action_events(
+    server: RHOAIServer,
+    ctx: Context | None,
+    namespace: str | None,
+    name: str | None,
+) -> dict[str, Any]:
     """Get job events."""
     if namespace is None or name is None:
         return {"error": "namespace and name are required for events action"}
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
     events = client.get_job_events(namespace, name)
 
     warnings = [e for e in events if e.get("type") == "Warning"]
@@ -528,7 +564,10 @@ def _action_events(server: RHOAIServer, namespace: str | None, name: str | None)
 
 
 def _action_checkpoints(
-    server: RHOAIServer, namespace: str | None, name: str | None
+    server: RHOAIServer,
+    ctx: Context | None,
+    namespace: str | None,
+    name: str | None,
 ) -> dict[str, Any]:
     """Get checkpoint information."""
     if namespace is None or name is None:
@@ -538,7 +577,7 @@ def _action_checkpoints(
 
     from rhoai_mcp.domains.training.crds import TrainingCRDs
 
-    resource = server.k8s.get(TrainingCRDs.TRAIN_JOB, name, namespace=namespace)
+    resource = server.get_k8s(ctx).get(TrainingCRDs.TRAIN_JOB, name, namespace=namespace)
     annotations = getattr(resource.metadata, "annotations", {}) or {}
     checkpoint_annotation = annotations.get("trainer.opendatahub.io/checkpoint", "")
 
@@ -570,6 +609,7 @@ def _action_checkpoints(
 
 def _action_estimate(
     server: RHOAIServer,  # noqa: ARG001
+    ctx: Context | None,  # noqa: ARG001
     model_id: str | None,
     method: str,
 ) -> dict[str, Any]:
@@ -612,6 +652,7 @@ def _action_estimate(
 
 def _action_validate(
     server: RHOAIServer,
+    ctx: Context | None,
     namespace: str | None,
     model_id: str | None,
     dataset_id: str | None,
@@ -636,7 +677,7 @@ def _action_validate(
     try:
         from rhoai_mcp.domains.training.crds import TrainingCRDs
 
-        server.k8s.get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, runtime_name)
+        server.get_k8s(ctx).get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, runtime_name)
     except (NotFoundError, RHOAIError):
         errors.append(f"Runtime '{runtime_name}' not found")
 
@@ -666,6 +707,7 @@ def _action_validate(
 
 def _action_prerequisites(
     server: RHOAIServer,
+    ctx: Context | None,
     namespace: str | None,
     model_id: str | None,
     dataset_id: str | None,
@@ -683,7 +725,7 @@ def _action_prerequisites(
     actions_needed = []
     all_passed = True
 
-    client = TrainingClient(server.k8s)
+    client = TrainingClient(server.get_k8s(ctx))
 
     # Check cluster connectivity and GPUs
     try:
@@ -775,7 +817,7 @@ def _action_prerequisites(
     # Check storage if specified
     if checkpoint_storage:
         try:
-            pvc = server.k8s.get_pvc(checkpoint_storage, namespace)
+            pvc = server.get_k8s(ctx).get_pvc(checkpoint_storage, namespace)
             pvc_phase = pvc.status.phase if pvc.status else "Unknown"
             if pvc_phase == "Bound":
                 checks.append(

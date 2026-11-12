@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.utils.errors import NotFoundError, ResourceExistsError, RHOAIError
 
@@ -118,6 +118,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         size_gb: int = 100,
         storage_class: str | None = None,
         access_mode: str = "ReadWriteMany",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a PVC for training checkpoints and data.
 
@@ -140,7 +141,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             return {"error": reason}
 
         result = create_training_pvc(
-            k8s=server.k8s,
+            k8s=server.get_k8s(ctx),
             namespace=namespace,
             pvc_name=pvc_name,
             size_gb=size_gb,
@@ -189,6 +190,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     def fix_pvc_permissions(
         namespace: str,
         pvc_name: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Fix permissions on a PVC for training jobs.
 
@@ -212,7 +214,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
 
         # Verify PVC exists
         try:
-            pvc = server.k8s.get_pvc(pvc_name, namespace)
+            pvc = server.get_k8s(ctx).get_pvc(pvc_name, namespace)
             status_phase = pvc.status.phase if pvc.status else "Unknown"
             if status_phase != "Bound":
                 return {

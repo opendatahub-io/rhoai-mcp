@@ -15,6 +15,8 @@ def _register_tools(mock_server: MagicMock) -> dict[str, Any]:
     from rhoai_mcp.domains.projects.tools import register_tools
 
     mcp = MagicMock()
+    # tools call server.get_k8s(ctx); return the configured k8s mock
+    mock_server.get_k8s = MagicMock(return_value=mock_server.k8s)
     registered_tools: dict[str, Any] = {}
 
     def capture_tool() -> Any:

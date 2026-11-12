@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.training.client import TrainingClient
 from rhoai_mcp.domains.training.crds import TrainingCRDs
@@ -19,7 +19,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     """Register training runtime tools with the MCP server."""
 
     @mcp.tool()
-    def get_runtime_details(runtime_name: str) -> dict[str, Any]:
+    def get_runtime_details(runtime_name: str, ctx: Context | None = None) -> dict[str, Any]:
         """Get detailed information about a training runtime.
 
         Returns the complete configuration of a ClusterTrainingRuntime
@@ -31,11 +31,11 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         Returns:
             Runtime configuration details.
         """
-        client = TrainingClient(server.k8s)
+        client = TrainingClient(server.get_k8s(ctx))
         runtime = client.get_cluster_training_runtime(runtime_name)
 
         # Get the full resource for additional details
-        resource = server.k8s.get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, runtime_name)
+        resource = server.get_k8s(ctx).get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, runtime_name)
         spec = dict(resource.spec) if hasattr(resource.spec, "items") else resource.spec or {}
 
         # Parse template details
@@ -74,6 +74,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         model_initializer_image: str | None = None,
         dataset_initializer_image: str | None = None,
         confirmed: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a new ClusterTrainingRuntime.
 
@@ -135,7 +136,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             "spec": spec,
         }
 
-        resource = server.k8s.create(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, body=body)
+        resource = server.get_k8s(ctx).create(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, body=body)
 
         return {
             "success": True,
@@ -147,6 +148,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
     def setup_training_runtime(
         name: str = "mcp-transformers-runtime",
         framework: str = "transformers",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Set up a ClusterTrainingRuntime.
 
@@ -168,7 +170,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
 
         # Check if runtime already exists
         try:
-            server.k8s.get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, name)
+            server.get_k8s(ctx).get(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, name)
             return {
                 "exists": True,
                 "name": name,
@@ -198,7 +200,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             "spec": spec,
         }
 
-        resource = server.k8s.create(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, body=body)
+        resource = server.get_k8s(ctx).create(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, body=body)
 
         return {
             "success": True,
@@ -210,7 +212,9 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         }
 
     @mcp.tool()
-    def delete_runtime(name: str, confirm: bool = False) -> dict[str, Any]:
+    def delete_runtime(
+        name: str, confirm: bool = False, ctx: Context | None = None
+    ) -> dict[str, Any]:
         """Delete a ClusterTrainingRuntime.
 
         Removes a training runtime. Existing training jobs using this
@@ -236,7 +240,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
             }
 
         try:
-            server.k8s.delete(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, name)
+            server.get_k8s(ctx).delete(TrainingCRDs.CLUSTER_TRAINING_RUNTIME, name)
         except NotManagedByMCPError as e:
             return {"error": str(e)}
 

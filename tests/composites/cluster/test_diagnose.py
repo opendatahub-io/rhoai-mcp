@@ -15,6 +15,7 @@ class TestDiagnoseModel:
         """Create a mock RHOAIServer."""
         server = MagicMock()
         server.k8s = MagicMock()
+        server.get_k8s = MagicMock(return_value=server.k8s)
         server.k8s.core_v1 = MagicMock()
         return server
 
@@ -37,7 +38,7 @@ class TestDiagnoseModel:
             ]
             mock_client.get_inference_service_logs.return_value = "Model loaded"
 
-            result = _diagnose_model(mock_server, "my-model", "test-ns")
+            result = _diagnose_model(mock_server, None, "my-model", "test-ns")
 
         assert result["resource"]["name"] == "my-model"
         assert result["resource"]["status"] == "Ready"
@@ -65,7 +66,7 @@ class TestDiagnoseModel:
             mock_client.get_inference_service_events.return_value = []
             mock_client.get_inference_service_logs.return_value = ""
 
-            result = _diagnose_model(mock_server, "my-model", "test-ns")
+            result = _diagnose_model(mock_server, None, "my-model", "test-ns")
 
         assert "Model not ready: Failed" in result["issues_detected"]
 
@@ -92,7 +93,7 @@ class TestDiagnoseModel:
             ]
             mock_client.get_inference_service_logs.return_value = ""
 
-            result = _diagnose_model(mock_server, "my-model", "test-ns")
+            result = _diagnose_model(mock_server, None, "my-model", "test-ns")
 
         assert "Image pull failure" in result["issues_detected"]
         assert any("image name" in fix for fix in result["suggested_fixes"])
@@ -120,7 +121,7 @@ class TestDiagnoseModel:
             ]
             mock_client.get_inference_service_logs.return_value = ""
 
-            result = _diagnose_model(mock_server, "my-model", "test-ns")
+            result = _diagnose_model(mock_server, None, "my-model", "test-ns")
 
         assert "Pod scheduling failed" in result["issues_detected"]
         assert any("GPU" in fix for fix in result["suggested_fixes"])
@@ -148,7 +149,7 @@ class TestDiagnoseModel:
             ]
             mock_client.get_inference_service_logs.return_value = ""
 
-            result = _diagnose_model(mock_server, "my-model", "test-ns")
+            result = _diagnose_model(mock_server, None, "my-model", "test-ns")
 
         assert "Container crash loop" in result["issues_detected"]
 
@@ -175,7 +176,7 @@ class TestDiagnoseModel:
             ]
             mock_client.get_inference_service_logs.return_value = ""
 
-            result = _diagnose_model(mock_server, "my-model", "test-ns")
+            result = _diagnose_model(mock_server, None, "my-model", "test-ns")
 
         assert "Out of memory" in result["issues_detected"]
         assert any("memory" in fix for fix in result["suggested_fixes"])
@@ -188,7 +189,7 @@ class TestDiagnoseModel:
             mock_client = mock_cls.return_value
             mock_client.get_inference_service.side_effect = Exception("not found")
 
-            result = _diagnose_model(mock_server, "my-model", "test-ns")
+            result = _diagnose_model(mock_server, None, "my-model", "test-ns")
 
         assert any("Failed to get model" in i for i in result["issues_detected"])
 
@@ -201,6 +202,7 @@ class TestDiagnoseWorkbench:
         """Create a mock RHOAIServer."""
         server = MagicMock()
         server.k8s = MagicMock()
+        server.get_k8s = MagicMock(return_value=server.k8s)
         server.k8s.core_v1 = MagicMock()
         return server
 
@@ -223,7 +225,7 @@ class TestDiagnoseWorkbench:
             ]
             mock_client.get_workbench_logs.return_value = "Jupyter running"
 
-            result = _diagnose_workbench(mock_server, "my-wb", "test-ns")
+            result = _diagnose_workbench(mock_server, None, "my-wb", "test-ns")
 
         assert result["resource"]["name"] == "my-wb"
         assert result["resource"]["status"] == "Running"
@@ -249,7 +251,7 @@ class TestDiagnoseWorkbench:
             mock_client.get_workbench.return_value = mock_wb
             mock_client.get_workbench_events.return_value = []
 
-            result = _diagnose_workbench(mock_server, "my-wb", "test-ns")
+            result = _diagnose_workbench(mock_server, None, "my-wb", "test-ns")
 
         assert "Workbench is stopped" in result["issues_detected"]
         assert result["logs"] is None
@@ -283,7 +285,7 @@ class TestDiagnoseWorkbench:
             ]
             mock_client.get_workbench_logs.return_value = ""
 
-            result = _diagnose_workbench(mock_server, "my-wb", "test-ns")
+            result = _diagnose_workbench(mock_server, None, "my-wb", "test-ns")
 
         assert "Image pull failure" in result["issues_detected"]
         assert any("image name" in fix for fix in result["suggested_fixes"])
@@ -307,7 +309,7 @@ class TestDiagnoseWorkbench:
             mock_client.get_workbench_events.return_value = []
             mock_client.get_workbench_logs.return_value = ""
 
-            result = _diagnose_workbench(mock_server, "my-wb", "test-ns")
+            result = _diagnose_workbench(mock_server, None, "my-wb", "test-ns")
 
         assert "Workbench is in error state" in result["issues_detected"]
         assert any("events and logs" in fix for fix in result["suggested_fixes"])
@@ -337,7 +339,7 @@ class TestDiagnoseWorkbench:
             ]
             mock_client.get_workbench_logs.return_value = ""
 
-            result = _diagnose_workbench(mock_server, "my-wb", "test-ns")
+            result = _diagnose_workbench(mock_server, None, "my-wb", "test-ns")
 
         assert "Pod scheduling failed" in result["issues_detected"]
 
@@ -349,6 +351,6 @@ class TestDiagnoseWorkbench:
             mock_client = mock_cls.return_value
             mock_client.get_workbench.side_effect = Exception("not found")
 
-            result = _diagnose_workbench(mock_server, "my-wb", "test-ns")
+            result = _diagnose_workbench(mock_server, None, "my-wb", "test-ns")
 
         assert any("Failed to get workbench" in i for i in result["issues_detected"])

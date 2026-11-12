@@ -179,12 +179,21 @@ def check_ungoverned_call_succeeds() -> None:
 
 
 def _kubectl(*args: str, stdin: str | None = None) -> str:
-    """Run kubectl (the smoke script runs in the workflow's cluster context)."""
+    """Run kubectl (the smoke script runs in the workflow's cluster context).
+
+    On failure, raises RuntimeError carrying the command, exit code, and
+    stderr — kubectl writes diagnostics (never tokens) to stderr, and the
+    command identity is what the check runner needs to localize a failure.
+    """
     import subprocess
 
     proc = subprocess.run(
-        ["kubectl", *args], capture_output=True, text=True, check=True, input=stdin
+        ["kubectl", *args], capture_output=True, text=True, check=False, input=stdin
     )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"kubectl {' '.join(args)} exited {proc.returncode}: {proc.stderr.strip()[:300]}"
+        )
     return proc.stdout.strip()
 
 

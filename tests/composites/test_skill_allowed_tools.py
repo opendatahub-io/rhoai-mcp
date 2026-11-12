@@ -31,34 +31,14 @@ SKILLS_DIR = REPO_ROOT / ".claude" / "skills"
 MCP_TOOL_PREFIX = "mcp__"
 MCP_TOOL_RE = re.compile(rf"^{MCP_TOOL_PREFIX}(?P<server>.+?)__(?P<tool>.+)$")
 
-#: Known, accepted gaps: tools both skills declare that a default server does
-#: not expose. Each entry is a deliberate deferral, not an oversight.
-#:
-#: ``get_cluster_resources`` belongs to the ``training`` domain, which is not in
-#: the default plugin set, yet it is listed in the committed tool surface of both
-#: RHAIRFE-1705 and RHAIRFE-1706 (``docs/mcp-api-stability.md``). Exposing it from
-#: a default plugin is deferred; see ``docs/temp/get-cluster-resources-fix.patch``
-#: for a prepared fix. Both skills define an ask-the-customer fallback, so the
-#: flows degrade rather than break.
-#:
-#: **Removing an entry here is the goal.** Adding one should require the same
-#: scrutiny as shipping a skill that names a tool nobody serves.
-KNOWN_UNRESOLVED: dict[str, str] = {
-    "get_cluster_resources": (
-        "training-domain tool absent from the default plugin set; fix deferred, "
-        "skills fall back to asking the customer for GPU inventory"
-    ),
-}
+#: Known, accepted gaps between skill allowlists and default tools.
+KNOWN_UNRESOLVED: dict[str, str] = {}
 
 
 def default_plugins() -> list[str]:
     """The shipped ``enabled_plugins`` default, read from the config itself.
 
-    Read rather than duplicated: if the deferred ``get_cluster_resources`` fix
-    lands by adding ``training`` to the real default set, a hardcoded copy here
-    would keep loading the stale list, the tool would still look unresolved, and
-    the ``KNOWN_UNRESOLVED`` entry would never be retired -- exactly the rot
-    ``test_known_gaps_are_still_gaps`` exists to prevent.
+    Reading the configured default keeps this check aligned with the shipped server.
 
     Uses the field default rather than an instance so an exported
     ``RHOAI_MCP_ENABLED_PLUGINS`` cannot change what this test checks.

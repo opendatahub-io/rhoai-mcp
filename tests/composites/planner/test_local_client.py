@@ -342,7 +342,11 @@ class TestLocalPlannerGenerateConfig:
 
     @pytest.mark.parametrize(
         "model_uri",
-        ["hf://meta-llama/Llama-3.1-70B-Instruct", None, "oci://registry.example.com/models/llama:v1"],
+        [
+            "hf://meta-llama/Llama-3.1-70B-Instruct",
+            None,
+            "oci://registry.example.com/models/llama:v1",
+        ],
     )
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_generate_config_full_flow(

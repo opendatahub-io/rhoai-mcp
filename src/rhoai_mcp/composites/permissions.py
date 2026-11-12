@@ -6,6 +6,9 @@ values are lists of permission dicts with apiGroup, resource, and verb.
 """
 
 CLUSTER_PERMISSIONS: dict[str, list[dict[str, str]]] = {
+    "get_cluster_resources": [
+        {"apiGroup": "", "resource": "nodes", "verb": "list"},
+    ],
     "cluster_summary": [
         {"apiGroup": "project.openshift.io", "resource": "projects", "verb": "list"},
         {"apiGroup": "kubeflow.org", "resource": "notebooks", "verb": "list"},

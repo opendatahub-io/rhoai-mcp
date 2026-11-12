@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 
 def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
     """Register cluster composite tools with the MCP server."""
+    from rhoai_mcp.composites.cluster.inventory import register_cluster_resources
+
+    register_cluster_resources(mcp, server)
 
     @mcp.tool()
     def cluster_summary() -> ClusterSummary:
@@ -245,10 +248,11 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         cluster_info: dict = {"nodes": 0, "gpu_available": 0, "gpu_type": None}
         training_client = None
         try:
+            from rhoai_mcp.domains.cluster.client import ClusterClient
             from rhoai_mcp.domains.training.client import TrainingClient
 
             training_client = TrainingClient(k8s)
-            resources = training_client.get_cluster_resources()
+            resources = ClusterClient(k8s).get_cluster_resources()
             cluster_info["nodes"] = resources.node_count
             if resources.gpu_info:
                 cluster_info["gpu_available"] = resources.gpu_info.available

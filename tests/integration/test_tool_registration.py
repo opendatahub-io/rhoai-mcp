@@ -4,7 +4,9 @@ import re
 from unittest.mock import MagicMock
 
 import pytest
+from mcp.server.fastmcp import FastMCP
 
+from rhoai_mcp.config import RHOAIConfig
 from rhoai_mcp.plugin_manager import PluginManager
 from rhoai_mcp.server import RHOAIServer
 
@@ -103,3 +105,30 @@ def test_minimum_tool_count(all_tools: dict[str, object]) -> None:
     assert len(all_tools) >= 40, (
         f"Expected at least 40 tools, got {len(all_tools)}: {sorted(all_tools.keys())}"
     )
+
+
+@pytest.mark.parametrize(
+    ("plugins", "expected"),
+    [
+        (RHOAIConfig.model_fields["enabled_plugins"].get_default(), True),
+        (["cluster-composites"], True),
+        (["training"], False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_cluster_resources_registration_and_permissions(
+    plugins: list[str] | None, expected: bool
+) -> None:
+    """Only the cluster plugin exposes and governs the inventory tool."""
+    pm = PluginManager()
+    pm.load_core_plugins(enabled_plugins=plugins)
+    mcp = FastMCP("test")
+    pm.register_all_tools(mcp, RHOAIServer())
+    names = [tool.name for tool in await mcp.list_tools()]
+    permissions = pm.collect_tool_permissions()
+    assert names.count("get_cluster_resources") == int(expected)
+    assert ("get_cluster_resources" in permissions) is expected
+    if expected:
+        assert permissions["get_cluster_resources"] == [
+            {"apiGroup": "", "resource": "nodes", "verb": "list"}
+        ]

@@ -89,53 +89,6 @@ def register_tools(mcp: FastMCP, server: "RHOAIServer") -> None:
         return ResponseBuilder.training_job_detail(job, v)
 
     @mcp.tool()
-    def get_cluster_resources() -> dict[str, Any]:
-        """Get cluster-wide compute resources available for training.
-
-        Returns information about CPU, memory, and GPU resources across
-        all nodes in the cluster. Useful for planning training jobs and
-        understanding cluster capacity.
-
-        Returns:
-            Cluster resource summary including CPU, memory, and GPU info.
-        """
-        client = TrainingClient(server.k8s)
-        resources = client.get_cluster_resources()
-
-        result: dict[str, Any] = {
-            "cpu_total": resources.cpu_total,
-            "cpu_allocatable": resources.cpu_allocatable,
-            "memory_total_gb": round(resources.memory_total_gb, 1),
-            "memory_allocatable_gb": round(resources.memory_allocatable_gb, 1),
-            "node_count": resources.node_count,
-            "has_gpus": resources.has_gpus,
-        }
-
-        if resources.gpu_info:
-            result["gpu_info"] = {
-                "type": resources.gpu_info.type,
-                "product": resources.gpu_info.product,
-                "products": resources.gpu_info.products,
-                "total": resources.gpu_info.total,
-                "available": resources.gpu_info.available,
-                "nodes_with_gpu": resources.gpu_info.nodes_with_gpu,
-            }
-
-        # Include per-node details
-        result["nodes"] = [
-            {
-                "name": node.name,
-                "cpu": node.cpu_allocatable,
-                "memory_gb": round(node.memory_allocatable_gb, 1),
-                "gpus": node.gpu_count,
-                "gpu_product": node.gpu_product,
-            }
-            for node in resources.nodes
-        ]
-
-        return result
-
-    @mcp.tool()
     def list_training_runtimes(namespace: str | None = None) -> dict[str, Any]:
         """List available training runtimes.
 

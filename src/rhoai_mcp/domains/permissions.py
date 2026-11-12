@@ -142,9 +142,6 @@ TRAINING_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     "get_training_job": [
         {"apiGroup": "kubeflow.org", "resource": "trainjobs", "verb": "get"},
     ],
-    "get_cluster_resources": [
-        {"apiGroup": "", "resource": "nodes", "verb": "list"},
-    ],
     "list_training_runtimes": [
         {"apiGroup": "kubeflow.org", "resource": "clustertrainingruntimes", "verb": "list"},
     ],

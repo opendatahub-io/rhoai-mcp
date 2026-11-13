@@ -148,6 +148,8 @@ def test_cluster_probe_override_is_scoped_to_the_mock_server(
 ) -> None:
     monkeypatch.setenv("PLANNER_DETECT_CLUSTER_GPUS", "true")
     monkeypatch.setenv("RHOAI_MCP_MOCK_CLUSTER", "true")
+    monkeypatch.setenv("KUBECONFIG", "/custom/kubeconfig")
+    monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "cluster.example")
     monkeypatch.setattr(AgentModelSpec, "build", lambda _self: FunctionModel(echo))
     _agent, toolset = runner.build_agent(SPEC, mock_cluster=mock_cluster)
     transport = toolset.client.transport
@@ -156,7 +158,7 @@ def test_cluster_probe_override_is_scoped_to_the_mock_server(
     assert transport.env == (
         {"PLANNER_DETECT_CLUSTER_GPUS": "false"}
         if mock_cluster
-        else {"RHOAI_MCP_MOCK_CLUSTER": "false"}
+        else {**os.environ, "RHOAI_MCP_MOCK_CLUSTER": "false"}
     )
     assert os.environ["PLANNER_DETECT_CLUSTER_GPUS"] == "true"
 

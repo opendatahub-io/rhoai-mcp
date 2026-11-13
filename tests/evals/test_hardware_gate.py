@@ -155,7 +155,12 @@ def discovery(result: Any, *, outcome: str = "success", index: int = 2) -> ToolC
     )
 
 
-def test_successful_discovery_allows_filtered_recommendation_before_customer_reply() -> None:
+@pytest.mark.parametrize(
+    "product", ["NVIDIA A100 80GB", "NVIDIA-A100-SXM4-40GB", "NVIDIA L4", "NVIDIA H100"]
+)
+def test_successful_discovery_allows_filtered_recommendation_before_customer_reply(
+    product: str,
+) -> None:
     transcript = conversation([3])
     transcript.tool_calls.insert(
         0,
@@ -163,7 +168,7 @@ def test_successful_discovery_allows_filtered_recommendation_before_customer_rep
             {
                 "has_gpus": True,
                 "gpu_info": {
-                    "product": "NVIDIA A100 80GB",
+                    "product": product,
                     "total": 4,
                 },
             }
@@ -189,6 +194,8 @@ def test_successful_discovery_allows_filtered_recommendation_before_customer_rep
         ({"has_gpus": True, "gpu_info": {"total": 4}}, "success"),
         ({"has_gpus": True, "gpu_info": {"product": "unknown", "total": 4}}, "success"),
         ({"has_gpus": True, "gpu_info": {"product": "Tesla T4", "total": 4}}, "success"),
+        ({"has_gpus": True, "gpu_info": {"product": "NVIDIA L40", "total": 4}}, "success"),
+        ({"has_gpus": True, "gpu_info": {"product": "NVIDIA L40S", "total": 4}}, "success"),
         ({"has_gpus": True, "gpu_info": {"product": "A100", "total": 4}}, "success"),
         ({"has_gpus": False}, "success"),
     ],

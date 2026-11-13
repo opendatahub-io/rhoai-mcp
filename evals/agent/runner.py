@@ -20,6 +20,7 @@ Lifecycle rules this module exists to enforce:
 
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
@@ -159,7 +160,7 @@ def build_agent(
     env = (
         {"PLANNER_DETECT_CLUSTER_GPUS": "false"}
         if mock_cluster
-        else {"RHOAI_MCP_MOCK_CLUSTER": "false"}
+        else {**os.environ, "RHOAI_MCP_MOCK_CLUSTER": "false"}
     )
     toolset = MCPToolset(StdioTransport(command="uv", args=args, env=env, cwd=str(REPO_ROOT)))
     agent = Agent(

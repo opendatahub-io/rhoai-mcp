@@ -510,8 +510,8 @@ def _check_hardware_confirmation(
         identified = any(
             isinstance(n, str)
             and (
-                ("A100" in n.upper() and ("80" in n or "40" in n))
-                or any(gpu in n.upper() for gpu in ("H100", "H200", "B200", "L4"))
+                (re.search(r"\bA100\b", n, re.I) and ("80" in n or "40" in n))
+                or re.search(r"\b(?:H100|H200|B200|L4)\b", n, re.I)
             )
             for n in names
         )

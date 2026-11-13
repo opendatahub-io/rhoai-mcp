@@ -55,6 +55,11 @@ class TestEnMaaSJudge:
 class TestGoogleJudgeLLMInit:
     """Tests for GoogleJudgeLLM.__init__ use_vertex branches."""
 
+    @pytest.fixture(autouse=True, scope="class")
+    @classmethod
+    def require_google_genai(cls) -> None:
+        pytest.importorskip("google.genai")
+
     @patch("google.genai.Client")
     def test_vertex_express_mode_with_api_key(self, mock_client_cls: MagicMock) -> None:
         """use_vertex=True + api_key → Vertex AI Express mode."""

@@ -67,8 +67,6 @@ jobs:
   test-eval-harness:
     name: Offline Eval Harness Tests
     runs-on: ubuntu-latest
-    env:
-      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

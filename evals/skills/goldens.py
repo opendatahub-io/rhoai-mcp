@@ -189,6 +189,7 @@ class Golden:
                 selection_turn_index=selection,
                 expectation=self.expectation,
                 consent_given=self.consent_given,
+                hardware_reply=self.hardware_reply,
             )
         else:
             raise ValueError(f"no checks defined for skill {self.skill!r}")
@@ -393,6 +394,7 @@ DEPLOY_APPROVED = Golden(
     ),
     approval_reply=APPROVE_REPLY,
     confirmation_reply=CONFIRM_REPLY,
+    hardware_reply=GPU_REPLY,
     selection_reply=DEPLOY_CHOOSE_REPLY,
     consent_given=True,
     expect_handoff=False,

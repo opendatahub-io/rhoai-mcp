@@ -523,6 +523,7 @@ def _check_hardware_confirmation(
         report.add(name, "unexercised", "no configured hardware reply or usable discovery")
         return
     premature = []
+    valid_filtered = []
     for call in recommendations:
         filtered = bool(call.arguments.get("preferred_gpu_types"))
         customer_before = hardware_at is not None and hardware_at < call.turn_index
@@ -539,11 +540,25 @@ def _check_hardware_confirmation(
             if turn.role == "user"
             for clause in re.split(r"[.;!?]", turn.content)
         )
-        if not (
-            (filtered and (discovered or (customer_before and inventory)))
-            or (not filtered and consent)
-        ):
+        filtered_valid = filtered and (discovered or (customer_before and inventory))
+        # An empty slot in a successful, hardware-constrained recommendation
+        # permits the skill's subsequent unfiltered fallback.
+        fallback = any(
+            previous.turn_index < call.turn_index
+            and not previous.is_error
+            and not mapping(previous.structured_result).get("error")
+            and any(
+                slot in mapping(mapping(previous.structured_result).get("recommendations"))
+                and mapping(mapping(previous.structured_result).get("recommendations"))[slot]
+                is None
+                for slot in ("top_balanced", "top_cost", "top_performance", "top_quality")
+            )
+            for previous in valid_filtered
+        )
+        if not (filtered_valid or (not filtered and (consent or fallback))):
             premature.append(call)
+        if filtered_valid:
+            valid_filtered.append(call)
     report.check(
         name,
         not premature,
@@ -757,6 +772,7 @@ def check_navigator_deploy(
     confirmation_turn_index: int | None = None,
     selection_turn_index: int | None = None,
     expectation: SelectionExpectation | None = None,
+    hardware_reply: str | None = None,
 ) -> CheckReport:
     """Deterministic checks for the ``navigator-deploy`` skill (plan §3.1).
 
@@ -769,6 +785,8 @@ def check_navigator_deploy(
     """
     report = CheckReport()
     routed = check_routing(transcript, "navigator-deploy", report)
+
+    _check_hardware_confirmation(transcript, report, hardware_reply)
 
     used = transcript.tool_names_used
     plan_at = _first_call_index(transcript, "plan_deployment")

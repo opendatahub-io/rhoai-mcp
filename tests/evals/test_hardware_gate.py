@@ -6,7 +6,7 @@ from typing import Any, Literal
 import pytest
 from evals.agent.transcript import AgentTranscript, ToolCallRecord, TranscriptTurn, from_pydantic_ai
 from evals.skills.checks import check_navigator
-from evals.skills.goldens import GPU_REPLY, NAVIGATOR_GOLDENS, NAVIGATOR_HAPPY_PATH
+from evals.skills.goldens import DEPLOY_APPROVED, GPU_REPLY, NAVIGATOR_GOLDENS, NAVIGATOR_HAPPY_PATH
 
 from tests.evals.test_skill_agreement import workflow
 
@@ -112,6 +112,34 @@ def test_real_failure_pattern_is_caught_even_after_a_correct_handoff() -> None:
     )
     report = NAVIGATOR_HAPPY_PATH.grade(transcript)
     assert {c.name for c in report.failures} == {CHECK}
+
+
+def test_deployment_rejects_recommendation_before_hardware_reply() -> None:
+    messages = workflow(deploy=True)
+    index = next(
+        i
+        for i, message in enumerate(messages)
+        if any(getattr(part, "content", None) == GPU_REPLY for part in message.parts)
+    )
+    reply = messages.pop(index)
+    messages.insert(index + 2, reply)
+    report = DEPLOY_APPROVED.grade(from_pydantic_ai(messages))
+    assert {c.name for c in report.failures} == {CHECK}
+
+
+def test_fallback_requires_a_successful_prior_constrained_call_with_empty_slot() -> None:
+    transcript = conversation([5, 6])
+    primary, fallback = transcript.tool_calls
+    fallback.arguments["preferred_gpu_types"] = []
+    primary.structured_result = {"recommendations": {"top_balanced": None}}
+    assert status(transcript) == "pass"
+    primary.structured_result = {"recommendations": {"top_balanced": {"model_id": "model"}}}
+    assert status(transcript) == "fail"
+    primary.structured_result = {"error": "failed", "recommendations": {"top_balanced": None}}
+    assert status(transcript) == "fail"
+    primary.structured_result = {"recommendations": {"top_balanced": None}}
+    primary.turn_index = 3
+    assert status(transcript) == "fail"
 
 
 def discovery(result: Any, *, outcome: str = "success", index: int = 2) -> ToolCallRecord:

@@ -641,7 +641,7 @@ def test_documented_unconstrained_fallback_is_allowed_after_empty_slot() -> None
         returns(result("recommend_model", "primary", primary)),
     ]
 
-    assert "navigator_recommend_after_hardware_confirmation" in failures(grade(messages))
+    assert "navigator_recommend_after_hardware_confirmation" not in failures(grade(messages))
 
 
 def test_a_different_chosen_category_uses_its_own_slot() -> None:

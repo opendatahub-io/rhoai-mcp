@@ -12,7 +12,7 @@ from evals.reporting.recorder import EvalRecorder
 from evals.skills.attempt import score_artifact
 from evals.skills.config import SkillEvalConfig
 from evals.skills.goldens import NAVIGATOR_HAPPY_PATH
-from evals.skills.rescore import main
+from evals.skills.rescore import main, rescore
 
 from tests.evals.test_skill_agreement import workflow
 
@@ -73,6 +73,26 @@ def test_legacy_artifact_requires_matching_hash(tmp_path: Path) -> None:
             config=config,
             recorder=recorder,
         )
+
+
+def test_rescore_uses_snapshot_when_scenario_is_unregistered(tmp_path: Path) -> None:
+    path = artifact(tmp_path)
+    config = SkillEvalConfig(_env_file=None)
+    recorder = EvalRecorder(config, path=tmp_path / "history.jsonl")
+    with patch("evals.skills.rescore.GOLDENS_BY_ID", {}):
+        outcomes = rescore([path], config=config, recorder=recorder)
+    assert len(outcomes) == 1
+    assert len(load_records(str(recorder.path))) == 1
+
+
+def test_rescore_legacy_artifact_uses_registry(tmp_path: Path) -> None:
+    path = artifact(tmp_path, snapshot=False)
+    config = SkillEvalConfig(_env_file=None)
+    recorder = EvalRecorder(config, path=tmp_path / "history.jsonl")
+    assert len(rescore([path], config=config, recorder=recorder)) == 1
+    with patch("evals.skills.rescore.GOLDENS_BY_ID", {}):
+        with pytest.raises(ValueError, match="unknown scenario"):
+            rescore([path], config=config, recorder=recorder)
 
 
 def test_missing_required_metric_and_incomplete_execution_cannot_pass(tmp_path: Path) -> None:

@@ -11,7 +11,7 @@ from evals.agent.transcript import AttemptArtifact
 from evals.reporting.recorder import EvalRecorder
 from evals.skills.attempt import RESULTS_ROOT, SKILL_RESULTS_PATH, AttemptOutcome, score_artifact
 from evals.skills.config import SkillEvalConfig
-from evals.skills.goldens import GOLDENS_BY_ID
+from evals.skills.goldens import GOLDENS_BY_ID, Golden
 
 
 def find_artifacts(root: Path, *, run_id: str | None, attempt_id: str | None) -> list[Path]:
@@ -33,9 +33,15 @@ def rescore(
     for path in paths:
         artifact = AttemptArtifact.load(path)
         golden_id = artifact.metadata.get("golden_id", "")
-        golden = GOLDENS_BY_ID.get(golden_id)
-        if golden is None:
-            raise ValueError(f"{path}: unknown scenario {golden_id!r}")
+        snapshot = artifact.metadata.get("scenario_snapshot")
+        if snapshot is not None:
+            golden = Golden.from_snapshot(snapshot)
+            if golden.id != golden_id or golden.skill != artifact.metadata.get("skill"):
+                raise ValueError(f"{path}: saved scenario snapshot does not match artifact identity")
+        else:
+            golden = GOLDENS_BY_ID.get(golden_id)
+            if golden is None:
+                raise ValueError(f"{path}: unknown scenario {golden_id!r}")
         outcomes.append(score_artifact(path, golden, config=cfg, recorder=rec, judge=judge))
     return outcomes
 

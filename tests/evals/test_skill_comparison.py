@@ -395,7 +395,9 @@ def test_replay_only_uses_artifact_time_and_is_not_original(
         build_skill_comparison([rescored], run_ids=["run-a"])
 
 
-def test_marked_replay_without_artifact_has_unknown_execution_time(records: list[EvalRecord]) -> None:
+def test_marked_replay_without_artifact_has_unknown_execution_time(
+    records: list[EvalRecord],
+) -> None:
     rescored = replace(records[0], agent_seconds=0, is_rescore=True, artifact_path="")
     report = build_skill_comparison([rescored], run_ids=["run-a"], scoring="latest")
     assert report.attempts[0].agent_seconds is None

@@ -18,15 +18,23 @@ PORT ?= 8000
 KUBECONFIG ?= $(HOME)/.kube/config
 LOG_LEVEL ?= INFO
 
+# Disable DeepEval telemetry for all Makefile recipes unless explicitly overridden.
+export DEEPEVAL_TELEMETRY_OPT_OUT ?= YES
+
 # Build platform (force linux/amd64 for consistent builds across host architectures)
 PLATFORM ?= linux/amd64
 
 # PyPI index URL for requirements generation (Red Hat internal index).
 PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 
-# Guard: ensure a container runtime was found
+# Keep these paths aligned with the eval harness checks in CI.
+LINT_PATHS := src/ evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
+
+# Guard: ensure a container runtime was found (cleanup does not need one)
+ifneq ($(strip $(MAKECMDGOALS)),evals-clean)
 ifeq ($(CONTAINER_RUNTIME),)
     $(error No container runtime found. Install podman or docker.)
+endif
 endif
 
 # Compose command detection (podman compose or docker compose)
@@ -43,7 +51,8 @@ else
 endif
 
 .PHONY: help build build-no-cache run run-http run-stdio run-dev run-token stop logs shell clean info
-.PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
+.PHONY: dev install sync test test-evals lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
+.PHONY: evals-clean eval-skills eval-skills-judge eval-rescore
 .PHONY: generate-requirements-cpu
 
 # =============================================================================
@@ -58,10 +67,10 @@ help: ## Show this help message
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Development:"
-	@grep -E '^(dev|install|sync|test|lint|format|check|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(dev|install|sync|test|test-evals|lint|format|check|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Evaluation:"
-	@grep -E '^(eval|eval-live|eval-scenario|eval-report|eval-compare|eval-trend):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(eval|eval-live|eval-scenario|eval-report|eval-compare|eval-trend|eval-skills|eval-skills-judge|eval-rescore|evals-clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Container:"
 	@grep -E '^(build|run|stop|logs|shell|clean|info|test-):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -81,8 +90,11 @@ install: ## Install package in development mode
 sync: ## Sync dependencies without installing dev packages
 	uv sync --no-dev
 
-test: ## Run all tests
-	uv run pytest tests/ -v
+test: ## Run tests (excluding evaluation tests)
+	uv run pytest tests/ --ignore=tests/evals -v
+
+test-evals: ## Run offline evaluation tests
+	uv run --group skill-eval pytest tests/evals -v --tb=short
 
 test-unit: ## Run unit tests only (training domain)
 	uv run pytest tests/training -v
@@ -91,12 +103,12 @@ test-integration: ## Run integration tests only
 	uv run pytest tests/integration -v
 
 lint: ## Run linter and formatting (ruff)
-	uv run ruff check src/
-	@uv run ruff format --check src/ || (echo "Formatting issues found. Run 'make format' to fix." && exit 1)
+	uv run ruff check $(LINT_PATHS)
+	@uv run ruff format --check $(LINT_PATHS) || (echo "Formatting issues found. Run 'make format' to fix." && exit 1)
 
 format: ## Format code (ruff)
-	uv run ruff format src/
-	uv run ruff check --fix src/
+	uv run ruff format $(LINT_PATHS)
+	uv run ruff check --fix $(LINT_PATHS)
 
 typecheck: ## Run type checker (mypy)
 	uv run mypy src/
@@ -146,16 +158,20 @@ eval-up: build ## Start eval services (rhoai-mcp + llama-stack + LCS)
 eval-down: ## Stop eval services
 	$(COMPOSE_CMD) -f docker-compose.eval.yml down -v
 
+evals-clean: ## Remove evaluation results while preserving the README
+	@mkdir -p evals/results
+	@find evals/results -depth -mindepth 1 ! -path evals/results/README.md -delete
+
 eval: ## Run MCP evaluation tests (starts services, runs tests, stops services)
 	$(MAKE) eval-up
-	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short --reruns 2 --reruns-delay 5; \
+	uv run --group eval pytest evals/ -v -m "eval and not live and not skill_eval" --tb=short --reruns 2 --reruns-delay 5; \
 	status=$$?; \
 	$(MAKE) eval-down; \
 	exit $$status
 
 eval-live: ## Run all MCP evaluation tests including live cluster
 	$(MAKE) eval-up
-	uv run --group eval pytest evals/ -v -m "eval" --tb=short --reruns 2 --reruns-delay 5; \
+	uv run --group eval pytest evals/ -v -m "eval and not skill_eval" --tb=short --reruns 2 --reruns-delay 5; \
 	status=$$?; \
 	$(MAKE) eval-down; \
 	exit $$status
@@ -170,10 +186,23 @@ eval-report: ## Show latest eval run summary
 	uv run --group eval python -m evals.reporting.cli summary
 
 eval-compare: ## Compare eval scores across providers/models
-	uv run --group eval python -m evals.reporting.cli compare
+	uv run --group eval python -m evals.reporting.cli compare $(ARGS)
 
 eval-trend: ## Show eval score trends over time
 	uv run --group eval python -m evals.reporting.cli trend
+
+# =============================================================================
+# Skill evaluations (Pydantic AI agent over stdio; no LCORE/compose needed)
+# =============================================================================
+
+eval-skills: ## Run both skill suites with deterministic checks
+	uv run --group skill-eval pytest evals/skills -v -s --reruns 0
+
+eval-skills-judge: ## Run both skill suites with the judge
+	RHOAI_EVAL_SKILL_JUDGE=1 uv run --group skill-eval pytest evals/skills -v -s --reruns 0
+
+eval-rescore: ## Re-evaluate a saved attempt (ARGS="--attempt <id> [--judge]")
+	uv run --group skill-eval python -m evals.skills.rescore $(ARGS)
 
 # =============================================================================
 # Requirements

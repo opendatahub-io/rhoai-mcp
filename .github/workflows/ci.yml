@@ -64,6 +64,34 @@ jobs:
       - name: Run mypy
         run: uv run mypy src/
 
+  test-eval-harness:
+    name: Offline Eval Harness Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --locked --group skill-eval
+
+      - name: Check retained eval code
+        run: |
+          uv run --locked --group skill-eval ruff check evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
+          uv run --locked --group skill-eval ruff format --check evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
+
+      - name: Run offline eval harness tests
+        run: uv run --locked --group skill-eval pytest tests/evals -v --tb=short
+
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

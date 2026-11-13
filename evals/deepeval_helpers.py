@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -14,14 +15,23 @@ from deepeval.test_case import (
 )
 from mcp.types import CallToolResult, TextContent, Tool
 
+from evals.agent.transcript import LOAD_CAPABILITY_ARG_KEYS, AgentTranscript, ToolCallRecord
 from evals.lcs_client import LCSResult
 
 logger = logging.getLogger(__name__)
 
 
-async def fetch_tool_schemas(
-    rhoai_mcp_url: str, transport: str = "sse"
-) -> list[Tool]:
+class NothingToScoreError(ValueError):
+    """Raised when a transcript has no turns and so cannot be scored.
+
+    A harness error can legitimately end an attempt before any message exists
+    (failed agent construction, failed MCP handshake). The artifact is still
+    saved, but DeepEval rejects an empty ``ConversationalTestCase``, so callers
+    must record ``n/a`` with the missing precondition rather than a zero score.
+    """
+
+
+async def fetch_tool_schemas(rhoai_mcp_url: str, transport: str = "sse") -> list[Tool]:
     """Fetch tool schemas from a running rhoai-mcp server.
 
     Args:
@@ -43,9 +53,7 @@ async def fetch_tool_schemas(
 
         client_context = streamable_http_client(f"{base}/mcp")
     else:
-        raise ValueError(
-            f"Unsupported transport {transport!r}: must be 'sse' or 'streamable-http'"
-        )
+        raise ValueError(f"Unsupported transport {transport!r}: must be 'sse' or 'streamable-http'")
 
     async with client_context as streams:
         read_stream, write_stream = streams[0], streams[1]
@@ -113,21 +121,20 @@ def lcs_result_to_conversational_test_case(
             mcp_tools_called = []
             for _ in tool_calls_in_msg:
                 if tc_index < len(result.tool_calls):
-                    mcp_tools_called.append(
-                        _lcs_tool_call_to_deepeval(result.tool_calls[tc_index])
-                    )
+                    mcp_tools_called.append(_lcs_tool_call_to_deepeval(result.tool_calls[tc_index]))
                     tc_index += 1
 
             if mcp_tools_called:
-                turn = Turn(
-                    role="assistant",
-                    content=content,
-                    mcp_tools_called=mcp_tools_called,
+                # No _mcp_interaction assignment: as of deepeval 4.3.1 it is a
+                # derived read-only property that is already True whenever
+                # mcp_tools_called is non-empty, and assigning to it raises.
+                turns.append(
+                    Turn(
+                        role="assistant",
+                        content=content,
+                        mcp_tools_called=mcp_tools_called,
+                    )
                 )
-                # Work around DeepEval/Pydantic V2 bug where PrivateAttr
-                # _mcp_interaction doesn't get set from model_validator data dict
-                turn._mcp_interaction = True
-                turns.append(turn)
             else:
                 turns.append(Turn(role="assistant", content=content))
 
@@ -139,6 +146,155 @@ def lcs_result_to_conversational_test_case(
     )
 
 
+def _record_to_mcp_tool_call(record: ToolCallRecord) -> MCPToolCall:
+    """Convert a shared-contract tool call into a typed DeepEval MCPToolCall.
+
+    DeepEval validates by isinstance against ``mcp.types``, so the result must be
+    a real ``CallToolResult``; a dict-shaped result is rejected. Structured
+    content and the error flag are preserved rather than flattened to a string,
+    since ``MultiTurnMCPUseMetric`` scores arguments as well as tool choice.
+    """
+    structured = record.structured_result
+    payload = structured if structured is not None else record.result_text
+    return MCPToolCall(
+        name=record.name,
+        args=record.arguments,
+        result=CallToolResult(
+            content=[TextContent(type="text", text=record.result_text or "")],
+            # DeepEval reads ``structuredContent["result"]`` unconditionally
+            # (metrics/mcp/utils.py: no .get(), no fallback), so the payload
+            # must be wrapped under that key or every MCP metric raises
+            # KeyError before the judge is even called. Passing the raw tool
+            # result straight through looks more faithful but breaks scoring.
+            structuredContent={"result": payload},
+            isError=record.is_error,
+        ),
+    )
+
+
+#: Tool arguments are rendered in full up to this length. Truncating silently
+#: made a fidelity judge report the agent's tool calls as "malformed or
+#: truncated" and dock the score for it — the rubric was grading our rendering,
+#: not the agent. When truncation is unavoidable it is now labelled as ours.
+MAX_RENDERED_ARGS = 1500
+
+
+def _render_args(arguments: dict[str, Any]) -> str:
+    """Render tool arguments for a content-only rubric, truncation made explicit."""
+    rendered = json.dumps(arguments, ensure_ascii=False)
+    if len(rendered) <= MAX_RENDERED_ARGS:
+        return rendered
+    return f"{rendered[:MAX_RENDERED_ARGS]}… <args truncated for display, call was complete>"
+
+
+def _render_fidelity_call(call: ToolCallRecord) -> str:
+    rendered = f"[called tool: {call.name}({_render_args(call.arguments)})"
+    rendered += " -> ERROR]" if call.is_error else "]"
+    if call.name == "plan_deployment" and isinstance(call.structured_result, dict):
+        evidence = {
+            key: call.structured_result[key]
+            for key in ("ready", "issues", "warnings")
+            if key in call.structured_result
+        }
+        rendered += (
+            f"\n[internal tool result: {call.name}, call_id={call.call_id}; "
+            "not customer-visible prose] " + json.dumps(evidence, ensure_ascii=False)
+        )
+    return rendered
+
+
+def _render_skill_load(call: ToolCallRecord) -> str:
+    skill = next(
+        (str(call.arguments[key]) for key in LOAD_CAPABILITY_ARG_KEYS if call.arguments.get(key)),
+        call.name,
+    )
+    if not call.is_error:
+        return f"[loaded skill: {skill}]"
+    outcome = call.outcome or "incomplete"
+    diagnostic = call.error or call.result_text
+    detail = f"; {diagnostic}" if diagnostic else ""
+    return f"[skill load: {skill}; outcome: {outcome}{detail}]"
+
+
+def transcript_to_conversational_test_case(
+    transcript: AgentTranscript,
+    mcp_server: MCPServer,
+    *,
+    include_skill_body: bool = False,
+    skill: str | None = None,
+    annotate_tool_calls: bool = False,
+) -> ConversationalTestCase:
+    """Build a DeepEval conversational test case from a shared transcript.
+
+    Calls are already matched to their own turn by call ID upstream, and harness
+    tools are already separated from MCP tools, so this is a straight mapping.
+
+    Args:
+        transcript: The adapted transcript, normally rebuilt from the saved
+            attempt artifact so live scoring and re-scoring share one path.
+        mcp_server: Tool schemas captured from the same server session.
+        include_skill_body: Whether to prepend the skill instructions the model
+            actually received. Required for the skill-fidelity rubric, which
+            cannot judge adherence to a document it has not been shown; left off
+            for the MCP metrics, which only score tool use.
+        skill: Which loaded skill's body to include. Defaults to the first one.
+
+    Returns:
+        A ``ConversationalTestCase`` whose assistant turns carry only genuine MCP
+        interactions. Skill loading stays visible as conversational context but
+        is never counted as an MCP tool call.
+    """
+    if not transcript.turns:
+        raise NothingToScoreError(
+            "transcript has no turns; the attempt produced no conversation "
+            "(check ConversationResult.outcome and error_stage)"
+        )
+
+    turns: list[Turn] = []
+    # The skill body is inserted *after* the opening user turn, not before it.
+    # DeepEval builds a unit's `task` by consuming leading user turns and
+    # stopping at the first non-user turn, so prepending an assistant turn would
+    # leave the first unit with an empty task and demote the real opening
+    # message to a step. Placing it after is also truthful: the agent loaded the
+    # skill in response to that first message.
+    pending_body = transcript.skill_body(skill) if include_skill_body else None
+
+    for source in transcript.turns:
+        if source.role == "user":
+            turns.append(Turn(role="user", content=source.content))
+            if pending_body:
+                turns.append(
+                    Turn(
+                        role="assistant",
+                        content=(f"[skill instructions delivered to the agent]\n\n{pending_body}"),
+                    )
+                )
+                pending_body = None
+            continue
+
+        mcp_tools_called = [_record_to_mcp_tool_call(c) for c in source.mcp_tool_calls]
+        content = source.content
+        if source.harness_tool_calls:
+            # Harness calls are excluded from MCP interactions, so render every
+            # load and its outcome even when the turn also contains text or MCP calls.
+            rendered = "\n".join(_render_skill_load(c) for c in source.harness_tool_calls)
+            content = f"{content}\n{rendered}" if content else rendered
+
+        if annotate_tool_calls and source.mcp_tool_calls:
+            # Render tool calls into the content so a rubric scored on ROLE and
+            # CONTENT can see them. MultiTurnParams.MCP_TOOLS cannot be used for
+            # this: it looks for a case-level attribute that does not exist.
+            rendered = "\n".join(_render_fidelity_call(c) for c in source.mcp_tool_calls)
+            content = f"{content}\n{rendered}" if content else rendered
+
+        if mcp_tools_called:
+            turns.append(Turn(role="assistant", content=content, mcp_tools_called=mcp_tools_called))
+        elif content:
+            turns.append(Turn(role="assistant", content=content))
+
+    return ConversationalTestCase(turns=turns, mcp_servers=[mcp_server])
+
+
 def lcs_result_to_single_turn_test_case(
     result: LCSResult,
     mcp_server: MCPServer,
@@ -147,9 +303,7 @@ def lcs_result_to_single_turn_test_case(
 
     Used for simpler scenarios where multi-turn tracking isn't needed.
     """
-    mcp_tools_called = [
-        _lcs_tool_call_to_deepeval(tc) for tc in result.tool_calls
-    ]
+    mcp_tools_called = [_lcs_tool_call_to_deepeval(tc) for tc in result.tool_calls]
 
     return LLMTestCase(
         input=result.task,

@@ -188,6 +188,8 @@ def test_successful_discovery_allows_filtered_recommendation_before_customer_rep
         ),
         ({"has_gpus": True, "gpu_info": {"total": 4}}, "success"),
         ({"has_gpus": True, "gpu_info": {"product": "unknown", "total": 4}}, "success"),
+        ({"has_gpus": True, "gpu_info": {"product": "Tesla T4", "total": 4}}, "success"),
+        ({"has_gpus": True, "gpu_info": {"product": "A100", "total": 4}}, "success"),
         ({"has_gpus": False}, "success"),
     ],
 )

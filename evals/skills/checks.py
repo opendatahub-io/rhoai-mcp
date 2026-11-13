@@ -508,7 +508,12 @@ def _check_hardware_confirmation(
         products = info.get("products") or info.get("product")
         names = products if isinstance(products, list) else [products]
         identified = any(
-            isinstance(n, str) and n.strip().lower() not in {"", "unknown", "n/a"} for n in names
+            isinstance(n, str)
+            and (
+                ("A100" in n.upper() and ("80" in n or "40" in n))
+                or any(gpu in n.upper() for gpu in ("H100", "H200", "B200", "L4"))
+            )
+            for n in names
         )
         total = info.get("total")
         return (

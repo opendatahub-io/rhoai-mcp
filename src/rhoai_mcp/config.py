@@ -255,6 +255,7 @@ class RHOAIConfig(BaseSettings):
             "planner-composites",
             "model_registry",
             "inference",
+            "automl",
             "cluster-composites",
             "meta-composites",
         ],

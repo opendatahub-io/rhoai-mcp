@@ -128,8 +128,15 @@ class TestRHOAIConfig:
         monkeypatch.delenv("RHOAI_MCP_ENABLED_PLUGINS", raising=False)
         config = RHOAIConfig(_env_file=None)
         assert config.enabled_plugins == [
-            "projects", "connections", "storage", "planner-composites",
-            "model_registry", "inference", "cluster-composites", "meta-composites",
+            "projects",
+            "connections",
+            "storage",
+            "planner-composites",
+            "model_registry",
+            "inference",
+            "automl",
+            "cluster-composites",
+            "meta-composites",
         ]
 
     def test_enabled_plugins_none_loads_all(self, monkeypatch):
@@ -228,7 +235,6 @@ class TestPlannerConfig:
         assert config.planner_model_catalog_url == "https://catalog.example.com"
 
 
-
 class TestOIDCConfig:
     """Tests for OIDC configuration."""
 
@@ -280,7 +286,9 @@ class TestOIDCConfig:
 
     def test_oidc_issuer_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """OIDC issuer URL can be set via environment variable."""
-        monkeypatch.setenv("RHOAI_MCP_OIDC_ISSUER_URL", "https://keycloak.example.com/auth/realms/rhoai")
+        monkeypatch.setenv(
+            "RHOAI_MCP_OIDC_ISSUER_URL", "https://keycloak.example.com/auth/realms/rhoai"
+        )
         config = RHOAIConfig()
         assert config.oidc_issuer_url == "https://keycloak.example.com/auth/realms/rhoai"
 

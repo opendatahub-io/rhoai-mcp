@@ -92,6 +92,18 @@ INFERENCE_PERMISSIONS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
+AUTOML_PERMISSIONS: dict[str, list[dict[str, str]]] = {
+    "list_automl_deployments": [
+        {"apiGroup": "serving.kserve.io", "resource": "inferenceservices", "verb": "list"},
+    ],
+    "get_automl_deployment": [
+        {"apiGroup": "serving.kserve.io", "resource": "inferenceservices", "verb": "get"},
+    ],
+    "prepare_automl_prediction": [
+        {"apiGroup": "serving.kserve.io", "resource": "inferenceservices", "verb": "get"},
+    ],
+}
+
 _DSPA = "datasciencepipelinesapplications.opendatahub.io"
 
 PIPELINES_PERMISSIONS: dict[str, list[dict[str, str]]] = {

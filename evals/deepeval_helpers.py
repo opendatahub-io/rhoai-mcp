@@ -15,7 +15,7 @@ from deepeval.test_case import (
 )
 from mcp.types import CallToolResult, TextContent, Tool
 
-from evals.agent.transcript import AgentTranscript, ToolCallRecord
+from evals.agent.transcript import LOAD_CAPABILITY_ARG_KEYS, AgentTranscript, ToolCallRecord
 from evals.lcs_client import LCSResult
 
 logger = logging.getLogger(__name__)
@@ -204,6 +204,19 @@ def _render_fidelity_call(call: ToolCallRecord) -> str:
     return rendered
 
 
+def _render_skill_load(call: ToolCallRecord) -> str:
+    skill = next(
+        (str(call.arguments[key]) for key in LOAD_CAPABILITY_ARG_KEYS if call.arguments.get(key)),
+        call.name,
+    )
+    if not call.is_error:
+        return f"[loaded skill: {skill}]"
+    outcome = call.outcome or "incomplete"
+    diagnostic = call.error or call.result_text
+    detail = f"; {diagnostic}" if diagnostic else ""
+    return f"[skill load: {skill}; outcome: {outcome}{detail}]"
+
+
 def transcript_to_conversational_test_case(
     transcript: AgentTranscript,
     mcp_server: MCPServer,
@@ -262,14 +275,11 @@ def transcript_to_conversational_test_case(
 
         mcp_tools_called = [_record_to_mcp_tool_call(c) for c in source.mcp_tool_calls]
         content = source.content
-        if not content and source.harness_tool_calls and not mcp_tools_called:
-            # Keep the skill-loading step in the conversation without letting an
-            # empty assistant turn look like a non-response.
-            loaded = ", ".join(
-                str(c.arguments.get("id") or c.arguments.get("name") or c.name)
-                for c in source.harness_tool_calls
-            )
-            content = f"[loaded skill: {loaded}]"
+        if source.harness_tool_calls:
+            # Harness calls are excluded from MCP interactions, so render every
+            # load and its outcome even when the turn also contains text or MCP calls.
+            rendered = "\n".join(_render_skill_load(c) for c in source.harness_tool_calls)
+            content = f"{content}\n{rendered}" if content else rendered
 
         if annotate_tool_calls and source.mcp_tool_calls:
             # Render tool calls into the content so a rubric scored on ROLE and

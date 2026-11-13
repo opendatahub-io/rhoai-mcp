@@ -254,6 +254,98 @@ class TestConversationalTestCase:
         assert len(loading) == 1
         assert not loading[0].mcp_tools_called
 
+    @pytest.mark.parametrize(
+        ("result", "outcome", "diagnostic"),
+        [
+            (
+                ToolReturnPart(
+                    tool_name="load_capability",
+                    tool_call_id="h1",
+                    content="not found",
+                    outcome="failed",
+                ),
+                "failed",
+                "not found",
+            ),
+            (
+                ToolReturnPart(
+                    tool_name="load_capability",
+                    tool_call_id="h1",
+                    content="try again",
+                    outcome="retried",
+                ),
+                "retried",
+                "try again",
+            ),
+            (None, "incomplete", "tool call did not return"),
+        ],
+    )
+    def test_failed_skill_load_is_visible_before_recovery(
+        self, result: Any, outcome: str, diagnostic: str, mcp_server: MCPServer
+    ) -> None:
+        history = [
+            ModelRequest(parts=[UserPromptPart(content="Help me.")]),
+            ModelResponse(
+                parts=[LoadCapabilityCallPart(args={"id": "navigator"}, tool_call_id="h1")]
+            ),
+        ]
+        if result is not None:
+            history.append(ModelRequest(parts=[result]))
+        history.extend(
+            [
+                ModelResponse(
+                    parts=[LoadCapabilityCallPart(args={"id": "navigator"}, tool_call_id="h2")]
+                ),
+                ModelRequest(
+                    parts=[
+                        LoadCapabilityReturnPart(content={"message": "loaded"}, tool_call_id="h2")
+                    ]
+                ),
+            ]
+        )
+
+        case = transcript_to_conversational_test_case(from_pydantic_ai(history), mcp_server)
+
+        failed, recovered = case.turns[1:]
+        assert "navigator" in failed.content
+        assert f"outcome: {outcome}" in failed.content
+        assert diagnostic in failed.content
+        assert "loaded skill" not in failed.content
+        assert recovered.content == "[loaded skill: navigator]"
+        assert not failed.mcp_tools_called and not recovered.mcp_tools_called
+
+    def test_skill_load_is_visible_in_turn_with_text_and_mcp_call(
+        self, mcp_server: MCPServer
+    ) -> None:
+        history = [
+            ModelRequest(parts=[UserPromptPart(content="Help me.")]),
+            ModelResponse(
+                parts=[
+                    TextPart(content="Checking."),
+                    LoadCapabilityCallPart(args={"capability": "navigator"}, tool_call_id="h1"),
+                    ToolCallPart(tool_name="recommend_model", args={}, tool_call_id="m1"),
+                ]
+            ),
+            ModelRequest(
+                parts=[
+                    ToolReturnPart(
+                        tool_name="load_capability",
+                        tool_call_id="h1",
+                        content="denied",
+                        outcome="denied",
+                    ),
+                    ToolReturnPart(tool_name="recommend_model", tool_call_id="m1", content="ok"),
+                ]
+            ),
+        ]
+
+        case = transcript_to_conversational_test_case(from_pydantic_ai(history), mcp_server)
+
+        turn = case.turns[1]
+        assert "Checking." in turn.content
+        assert "navigator; outcome: denied; denied" in turn.content
+        assert [call.name for call in turn.mcp_tools_called] == ["recommend_model"]
+
     def test_user_turns_are_preserved_in_order(
         self, history: list[Any], mcp_server: MCPServer
     ) -> None:

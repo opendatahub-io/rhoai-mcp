@@ -66,6 +66,7 @@ def test_legacy_artifact_requires_matching_hash(tmp_path: Path) -> None:
     config = SkillEvalConfig(_env_file=None)
     recorder = EvalRecorder(config, path=tmp_path / "history.jsonl")
     score_artifact(path, NAVIGATOR_HAPPY_PATH, config=config, recorder=recorder)
+    assert load_records(str(recorder.path))[0].environment.cluster_mode == "unknown"
     with pytest.raises(ValueError, match="incompatible artifact"):
         score_artifact(
             path,
@@ -149,7 +150,10 @@ def test_replay_cli_requires_selector_and_reports_no_match(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
-async def test_live_scoring_and_replay_share_the_saved_record_path(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cluster_mode", ["mock", "live"])
+async def test_live_scoring_and_replay_share_the_saved_record_path(
+    tmp_path: Path, cluster_mode: str
+) -> None:
     from unittest.mock import AsyncMock
 
     from evals.agent.runner import ConversationResult
@@ -162,12 +166,13 @@ async def test_live_scoring_and_replay_share_the_saved_record_path(tmp_path: Pat
             return {"id": self.id, "model_name": "offline"}
 
     golden = NAVIGATOR_HAPPY_PATH
-    config = SkillEvalConfig(_env_file=None)
+    config = SkillEvalConfig(_env_file=None, cluster_mode=cluster_mode)
     recorder = EvalRecorder(config, path=tmp_path / "history.jsonl")
 
     async def fake_run(
-        _spec: object, _script: object, *, run_id: str, attempt_id: str
+        _spec: object, _script: object, *, run_id: str, attempt_id: str, mock_cluster: bool
     ) -> ConversationResult:
+        assert mock_cluster is (cluster_mode == "mock")
         return ConversationResult(
             run_id=run_id,
             attempt_id=attempt_id,
@@ -183,7 +188,14 @@ async def test_live_scoring_and_replay_share_the_saved_record_path(tmp_path: Pat
         first = await run_attempt(
             golden, Spec(), recorder=recorder, config=config, results_root=tmp_path
         )
-        replay = score_artifact(first.artifact_path, golden, config=config, recorder=recorder)
+        replay = score_artifact(
+            first.artifact_path,
+            golden,
+            config=SkillEvalConfig(
+                _env_file=None, cluster_mode="live" if cluster_mode == "mock" else "mock"
+            ),
+            recorder=recorder,
+        )
         assert agent.await_count == 1
     records = load_records(str(recorder.path))
     assert first.report.to_list() == replay.report.to_list()
@@ -191,3 +203,5 @@ async def test_live_scoring_and_replay_share_the_saved_record_path(tmp_path: Pat
     assert records[0].attempt_id == records[1].attempt_id
     assert records[0].scoring_id != records[1].scoring_id
     assert records[0].checks == records[1].checks
+    assert AttemptArtifact.load(first.artifact_path).metadata["cluster_mode"] == cluster_mode
+    assert [record.environment.cluster_mode for record in records] == [cluster_mode, cluster_mode]

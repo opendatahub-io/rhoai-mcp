@@ -30,6 +30,7 @@ from evals.agent.runner import (
     REPO_ROOT,
     run_conversation,
 )
+from evals.config import ClusterMode
 from evals.reporting.models import (
     CheckRecord,
     EnvironmentRecord,
@@ -110,6 +111,7 @@ async def run_attempt(
         golden.script,
         run_id=recorder.run_id,
         attempt_id=attempt_id,
+        mock_cluster=config.cluster_mode == ClusterMode.MOCK,
     )
     agent_seconds = time.monotonic() - agent_started
 
@@ -127,6 +129,7 @@ async def run_attempt(
             "skill_sha": golden.skill_sha(),
             "rubric_version": RUBRIC_VERSION,
             **spec.describe(),
+            "cluster_mode": config.cluster_mode.value,
         }
     )
     artifact_path = artifact.save(root)
@@ -266,7 +269,7 @@ def score_artifact(
             lcs_url="",
             eval_provider=config.eval_provider.value,
             eval_model=config.eval_model if judge is not None else "",
-            cluster_mode=config.cluster_mode.value,
+            cluster_mode=meta.get("cluster_mode", "unknown"),
             mcp_use_threshold=config.mcp_use_threshold,
             task_completion_threshold=config.task_completion_threshold,
             eval_model_base_url=config.judge_base_url or "",

@@ -157,7 +157,11 @@ def build_agent(
         args.append("--mock-cluster")
 
     # The embedded planner probes Kubernetes independently of our mock client.
-    env = {"PLANNER_DETECT_CLUSTER_GPUS": "false"} if mock_cluster else None
+    env = (
+        {"PLANNER_DETECT_CLUSTER_GPUS": "false"}
+        if mock_cluster
+        else {"RHOAI_MCP_MOCK_CLUSTER": "false"}
+    )
     toolset = MCPToolset(StdioTransport(command="uv", args=args, env=env, cwd=str(REPO_ROOT)))
     agent = Agent(
         model=spec.build(),

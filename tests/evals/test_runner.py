@@ -147,12 +147,17 @@ def test_cluster_probe_override_is_scoped_to_the_mock_server(
     monkeypatch: pytest.MonkeyPatch, mock_cluster: bool
 ) -> None:
     monkeypatch.setenv("PLANNER_DETECT_CLUSTER_GPUS", "true")
+    monkeypatch.setenv("RHOAI_MCP_MOCK_CLUSTER", "true")
     monkeypatch.setattr(AgentModelSpec, "build", lambda _self: FunctionModel(echo))
     _agent, toolset = runner.build_agent(SPEC, mock_cluster=mock_cluster)
     transport = toolset.client.transport
 
     assert ("--mock-cluster" in transport.args) is mock_cluster
-    assert transport.env == ({"PLANNER_DETECT_CLUSTER_GPUS": "false"} if mock_cluster else None)
+    assert transport.env == (
+        {"PLANNER_DETECT_CLUSTER_GPUS": "false"}
+        if mock_cluster
+        else {"RHOAI_MCP_MOCK_CLUSTER": "false"}
+    )
     assert os.environ["PLANNER_DETECT_CLUSTER_GPUS"] == "true"
 
 

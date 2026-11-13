@@ -3,8 +3,9 @@
 Discovery mode — both skills are in the catalog and the agent must pick, load,
 and follow the right one from a natural-language request (plan §2.1).
 
-Runs against the stdio ``rhoai-mcp`` server with ``--mock-cluster``; no LCORE,
-no compose, no live cluster. Dry run by default (deterministic checks only);
+Runs against the stdio ``rhoai-mcp`` server with ``--mock-cluster`` by default;
+``RHOAI_EVAL_CLUSTER_MODE=live`` selects a real cluster. No LCORE or compose.
+Dry run by default (deterministic checks only);
 set ``RHOAI_EVAL_SKILL_JUDGE=1`` to add judged metrics.
 
     uv run --group skill-eval pytest evals/skills/test_navigator.py -v

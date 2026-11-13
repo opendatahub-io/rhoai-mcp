@@ -80,6 +80,18 @@ def read_agent_observations(
     if path is None:
         result.warnings.append("No artifact path; agent usage and tool counts are unavailable.")
         return result
+    if artifacts_root is not None:
+        if any(
+            not value or value in {".", ".."} or Path(value).name != value
+            for value in (original_run, record.attempt_id)
+        ):
+            raise ValueError("Artifact IDs must be single path components")
+        root = artifacts_root.resolve()
+        if any(
+            not candidate.resolve().is_relative_to(root)
+            for candidate in (path, path / "artifact.json", path / "messages.json")
+        ):
+            raise ValueError("Artifact path escapes root")
     try:
         raw = (path / "artifact.json").read_bytes()
         artifact = json.loads(raw)
@@ -103,10 +115,6 @@ def read_agent_observations(
 
     # The runner saves one cumulative history. Never add each turn's cumulative
     # history or a nested RunUsage to these per-response RequestUsage values.
-    unique = {json.dumps(m, sort_keys=True): m for m in messages}
-    if len(unique) != len(messages):
-        result.warnings.append("Identical native messages deduplicated before counting usage.")
-    messages = list(unique.values())
     responses = [m for m in messages if m.get("kind") == "response"]
     result.model_responses = len(responses)
     usage_fields = {

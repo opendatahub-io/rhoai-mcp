@@ -630,7 +630,11 @@ Each attempt writes `evals/results/<run-id>/<attempt-id>/artifact.json` and `mes
 
 ### Navigator comparison reports
 
-The offline comparison command produces Markdown and JSON reports with quality, deterministic checks, token usage, tool calls, timing and per-attempt results. Select the original run IDs explicitly; repeat `--run-id` when a sweep spans multiple pytest sessions. It rejects incompatible configurations and unbalanced scenario mixes.
+The offline comparison command produces Markdown and JSON reports with quality, deterministic checks, token usage, tool calls, timing and per-attempt results. Select the original run IDs explicitly; repeat `--run-id` when a sweep spans multiple pytest sessions. It rejects incompatible configurations and unbalanced scenario mixes. Checks-only attempts are excluded, and the comparison fails if no judged Navigator attempts remain. Judge saved attempts and use `--scoring latest`, or generate a Navigator-only judged run:
+
+```bash
+RHOAI_EVAL_SKILL_JUDGE=1 uv run --group skill-eval pytest evals/skills/test_navigator.py -v -s --reruns 0
+```
 
 ```bash
 make eval-compare ARGS="--file evals/results/skill_history.jsonl --run-id <run-id> --format markdown --output evals/results/navigator-comparison.md"

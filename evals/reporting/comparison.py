@@ -53,8 +53,6 @@ def provider_comparison_report(
             ),
             fmt=fmt,
         )
-    if any(r.skill for r in records):
-        raise ValueError("Skill comparisons require an explicit --cohort or --run-id selection")
     if fmt == "json":
         raise ValueError("JSON comparison output requires a skill cohort or run IDs")
     if last_n < 1:
@@ -65,6 +63,8 @@ def provider_comparison_report(
     filtered = records
     if scenario:
         filtered = [r for r in filtered if r.scenario == scenario]
+    if any(r.skill for r in filtered):
+        raise ValueError("Skill comparisons require an explicit --cohort or --run-id selection")
     if not filtered:
         return f"No records found for scenario={scenario}"
 

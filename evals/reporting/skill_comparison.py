@@ -144,11 +144,11 @@ def _check(record: EvalRecord, name: str) -> bool | None:
     return found.status == "pass" if found and found.status in {"pass", "fail"} else None
 
 
-def _single(values: set[Any], label: str) -> Any:
+def _single(values: set[Any], label: str, *, allow_empty: bool = False) -> Any:
     if len(values) != 1:
         raise ValueError(f"Incompatible {label}; select one cohort or a matching set of runs")
     value = next(iter(values))
-    if value in ("", None, "unknown"):
+    if value in (None, "unknown") or (value == "" and not allow_empty):
         raise ValueError(f"Missing {label}; comparison configuration cannot be established")
     return value
 
@@ -165,7 +165,7 @@ def _configuration(records: list[EvalRecord]) -> dict[str, Any]:
         "judge_provider": _single({r.environment.eval_provider for r in records}, "judge provider"),
         "judge_model": _single({r.environment.eval_model for r in records}, "judge model"),
         "judge_endpoint": _single(
-            {r.environment.eval_model_base_url for r in records}, "judge endpoint"
+            {r.environment.eval_model_base_url for r in records}, "judge endpoint", allow_empty=True
         ),
         "cluster_mode": _single({r.environment.cluster_mode for r in records}, "cluster mode"),
         "agent_backend": _single({r.environment.agent_backend for r in records}, "agent backend"),
@@ -268,6 +268,7 @@ def build_skill_comparison(
             origins.setdefault(record.attempt_id, record.run_id)
             initial_records.setdefault(record.attempt_id, record)
     selected: list[tuple[EvalRecord, AgentObservations]] = []
+    known_runs = {r.run_id for r in source}
     seen: set[str] = set()
     selected_positions: dict[str, int] = {}
     for record in sorted(source, key=lambda r: r.timestamp):
@@ -294,6 +295,8 @@ def build_skill_comparison(
             raise ValueError("Skill comparisons require original attempt identities")
         obs = read_agent_observations(record, artifacts_root)
         origin = obs.artifact_run_id or path_run or origins[record.attempt_id]
+        if scoring == "latest":
+            known_runs.add(origin)
         if scoring == "latest" and run_ids and origin not in run_ids:
             excluded["outside_selection"] += 1
             continue
@@ -339,7 +342,7 @@ def build_skill_comparison(
                         f"Native artifact hash differs from frozen cohort: {record.attempt_id}/{Path(name).name}"
                     )
     if run_ids:
-        missing = set(run_ids) - {r.run_id for r in source}
+        missing = set(run_ids) - known_runs
         if missing:
             raise ValueError(f"Unknown run IDs: {', '.join(sorted(missing))}")
     recent: dict[tuple[str, str], list[tuple[EvalRecord, AgentObservations]]] = defaultdict(list)

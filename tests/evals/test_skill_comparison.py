@@ -283,6 +283,15 @@ def test_incompatible_configurations_are_rejected(
         build(records)
 
 
+def test_empty_judge_endpoint_is_accepted_only_when_uniform(records: list[EvalRecord]) -> None:
+    for r in records:
+        r.environment.eval_model_base_url = ""
+    assert build(records).configuration["judge_endpoint"] == ""
+    records[-1].environment.eval_model_base_url = "https://other.invalid"
+    with pytest.raises(ValueError, match="Incompatible judge endpoint"):
+        build(records)
+
+
 def test_unequal_golden_sets_refuse_aggregate_but_common_scenario_works(
     records: list[EvalRecord],
 ) -> None:
@@ -351,6 +360,15 @@ def test_latest_scoring_can_select_replay_by_original_run(records: list[EvalReco
         next(a for a in report.attempts if a.record.attempt_id == rescored.attempt_id).record
         is rescored
     )
+
+
+def test_replay_only_can_select_original_run(records: list[EvalRecord]) -> None:
+    rescored = replace(records[0], run_id="rescored", is_rescore=True, agent_seconds=0)
+    report = build_skill_comparison([rescored], run_ids=["run-a"], scoring="latest")
+    assert report.attempts[0].record is rescored
+    assert report.configuration["run_ids"] == ["run-a"]
+    with pytest.raises(ValueError, match="Unknown run IDs"):
+        build_skill_comparison([rescored], run_ids=["missing"], scoring="latest")
 
 
 def test_latest_scoring_uses_original_checks_only_execution_time(records: list[EvalRecord]) -> None:
@@ -539,14 +557,38 @@ def test_partial_response_usage_is_not_an_undercounted_total(
     assert obs.model_responses == 2
 
 
-def test_identical_cumulative_messages_are_not_counted_twice(records: list[EvalRecord]) -> None:
+def test_identical_messages_count_as_separate_occurrences(records: list[EvalRecord]) -> None:
     path = Path(records[0].artifact_path) / "messages.json"
     messages = json.loads(path.read_text())
-    messages += deepcopy(messages)
+    messages.extend(deepcopy(messages[1:3]))
     path.write_text(json.dumps(messages))
     obs = read_agent_observations(records[0])
-    assert obs.output_tokens == 40 and obs.model_responses == 2 and obs.mcp_calls == 1
-    assert any("deduplicated" in warning for warning in obs.warnings)
+    assert (obs.output_tokens, obs.model_responses, obs.mcp_calls, obs.unreturned_mcp_calls) == (
+        50,
+        3,
+        2,
+        0,
+    )
+
+
+@pytest.mark.parametrize("field,value", [("run_id", "../outside"), ("attempt_id", "/outside")])
+def test_portable_artifact_root_rejects_unsafe_ids(
+    records: list[EvalRecord], tmp_path: Path, field: str, value: str
+) -> None:
+    unsafe = replace(records[0], artifact_path="", **{field: value})
+    with pytest.raises(ValueError, match="single path components"):
+        read_agent_observations(unsafe, tmp_path)
+
+
+@pytest.mark.parametrize("name", ["artifact.json", "messages.json"])
+def test_portable_artifact_root_rejects_symlinks_outside_root(
+    records: list[EvalRecord], tmp_path: Path, name: str
+) -> None:
+    path = Path(records[0].artifact_path) / name
+    path.unlink()
+    path.symlink_to(tmp_path.parent / "outside")
+    with pytest.raises(ValueError, match="escapes root"):
+        read_agent_observations(records[0], tmp_path)
 
 
 def test_portable_artifact_root_finds_original_run_for_rescore(
@@ -715,6 +757,9 @@ def test_skill_history_needs_selection_and_legacy_lcs_missing_scores_stay_na(
         ),
     ]
     assert "n/a" in provider_comparison_report(legacy)
+    assert "n/a" in provider_comparison_report([*legacy, records[1]], scenario="happy")
+    with pytest.raises(ValueError, match="explicit"):
+        provider_comparison_report([*legacy, records[1]], scenario="vague")
 
 
 def test_markdown_has_valid_separators_for_single_character_columns() -> None:

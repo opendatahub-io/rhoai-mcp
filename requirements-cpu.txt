@@ -21,7 +21,7 @@ attrs==26.1.0
     #   jsonschema
     #   referencing
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-certifi==2026.7.22
+certifi==2026.10.23
     # via
     #   -c constraints-lock.tmp
     #   httpcore
@@ -255,7 +255,7 @@ typing-inspection==0.4.4
     #   pydantic
     #   pydantic-settings
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-urllib3==2.7.0
+urllib3==2.8.0
     # via
     #   -c constraints-lock.tmp
     #   kubernetes

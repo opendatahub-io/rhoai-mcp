@@ -210,7 +210,8 @@ __marimo__/
 
 # Eval reports, results, and env
 evals/reports/
-evals/results/
+evals/results/*
+!evals/results/README.md
 .env.eval
 
 .deepeval

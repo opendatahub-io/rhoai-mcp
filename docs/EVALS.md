@@ -136,6 +136,7 @@ evals/
 │   ├── cli.py                        # CLI (summary, compare, trend)
 │   └── __main__.py                   # python -m entry point
 ├── results/
+│   ├── README.md                     # Results layout and cleanup
 │   └── eval_history.jsonl            # Persisted eval results (gitignored)
 ├── metrics/
 │   └── config.py                     # Metric factory functions

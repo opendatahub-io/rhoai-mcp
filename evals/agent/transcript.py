@@ -1,9 +1,9 @@
 """Shared transcript contract, Pydantic AI adapter, and attempt artifacts.
 
-The persisted artifact is the scoring input, in live runs as well as re-scores
-(plan §3.6): every attempt goes agent -> write artifact -> load artifact -> adapt
--> score. That is one scoring path rather than two, so a lossy artifact fails the
-live run instead of being discovered months later.
+The persisted artifact is the scoring input, in live runs as well as re-scores:
+every attempt goes agent -> write artifact -> load artifact -> adapt -> score.
+That is one scoring path rather than two, so a lossy artifact fails the live run
+instead of being discovered months later.
 
 Two representations exist here:
 
@@ -49,7 +49,7 @@ Role = Literal["user", "assistant"]
 #: both use the bare name. Skill ``allowed-tools`` use the prefixed spelling.
 MCP_TOOL_PREFIX = "mcp__"
 
-#: Harness-provided tools, reported separately from MCP tools (plan §3.2).
+#: Harness-provided tools, reported separately from MCP tools.
 HARNESS_TOOL_NAMES = frozenset({"load_capability"})
 
 #: ``load_capability`` names the skill under this key, as a JSON-encoded string.
@@ -57,7 +57,7 @@ LOAD_CAPABILITY_ARG_KEYS = ("id", "name", "capability")
 
 #: Instruction id under which the harness publishes the skill catalog (name +
 #: description only). In discovery mode this is all the model sees before it
-#: routes, which makes the descriptions themselves a tested artifact (plan §6.4).
+#: routes, which makes the descriptions themselves a tested artifact.
 CATALOG_INSTRUCTION_ID = "capability:deferred_capabilities"
 
 #: The catalog is itself carried by a pseudo-capability. It must never be filed
@@ -152,7 +152,7 @@ class AgentTranscript:
     **Primary consumer: mid-conversation checkpoints.** Each scripted reply in
     :mod:`evals.agent.runner` is gated on a ``Callable[[AgentTranscript], str | None]``
     evaluated *before* the reply is sent, so the script can refuse to send a
-    generic "yes" into an unexpected state (plan §2.1). At that moment the
+    generic "yes" into an unexpected state. At that moment the
     conversation is still running and no DeepEval case exists, so checkpoints
     need a cheap read-only view of "what has happened so far".
 
@@ -163,7 +163,7 @@ class AgentTranscript:
     - ``MCPToolCall`` carries only ``name``/``args``/``result`` — no call ID and
       no turn index, so call attribution cannot be re-derived or verified.
     - Harness calls are deliberately excluded from ``mcp_tools_called``, so the
-      §3.1 routing checks (which ``load_capability`` calls succeeded, in what
+      routing checks (which ``load_capability`` calls succeeded, in what
       order) have nothing to read.
     - Instructions are not part of its model at all, so the delivered skill body
       and the routing catalog are unrepresentable.
@@ -173,9 +173,7 @@ class AgentTranscript:
     and harness-vs-MCP discrimination — precisely the code that produced the
     known adapter bugs. Centralising it means a fix lands everywhere at once.
 
-    Note the "shared with the LCS path" rationale in plan §2.2 is currently
-    aspirational: ``evals/lcs_client.py`` still has its own shape and nothing
-    converts it. The two reasons above stand on their own.
+    The LCS path uses a separate transcript shape in ``evals/lcs_client.py``.
     """
 
     task: str
@@ -225,7 +223,7 @@ class AgentTranscript:
         """Skill names successfully loaded via ``load_capability``, in order.
 
         Failed loads are excluded: routing is judged on skills the model actually
-        received (plan §3.1).
+        received.
         """
         names: list[str] = []
         for call in self.harness_tool_calls:
@@ -242,8 +240,7 @@ class AgentTranscript:
         """The skill body as actually delivered to the model.
 
         Note this reads the delivered *instructions*, not the ``load_capability``
-        tool result. Plan §3.6 assumed the body arrives as the tool result; in
-        pydantic-ai-harness 0.64 that result is only an acknowledgement
+        tool result. In pydantic-ai-harness 0.64 that result is only an acknowledgement
         (``{"message": "Capability 'navigator' loaded..."}``) and the body is
         pushed as an instruction delta. A fidelity rubric shown the tool result
         would therefore be shown nothing.
@@ -454,7 +451,7 @@ def from_pydantic_ai(
     Args:
         messages: Cumulative history, e.g. the final ``result.all_messages()``.
             Do not concatenate successive ``all_messages()`` snapshots; that
-            duplicates earlier turns (plan §2.1).
+            duplicates earlier turns.
         task: The initial user request. Defaults to the first user prompt found.
         final_output: The agent's last textual output. Defaults to the last
             assistant text in the history.
@@ -548,7 +545,7 @@ class AttemptArtifact:
     """Everything needed to re-score one attempt without re-running the agent.
 
     A stale-schema artifact fails to load and is re-run; there is deliberately no
-    migration path (plan §3.6).
+    migration path.
     """
 
     attempt_id: str
@@ -662,7 +659,7 @@ class AttemptArtifact:
         return list(ModelMessagesTypeAdapter.validate_json(self.messages_json))
 
     def transcript(self) -> AgentTranscript:
-        """Rebuild the shared transcript. This is the scoring input (plan §3.6)."""
+        """Rebuild the shared transcript. This is the scoring input."""
         return from_pydantic_ai(self.messages(), task=self.task, final_output=self.final_output)
 
     def mcp_tools(self) -> list[Tool]:

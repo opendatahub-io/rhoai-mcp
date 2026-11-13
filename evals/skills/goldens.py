@@ -1,7 +1,7 @@
 """Scenario definitions: scripted replies, checkpoints, and expected checks.
 
 Both skills are phase-gated, so a golden is a *script with checkpoints* rather
-than a single prompt (plan §2.1). Each step declares the state it expects before
+than a single prompt. Each step declares the state it expects before
 its reply is sent; if that state is not reached the script stops, the partial
 transcript is saved, and the attempt is recorded as a failure. The alternative —
 sending a generic "yes" into an unexpected state — risks approving an action the
@@ -12,8 +12,7 @@ run to run, and nothing in this matrix is deterministic (no temperature control)
 
 Goldens take the default mock state as given. ``--mock-cluster`` builds a fixed
 ``create_default_cluster_state()`` at startup with no seeding hook, so branches
-that state cannot reach are reported ``unexercised`` rather than worked around
-(plan §3.4).
+that state cannot reach are reported ``unexercised`` rather than worked around.
 """
 
 from __future__ import annotations
@@ -40,7 +39,7 @@ if TYPE_CHECKING:
 
 SKILLS_DIR = REPO_ROOT / ".claude" / "skills"
 
-#: Bump when rubric wording or fidelity-visible evidence changes (plan §3.5).
+#: Bump when rubric wording or fidelity-visible evidence changes.
 RUBRIC_VERSION = "v2"  # Include returned plan issues/warnings in fidelity evidence.
 
 
@@ -223,14 +222,14 @@ class Golden:
         return hashlib.sha256(payload.encode()).hexdigest()[:12]
 
     def skill_sha(self) -> str:
-        """Hash of the SKILL.md under test (plan §3.5)."""
+        """Hash of the SKILL.md under test."""
         path = SKILLS_DIR / self.skill / "SKILL.md"
         if not path.exists():
             return ""
         return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
     def allowed_tools(self) -> set[str]:
-        """Declared ``allowed-tools``, for §3.2 reporting (never a gate)."""
+        """Declared ``allowed-tools`` for reporting, never a gate."""
         path = SKILLS_DIR / self.skill / "SKILL.md"
         if not path.exists():
             return set()
@@ -351,7 +350,7 @@ NAVIGATOR_VAGUE_REQUIREMENTS = Golden(
 # --------------------------------------------------------------------------- #
 
 #: A complete, valid handoff supplied in the conversation, so this golden depends
-#: on neither a preceding navigator run nor any mock-state change (plan §3.4).
+#: on neither a preceding navigator run nor any mock-state change.
 HANDOFF_FIXTURE = """<!-- navigator-handoff
 model_id: meta-llama/Llama-3.1-8B-Instruct
 use_case: chatbot_conversational

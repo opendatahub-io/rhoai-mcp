@@ -1,4 +1,4 @@
-"""Tests for the eval record write/read path (plan §3.5).
+"""Tests for the eval record write/read path.
 
 Getting these right is what makes the data trustworthy later: a correct record
 can always be re-read, while a lossy one cannot be recovered. Two properties
@@ -242,7 +242,7 @@ class TestOverallPassed:
 
 
 class TestMetricExtraction:
-    """A judge error is an error, not a zero score (plan §3.3)."""
+    """A judge error is an error, not a zero score."""
 
     class _MetricData:
         def __init__(self, **kw: Any) -> None:
@@ -377,7 +377,7 @@ class TestOutcomeRecording:
         assert record.metrics[0].reason == "clarity partly met"
 
     def test_harness_error_attempt_is_still_written(self, tmp_path: Path) -> None:
-        """A failed setup must produce a record, not silence (plan §3.5)."""
+        """A failed setup must produce a record, not silence."""
         record = EvalRecord(
             run_id="r1",
             timestamp="t",

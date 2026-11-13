@@ -1,6 +1,6 @@
 """Run one golden against one model, score it, and record it.
 
-The order here is the point (plan §3.5, §3.6):
+The order here is the point:
 
 1. run the agent;
 2. **write the artifact** — including for a partial or failed attempt;
@@ -169,11 +169,11 @@ def score_artifact(
     **This is the one scoring path.** A live run calls it after writing its
     artifact; ``eval-rescore`` calls it on an artifact written minutes or weeks
     ago. Keeping both on this function is what stops live scoring and re-scoring
-    from drifting apart (plan §3.6).
+    from drifting apart.
 
     A re-score reuses the artifact's ``attempt_id`` and mints a fresh
     ``scoring_id``, so repeated scorings of one agent run stay distinguishable
-    while remaining linked to it (plan §3.5).
+    while remaining linked to it.
 
     Args:
         artifact_path: Directory written by :meth:`AttemptArtifact.save`.
@@ -362,7 +362,7 @@ def _score(
 
     A judge error is recorded as an error, never as a zero score, and a metric
     whose preconditions are absent is recorded ``n/a`` with the specific missing
-    precondition rather than silently skipped (plan §3.3).
+    precondition rather than silently skipped.
     """
     from deepeval.evaluate import AsyncConfig, CacheConfig, DisplayConfig, evaluate
 
@@ -440,7 +440,7 @@ def _score_fidelity(
     judge: Any,
     report: CheckReport,
 ) -> list[MetricRecord]:
-    """Score skill adherence with the per-skill GEval rubric (plan §3.3).
+    """Score skill adherence with the per-skill GEval rubric.
 
     Scored on a *separate* test case built with ``include_skill_body=True``: the
     judge cannot assess adherence to a document it has not been shown. The MCP

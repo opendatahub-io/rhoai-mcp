@@ -49,7 +49,7 @@ class EnvironmentRecord:
 
 @dataclass
 class CheckRecord:
-    """One named deterministic check result (plan §3.1).
+    """One named deterministic check result.
 
     ``status`` is ``pass`` | ``fail`` | ``n/a`` | ``unexercised``. The last two
     are deliberately distinct from ``pass``: a conditional branch that never ran
@@ -61,7 +61,7 @@ class CheckRecord:
     detail: str = ""
 
 
-#: Attempt outcomes, kept distinct from pass/fail (plan §3.4). Only an
+#: Attempt outcomes, kept distinct from pass/fail. Only an
 #: ``evaluated`` attempt is meaningfully a pass or a fail; the rest describe why
 #: the attempt did not reach a verdict. A model failure is an evaluation result,
 #: not automatically a harness bug.
@@ -77,7 +77,7 @@ class EvalRecord:
 
     The fields below ``duration_seconds`` were added for the skill-eval path and
     are absent from historical LCS records; ``reader.load_records`` supplies
-    defaults so old lines still parse (plan §3.5).
+    defaults so old lines still parse.
     """
 
     run_id: str
@@ -91,7 +91,7 @@ class EvalRecord:
     passed: bool = False
     duration_seconds: float | None = None
 
-    # -- skill-eval additions (plan §3.5) ----------------------------------- #
+    # -- skill-eval additions ----------------------------------------------- #
 
     attempt_id: str = ""
     """Identifies the agent run. A re-score reuses it."""
@@ -108,7 +108,7 @@ class EvalRecord:
     trace_id: str = ""
     """MLflow session grouping this attempt's per-turn traces. Equal to
     ``attempt_id`` by construction, since tracing follows MLflow's model of one
-    trace per turn rather than one per conversation (plan §3.6)."""
+    trace per turn rather than one per conversation."""
     dry_run: bool = False
     """True when no judge ran. Such a record carries no metric scores and must
     never be read as a judged pass."""

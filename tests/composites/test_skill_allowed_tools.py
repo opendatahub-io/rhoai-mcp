@@ -1,6 +1,6 @@
 """Every skill ``allowed-tools`` entry must resolve to a real default tool.
 
-This is the cheap, no-LLM guard from plan §3.2. Comparing the skills' declared
+This is a no-LLM guard. Comparing the skills' declared
 allowlists against the server's actual default tool list is exactly what
 surfaced the ``get_cluster_resources`` packaging bug; this test would have caught
 that drift the day it landed, instead of as a Phase 3 failure in a paid eval run.

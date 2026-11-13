@@ -1,7 +1,7 @@
 """Live skill evaluation: the ``navigator`` model-selection skill.
 
 Discovery mode — both skills are in the catalog and the agent must pick, load,
-and follow the right one from a natural-language request (plan §2.1).
+and follow the right one from a natural-language request.
 
 Runs against the stdio ``rhoai-mcp`` server with ``--mock-cluster`` by default;
 ``RHOAI_EVAL_CLUSTER_MODE=live`` selects a real cluster. No LCORE or compose.
@@ -45,7 +45,7 @@ async def test_navigator_golden(
     )
 
     # Reported, never a gate: allowed-tools is optional per the agentskills spec
-    # and unimplemented by the harness (plan §3.2).
+    # and unimplemented by the harness.
     assert outcome.eligible, outcome.failure_summary()
     assert outcome.routing_ok, outcome.failure_summary()
     # Hard workflow checks decide pass/fail independently of any judge.

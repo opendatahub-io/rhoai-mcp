@@ -87,7 +87,7 @@ def metric_records_from(eval_result: Any) -> tuple[list[MetricRecord], bool]:
 
     A metric that errored has no usable score. It is recorded with
     ``success=False`` and its error in ``reason`` rather than being silently
-    scored ``0.0``, because a judge error is an error, not a zero (plan §3.3).
+    scored ``0.0``, because a judge error is an error, not a zero.
     """
     records: list[MetricRecord] = []
     all_passed = True
@@ -125,7 +125,7 @@ def overall_passed(
     *, checks_passed: bool, routing_ok: bool, metrics: list[MetricRecord], dry_run: bool,
     required_metrics: set[str] | None = None,
 ) -> bool:
-    """Decide the attempt's verdict (plan §3.5).
+    """Decide the attempt's verdict.
 
     An overall pass requires successful routing, all hard checks, and all
     required metrics passing. Two cases that must **not** pass:

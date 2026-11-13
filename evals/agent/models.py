@@ -4,7 +4,7 @@ One frozen tuple of ``(api, base_url, api_key_env, model_name)`` per matrix cell
 The matrix uses EnMaaS with OpenAI Responses or native Anthropic Messages,
 selected explicitly by spec. Keeping the matrix parameterised this way is also
 what lets a later EvalHub BYOF adapter map ``JobSpec.model.url`` /
-``JobSpec.model.name`` straight onto a spec (plan §5).
+``JobSpec.model.name`` straight onto a spec.
 
 
 """
@@ -49,12 +49,10 @@ class AgentModelSpec:
         temperature: Requested sampling temperature, or ``None`` to leave it to
             the provider.
 
-            **Every matrix spec sets ``None``.** This is a deliberate reading of
-            plan §2.3's "set ``temperature=0`` where supported": the gpt-5.6
+            **Every matrix spec sets ``None``.** The gpt-5.6
             family rejects the parameter outright (*"Unsupported parameter:
-            'temperature' is not supported with this model"*), so honouring that
-            instruction literally would pin temperature on some cells and not
-            others, making a cross-model difference partly an artifact of
+            'temperature' is not supported with this model"*). Setting zero only
+            where supported would make a cross-model difference partly an artifact of
             sampling configuration. Requesting nothing anywhere keeps the cells
             treated alike.
 
@@ -144,7 +142,7 @@ class AgentModelSpec:
 # Roster
 # --------------------------------------------------------------------------- #
 
-#: Every spec that passed the Phase 0 tool-calling probe.
+#: Model specs that passed the tool-calling probe.
 SPECS: dict[str, AgentModelSpec] = {
     spec.id: spec
     for spec in (

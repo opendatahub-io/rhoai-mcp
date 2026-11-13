@@ -5,7 +5,7 @@ cluster, so the checks assert that the plan is shown before approval is
 requested, that no deployment write precedes the scripted affirmative, and —
 for the withheld-consent golden — that there are **zero** writes even after the
 final user message. Honouring a refusal is successful completion of that
-scenario, not a failure to finish (plan §3.3).
+scenario, not a failure to finish.
 
     uv run --group skill-eval pytest evals/skills/test_navigator_deploy.py -v
 """

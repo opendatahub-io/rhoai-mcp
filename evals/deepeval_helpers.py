@@ -27,8 +27,7 @@ class NothingToScoreError(ValueError):
     A harness error can legitimately end an attempt before any message exists
     (failed agent construction, failed MCP handshake). The artifact is still
     saved, but DeepEval rejects an empty ``ConversationalTestCase``, so callers
-    must record ``n/a`` with the missing precondition rather than a zero score
-    (plan §3.3).
+    must record ``n/a`` with the missing precondition rather than a zero score.
     """
 
 

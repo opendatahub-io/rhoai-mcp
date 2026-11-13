@@ -1,6 +1,6 @@
 """Skill-fidelity rubrics: is the skill as written actually being delivered?
 
-This is the question no stock metric answers (plan §3.3). ``MultiTurnMCPUse``
+This is the question no stock metric answers. ``MultiTurnMCPUse``
 knows whether the right tools were called with the right arguments;
 ``MCPTaskCompletion`` knows whether the task got done. Neither has ever read the
 skill document, so neither can tell you whether the *documented workflow* was
@@ -15,7 +15,7 @@ Two design rules these rubrics follow:
    confident nonsense.
 2. **Fidelity is conditional on routing.** If the expected skill never loaded
    there is no document to adhere to, and the score is ``n/a`` with a reason —
-   never 0.0 (plan §3.1).
+   never 0.0.
 
 Evaluation steps are deliberately phrased as *observable* behaviours rather than
 impressions, so two runs of the same judge agree more often. Bump

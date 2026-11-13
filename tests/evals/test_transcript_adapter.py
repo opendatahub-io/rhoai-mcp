@@ -1,11 +1,11 @@
 """Adapter correctness tests for the Pydantic AI -> shared transcript conversion.
 
-These run before any paid evaluation (plan §2.2). The failure modes they pin down
+These run before any paid evaluation. The failure modes they pin down
 are all silent: a misattributed call, a harness tool counted as an MCP
 interaction, or a duplicated turn produces a plausible-looking score that is
 simply measuring the wrong thing.
 
-Because the persisted artifact is the scoring input in live runs too (plan §3.6),
+Because the persisted artifact is the scoring input in live runs too,
 the save/load tests here double as coverage of the live scoring path.
 """
 
@@ -172,7 +172,7 @@ class TestHarnessVsMcpClassification:
         assert transcript.skill_body("navigator") == SKILL_BODY
 
     def test_skill_body_is_not_the_load_capability_acknowledgement(self) -> None:
-        """Guards the plan §3.6 correction.
+        """Ensure fidelity scoring receives the delivered skill body.
 
         Reading the body off the ``load_capability`` result would hand a fidelity
         rubric a one-line acknowledgement instead of the 14k-character skill.

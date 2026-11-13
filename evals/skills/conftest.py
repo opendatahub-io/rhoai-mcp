@@ -2,7 +2,7 @@
 
 These deliberately **override** the LCS/HTTP fixtures in ``evals/conftest.py``:
 this path drives ``rhoai-mcp`` as a stdio subprocess and needs no LCORE stack,
-no compose, and no running server (plan §2.1). Tool schemas come from the same
+no compose, and no running server. Tool schemas come from the same
 MCP session the conversation runs against, not from a separate HTTP endpoint.
 
 Judge cost is opt-in. By default these run as a **dry run**: the agent runs, the
@@ -44,7 +44,7 @@ def skill_run_id() -> str:
 
 @pytest.fixture(scope="session")
 def agent_specs() -> list[Any]:
-    """Model specs selected by ``RHOAI_EVAL_AGENT_MODELS`` (plan §2.3)."""
+    """Model specs selected by ``RHOAI_EVAL_AGENT_MODELS``."""
     from evals.agent.models import selected_specs
 
     return selected_specs()
@@ -85,7 +85,7 @@ def skill_recorder(skill_eval_config: EvalConfig, skill_run_id: str) -> EvalReco
 
 @pytest.fixture(scope="session")
 def judge_llm(skill_eval_config: EvalConfig) -> Any:
-    """The judge, held fixed across agent models (plan §2.3).
+    """The judge, held fixed across agent models.
 
     Built once per session so a misconfigured judge fails fast rather than once
     per scenario.

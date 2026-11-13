@@ -1,8 +1,8 @@
 """Drive a scripted multi-turn conversation against the stdio rhoai-mcp server.
 
 One agent, both skills in the catalog, the full default MCP tool surface, and a
-fixed script of user replies. The agent must discover which skill applies, load
-it, and follow it (plan §2.1 "discovery mode").
+fixed script of user replies. In discovery mode, the agent must discover which
+skill applies, load it, and follow it.
 
 Lifecycle rules this module exists to enforce:
 
@@ -15,7 +15,7 @@ Lifecycle rules this module exists to enforce:
   cumulative ``all_messages()``; concatenating successive snapshots duplicates
   earlier turns.
 - **Partial history is preserved on failure.** A timeout, usage-limit breach or
-  failed checkpoint still produces a saved artifact (plan §3.4, §3.6).
+  failed checkpoint still produces a saved artifact.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ DEFAULT_TURN_TIMEOUT_S = 300.0
 # Outcomes
 # --------------------------------------------------------------------------- #
 
-#: Kept distinct from pass/fail (plan §3.4). An attempt that merely fails its
+#: Kept distinct from pass/fail. An attempt that merely fails its
 #: checks is still ``evaluated``; only infrastructure and model breakdowns are not.
 OUTCOME_EVALUATED = "evaluated"
 OUTCOME_HARNESS_ERROR = "harness_error"
@@ -127,8 +127,7 @@ class ScriptedTurn:
 
     The checkpoint runs *before* the reply is sent. If it fails, the script stops
     and the partial transcript is saved: sending a generic affirmative into an
-    unexpected state could approve an action the scenario never intended
-    (plan §2.1).
+    unexpected state could approve an action the scenario never intended.
     """
 
     prompt: str

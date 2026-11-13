@@ -1,4 +1,4 @@
-"""Tests for the deterministic skill checks (plan §3.1).
+"""Tests for the deterministic skill checks.
 
 No LLM, no network. These are the checks that decide pass/fail independently of
 any judge, so a defect here silently mislabels every attempt.
@@ -7,7 +7,7 @@ Particular attention to the table checker: the helper it replaces accepted a row
 carrying a single recommendation cell, and flattened every markdown table in the
 output into one pseudo-table — so a Phase 2 workload table could satisfy checks
 meant for the Phase 3 recommendation table. The malformed-table cases below
-exist to pin those down (plan §3.1).
+exist to pin those down.
 """
 
 from __future__ import annotations
@@ -710,7 +710,7 @@ class TestNavigatorDeploy:
         """The default mock state already has a runtime, so this cannot fire.
 
         Reporting it as unexercised is the point: a conditional that never ran
-        must not read as coverage (plan §3.1, §3.4).
+        must not read as coverage.
         """
         transcript = deploy_transcript()
         approved_at = find_user_turn_index(transcript, "Yes, deploy it.")

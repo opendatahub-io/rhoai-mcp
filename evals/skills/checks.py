@@ -1,4 +1,4 @@
-"""Deterministic checks read straight off a transcript (plan §3.1).
+"""Deterministic checks read straight off a transcript.
 
 No judge, no cost, no network. Every function here is a pure read over an
 :class:`~evals.agent.transcript.AgentTranscript` plus the agent's text, so the
@@ -7,10 +7,10 @@ same checks run on a live attempt and on a re-scored artifact.
 Three principles the result model exists to enforce:
 
 1. **Collect, then assert.** Checks return named results rather than raising, so
-   a failure cannot abort the test before the attempt is recorded (plan §3.5).
+   a failure cannot abort the test before the attempt is recorded.
 2. **A conditional that never fired is not a pass.** With a fixed mock state
    several branches are unreachable; they are reported ``unexercised`` so the
-   gap is visible instead of being read as coverage (plan §3.1, §3.4).
+   gap is visible instead of being read as coverage.
 3. **A check whose precondition is absent is ``n/a``, not a pass.** If routing
    failed there is no skill to judge adherence to.
 """
@@ -57,7 +57,7 @@ DEPLOYMENT_WRITE_TOOLS = frozenset(
 #: navigator is a selection skill: planning is navigator-deploy's job.
 NAVIGATOR_FORBIDDEN_TOOLS = DEPLOYMENT_WRITE_TOOLS | {"plan_deployment"}
 
-#: Recommendation comparison table (plan §3.1): exactly these, in this order.
+#: Recommendation comparison table: exactly these, in this order.
 RECOMMENDATION_COLUMNS: tuple[str, ...] = ("Balanced", "Cost", "Performance", "Quality")
 RECOMMENDATION_ROWS: tuple[str, ...] = (
     "Model",
@@ -142,7 +142,7 @@ class CheckReport:
         return not self.failures
 
     def to_list(self) -> list[dict[str, str]]:
-        """Serialisable form for the result record (plan §3.5)."""
+        """Serialisable form for the result record."""
         return [{"name": r.name, "status": r.status, "detail": r.detail} for r in self.results]
 
     def summary(self) -> str:
@@ -199,7 +199,7 @@ def find_tables(text: str) -> list[MarkdownTable]:
     Parsing tables *separately* is the point. The earlier helper flattened every
     pipe-prefixed line in the output into one pseudo-table, so a workload table
     printed in Phase 2 could satisfy checks meant for the Phase 3 recommendation
-    table (plan §3.1).
+    table.
     """
     tables: list[MarkdownTable] = []
     current: list[list[str]] = []
@@ -229,7 +229,7 @@ def find_recommendation_table(text: str) -> MarkdownTable | None:
 
 
 def check_recommendation_table(text: str, report: CheckReport) -> None:
-    """Validate the recommendation table's exact shape (plan §3.1).
+    """Validate the recommendation table's exact shape.
 
     Checks headers, row labels, and **cell counts** — the last of which the
     earlier helper omitted, so a row carrying a single recommendation cell
@@ -321,7 +321,7 @@ def check_routing(transcript: AgentTranscript, expected_skill: str, report: Chec
     Returns:
         Whether routing succeeded. A routing failure makes skill-fidelity
         scoring ``n/a`` and fails the attempt, but MCP metrics still run on
-        whatever trajectory exists (plan §3.1, §3.3).
+        whatever trajectory exists.
     """
     loaded = transcript.skills_loaded
     ok = expected_skill in loaded
@@ -390,7 +390,7 @@ def check_navigator(
     expectation: SelectionExpectation | None = None,
     hardware_reply: str | None = None,
 ) -> CheckReport:
-    """Deterministic checks for the ``navigator`` skill (plan §3.1).
+    """Deterministic checks for the ``navigator`` skill.
 
     Args:
         transcript: The attempt, live or rebuilt from an artifact.
@@ -779,7 +779,7 @@ def check_navigator_deploy(
     expectation: SelectionExpectation | None = None,
     hardware_reply: str | None = None,
 ) -> CheckReport:
-    """Deterministic checks for the ``navigator-deploy`` skill (plan §3.1).
+    """Deterministic checks for the ``navigator-deploy`` skill.
 
     Args:
         transcript: The attempt, live or rebuilt from an artifact.
@@ -991,7 +991,7 @@ def _check_runtime_before_execution(transcript: AgentTranscript, report: CheckRe
 
 
 # --------------------------------------------------------------------------- #
-# allowed-tools reporting (plan §3.2 - reported, never a gate)
+# allowed-tools reporting (reported, never a gate)
 # --------------------------------------------------------------------------- #
 
 
@@ -1000,6 +1000,6 @@ def tools_outside_allowlist(transcript: AgentTranscript, allowed: set[str]) -> l
 
     Reported as an observation, not asserted: ``allowed-tools`` is optional per
     the agentskills spec and unimplemented by the harness. Explicit workflow
-    boundaries stay hard checks (plan §3.2).
+    boundaries stay hard checks.
     """
     return sorted({c.name for c in transcript.mcp_tool_calls} - allowed)

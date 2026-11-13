@@ -504,7 +504,9 @@ def from_pydantic_ai(
                 if not isinstance(part, ToolCallPart):
                     continue
                 call_id = part.tool_call_id or ""
-                ret = returns.get((message_index, part_index), _Return())
+                ret = returns.get(
+                    (message_index, part_index), _Return(error="tool call did not return")
+                )
                 record = ToolCallRecord(
                     call_id=call_id,
                     name=normalize_tool_name(part.tool_name),
@@ -594,7 +596,16 @@ class AttemptArtifact:
 
     def save(self, root: Path) -> Path:
         """Write this artifact under ``<root>/<run_id>/<attempt_id>/``."""
+        for value in (self.run_id, self.attempt_id):
+            if not value or value in {".", ".."} or Path(value).name != value:
+                raise ValueError("artifact IDs must be single path components")
         directory = root / self.run_id / self.attempt_id
+        root_resolved = root.resolve()
+        if any(
+            not path.resolve().is_relative_to(root_resolved)
+            for path in (directory, directory / "messages.json", directory / "artifact.json")
+        ):
+            raise ValueError("artifact path escapes root")
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "messages.json").write_bytes(self.messages_json)
         (directory / "artifact.json").write_text(

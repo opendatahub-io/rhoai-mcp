@@ -12,6 +12,7 @@ the save/load tests here double as coverage of the live scoring path.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -331,6 +332,7 @@ class TestCallIdMatching:
         unanswered, answered = from_pydantic_ai(messages).mcp_tool_calls
 
         assert unanswered.structured_result is None and unanswered.outcome is None
+        assert unanswered.is_error
         assert answered.structured_result == {"ready": True}
 
     def test_interleaved_harness_call_does_not_shift_attribution(self) -> None:
@@ -455,9 +457,24 @@ class TestFailedCalls:
         (orphan,) = transcript.mcp_tool_calls
         assert orphan.result_text is None
         assert orphan.outcome is None
-        # No outcome and no error means "never returned"; callers must be able to
-        # tell this apart from a successful call.
-        assert not orphan.is_error or orphan.result_text is None
+        assert orphan.is_error
+        assert orphan.error == "tool call did not return"
+
+    def test_unreturned_skill_load_is_not_counted_as_loaded(self) -> None:
+        transcript = from_pydantic_ai([assistant(load_call("navigator", "h1"))])
+
+        assert transcript.harness_tool_calls[0].is_error
+        assert transcript.skills_loaded == []
+
+    def test_successful_call_with_empty_result_is_not_an_error(self) -> None:
+        transcript = from_pydantic_ai(
+            [
+                assistant(call("plan_deployment", "p1")),
+                returns(result("plan_deployment", "p1", None)),
+            ]
+        )
+
+        assert not transcript.mcp_tool_calls[0].is_error
 
     def test_string_encoded_arguments_are_parsed(self) -> None:
         messages = [
@@ -628,6 +645,38 @@ class TestArtifactRoundTrip:
             returns(result("recommend_model", "m1", {"recommendations": ["llama"]})),
             assistant(TextPart(content="Here are the options.")),
         ]
+
+    @pytest.mark.parametrize("field", ["run_id", "attempt_id"])
+    @pytest.mark.parametrize("value", ["", ".", "..", "../outside", "/outside", "a/b"])
+    def test_invalid_ids_cannot_escape_root(self, tmp_path: Path, field: str, value: str) -> None:
+        ids = {"run_id": "run", "attempt_id": "attempt", field: value}
+        artifact = AttemptArtifact.from_messages([], **ids)
+
+        with pytest.raises(ValueError, match="artifact IDs"):
+            artifact.save(tmp_path / "root")
+        assert not (tmp_path / "root").exists()
+
+    @pytest.mark.parametrize("name", ["directory", "messages.json", "artifact.json"])
+    def test_symlink_cannot_redirect_writes_outside_root(self, tmp_path: Path, name: str) -> None:
+        root = tmp_path / "root"
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        artifact = AttemptArtifact.from_messages([], run_id="run", attempt_id="attempt")
+        if name == "directory":
+            (root / "run").mkdir(parents=True)
+            (root / "run" / "attempt").symlink_to(outside, target_is_directory=True)
+        else:
+            directory = root / "run" / "attempt"
+            directory.mkdir(parents=True)
+            (outside / name).write_text("unchanged")
+            (directory / name).symlink_to(outside / name)
+
+        with pytest.raises(ValueError, match="escapes root"):
+            artifact.save(root)
+        if name != "directory":
+            assert (outside / name).read_text() == "unchanged"
+        else:
+            assert not list(outside.iterdir())
 
     def test_saved_artifact_reloads_into_an_equivalent_transcript(self, tmp_path: Any) -> None:
         artifact = AttemptArtifact.from_messages(

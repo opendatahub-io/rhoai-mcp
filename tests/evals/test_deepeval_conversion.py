@@ -334,3 +334,16 @@ class TestConversationalTestCase:
 
         (turn,) = [t for t in case.turns if t.mcp_tools_called]
         assert turn.mcp_tools_called[0].result.isError is True
+
+    def test_unreturned_call_is_flagged_as_an_error_result(self, mcp_server: MCPServer) -> None:
+        history = [
+            ModelRequest(parts=[UserPromptPart(content="Recommend a model.")]),
+            ModelResponse(
+                parts=[ToolCallPart(tool_name="recommend_model", args={}, tool_call_id="x1")]
+            ),
+        ]
+
+        case = transcript_to_conversational_test_case(from_pydantic_ai(history), mcp_server)
+
+        (turn,) = [t for t in case.turns if t.mcp_tools_called]
+        assert turn.mcp_tools_called[0].result.isError is True

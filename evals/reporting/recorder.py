@@ -114,6 +114,7 @@ def metric_records_from(eval_result: Any) -> tuple[list[MetricRecord], bool]:
                     success=success,
                     threshold=float(md.threshold) if md.threshold is not None else 0.0,
                     reason=str(errored) if errored else (details.get("summary") or md.reason or ""),
+                    version=str(details.get("metric_version") or ""),
                     scorecards=details.get("scorecards", []),
                 )
             )

@@ -290,7 +290,11 @@ class TestMetricExtraction:
                         self._MetricData(
                             score=23 / 24,
                             reason=json.dumps(
-                                {"metric_version": "conversation-v3-items", "scorecards": cards}
+                                {
+                                    "metric_version": "conversation-v3-items",
+                                    "summary": "efficiency partly met",
+                                    "scorecards": cards,
+                                }
                             ),
                         )
                     ]
@@ -298,6 +302,7 @@ class TestMetricExtraction:
             ]
         )
         records, _ = metric_records_from(result)
+        assert records[0].version == "conversation-v3-items"
         assert records[0].scorecards == cards
         record = EvalRecord(
             run_id="r",
@@ -309,6 +314,7 @@ class TestMetricExtraction:
         )
         loaded = record_from_dict(json.loads(json.dumps(asdict(record))))
         assert loaded.metrics[0].score == 23 / 24
+        assert loaded.metrics[0].version == "conversation-v3-items"
         assert loaded.metrics[0].scorecards == cards
 
     def test_errored_metric_is_not_scored_zero(self) -> None:

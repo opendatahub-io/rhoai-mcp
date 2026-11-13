@@ -266,6 +266,73 @@ class TestHarnessVsMcpClassification:
 
 
 class TestCallIdMatching:
+    def test_reused_id_keeps_each_result_on_its_own_call(self) -> None:
+        messages = [
+            assistant(call("plan_deployment", "call_0")),
+            returns(result("plan_deployment", "call_0", {"ready": False})),
+            assistant(call("plan_deployment", "call_0")),
+            returns(result("plan_deployment", "call_0", {"ready": True})),
+        ]
+
+        transcript = from_pydantic_ai(messages)
+
+        assert [c.structured_result for c in transcript.mcp_tool_calls] == [
+            {"ready": False},
+            {"ready": True},
+        ]
+
+    @pytest.mark.parametrize("legacy", [False, True])
+    def test_reused_id_after_retry_does_not_change_the_failed_call(self, legacy: bool) -> None:
+        retry = (
+            RetryPromptPart(tool_name="plan_deployment", content="bad arg", tool_call_id="call_0")
+            if legacy
+            else ToolReturnPart(
+                tool_name="plan_deployment",
+                content="bad arg",
+                tool_call_id="call_0",
+                outcome="retried",
+            )
+        )
+        messages = [
+            assistant(call("plan_deployment", "call_0")),
+            returns(retry),
+            assistant(call("plan_deployment", "call_0")),
+            returns(result("plan_deployment", "call_0", {"ready": True})),
+        ]
+
+        failed, succeeded = from_pydantic_ai(messages).mcp_tool_calls
+
+        assert failed.is_error and failed.outcome == "retried"
+        assert (failed.error if legacy else failed.result_text) == "bad arg"
+        assert not succeeded.is_error and succeeded.structured_result == {"ready": True}
+
+    def test_reused_id_in_one_response_matches_returns_in_order(self) -> None:
+        messages = [
+            assistant(call("plan_deployment", "same"), call("plan_deployment", "same")),
+            returns(
+                result("plan_deployment", "same", {"ready": False}),
+                result("plan_deployment", "same", {"ready": True}),
+            ),
+        ]
+
+        assert [c.structured_result for c in from_pydantic_ai(messages).mcp_tool_calls] == [
+            {"ready": False},
+            {"ready": True},
+        ]
+
+    def test_later_call_shadows_an_unanswered_call_with_same_id(self) -> None:
+        messages = [
+            returns(result("plan_deployment", "same", {"ready": "orphan"})),
+            assistant(call("plan_deployment", "same")),
+            assistant(call("plan_deployment", "same")),
+            returns(result("plan_deployment", "same", {"ready": True})),
+        ]
+
+        unanswered, answered = from_pydantic_ai(messages).mcp_tool_calls
+
+        assert unanswered.structured_result is None and unanswered.outcome is None
+        assert answered.structured_result == {"ready": True}
+
     def test_interleaved_harness_call_does_not_shift_attribution(self) -> None:
         """The regression that motivated this adapter.
 

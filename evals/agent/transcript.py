@@ -19,7 +19,7 @@ Two representations exist here:
 
 Two correctness rules this module exists to enforce:
 
-1. **Calls and returns are matched by call ID, never by list position.** The
+1. **Calls and returns are matched by call ID and occurrence.** The
    previous LCS helper consumed ``result.tool_calls`` positionally, which
    attached a later tool's result to an earlier turn whenever a harness call was
    interleaved. Parallel tool calls can also return out of order.
@@ -32,6 +32,7 @@ Two correctness rules this module exists to enforce:
 from __future__ import annotations
 
 import json
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -323,41 +324,50 @@ def _args_dict(part: Any) -> dict[str, Any]:
 
 @dataclass
 class _Return:
-    """A tool return or retry, keyed by call ID."""
+    """A tool return or retry associated with one call occurrence."""
 
     content: Any = None
     outcome: str | None = None
     error: str | None = None
 
 
-def _index_returns(messages: list[ModelMessage]) -> dict[str, _Return]:
-    """Index every tool return and retry prompt by its call ID.
+def _index_returns(messages: list[ModelMessage]) -> dict[tuple[int, int], _Return]:
+    """Match each return to an earlier call occurrence, including reused IDs.
 
-    Indexing first, then matching by ID, is what makes parallel tool calls and
-    out-of-order returns attribute correctly.
+    Calls sharing an ID in one response are matched in order. As in Pydantic AI,
+    reusing an unresolved ID in a later response leaves earlier calls unanswered.
     """
-    from pydantic_ai.messages import ModelRequest, RetryPromptPart, ToolReturnPart
+    from pydantic_ai.messages import (
+        ModelRequest,
+        ModelResponse,
+        RetryPromptPart,
+        ToolCallPart,
+        ToolReturnPart,
+    )
 
-    returns: dict[str, _Return] = {}
-    for message in messages:
-        if not isinstance(message, ModelRequest):
-            continue
-        for part in message.parts:
-            # LoadCapabilityReturnPart subclasses ToolReturnPart, so this one
-            # isinstance check deliberately covers both.
-            if isinstance(part, ToolReturnPart):
-                call_id = part.tool_call_id or ""
-                if call_id:
-                    returns[call_id] = _Return(
-                        content=part.content, outcome=getattr(part, "outcome", None)
-                    )
-            elif isinstance(part, RetryPromptPart):
-                call_id = part.tool_call_id or ""
-                if call_id:
-                    existing = returns.get(call_id) or _Return()
-                    existing.error = _result_text(part.content)
-                    existing.outcome = existing.outcome or "retried"
-                    returns[call_id] = existing
+    returns: dict[tuple[int, int], _Return] = {}
+    pending: dict[str, deque[tuple[int, int]]] = {}
+    for message_index, message in enumerate(messages):
+        if isinstance(message, ModelResponse):
+            for part_index, part in enumerate(message.parts):
+                if not isinstance(part, ToolCallPart) or not part.tool_call_id:
+                    continue
+                calls = pending.setdefault(part.tool_call_id, deque())
+                if calls and calls[-1][0] != message_index:
+                    calls.clear()
+                calls.append((message_index, part_index))
+        elif isinstance(message, ModelRequest):
+            for part in message.parts:
+                # LoadCapabilityReturnPart is also a ToolReturnPart.
+                if isinstance(part, ToolReturnPart):
+                    ret = _Return(content=part.content, outcome=part.outcome)
+                elif isinstance(part, RetryPromptPart) and part.tool_name is not None:
+                    ret = _Return(error=_result_text(part.content), outcome="retried")
+                else:
+                    continue
+                calls = pending.get(part.tool_call_id or "")
+                if calls:
+                    returns[calls.popleft()] = ret
     return returns
 
 
@@ -467,7 +477,7 @@ def from_pydantic_ai(
     catalog: list[str] = []
     delivered: dict[str, list[str]] = {}
 
-    for message in messages:
+    for message_index, message in enumerate(messages):
         if isinstance(message, ModelRequest):
             _collect_instructions(message, catalog, delivered)
             # A ModelRequest carrying only tool returns is not a user turn; its
@@ -490,11 +500,11 @@ def from_pydantic_ai(
             )
             turn_index = len(transcript.turns)
 
-            for part in message.parts:
+            for part_index, part in enumerate(message.parts):
                 if not isinstance(part, ToolCallPart):
                     continue
                 call_id = part.tool_call_id or ""
-                ret = returns.get(call_id, _Return())
+                ret = returns.get((message_index, part_index), _Return())
                 record = ToolCallRecord(
                     call_id=call_id,
                     name=normalize_tool_name(part.tool_name),

@@ -117,6 +117,7 @@ addopts = "-p evals.pytest_defaults -ra -q"
 markers = [
     "eval: MCP evaluation tests (require LLM provider)",
     "live: tests requiring a live OpenShift cluster",
+    "skill_eval: skill evaluation tests (require the skill-eval dependency group)",
 ]
 
 [tool.coverage.run]

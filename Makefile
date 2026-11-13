@@ -154,14 +154,14 @@ eval-down: ## Stop eval services
 
 eval: ## Run MCP evaluation tests (starts services, runs tests, stops services)
 	$(MAKE) eval-up
-	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short --reruns 2 --reruns-delay 5; \
+	uv run --group eval pytest evals/ -v -m "eval and not live and not skill_eval" --tb=short --reruns 2 --reruns-delay 5; \
 	status=$$?; \
 	$(MAKE) eval-down; \
 	exit $$status
 
 eval-live: ## Run all MCP evaluation tests including live cluster
 	$(MAKE) eval-up
-	uv run --group eval pytest evals/ -v -m "eval" --tb=short --reruns 2 --reruns-delay 5; \
+	uv run --group eval pytest evals/ -v -m "eval and not skill_eval" --tb=short --reruns 2 --reruns-delay 5; \
 	status=$$?; \
 	$(MAKE) eval-down; \
 	exit $$status

@@ -22,7 +22,7 @@ from evals.skills.goldens import DEPLOY_GOLDENS
 if TYPE_CHECKING:
     from evals.agent.models import AgentModelSpec
 
-pytestmark = [pytest.mark.eval, pytest.mark.asyncio]
+pytestmark = [pytest.mark.eval, pytest.mark.asyncio, pytest.mark.skill_eval]
 
 
 @pytest.mark.parametrize("golden", DEPLOY_GOLDENS, ids=lambda g: g.id)

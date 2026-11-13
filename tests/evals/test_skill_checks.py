@@ -737,6 +737,43 @@ class TestNavigatorDeploy:
 
         assert "deploy_runtime_created_before_execute" in {r.name for r in report.failures}
 
+    @pytest.mark.parametrize(
+        ("steps", "expected"),
+        [
+            ([False, True, "execute"], "fail"),
+            ([True, False, "execute"], "unexercised"),
+            ([False, True, "create", "execute"], "pass"),
+            ([True, "create", "execute", "execute"], "pass"),
+            (["create", True, "execute"], "fail"),
+            ([True, "create", "execute", True, "execute"], "fail"),
+            ([True, "execute", True, "create", "execute"], "fail"),
+            ([True, None, "execute"], "unexercised"),
+            ([True, "create", "execute", None, "execute"], "unexercised"),
+            ([True], "unexercised"),
+        ],
+    )
+    def test_runtime_check_uses_plan_for_each_execution(
+        self, steps: list[bool | str | None], expected: str
+    ) -> None:
+        messages = [user("Deploy it."), *load("navigator-deploy", "h1")]
+        for index, step in enumerate(steps):
+            if isinstance(step, bool) or step is None:
+                name = "plan_deployment"
+                content = {} if step is None else {"runtime_needs_creation": step}
+            else:
+                name = "create_serving_runtime" if step == "create" else "execute_deployment"
+                content = {"success": True} if step == "create" else {"deployed": True}
+            call_id = f"call-{index}"
+            messages.extend(
+                [assistant(call(name, call_id)), returns(result(name, call_id, content))]
+            )
+
+        report = check_navigator_deploy(from_pydantic_ai(messages))
+        status = next(
+            r.status for r in report.results if r.name == "deploy_runtime_created_before_execute"
+        )
+        assert status == expected
+
     def test_execute_after_a_failed_precondition_fails(self) -> None:
         messages = [
             user("Deploy it."),

@@ -861,29 +861,7 @@ def check_navigator_deploy(
                 review_error or "",
             )
 
-    # Conditional branch: only meaningful when the plan says a runtime is needed.
-    needs_runtime = _plan_requires_runtime(transcript)
-    if needs_runtime is None:
-        report.add(
-            "deploy_runtime_created_before_execute",
-            "unexercised",
-            "no plan_deployment result to read runtime_needs_creation from",
-        )
-    elif not needs_runtime:
-        report.add(
-            "deploy_runtime_created_before_execute",
-            "unexercised",
-            "runtime_needs_creation=false in the default mock state; "
-            "the create-runtime branch is unreachable without state control",
-        )
-    else:
-        runtime_at = _first_call_index(transcript, "create_serving_runtime")
-        exec_at = execute_calls[0].turn_index if execute_calls else None
-        report.check(
-            "deploy_runtime_created_before_execute",
-            runtime_at is not None and (exec_at is None or runtime_at < exec_at),
-            f"create_serving_runtime at {runtime_at}, execute_deployment at {exec_at}",
-        )
+    _check_runtime_before_execution(transcript, report)
 
     _check_failed_deployment_preconditions(transcript, report)
 
@@ -957,24 +935,54 @@ def _check_deployment_agreement(
     report.check(names[1], not errors, "; ".join(errors))
 
 
-def _plan_requires_runtime(transcript: AgentTranscript) -> bool | None:
-    """Read ``runtime_needs_creation`` from the plan result, if it is there.
-
-    Returns ``None`` when no plan result is available, so the caller can report
-    the dependent check as unexercised rather than silently passing it.
-    """
-    for call in transcript.mcp_tool_calls:
-        if call.name != "plan_deployment":
-            continue
-        structured = call.structured_result
-        if isinstance(structured, dict):
-            for key in ("runtime_needs_creation", "needs_runtime_creation"):
-                if key in structured:
-                    return bool(structured[key])
-            runtime = structured.get("runtime")
-            if isinstance(runtime, dict) and "needs_creation" in runtime:
-                return bool(runtime["needs_creation"])
+def _plan_requires_runtime(plan: ToolCallRecord) -> bool | None:
+    """Read the runtime requirement from one plan, if present."""
+    structured = plan.structured_result
+    if isinstance(structured, dict):
+        for key in ("runtime_needs_creation", "needs_runtime_creation"):
+            if key in structured:
+                return bool(structured[key])
+        runtime = structured.get("runtime")
+        if isinstance(runtime, dict) and "needs_creation" in runtime:
+            return bool(runtime["needs_creation"])
     return None
+
+
+def _check_runtime_before_execution(transcript: AgentTranscript, report: CheckReport) -> None:
+    """Check each execution against its latest preceding plan and runtime creation."""
+    plan = None
+    runtime_at = None
+    exercised = False
+    unknown = False
+    missing = []
+    for call in transcript.mcp_tool_calls:
+        if call.name == "plan_deployment":
+            plan = call
+            runtime_at = None
+        elif call.name == "create_serving_runtime" and plan is not None:
+            if runtime_at is None and call.turn_index > plan.turn_index:
+                runtime_at = call.turn_index
+        elif call.name == "execute_deployment":
+            if plan is None or plan.turn_index >= call.turn_index:
+                unknown = True
+                continue
+            needs_runtime = _plan_requires_runtime(plan)
+            if needs_runtime is None:
+                unknown = True
+            elif needs_runtime:
+                exercised = True
+                if runtime_at is None or runtime_at >= call.turn_index:
+                    missing.append(f"{call.call_id} at turn {call.turn_index}")
+
+    name = "deploy_runtime_created_before_execute"
+    if missing:
+        report.check(name, False, "runtime not created before execution: " + ", ".join(missing))
+    elif unknown or not exercised:
+        report.add(
+            name, "unexercised", "no execution required creation, or a requirement is unknown"
+        )
+    else:
+        report.check(name, True)
 
 
 # --------------------------------------------------------------------------- #

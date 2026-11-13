@@ -90,9 +90,11 @@ def test_rescore_legacy_artifact_uses_registry(tmp_path: Path) -> None:
     config = SkillEvalConfig(_env_file=None)
     recorder = EvalRecorder(config, path=tmp_path / "history.jsonl")
     assert len(rescore([path], config=config, recorder=recorder)) == 1
-    with patch("evals.skills.rescore.GOLDENS_BY_ID", {}):
-        with pytest.raises(ValueError, match="unknown scenario"):
-            rescore([path], config=config, recorder=recorder)
+    with (
+        patch("evals.skills.rescore.GOLDENS_BY_ID", {}),
+        pytest.raises(ValueError, match="unknown scenario"),
+    ):
+        rescore([path], config=config, recorder=recorder)
 
 
 def test_missing_required_metric_and_incomplete_execution_cannot_pass(tmp_path: Path) -> None:

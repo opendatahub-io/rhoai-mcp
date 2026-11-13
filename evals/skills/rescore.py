@@ -37,7 +37,9 @@ def rescore(
         if snapshot is not None:
             golden = Golden.from_snapshot(snapshot)
             if golden.id != golden_id or golden.skill != artifact.metadata.get("skill"):
-                raise ValueError(f"{path}: saved scenario snapshot does not match artifact identity")
+                raise ValueError(
+                    f"{path}: saved scenario snapshot does not match artifact identity"
+                )
         else:
             golden = GOLDENS_BY_ID.get(golden_id)
             if golden is None:

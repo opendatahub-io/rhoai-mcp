@@ -27,6 +27,9 @@ PLATFORM ?= linux/amd64
 # PyPI index URL for requirements generation (Red Hat internal index).
 PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 
+# Keep these paths aligned with the eval harness checks in CI.
+LINT_PATHS := src/ evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
+
 # Guard: ensure a container runtime was found
 ifeq ($(CONTAINER_RUNTIME),)
     $(error No container runtime found. Install podman or docker.)
@@ -97,12 +100,12 @@ test-integration: ## Run integration tests only
 	uv run pytest tests/integration -v
 
 lint: ## Run linter and formatting (ruff)
-	uv run ruff check src/
-	@uv run ruff format --check src/ || (echo "Formatting issues found. Run 'make format' to fix." && exit 1)
+	uv run ruff check $(LINT_PATHS)
+	@uv run ruff format --check $(LINT_PATHS) || (echo "Formatting issues found. Run 'make format' to fix." && exit 1)
 
 format: ## Format code (ruff)
-	uv run ruff format src/
-	uv run ruff check --fix src/
+	uv run ruff format $(LINT_PATHS)
+	uv run ruff check --fix $(LINT_PATHS)
 
 typecheck: ## Run type checker (mypy)
 	uv run mypy src/

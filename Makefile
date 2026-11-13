@@ -46,7 +46,7 @@ else
 endif
 
 .PHONY: help build build-no-cache run run-http run-stdio run-dev run-token stop logs shell clean info
-.PHONY: dev install sync test lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
+.PHONY: dev install sync test test-evals lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
 .PHONY: generate-requirements-cpu
 
 # =============================================================================
@@ -61,7 +61,7 @@ help: ## Show this help message
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Development:"
-	@grep -E '^(dev|install|sync|test|lint|format|check|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(dev|install|sync|test|test-evals|lint|format|check|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Evaluation:"
 	@grep -E '^(eval|eval-live|eval-scenario|eval-report|eval-compare|eval-trend):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -84,8 +84,11 @@ install: ## Install package in development mode
 sync: ## Sync dependencies without installing dev packages
 	uv sync --no-dev
 
-test: ## Run all tests
-	uv run pytest tests/ -v
+test: ## Run tests (excluding evaluation tests)
+	uv run pytest tests/ --ignore=tests/evals -v
+
+test-evals: ## Run offline evaluation tests
+	uv run --group skill-eval pytest tests/evals -v --tb=short
 
 test-unit: ## Run unit tests only (training domain)
 	uv run pytest tests/training -v

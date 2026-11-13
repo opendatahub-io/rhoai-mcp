@@ -5,4 +5,7 @@
 
 import os
 
+from evals.deepeval_defaults import configure_deepeval
+
 os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "YES")
+configure_deepeval()

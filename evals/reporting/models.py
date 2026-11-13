@@ -114,6 +114,8 @@ class EvalRecord:
     never be read as a judged pass."""
     agent_seconds: float | None = None
     """Agent execution time, separate from scoring time (``duration_seconds``)."""
+    is_rescore: bool | None = None
+    """Whether this scoring pass replayed an artifact; absent in older records."""
     skill_sha: str = ""
     scenario_sha: str = ""
     rubric_version: str = ""

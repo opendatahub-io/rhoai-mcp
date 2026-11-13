@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from evals.agent.transcript import AttemptArtifact
+from evals.deepeval_defaults import configure_deepeval
 from evals.reporting.recorder import EvalRecorder
 from evals.skills.attempt import RESULTS_ROOT, SKILL_RESULTS_PATH, AttemptOutcome, score_artifact
 from evals.skills.config import SkillEvalConfig
@@ -27,6 +28,7 @@ def find_artifacts(root: Path, *, run_id: str | None, attempt_id: str | None) ->
 def rescore(
     paths: list[Path], *, judge: Any = None, recorder: Any = None, config: Any = None
 ) -> list[AttemptOutcome]:
+    configure_deepeval()
     cfg = config or SkillEvalConfig()
     rec = recorder or EvalRecorder(cfg, path=SKILL_RESULTS_PATH)
     outcomes = []
@@ -49,6 +51,7 @@ def rescore(
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_deepeval()
     parser = argparse.ArgumentParser(description=__doc__)
     selector = parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--run", dest="run_id", help="run id (prefix)")

@@ -162,7 +162,7 @@ def score_artifact(
     run_error: str | None = None,
     run_error_stage: str | None = None,
     turns: int | None = None,
-    agent_seconds: float = 0.0,
+    agent_seconds: float | None = None,
 ) -> AttemptOutcome:
     """Grade and record a saved attempt.
 
@@ -187,7 +187,7 @@ def score_artifact(
         run_error: Live-run error text, likewise.
         run_error_stage: Live-run error stage, likewise.
         turns: Turns completed, likewise.
-        agent_seconds: Agent execution time; zero for a re-score, which ran none.
+        agent_seconds: Agent execution time, or None for a re-score.
     """
     from evals.agent.transcript import AttemptArtifact
 
@@ -291,7 +291,8 @@ def score_artifact(
         checks=[CheckRecord(**c) for c in report.to_list()],
         artifact_path=str(artifact_path),
         dry_run=dry_run,
-        agent_seconds=round(agent_seconds, 2),
+        agent_seconds=round(agent_seconds, 2) if agent_seconds is not None else 0.0,
+        is_rescore=agent_seconds is None,
         skill_sha=str(meta.get("skill_sha", "")),
         scenario_sha=str(meta.get("scenario_sha", "")),
         rubric_version=RUBRIC_VERSION,

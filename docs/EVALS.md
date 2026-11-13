@@ -612,6 +612,8 @@ The skill suite runs Pydantic AI with both Navigator skills available for discov
 
 Pytest runs and Makefile recipes opt out of DeepEval telemetry by default, including `make eval-rescore`. Set `DEEPEVAL_TELEMETRY_OPT_OUT=NO` explicitly to enable it. Non-pytest commands run outside Make require the variable to be set separately.
 
+Pytest evaluation runs and the rescore command default DeepEval's per-attempt judge timeout to 900 seconds. Set `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` to another value to override it, or set `DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE` to use an explicit outer task budget. Provider timeouts may still apply. This default also applies to judged replay and legacy pytest evals.
+
 Set `RHOAI_EVAL_AGENT_MODELS=all` to select all four EnMaaS profiles, or provide a comma-separated list of profile IDs.
 
 ```bash
@@ -625,6 +627,17 @@ make eval-rescore ARGS="--attempt <attempt-id> --judge"
 Live checks-only runs still call the agent. Replay reads saved evidence and never starts an agent or MCP; checks-only replay needs no credentials or network, while judged replay calls the configured judge. Use `uv run --group skill-eval pytest evals/skills/test_navigator_deploy.py -k withheld -v -s` to select a subset. `--run <run-id>` replays a whole run.
 
 Each attempt writes `evals/results/<run-id>/<attempt-id>/artifact.json` and `messages.json`, including partial histories, tool schemas, errors, delivered instructions, generation settings and scenario intent. Each scoring appends to `evals/results/skill_history.jsonl` with the original run and attempt IDs and a new scoring ID. Older artifacts without an intent snapshot are accepted only when their scenario hash matches the current definition. Scores contain the evaluator revision, checks and rubric versions, judge configuration and original generation hashes. Read the JSONL directly to inspect prior results.
+
+### Navigator comparison reports
+
+The offline comparison command produces Markdown and JSON reports with quality, deterministic checks, token usage, tool calls, timing and per-attempt results. Select the original run IDs explicitly; repeat `--run-id` when a sweep spans multiple pytest sessions. It rejects incompatible configurations and unbalanced scenario mixes.
+
+```bash
+make eval-compare ARGS="--file evals/results/skill_history.jsonl --run-id <run-id> --format markdown --output evals/results/navigator-comparison.md"
+make eval-compare ARGS="--file evals/results/skill_history.jsonl --run-id <run-id> --format json --output evals/results/navigator-comparison.json"
+```
+
+The default uses the original scoring for each attempt. Add `--scoring latest` to select its most recent scoring without counting replays as new conversations. The agent duration comes from the original execution record or saved artifact. Use `--artifacts-root evals/results` to find artifacts moved from another checkout. Add `--concurrent` when attempts overlapped; their timings are descriptive, not a controlled latency comparison. Missing measurements remain `n/a`. Reports and histories in `evals/results` are gitignored.
 
 `CHECKS ONLY` means judging was skipped; it is not an overall pass. A judged pass requires a completed execution, correct routing, all mandatory checks and all three required metrics. Execution errors, failed checks, judge errors and unexercised branches are shown separately. See [judge scoring](JUDGE-SCORING.md).
 

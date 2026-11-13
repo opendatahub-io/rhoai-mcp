@@ -202,6 +202,8 @@ async def test_live_scoring_and_replay_share_the_saved_record_path(
     assert records[0].run_id == records[1].run_id == recorder.run_id
     assert records[0].attempt_id == records[1].attempt_id
     assert records[0].scoring_id != records[1].scoring_id
+    assert records[0].is_rescore is False
+    assert records[1].is_rescore is True
     assert records[0].checks == records[1].checks
     assert AttemptArtifact.load(first.artifact_path).metadata["cluster_mode"] == cluster_mode
     assert [record.environment.cluster_mode for record in records] == [cluster_mode, cluster_mode]

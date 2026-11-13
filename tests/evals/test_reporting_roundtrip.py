@@ -154,9 +154,29 @@ class TestRecordRoundTrip:
 
         assert loaded.scenario == "cluster_exploration"
         assert loaded.environment.agent_backend == "lcs"
+        assert loaded.environment.agent_model == "granite"
         assert loaded.attempt_id == ""
         assert loaded.dry_run is False
         assert loaded.checks == []
+
+    def test_empty_lcs_model_survives_round_trip(self, tmp_path: Path) -> None:
+        from evals.reporting.formatting import provider_label
+
+        env = environment()
+        env.agent_backend = "lcs"
+        env.agent_model = ""
+        record = EvalRecord(
+            run_id="r1",
+            timestamp="t",
+            scenario="s",
+            git=GitRecord(commit="c", branch="b"),
+            environment=env,
+        )
+
+        (loaded,) = load_records(str(write(tmp_path, record)))
+
+        assert loaded.environment.agent_model == ""
+        assert provider_label(loaded) == "lcs"
 
     def test_malformed_line_is_skipped_without_losing_the_rest(self, tmp_path: Path) -> None:
         good = EvalRecord(

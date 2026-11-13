@@ -30,7 +30,7 @@ def record_from_dict(data: dict[str, Any]) -> EvalRecord:
         raise TypeError("An eval environment must be an object")
     environment = EnvironmentRecord(
         agent_backend=env.get("agent_backend") or env.get("llm_provider") or "unknown",
-        agent_model=env.get("agent_model") or env.get("llm_model") or "unknown",
+        agent_model=env.get("agent_model", env.get("llm_model", "unknown")),
         lcs_url=env.get("lcs_url", ""),
         eval_provider=env.get("eval_provider", "unknown"),
         eval_model=env.get("eval_model", "unknown"),

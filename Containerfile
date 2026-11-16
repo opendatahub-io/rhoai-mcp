@@ -61,7 +61,7 @@ EXPOSE 8000
 # Health check for HTTP transports
 # Note: Only works with SSE/streamable-http, not stdio
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8000/health', timeout=5)" || exit 0
+    CMD python -c "import httpx2; httpx2.get('http://localhost:8000/health', timeout=5)" || exit 0
 
 # Default entrypoint runs the MCP server
 ENTRYPOINT ["rhoai-mcp"]

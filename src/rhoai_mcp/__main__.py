@@ -205,16 +205,16 @@ def main() -> int:
 
     try:
         mcp = create_server(config)
+        # v2: host/port come from config (RHOAI_MCP_HOST/PORT env vars or
+        # CLI args) and are passed per-run; MCPServer no longer takes them.
+        # run()'s overloads are Literal-typed per transport, so dispatch on
+        # the enum rather than passing a plain str.
         if config.transport == TransportMode.STDIO:
-            mcp.run(transport=transport_name)  # type: ignore[arg-type]
+            mcp.run(transport="stdio")
+        elif config.transport == TransportMode.SSE:
+            mcp.run(transport="sse", host=config.host, port=config.port)
         else:
-            # v2: host/port come from config (RHOAI_MCP_HOST/PORT env vars or
-            # CLI args) and are passed per-run; MCPServer no longer takes them
-            mcp.run(  # type: ignore[arg-type]
-                transport=transport_name,
-                host=config.host,
-                port=config.port,
-            )
+            mcp.run(transport="streamable-http", host=config.host, port=config.port)
     except BaseException as exc:  # BaseException to catch anyio's BaseExceptionGroup
         if _has_auth_error(exc):
             logger.error(

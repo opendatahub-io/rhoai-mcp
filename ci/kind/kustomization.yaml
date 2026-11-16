@@ -21,6 +21,7 @@ kind: Kustomization
 resources:
   - ../../deploy/kustomize/base
   - personas.yaml
+  - kserve-crds.yaml
 
 # The base's namespace field applies during the base's own rendering pass;
 # overlay-added resources (personas.yaml) need it declared here too.

@@ -1,0 +1,17 @@
+# Enable multi-user auth in token-review mode over streamable-http. JSON
+# patch "add" on an existing key replaces it, so RHOAI_MCP_TRANSPORT
+# overrides the base's "sse" default. No model-catalog URL: there is no
+# Model Catalog on the smoke cluster, and the planner falls back to
+# bundled benchmarks.
+- op: add
+  path: /data/RHOAI_MCP_OIDC_ENABLED
+  value: "true"
+- op: add
+  path: /data/RHOAI_MCP_OIDC_TOKEN_MODE
+  value: "token-review"
+- op: add
+  path: /data/RHOAI_MCP_TRANSPORT
+  value: "streamable-http"
+- op: add
+  path: /data/RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY
+  value: "user-token"

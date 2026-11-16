@@ -1,0 +1,90 @@
+name: Smoke E2E (KinD)
+
+# In-repo smoke lane (RHAI-14598): deploys the server into a KinD cluster
+# in token-review mode with two RBAC personas and asserts the golden path —
+# boot/health, RBAC list-filtering and call-denial, and one token-rotation
+# case — via a raw JSON-RPC client (SDK-agnostic, inert to the SDK v2
+# migration). Deliberately smoke-level: no gateway, no model-serving tool
+# calls, no JWT/OIDC mode — that breadth stays in opendatahub-tests.
+# Layering is documented in README.md ("Testing layers").
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Later steps run repository code and docker build on PR content —
+          # do not leave the GITHUB_TOKEN in .git/config (CWE-522).
+          persist-credentials: false
+
+      - name: Create KinD cluster
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        with:
+          cluster_name: rhoai-mcp-smoke
+
+      - name: Build server image
+        run: docker build -f Containerfile -t rhoai-mcp:smoke .
+
+      - name: Load image into KinD
+        run: kind load docker-image rhoai-mcp:smoke --name rhoai-mcp-smoke
+
+      - name: Deploy server and personas
+        run: |
+          kubectl apply -k ci/kind
+          kubectl -n rhoai-mcp rollout status deployment/rhoai-mcp --timeout=180s
+
+      - name: Diagnose deployment failure
+        if: failure()
+        run: |
+          kubectl -n rhoai-mcp get pods -o wide || true
+          kubectl -n rhoai-mcp describe deployment rhoai-mcp || true
+          for pod in $(kubectl -n rhoai-mcp get pods -o name); do
+            kubectl -n rhoai-mcp describe "$pod" || true
+            kubectl -n rhoai-mcp logs "$pod" --all-containers --tail=100 || true
+          done
+
+      - name: Run smoke checks
+        run: |
+          set -euo pipefail
+          kubectl -n rhoai-mcp port-forward svc/rhoai-mcp 8000:8000 &
+          PORT_FORWARD_PID=$!
+          trap 'kill "$PORT_FORWARD_PID" 2>/dev/null || true' EXIT
+
+          # Wait for the port-forward to accept connections; fail loudly on timeout
+          ready=0
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::server never became reachable on the port-forward"
+            exit 1
+          fi
+
+          # Assign separately from export so a failed kubectl aborts loudly
+          SMOKE_BASE_URL=http://127.0.0.1:8000
+          SMOKE_READER_TOKEN="$(kubectl -n rhoai-mcp create token smoke-reader)"
+          SMOKE_READER_TOKEN_2="$(kubectl -n rhoai-mcp create token smoke-reader)"
+          SMOKE_DEPLOYER_TOKEN="$(kubectl -n rhoai-mcp create token smoke-deployer)"
+          export SMOKE_BASE_URL SMOKE_READER_TOKEN SMOKE_READER_TOKEN_2 SMOKE_DEPLOYER_TOKEN
+
+          python3 ci/smoke/smoke_test.py

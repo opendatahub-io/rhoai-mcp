@@ -1,0 +1,10 @@
+# The smoke image is built in CI and loaded directly into the KinD node
+# (kind load docker-image) — never pull it. Patched on the Deployment
+# itself because the base's params.env image replacement runs at the base
+# layer, before overlay patches apply.
+- op: replace
+  path: /spec/template/spec/containers/0/image
+  value: rhoai-mcp:smoke
+- op: replace
+  path: /spec/template/spec/containers/0/imagePullPolicy
+  value: Never

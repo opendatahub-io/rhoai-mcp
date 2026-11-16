@@ -1,0 +1,21 @@
+# Replace the base's broad read-write ClusterRole with the minimal set the
+# token-review validation mode needs (same rules as the openshift-oidc
+# overlay's clusterrole-patch). Resource access is evaluated against the
+# caller's bearer token (user-token strategy), not the SA's identity.
+- op: replace
+  path: /rules
+  value:
+    # Validate opaque bearer tokens via TokenReview
+    - apiGroups: ["authentication.k8s.io"]
+      resources: ["tokenreviews"]
+      verbs: ["create"]
+
+    # RBAC-filter MCP tools per user via SubjectAccessReview
+    - apiGroups: ["authorization.k8s.io"]
+      resources: ["subjectaccessreviews"]
+      verbs: ["create"]
+
+    # Fetch OCP group memberships for authenticated users
+    - apiGroups: ["user.openshift.io"]
+      resources: ["users"]
+      verbs: ["get"]

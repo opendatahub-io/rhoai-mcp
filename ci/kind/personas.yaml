@@ -1,0 +1,66 @@
+# RBAC personas for the smoke assertions (RHAI-14598). Part of the
+# ci/kind kustomization — see kustomization.yaml.
+#
+# Governed tools used by the smoke assertions (see
+# src/rhoai_mcp/domains/permissions.py):
+#   deploy_model            -> create serving.kserve.io/inferenceservices  (deployer only)
+#   list_inference_services -> list serving.kserve.io/inferenceservices    (both personas)
+---
+# Persona: smoke-reader — get/list on KServe resources. Sees governed
+# read tools; deploy_model is filtered from tools/list and denied on call.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: smoke-reader
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rhoai-mcp-smoke-reader
+rules:
+  - apiGroups: ["serving.kserve.io"]
+    resources: ["inferenceservices", "servingruntimes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhoai-mcp-smoke-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rhoai-mcp-smoke-reader
+subjects:
+  - kind: ServiceAccount
+    name: smoke-reader
+    namespace: rhoai-mcp
+---
+# Persona: smoke-deployer — adds create/delete, so deploy_model is
+# visible in tools/list for this caller.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: smoke-deployer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rhoai-mcp-smoke-deployer
+rules:
+  - apiGroups: ["serving.kserve.io"]
+    resources: ["inferenceservices", "servingruntimes"]
+    verbs: ["get", "list", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhoai-mcp-smoke-deployer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rhoai-mcp-smoke-deployer
+subjects:
+  - kind: ServiceAccount
+    name: smoke-deployer
+    namespace: rhoai-mcp
+  

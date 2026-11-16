@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# KinD smoke-lane deployment for rhoai-mcp (RHAI-14598).
+#
+# Reuses the canonical kustomize base (deploy/kustomize/base) so the smoke
+# lane cannot drift from the real deployment shape — the base carries the
+# pod security context (runAsUser 1000), the --transport arg that overrides
+# the image's stdio CMD, probes, and the hardened container spec. Patches:
+#   * ClusterRole — minimal token-review permissions, the same shape as the
+#     openshift-oidc overlay's role (the lane runs the user-token strategy,
+#     so no impersonation rule)
+#   * ConfigMap   — enable OIDC token-review over streamable-http
+#   * Deployment  — the kind-loaded smoke image (rhoai-mcp:smoke, Never
+#     pull); patched on the Deployment because the base's params.env image
+#     replacement runs at the base layer, before overlay patches
+# The two RBAC personas the smoke assertions use are in personas.yaml.
+#
+# Apply with: kubectl apply -k ci/kind
+
+resources:
+  - ../../deploy/kustomize/base
+  - personas.yaml
+
+# The base's namespace field applies during the base's own rendering pass;
+# overlay-added resources (personas.yaml) need it declared here too.
+namespace: rhoai-mcp
+
+patches:
+  - target:
+      kind: ClusterRole
+      name: rhoai-mcp
+    path: clusterrole-patch.yaml
+  - target:
+      kind: ConfigMap
+      name: rhoai-mcp-config
+    path: config-patch.yaml
+  - target:
+      kind: Deployment
+      name: rhoai-mcp
+    path: deployment-patch.yaml

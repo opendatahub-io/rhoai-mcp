@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.cluster.client import ClusterClient
 
@@ -10,11 +10,11 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_cluster_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_cluster_resources(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register the cluster resource inventory tool."""
 
     @mcp.tool()
-    def get_cluster_resources() -> dict[str, Any]:
+    def get_cluster_resources(ctx: Context | None = None) -> dict[str, Any]:
         """Get cluster-wide compute resources available for workloads.
 
         Returns information about CPU, memory, and GPU resources across
@@ -24,7 +24,7 @@ def register_cluster_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
         Returns:
             Cluster resource summary including CPU, memory, and GPU info.
         """
-        client = ClusterClient(server.k8s)
+        client = ClusterClient(server.get_k8s(ctx))
         resources = client.get_cluster_resources()
 
         result: dict[str, Any] = {

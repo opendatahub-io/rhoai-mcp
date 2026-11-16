@@ -91,7 +91,6 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         return ResponseBuilder.training_job_detail(job, v)
 
     @mcp.tool()
-    @mcp.tool()
     def list_training_runtimes(
         namespace: str | None = None, ctx: Context | None = None
     ) -> dict[str, Any]:

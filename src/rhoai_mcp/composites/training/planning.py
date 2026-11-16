@@ -153,7 +153,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
         # Check 1: Cluster connectivity
         resources = None
         try:
-            resources = ClusterClient(server.k8s).get_cluster_resources()
+            resources = ClusterClient(server.get_k8s(ctx)).get_cluster_resources()
             checks.append(
                 {
                     "name": "Cluster connectivity",
@@ -498,7 +498,7 @@ def register_tools(mcp: MCPServer, server: RHOAIServer) -> None:
 
         # Check cluster connectivity and GPUs
         try:
-            resources = ClusterClient(server.k8s).get_cluster_resources()
+            resources = ClusterClient(server.get_k8s(ctx)).get_cluster_resources()
             if not resources.has_gpus:
                 issues.append("No GPUs available in cluster")
                 prereq_passed = False

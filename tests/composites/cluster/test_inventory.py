@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.composites.cluster.inventory import register_cluster_resources
 
@@ -12,6 +12,8 @@ from rhoai_mcp.composites.cluster.inventory import register_cluster_resources
 async def test_get_cluster_resources() -> None:
     """The cluster tool returns the established resource inventory shape."""
     server = MagicMock()
+    # the tool calls server.get_k8s(ctx); return the configured k8s mock
+    server.get_k8s = MagicMock(return_value=server.k8s)
     node = MagicMock()
     node.metadata.name = "worker-1"
     node.metadata.labels = {"nvidia.com/gpu.product": "Tesla-T4"}
@@ -19,9 +21,11 @@ async def test_get_cluster_resources() -> None:
     node.status.allocatable = {"cpu": "30", "memory": "120Gi", "nvidia.com/gpu": "4"}
     server.k8s.core_v1.list_node.return_value.items = [node]
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register_cluster_resources(mcp, server)
-    _, result = await mcp.call_tool("get_cluster_resources", {})
+    call_result = await mcp.call_tool("get_cluster_resources", {})
+    assert call_result.is_error is False
+    result = call_result.structured_content
 
     assert result == {
         "cpu_total": 32,

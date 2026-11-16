@@ -729,7 +729,7 @@ def _action_prerequisites(
 
     # Check cluster connectivity and GPUs
     try:
-        resources = ClusterClient(server.k8s).get_cluster_resources()
+        resources = ClusterClient(server.get_k8s(ctx)).get_cluster_resources()
         checks.append(
             {
                 "name": "Cluster connectivity",

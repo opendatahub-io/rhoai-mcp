@@ -4,7 +4,7 @@ import re
 from unittest.mock import MagicMock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.config import RHOAIConfig
 from rhoai_mcp.plugin_manager import PluginManager
@@ -122,7 +122,7 @@ async def test_cluster_resources_registration_and_permissions(
     """Only the cluster plugin exposes and governs the inventory tool."""
     pm = PluginManager()
     pm.load_core_plugins(enabled_plugins=plugins)
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     pm.register_all_tools(mcp, RHOAIServer())
     names = [tool.name for tool in await mcp.list_tools()]
     permissions = pm.collect_tool_permissions()

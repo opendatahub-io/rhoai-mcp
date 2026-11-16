@@ -24,6 +24,7 @@ from evals.reporting.models import (
 )
 from evals.reporting.reader import load_records
 from evals.reporting.recorder import metric_records_from, overall_passed
+from evals.reporting.trending import score_trend_report
 
 
 def environment() -> EnvironmentRecord:
@@ -45,6 +46,28 @@ def write(tmp_path: Path, *records: EvalRecord) -> Path:
         for record in records:
             handle.write(json.dumps(asdict(record)) + "\n")
     return path
+
+
+def test_trend_displays_missing_and_zero_duration(tmp_path: Path) -> None:
+    record = EvalRecord(
+        run_id="r",
+        timestamp="t",
+        scenario="s",
+        git=GitRecord(commit="abc", branch="main"),
+        environment=environment(),
+    )
+    data = asdict(record)
+    data.pop("duration_seconds")
+    path = tmp_path / "history.jsonl"
+    path.write_text(
+        "\n".join(
+            json.dumps({**data, **duration})
+            for duration in ({}, {"duration_seconds": None}, {"duration_seconds": 0.0})
+        )
+    )
+    output = score_trend_report(load_records(str(path)))
+    assert output.count("n/a") == 2
+    assert "0.0s" in output
 
 
 class TestRecordRoundTrip:

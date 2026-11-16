@@ -339,6 +339,34 @@ def test_recommendation_after_choice_cannot_replace_handoff_capacity() -> None:
     assert grade(messages).passed
 
 
+@pytest.mark.parametrize("deploy", [False, True])
+def test_rerun_after_table_cannot_replace_displayed_capacity(deploy: bool) -> None:
+    messages = workflow(deploy=deploy)
+    later = deepcopy(RECOMMENDATION)
+    later["specification"]["traffic_profile"]["expected_qps"] = 9.9
+    choice = next(
+        i
+        for i, message in enumerate(messages)
+        if any(
+            getattr(part, "content", None) == (DEPLOY_CHOOSE_REPLY if deploy else CHOOSE_REPLY)
+            for part in message.parts
+        )
+    )
+    messages[choice:choice] = [
+        assistant(
+            call(
+                "recommend_model",
+                "late",
+                use_case="chatbot_conversational",
+                user_count=50,
+                preferred_gpu_types=["A100-80"],
+            )
+        ),
+        returns(result("recommend_model", "late", later)),
+    ]
+    assert grade(messages, deploy=deploy).passed
+
+
 @pytest.mark.parametrize("capacity", [0.13, 0.1])
 def test_handoff_capacity_matches_deployment_plan_contract(capacity: float) -> None:
     navigator = workflow()

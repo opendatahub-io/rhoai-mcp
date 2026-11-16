@@ -177,12 +177,15 @@ def selected_recommendation(
     selection: int | None,
     model_cell: str,
     gpu_cell: str,
+    table_turn: int | None,
     *,
     after_turn: int | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
     """Find the selected slot by its displayed model, excluding subsequent tool calls."""
     if selection is None or not valid_gate(transcript, selection):
         return {}, {}, ["configuration selection turn is missing"]
+    if table_turn is None:
+        return {}, {}, ["recommendation table is missing"]
     slot = SLOTS.get(intent.category)
     if slot is None:
         return {}, {}, [f"unknown recommendation category {intent.category!r}"]
@@ -192,7 +195,7 @@ def selected_recommendation(
         data = call.structured_result
         if (
             call.name != "recommend_model"
-            or call.turn_index >= selection
+            or call.turn_index > table_turn
             or (after_turn is not None and call.turn_index <= after_turn)
             or call.is_error
             or not isinstance(data, dict)

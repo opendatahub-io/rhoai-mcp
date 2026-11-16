@@ -30,11 +30,9 @@ PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13
 # Keep these paths aligned with the eval harness checks in CI.
 LINT_PATHS := src/ evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
 
-# Guard: ensure a container runtime was found (cleanup does not need one)
-ifneq ($(strip $(MAKECMDGOALS)),evals-clean)
+# Guard: ensure a container runtime was found
 ifeq ($(CONTAINER_RUNTIME),)
     $(error No container runtime found. Install podman or docker.)
-endif
 endif
 
 # Compose command detection (podman compose or docker compose)
@@ -164,14 +162,14 @@ evals-clean: ## Remove evaluation results while preserving the README
 
 eval: ## Run MCP evaluation tests (starts services, runs tests, stops services)
 	$(MAKE) eval-up
-	uv run --group eval pytest evals/ -v -m "eval and not live and not skill_eval" --tb=short --reruns 2 --reruns-delay 5; \
+	uv run --group eval pytest evals/ -v -m "eval and not live" --tb=short --reruns 2 --reruns-delay 5; \
 	status=$$?; \
 	$(MAKE) eval-down; \
 	exit $$status
 
 eval-live: ## Run all MCP evaluation tests including live cluster
 	$(MAKE) eval-up
-	uv run --group eval pytest evals/ -v -m "eval and not skill_eval" --tb=short --reruns 2 --reruns-delay 5; \
+	uv run --group eval pytest evals/ -v -m "eval" --tb=short --reruns 2 --reruns-delay 5; \
 	status=$$?; \
 	$(MAKE) eval-down; \
 	exit $$status

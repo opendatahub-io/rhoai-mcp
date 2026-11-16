@@ -706,6 +706,14 @@ class TestNavigatorDeploy:
         assert approval.checkpoint(unresolved) is not None
         assert approval.checkpoint(deploy_transcript()) is not None
 
+    def test_refusal_checkpoint_requires_review_and_no_previous_writes(self) -> None:
+        from evals.skills.goldens import DEPLOY_CONSENT_WITHHELD
+
+        refusal = next(t for t in DEPLOY_CONSENT_WITHHELD.script if t.name == "withhold-consent")
+        assert refusal.checkpoint(from_pydantic_ai(deploy_messages()[:-3])) is None
+        assert refusal.checkpoint(from_pydantic_ai(deploy_messages(review="No plan yet.")[:-3]))
+        assert refusal.checkpoint(deploy_transcript())
+
     def test_unreachable_runtime_branch_is_reported_unexercised(self) -> None:
         """The default mock state already has a runtime, so this cannot fire.
 

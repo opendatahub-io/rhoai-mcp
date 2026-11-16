@@ -579,11 +579,11 @@ def _check_hardware_confirmation(
 
 def _selected_cells(
     transcript: AgentTranscript, category: str, selection: int | None
-) -> tuple[str, str]:
+) -> tuple[str, str, int | None]:
     if not valid_gate(transcript, selection):
-        return "", ""
-    cells = ("", "")
-    for turn in transcript.turns[:selection]:
+        return "", "", None
+    cells = ("", "", None)
+    for index, turn in enumerate(transcript.turns[:selection]):
         if turn.role != "assistant":
             continue
         table = find_recommendation_table(turn.content)
@@ -594,6 +594,7 @@ def _selected_cells(
         cells = (
             rows.get("Model", [""] * (column + 1))[column],
             rows.get("GPU", [""] * (column + 1))[column],
+            index,
         )
     return cells
 

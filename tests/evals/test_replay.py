@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from evals.agent.transcript import AttemptArtifact
@@ -15,6 +15,31 @@ from evals.skills.goldens import NAVIGATOR_HAPPY_PATH
 from evals.skills.rescore import main, rescore
 
 from tests.evals.test_skill_agreement import workflow
+
+
+@pytest.mark.parametrize("after,expected", [("original", "original"), ("changed", "")])
+async def test_run_preserves_only_stable_skill_identity(
+    tmp_path: Path, after: str, expected: str
+) -> None:
+    from evals.agent.models import AgentModelSpec
+    from evals.agent.runner import ConversationResult
+    from evals.skills.attempt import run_attempt
+    from evals.skills.goldens import Golden
+
+    result = ConversationResult(attempt_id="a", run_id="r", spec_id="test", task="")
+    config = SkillEvalConfig(_env_file=None)
+    recorder = EvalRecorder(config, path=tmp_path / "history.jsonl")
+    spec = AgentModelSpec(id="test", model_name="model", base_url=None, api_key_env="KEY")
+    with (
+        patch.object(Golden, "skill_sha", side_effect=["original", after]),
+        patch("evals.skills.attempt.run_conversation", return_value=result),
+        patch("evals.skills.attempt.score_artifact", new=Mock()) as score,
+    ):
+        await run_attempt(
+            NAVIGATOR_HAPPY_PATH, spec, recorder=recorder, config=config, results_root=tmp_path
+        )
+    artifact = AttemptArtifact.load(score.call_args.args[0])
+    assert artifact.metadata["skill_sha"] == expected
 
 
 def artifact(root: Path, *, snapshot: bool = True) -> Path:

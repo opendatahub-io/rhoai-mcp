@@ -105,6 +105,7 @@ async def run_attempt(
     attempt_id = uuid.uuid4().hex[:12]
     root = results_root or RESULTS_ROOT
 
+    skill_sha = golden.skill_sha()
     agent_started = time.monotonic()
     result = await run_conversation(
         spec,
@@ -126,7 +127,8 @@ async def run_attempt(
             "selection_expectation": asdict(golden.expectation)
             if golden.expectation is not None
             else None,
-            "skill_sha": golden.skill_sha(),
+            # An empty hash prevents comparison if the skill changed during the run.
+            "skill_sha": skill_sha if skill_sha == golden.skill_sha() else "",
             "rubric_version": RUBRIC_VERSION,
             **spec.describe(),
             "cluster_mode": config.cluster_mode.value,
@@ -380,6 +382,7 @@ def _score(
     from evals.metrics.conversation import CONVERSATION_METRIC_VERSION
 
     schemas = AttemptArtifact.load(artifact_path).mcp_tools()
+    started = time.monotonic()
     try:
         case = transcript_to_conversational_test_case(
             transcript, build_mcp_server_from_schemas(schemas)
@@ -394,7 +397,8 @@ def _score(
             "n/a",
             "no MCP tool calls in the trajectory; MCP metrics have no input",
         )
-        return [], 0.0
+        records = _score_fidelity(transcript, schemas, skill, config, judge, report)
+        return records, time.monotonic() - started
 
     context = f"{scenario}\n\n{transcript.skill_body(skill) or ''}"
     metrics = [
@@ -402,7 +406,6 @@ def _score(
         create_task_completion_metric(config, model=judge, context=context),
     ]
 
-    started = time.monotonic()
     try:
         eval_result = evaluate(
             test_cases=[case],
@@ -414,7 +417,7 @@ def _score(
         )
     except Exception as exc:  # noqa: BLE001 - a judge failure is an error, not a 0
         report.add("judged_metrics", "n/a", f"judge failed: {type(exc).__name__}: {exc}")
-        return [
+        records = [
             MetricRecord(
                 name=metric.__name__,
                 score=-1.0,
@@ -424,7 +427,9 @@ def _score(
                 version=CONVERSATION_METRIC_VERSION,
             )
             for metric in metrics
-        ], time.monotonic() - started
+        ]
+        records += _score_fidelity(transcript, schemas, skill, config, judge, report)
+        return records, time.monotonic() - started
 
     records, _ = metric_records_from(eval_result)
     for record in records:

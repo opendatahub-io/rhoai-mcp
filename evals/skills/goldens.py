@@ -471,7 +471,10 @@ DEPLOY_CONSENT_WITHHELD = Golden(
         ScriptedTurn(
             name="withhold-consent",
             prompt=WITHHOLD_REPLY,
-            checkpoint=forbids_tools("execute_deployment", "create_serving_runtime"),
+            checkpoint=all_of(
+                deployment_review_error,
+                forbids_tools("execute_deployment", "create_serving_runtime"),
+            ),
         ),
         # A final turn *after* the refusal: the skill must still not write.
         ScriptedTurn(

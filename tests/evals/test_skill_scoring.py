@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 
 def test_normal_scoring_keeps_item_evidence_without_extra_judge_calls() -> None:
     from pathlib import Path
@@ -81,3 +83,50 @@ def test_fidelity_judge_error_is_a_failed_metric() -> None:
     assert records[0].success is False
     assert records[0].score == -1
     assert "judge unavailable" in records[0].reason
+
+
+@pytest.mark.parametrize("mcp_failure", [False, True])
+def test_fidelity_runs_without_mcp_or_when_mcp_judge_fails(mcp_failure: bool) -> None:
+    from pathlib import Path
+
+    from evals.agent.transcript import from_pydantic_ai
+    from evals.config import EvalConfig
+    from evals.reporting.models import MetricRecord
+    from evals.skills.attempt import _score
+    from evals.skills.checks import CheckReport
+    from pydantic_ai.messages import TextPart
+
+    from tests.evals.test_conversation_metrics import UnusedJudge
+    from tests.evals.test_skill_agreement import workflow
+    from tests.evals.test_skill_checks import assistant, load, user
+
+    messages = (
+        workflow()
+        if mcp_failure
+        else [
+            user("help"),
+            *load("navigator", "skill"),
+            assistant(TextPart(content="What do you need?")),
+        ]
+    )
+    fidelity = MetricRecord(name="fidelity", score=1, success=True, threshold=0.8, reason="")
+    with (
+        patch(
+            "evals.agent.transcript.AttemptArtifact.load",
+            return_value=SimpleNamespace(mcp_tools=lambda: []),
+        ),
+        patch("deepeval.evaluate.evaluate", side_effect=RuntimeError("judge unavailable")),
+        patch("evals.skills.attempt._score_fidelity", return_value=[fidelity]) as score_fidelity,
+    ):
+        records, _ = _score(
+            from_pydantic_ai(messages),
+            Path("unused"),
+            "navigator",
+            EvalConfig(_env_file=None),
+            UnusedJudge(),
+            CheckReport(),
+        )
+    score_fidelity.assert_called_once()
+    assert fidelity in records
+    assert len(records) == (3 if mcp_failure else 1)
+    assert all(not record.success for record in records if record is not fidelity)

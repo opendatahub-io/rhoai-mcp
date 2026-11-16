@@ -32,7 +32,12 @@ class TestEnMaaSJudge:
         from evals.providers import create_judge_llm
 
         monkeypatch.setenv("ENMAAS_KEY", "gateway-key")
-        config = EvalConfig(_env_file=None, eval_provider="enmaas", eval_model="gpt-5.6-sol")
+        config = EvalConfig(
+            _env_file=None,
+            _env_prefix="RHOAI_TEST_",
+            eval_provider="enmaas",
+            eval_model="gpt-5.6-sol",
+        )
         create_judge_llm(config)
         mock_judge.assert_called_once_with(
             model_name="gpt-5.6-sol",

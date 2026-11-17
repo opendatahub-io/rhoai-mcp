@@ -357,4 +357,11 @@ class TestRBACEnforcementEndToEnd:
                 assert resp.json()["result"]["isError"] is False
         finally:
             server.should_exit = True
-            await task
+            try:
+                await asyncio.wait_for(task, timeout=5)
+            except asyncio.TimeoutError:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass

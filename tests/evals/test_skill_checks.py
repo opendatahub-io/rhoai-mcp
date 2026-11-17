@@ -254,6 +254,15 @@ class TestRecommendationTable:
 
         assert "table_no_placeholders" in {r.name for r in report.failures}
 
+    def test_bracketed_prose_is_not_a_placeholder(self) -> None:
+        table = GOOD_TABLE.replace(
+            "| 72 | 65 | 88 | 91 |", "| 72 [per replica] | [available] | 88 | 91 |"
+        )
+        report = CheckReport()
+        check_recommendation_table(table, report)
+
+        assert report.passed, report.failures
+
     def test_missing_row_fails(self) -> None:
         dropped = "\n".join(
             line for line in GOOD_TABLE.splitlines() if not line.startswith("| Cost/month")
@@ -650,6 +659,57 @@ class TestNavigatorDeploy:
 
         assert deployment_review_error(transcript, before_turn=approval) is not None
         assert "deploy_plan_shown_before_approval" in {r.name for r in report.failures}
+
+    @pytest.mark.parametrize(
+        "token",
+        [
+            "[model_name]",
+            "[model_id]",
+            "[namespace]",
+            "[runtime]",
+            "[storage_uri]",
+            "[gpu_count]",
+            "[gpu_type]",
+            "[memory_per_replica]",
+            "[replicas]",
+        ],
+    )
+    def test_review_template_placeholders_block_approval(self, token: str) -> None:
+        review = DEPLOY_REVIEW.replace("| Replicas | 1 |", f"| Replicas | 1 {token} |")
+        transcript = from_pydantic_ai(deploy_messages(review=review))
+
+        assert deployment_review_error(transcript) is not None
+
+    def test_review_allows_bracketed_prose(self) -> None:
+        review = DEPLOY_REVIEW.replace("| Replicas | 1 |", "| Replicas | 1 [per replica] |")
+        transcript = from_pydantic_ai(deploy_messages(review=review))
+
+        assert deployment_review_error(transcript) is None
+
+    def test_partial_recap_does_not_discard_complete_review(self) -> None:
+        from evals.skills.goldens import DEPLOY_APPROVED
+
+        recap = "| Field | Value |\n|---|---|\n| Model | Llama |\n| Namespace | production-models |"
+        messages = deploy_messages()
+        messages.insert(-3, assistant(TextPart(content=recap)))
+        transcript = from_pydantic_ai(messages)
+        approval = find_user_turn_index(transcript, "Yes, deploy it.")
+        report = check_navigator_deploy(transcript, approval_turn_index=approval)
+        checkpoint = next(t for t in DEPLOY_APPROVED.script if t.name == "approve-deployment")
+
+        assert deployment_review_error(transcript, before_turn=approval) is None
+        assert "deploy_plan_shown_before_approval" not in {r.name for r in report.failures}
+        assert checkpoint.checkpoint(from_pydantic_ai(messages[:-3])) is None
+
+    @pytest.mark.parametrize("replacement", ["[replicas]", "unresolved"])
+    def test_later_complete_invalid_review_discards_previous_review(self, replacement: str) -> None:
+        invalid = DEPLOY_REVIEW.replace("| Replicas | 1 |", f"| Replicas | {replacement} |")
+        messages = deploy_messages()
+        messages.insert(-3, assistant(TextPart(content=invalid)))
+        transcript = from_pydantic_ai(messages)
+        approval = find_user_turn_index(transcript, "Yes, deploy it.")
+
+        assert deployment_review_error(transcript, before_turn=approval) is not None
 
     @pytest.mark.parametrize(
         "override",

@@ -87,8 +87,20 @@ HANDOFF_KEYS: tuple[str, ...] = (
 
 HANDOFF_RE = re.compile(r"<!--\s*navigator-handoff\s*(?P<body>.*?)-->", re.DOTALL)
 
-#: An unreplaced template placeholder, e.g. a literal "[value]" cell.
-PLACEHOLDER_RE = re.compile(r"\[[a-z_ ]+\]", re.IGNORECASE)
+#: Literal placeholders used in the recommendation and deployment templates.
+RECOMMENDATION_PLACEHOLDERS = ("[value]",)
+DEPLOYMENT_PLACEHOLDERS = (
+    "[value]",
+    "[model_name]",
+    "[model_id]",
+    "[namespace]",
+    "[runtime]",
+    "[storage_uri]",
+    "[gpu_count]",
+    "[gpu_type]",
+    "[memory_per_replica]",
+    "[replicas]",
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -282,7 +294,13 @@ def check_recommendation_table(text: str, report: CheckReport) -> None:
     )
 
     placeholders = sorted(
-        {m for row in table.rows for cell in row for m in PLACEHOLDER_RE.findall(cell)}
+        {
+            token
+            for row in table.rows
+            for cell in row
+            for token in RECOMMENDATION_PLACEHOLDERS
+            if token in cell.casefold()
+        }
     )
     report.check(
         "table_no_placeholders",
@@ -702,14 +720,13 @@ def _deployment_review(
                 label = row[0].strip("*` ").casefold()
                 label = {"runtime": "serving runtime", "gpu": "gpus"}.get(label, label)
                 values[label] = row[1].strip("*` ")
-            if {"model", "namespace"} <= values.keys():
-                review = None
             if not required <= values.keys():
                 continue
+            review = None
             if any(
                 not values[key]
                 or values[key].casefold() in {"none", "null", "unknown", "unresolved", "—", "-"}
-                or PLACEHOLDER_RE.search(values[key])
+                or any(token in values[key].casefold() for token in DEPLOYMENT_PLACEHOLDERS)
                 for key in required
             ):
                 continue

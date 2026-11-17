@@ -401,4 +401,3 @@ class TestRBACEnforcementEndToEnd:
             except TimeoutError:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
->>>>>>> 551efdb (fix: address CodeRabbit review on the v2 migration (RHAI-14626))

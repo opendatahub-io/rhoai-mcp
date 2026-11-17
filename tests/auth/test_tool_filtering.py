@@ -132,8 +132,13 @@ def _middleware(
     allowed: set[str] | None, governed: set[str] | None = None
 ) -> tuple[RBACMiddleware, MagicMock]:
     server = MagicMock()
+    # These tests exercise the filtering mechanics with mocked permission
+    # sets; the OIDC identity check is not their subject (it has its own
+    # test below), so disable it explicitly — a bare MagicMock config
+    # would read oidc_enabled as truthy.
+    server.config.oidc_enabled = False
     if allowed is None:
-        server.get_allowed_tools.return_value = None  # OIDC disabled
+        server.get_allowed_tools.return_value = None  # no filtering
     else:
         server.get_allowed_tools.return_value = (allowed, governed or set())
     return RBACMiddleware(server), server
@@ -210,6 +215,32 @@ class TestRBACMiddlewareCall:
         assert call_next.await_count == 2
         assert result["isError"] is False
 
+    async def test_fail_closed_when_oidc_enabled_and_no_user_context(self) -> None:
+        """Defense-in-depth: OIDC on + no UserContext denies, per the module contract.
+
+        Unreachable on supported transports (the auth middleware 401s first),
+        but the middleware enforces its own docstring rather than relying on
+        the layer above it — get_allowed_tools()'s (set(), set()) for a
+        missing user would otherwise mean an empty governed set, which
+        passes everything.
+        """
+        server = MagicMock()
+        server.config.oidc_enabled = True
+        server.get_allowed_tools.return_value = (set(), set())
+        mw = RBACMiddleware(server)
+        call_next = AsyncMock(return_value={"content": [], "isError": False})
+
+        result = await mw(_ctx("tools/call", {"name": "any_tool", "arguments": {}}), call_next)
+
+        call_next.assert_not_awaited()
+        assert result["isError"] is True
+        # The specific reason ("denying all tools") is logged server-side;
+        # the wire contract is the denial itself
+        assert "not permitted" in result["content"][0]["text"]
+
+        listed = await mw(_ctx("tools/list", {}), AsyncMock(return_value=_list_result(["tool_a"])))
+        assert listed["tools"] == []
+
 
 class TestRBACMiddlewareList:
     async def test_list_filters_governed_denied(self) -> None:
@@ -275,6 +306,7 @@ class TestRBACEnforcementEndToEnd:
     @staticmethod
     def _build_mcp() -> MCPServer:
         server = MagicMock()
+        server.config.oidc_enabled = False  # filtering mechanics; identity has its own test
         server.get_allowed_tools.return_value = ({"visible_tool"}, {"visible_tool", "hidden_tool"})
         mcp = MCPServer(name="rbac-e2e", middleware=[RBACMiddleware(server)])
 
@@ -297,7 +329,14 @@ class TestRBACEnforcementEndToEnd:
         config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
         server = uvicorn.Server(config)
         task = asyncio.create_task(server.serve())
+        # Bounded startup wait: fail fast (and re-raise the task exception)
+        # if serve() exits before started, instead of hanging the suite.
+        deadline = asyncio.get_running_loop().time() + 30
         while not server.started:
+            if task.done() or asyncio.get_running_loop().time() > deadline:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                raise RuntimeError("uvicorn server failed to start")
             await asyncio.sleep(0.05)
         port = server.servers[0].sockets[0].getsockname()[1]
         try:
@@ -358,10 +397,8 @@ class TestRBACEnforcementEndToEnd:
         finally:
             server.should_exit = True
             try:
-                await asyncio.wait_for(task, timeout=5)
-            except asyncio.TimeoutError:
+                await asyncio.wait_for(task, timeout=10)
+            except TimeoutError:
                 task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+                await asyncio.gather(task, return_exceptions=True)
+>>>>>>> 551efdb (fix: address CodeRabbit review on the v2 migration (RHAI-14626))

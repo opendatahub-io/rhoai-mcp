@@ -55,7 +55,25 @@ class RBACMiddleware:
         Returns None when OIDC is disabled (no filtering); otherwise the
         (allowed, governed) tool-name sets. Raises on check failure —
         callers convert that to a fail-closed denial.
+
+        Fail-closed on a missing user identity (defense-in-depth): under
+        OIDC, a request with no UserContext denies all tools, per the
+        module contract. On the supported transports this is unreachable —
+        OIDCAuthMiddleware 401s unauthenticated requests before dispatch —
+        but the middleware enforces its own contract rather than relying
+        on the layer above it. Without this, get_allowed_tools()'s
+        (set(), set()) for a missing user context would mean an empty
+        governed set, which passes everything (unmapped tools are
+        allowed by design).
         """
+        if self._server.config.oidc_enabled:
+            from rhoai_mcp.auth.user_context import UserContext
+
+            if UserContext.current() is None:
+                raise RuntimeError(
+                    "OIDC is enabled but no UserContext is set — denying all tools "
+                    "(the auth middleware should have rejected this request)"
+                )
         return await asyncio.to_thread(self._server.get_allowed_tools)
 
     async def _enforce_call(self, ctx: Any, call_next: Any) -> Any:
@@ -116,4 +134,8 @@ class RBACMiddleware:
         return {
             "content": [{"type": "text", "text": message}],
             "isError": True,
+            # Protocol 2026-07-28 clients require resultType on CallToolResult;
+            # middleware short-circuits bypass the SDK's envelope, so set it
+            # explicitly. Older protocol versions ignore the extra field.
+            "resultType": "complete",
         }

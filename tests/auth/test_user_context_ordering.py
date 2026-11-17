@@ -70,7 +70,14 @@ async def _drive(app: OIDCAuthMiddleware, authorized: bool) -> None:
     config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
     server = uvicorn.Server(config)
     task = asyncio.create_task(server.serve())
+    # Bounded startup wait: fail fast (and re-raise the task exception)
+    # if serve() exits before started, instead of hanging the suite.
+    deadline = asyncio.get_running_loop().time() + 30
     while not server.started:
+        if task.done() or asyncio.get_running_loop().time() > deadline:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            raise RuntimeError("uvicorn server failed to start")
         await asyncio.sleep(0.05)
     port = server.servers[0].sockets[0].getsockname()[1]
     try:
@@ -128,7 +135,11 @@ async def _drive(app: OIDCAuthMiddleware, authorized: bool) -> None:
             assert '"isError":false' in resp.text
     finally:
         server.should_exit = True
-        await task
+        try:
+            await asyncio.wait_for(task, timeout=10)
+        except TimeoutError:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
 
 class TestUserContextOrderingStreamableHttp:
@@ -137,22 +148,32 @@ class TestUserContextOrderingStreamableHttp:
         app, probe = _build_app(stateless=True)
         await _drive(app, authorized=True)
 
-        methods = dict(probe.captured)
+        # Assert over the raw capture list — collapsing to a dict would
+        # drop an earlier dispatch with a different (e.g. None) username,
+        # which is exactly the propagation gap this test guards against.
+        methods = [m for m, _ in probe.captured]
         assert "initialize" in methods
         assert "tools/list" in methods
         assert "tools/call" in methods
-        assert all(user == "alice" for user in methods.values()), probe.captured
+        # stateless drive: initialize + tools/list + tools/call (no notification)
+        assert len(probe.captured) == 3, probe.captured
+        assert all(user == "alice" for _, user in probe.captured), probe.captured
 
     async def test_stateful_user_context_populated_before_dispatch(self) -> None:
         """Stateful Streamable HTTP: per-POST context reaches the session dispatch."""
         app, probe = _build_app(stateless=False)
         await _drive(app, authorized=True)
 
-        methods = dict(probe.captured)
+        # Assert over the raw capture list — collapsing to a dict would
+        # drop an earlier dispatch with a different (e.g. None) username,
+        # which is exactly the propagation gap this test guards against.
+        methods = [m for m, _ in probe.captured]
         assert "initialize" in methods
         assert "tools/list" in methods
         assert "tools/call" in methods
-        assert all(user == "alice" for user in methods.values()), probe.captured
+        # stateful drive: initialize + notification + tools/list + tools/call
+        assert len(probe.captured) == 4, probe.captured
+        assert all(user == "alice" for _, user in probe.captured), probe.captured
 
     async def test_unauthenticated_request_never_reaches_dispatch(self) -> None:
         """Negative control: no Bearer header means 401 and zero dispatched messages."""

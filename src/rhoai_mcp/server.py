@@ -97,17 +97,19 @@ class RHOAIServer:
     def _per_message_token(ctx: Context | None) -> SecretStr | None:
         """Bearer token from the per-message request, when the transport carries it.
 
-        SSE attaches each POST's Starlette Request to the message metadata
-        (``ctx.request_context.meta.request_context``); Streamable HTTP and
-        stdio leave ``meta`` None — the per-POST ``UserContext`` covers
-        streamable, and stdio has no per-message requests. Uses only public
-        attribute access; no SDK private imports (replaces the v1
-        ``request_ctx`` ContextVar mechanism, which no longer exists in v2).
+        The transport's per-message data lives on ``ctx.request_context.request``
+        (``ServerRequestContext.request`` — the runner maps the session message
+        metadata's ``request_context`` there; ``meta`` is protocol ``_meta``,
+        a different thing). SSE attaches each POST's Starlette Request; the
+        stateful Streamable HTTP dispatch runs in the request's own task, where
+        the per-POST ``UserContext`` already carries the token; stdio has no
+        per-message requests. Uses only public attribute access; no SDK private
+        imports (replaces the v1 ``request_ctx`` ContextVar mechanism, which no
+        longer exists in v2).
         """
         if ctx is None or ctx.request_context is None:
             return None
-        meta = getattr(ctx.request_context, "meta", None)
-        request = getattr(meta, "request_context", None) if meta is not None else None
+        request = getattr(ctx.request_context, "request", None)
         headers = getattr(request, "headers", None)
         if not headers:
             return None

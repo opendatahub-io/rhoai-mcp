@@ -43,13 +43,13 @@ Semantics (carried over from v1 exactly — same `get_allowed_tools()` contract,
 - **Fail-closed** — if the RBAC check raises: `tools/list` returns an empty tool list; `tools/call` returns the denied result. If `UserContext.current()` is `None` under OIDC: deny all (as today).
 - **Denial path (RHAI-14611, decided 2026-11-10):** in-band `is_error` result, message text unchanged. No HTTP 403 for per-tool denial — `403 + WWW-Authenticate: Bearer error="insufficient_scope"` is reserved for request-level scope denial (SDK `RequireAuthMiddleware` convention), applicable only if `oidc_required_scopes` ever moves from metadata-only to enforcement. The in-band message is `ToolError`-backed since RHAI-14623 (commit `3fd190f`) and survives v2 error scrubbing verbatim.
 
-**UserContext ordering (RHAI-14608, verified by test):** under Streamable HTTP — stateless and stateful — `OIDCAuthMiddleware` populates `UserContext` before dispatch reaches the middleware, so `RBACMiddleware` reads `UserContext.current()` directly. Under SSE (legacy), dispatch runs in the GET /sse task: `UserContext` reflects connection time, per-message identity comes from `ctx.meta` (see §3), and the SDK pins each session to the creating credential (mismatched POST → 404).
+**UserContext ordering (RHAI-14608, verified by test):** under Streamable HTTP — stateless and stateful — `OIDCAuthMiddleware` populates `UserContext` before dispatch reaches the middleware, so `RBACMiddleware` reads `UserContext.current()` directly. Under SSE (legacy), dispatch runs in the GET /sse task: `UserContext` reflects connection time, per-message identity comes from `ctx.request_context.request` (see §3), and the SDK pins each session to the creating credential (mismatched POST → 404).
 
 **Dual enforcement (list + call) — RATIFIED ([RHAI-14609](https://redhat.atlassian.net/browse/RHAI-14609), 2026-11-11):** keep both. Call enforcement is the security boundary — a client can invoke any tool by name regardless of what `tools/list` showed — and list filtering is the UX half plus the gateway broker's catalog-import dependency. One middleware covers both points via `ctx.method`.
 
 ## 2. Install verification (implements RHAI-14629)
 
-The RHAI-14595 tripwire promotes to the v2 world: installation is now a constructor argument, so the install assertion becomes (a) the `RBACMiddleware` instance is present in the server's middleware list (`mcp._lowlevel_server.middleware` — the list itself is public per RHAI-14607; accessor private, so prefer asserting through behavior), and (b) behavioral regression: a governed-denied `tools/call` is blocked and a filtered `tools/list` omits governed-denied tools, driven through `MCPServer.call_tool()` / the JSON-RPC harness. The existing `tests/test_tool_error_surface.py` already pins the error-text contract; `tests/auth/test_user_context_ordering.py` pins the ordering precondition.
+The RHAI-14595 tripwire promotes to the v2 world: installation is now a constructor argument, so the install assertion becomes (a) the `RBACMiddleware` instance is present in the server's middleware list (`mcp._lowlevel_server.middleware` — the list itself is public per RHAI-14607; accessor private, so prefer asserting through behavior), and (b) behavioral regression: a governed-denied `tools/call` is blocked and a filtered `tools/list` omits governed-denied tools, driven through a JSON-RPC harness over a real server (HTTP + uvicorn). Note: `MCPServer.call_tool()` invokes the tool manager directly and does NOT execute `ServerMiddleware` — it cannot verify middleware installation, so the dispatch-level harness is required. The existing `tests/test_tool_error_surface.py` already pins the error-text contract; `tests/auth/test_user_context_ordering.py` pins the ordering precondition.
 
 ## 3. Token sourcing — the `get_k8s(ctx)` refactor (implements RHAI-14631)
 
@@ -62,16 +62,16 @@ def get_k8s(self, ctx: Context) -> K8sClient:
 
 Token-source precedence, per the RHAI-14608 per-transport findings:
 
-1. **`ctx.meta.request_context.headers["authorization"]`** when `ctx.meta` is present — the per-message Request (SSE: fresh per POST; the SDK carries it on `SessionMessage.metadata`)
+1. **`ctx.request_context.request.headers["authorization"]`** when the transport carries per-message data (SSE: fresh per POST; the runner maps the session message metadata's `request_context` onto `ServerRequestContext.request`)
 2. **`UserContext.current().token`** otherwise — per-POST fresh under Streamable HTTP (contextvar set by `OIDCAuthMiddleware`); connection-time under SSE, bounded by the SDK's session-owner pinning
 
 `_get_per_message_token()` (private `request_ctx` ContextVar — gone in v2) is deleted; `tests/auth/test_server_oidc.py:161-229` (its request_ctx tests) is deleted or rewritten against the new accessor. K8s client construction per `oidc_kube_auth_strategy` (`user-token` / `impersonation`) is unchanged in semantics — only the token source moves.
 
-*Verification item inside RHAI-14631:* confirm the exact accessor path from the high-level tool `Context` to the per-message headers (`Context.request_context.meta.request_context.headers`) against mcp 2.3.0 — RHAI-14608 verified the middleware-side `ctx.meta`; the tool-side path needs the same one-time source check.
+*Verification item inside RHAI-14631:* confirm the exact accessor path from the high-level tool `Context` to the per-message headers against mcp 2.3.0 — resolved 2026-11-17 via PR review: the path is `Context.request_context.request.headers` (the runner maps the session message metadata's `request_context` onto `ServerRequestContext.request`; `meta` is protocol `_meta`, a different field).
 
 **RHAI-14632 (ctx threading):** add the `ctx: Context` parameter to every domain/composite tool that transitively touches `server.k8s`, update call sites, grep-audit for bare `server.k8s` property access. Wide but mechanical; splittable per domain. Sequencing note: [#30](https://github.com/opendatahub-io/rhoai-mcp/issues/30) (async K8s client) touches the same call sites — not concurrent landing (recorded on the issue).
 
-**RHAI-14633 (rotation/freshness tests):** run in the RHAI-14598 KinD harness on both channels — stateful Streamable HTTP (contextvar path) and SSE (`ctx.meta` path) — since rotation semantics differ by transport per RHAI-14608: a rotated token on message N+1 must be honored on N+1; a live RoleBinding change picked up on the next call.
+**RHAI-14633 (rotation/freshness tests):** run in the RHAI-14598 KinD harness on both channels — stateful Streamable HTTP (contextvar path) and SSE (`ctx.request_context.request` path) — since rotation semantics differ by transport per RHAI-14608: a rotated token on message N+1 must be honored on N+1; a live RoleBinding change picked up on the next call.
 
 ## 4. Auth configuration (from RHAI-14610, decided: accept)
 
@@ -87,7 +87,7 @@ Token-source precedence, per the RHAI-14608 per-transport findings:
 ## 6. Verified non-issues and watch items
 
 Non-issues (verified — nothing to migrate):
-- No `ctx.meta` use in the v1 code (the migration was inert; §3 now introduces *deliberate* use for SSE per RHAI-14608)
+- No per-message request access in the v1 code outside the private `request_ctx` (the migration was inert; §3 now introduces *deliberate* use for SSE per RHAI-14608, via the public `ServerRequestContext.request` field)
 - No structured-output declarations
 - No client-side MCP SDK in `src/`
 - Our own `RHOAI_MCP_*` env vars — v2's dropped SDK env config is inert for us

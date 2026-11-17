@@ -240,12 +240,17 @@ class TestGetK8sTokenPrecedence:
 
     @staticmethod
     def _ctx_with_headers(headers: dict[str, str]) -> Any:
-        """A tool-side Context whose message metadata carries a Request."""
+        """A tool-side Context matching the SDK's real shape.
+
+        The transport's per-message data lives on
+        ``ctx.request_context.request`` (ServerRequestContext.request) —
+        the runner maps the session message metadata's request_context
+        there. ``meta`` is protocol _meta, a different field.
+        """
         from types import SimpleNamespace
 
         request = SimpleNamespace(headers=headers)
-        meta = SimpleNamespace(request_context=request)
-        return SimpleNamespace(request_context=SimpleNamespace(meta=meta))
+        return SimpleNamespace(request_context=SimpleNamespace(request=request))
 
     def test_per_message_token_wins_over_user_context(self) -> None:
         from rhoai_mcp.auth.user_context import UserContext
@@ -308,4 +313,3 @@ class TestGetK8sTokenPrecedence:
             server._k8s_client.create_user_token_client.assert_not_called()
         finally:
             UserContext.reset_current(token)
-

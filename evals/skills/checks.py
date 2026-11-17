@@ -972,7 +972,11 @@ def _plan_requires_runtime(plan: ToolCallRecord) -> bool | None:
 
 
 def _check_runtime_before_execution(transcript: AgentTranscript, report: CheckReport) -> None:
-    """Check each execution against its latest preceding plan and runtime creation."""
+    """Check each execution against its latest preceding plan and runtime creation.
+
+    Calls in one assistant response may run concurrently, so their emission
+    order cannot establish that the agent saw the runtime creation result.
+    """
     plan = None
     runtime_at = None
     exercised = False
@@ -999,7 +1003,12 @@ def _check_runtime_before_execution(transcript: AgentTranscript, report: CheckRe
 
     name = "deploy_runtime_created_before_execute"
     if missing:
-        report.check(name, False, "runtime not created before execution: " + ", ".join(missing))
+        report.check(
+            name,
+            False,
+            "no runtime creation call in an earlier assistant response after the plan: "
+            + ", ".join(missing),
+        )
     elif unknown or not exercised:
         report.add(
             name, "unexercised", "no execution required creation, or a requirement is unknown"

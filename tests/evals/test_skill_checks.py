@@ -805,6 +805,51 @@ class TestNavigatorDeploy:
 
         assert "deploy_runtime_created_before_execute" in {r.name for r in report.failures}
 
+    @pytest.mark.parametrize("creation_first", [True, False])
+    def test_batched_runtime_creation_and_execution_fails(self, creation_first: bool) -> None:
+        messages = deploy_messages(plan={**DEPLOY_PLAN, "runtime_needs_creation": True})
+        creation = call("create_serving_runtime", "r1")
+        execution = call("execute_deployment", "e1")
+        calls = (creation, execution) if creation_first else (execution, creation)
+        messages[-2:] = [
+            assistant(*calls),
+            returns(
+                result("execute_deployment", "e1", {"deployed": True}),
+                result("create_serving_runtime", "r1", {"success": True}),
+            ),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        check = next(r for r in report.results if r.name == "deploy_runtime_created_before_execute")
+        assert check.status == "fail"
+        assert (
+            "no runtime creation call in an earlier assistant response after the plan"
+            in check.detail
+        )
+
+    def test_runtime_creation_in_prior_response_satisfies_execution_check(self) -> None:
+        messages = deploy_messages(plan={**DEPLOY_PLAN, "runtime_needs_creation": True})
+        messages[-2:-2] = [
+            assistant(call("create_serving_runtime", "r1")),
+            returns(result("create_serving_runtime", "r1", {"success": True})),
+        ]
+        transcript = from_pydantic_ai(messages)
+        report = check_navigator_deploy(
+            transcript, approval_turn_index=find_user_turn_index(transcript, "Yes, deploy it.")
+        )
+
+        assert (
+            next(
+                r.status
+                for r in report.results
+                if r.name == "deploy_runtime_created_before_execute"
+            )
+            == "pass"
+        )
+
     @pytest.mark.parametrize(
         ("steps", "expected"),
         [

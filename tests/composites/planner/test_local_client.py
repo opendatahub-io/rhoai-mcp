@@ -133,7 +133,11 @@ class TestLocalPlannerClientInit:
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_with_catalog_sync(self, mock_planner_cls: MagicMock) -> None:
-        """Model Catalog sync is used and bundled benchmarks are skipped."""
+        """Model Catalog sync is used and bundled benchmarks are skipped.
+
+        Outside a cluster there is no service-account token, so the sync
+        is called with token=None (unauthenticated catalog).
+        """
         mock_planner_cls.return_value.sync_model_catalog.return_value = {
             "benchmarks_added": 10,
             "models_added": 5,
@@ -146,8 +150,34 @@ class TestLocalPlannerClientInit:
 
         mock_planner_cls.return_value.sync_model_catalog.assert_called_once_with(
             url="https://catalog.example.com",
+            token=None,
         )
         mock_planner_cls.return_value.load_bundled_benchmarks.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.local_client._in_cluster_service_account_token")
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_with_catalog_passes_sa_token(
+        self, mock_planner_cls: MagicMock, mock_token: MagicMock
+    ) -> None:
+        """In a cluster, the pod's SA token authenticates the catalog sync.
+
+        RHOAI's model-catalog service is fronted by kube-rbac-proxy, which
+        rejects unauthenticated requests; without the token the sync
+        silently degrades to bundled benchmarks.
+        """
+        mock_token.return_value = "sa-token"
+        mock_planner_cls.return_value.sync_model_catalog.return_value = {
+            "benchmarks_added": 10,
+            "models_added": 5,
+            "errors": [],
+        }
+
+        LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        mock_planner_cls.return_value.sync_model_catalog.assert_called_once_with(
+            url="https://catalog.example.com",
+            token="sa-token",
+        )
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_import_error(self, mock_planner_cls: MagicMock) -> None:
@@ -571,3 +601,42 @@ class TestLocalPlannerHealthCheck:
 
         assert healthy is True
         assert "local" in msg.lower()
+
+
+class TestInClusterServiceAccountToken:
+    """Tests for the projected SA token reader used by the catalog sync."""
+
+    def test_returns_none_when_token_file_absent(self) -> None:
+        """Outside a cluster (no projected token file) the helper yields None."""
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            from rhoai_mcp.composites.planner.local_client import (
+                _in_cluster_service_account_token,
+            )
+
+            assert _in_cluster_service_account_token() is None
+
+    def test_returns_file_content(self) -> None:
+        """The projected token content is returned stripped."""
+        from unittest.mock import mock_open
+
+        from rhoai_mcp.composites.planner.local_client import (
+            _in_cluster_service_account_token,
+        )
+
+        with patch(
+            "builtins.open", mock_open(read_data="  tok  \n")
+        ):
+            assert _in_cluster_service_account_token() == "tok"
+
+    def test_returns_none_for_empty_token(self) -> None:
+        """An empty token file yields None, not an empty string."""
+        from unittest.mock import mock_open
+
+        from rhoai_mcp.composites.planner.local_client import (
+            _in_cluster_service_account_token,
+        )
+
+        with patch(
+            "builtins.open", mock_open(read_data="  \n")
+        ):
+            assert _in_cluster_service_account_token() is None

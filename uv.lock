@@ -2831,6 +2831,7 @@ name = "rhoai-mcp"
 version = "0.1.1"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "httpx2" },
     { name = "kubernetes" },
     { name = "llm-d-planner" },
@@ -2863,6 +2864,7 @@ skill-eval = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "httpx2", specifier = ">=2.10.0" },
     { name = "kubernetes", specifier = ">=35.0.0,<36" },
     { name = "llm-d-planner", specifier = ">=0.3.0,<1" },

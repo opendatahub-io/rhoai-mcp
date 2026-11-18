@@ -124,7 +124,7 @@ oauthlib==3.3.1
     #   -c constraints-lock.tmp
     #   requests-oauthlib
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-opentelemetry-api==1.44.0
+opentelemetry-api==1.45.2
     # via
     #   -c constraints-lock.tmp
     #   mcp
@@ -160,7 +160,7 @@ pydantic-core==2.50.4
     #   -c constraints-lock.tmp
     #   pydantic
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-pydantic-settings==2.16.2
+pydantic-settings==2.16.3
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)

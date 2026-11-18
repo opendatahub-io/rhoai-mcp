@@ -37,7 +37,7 @@ def test_whole_conversation_keeps_constraints_tools_and_final_reply(metric_name:
         args={"namespace": "production"},
         result=CallToolResult(
             content=[TextContent(type="text", text="storage missing")],
-            structuredContent={"result": {"ready": False, "issues": ["storage missing"]}},
+            structured_content={"result": {"ready": False, "issues": ["storage missing"]}},
         ),
     )
     case = ConversationalTestCase(

@@ -91,7 +91,7 @@ def _lcs_tool_call_to_deepeval(tc: Any) -> MCPToolCall:
         args=args,
         result=CallToolResult(
             content=[TextContent(type="text", text=result_text)],
-            structuredContent={"result": result_text},
+            structured_content={"result": result_text},
         ),
     )
 
@@ -166,8 +166,10 @@ def _record_to_mcp_tool_call(record: ToolCallRecord) -> MCPToolCall:
             # must be wrapped under that key or every MCP metric raises
             # KeyError before the judge is even called. Passing the raw tool
             # result straight through looks more faithful but breaks scoring.
-            structuredContent={"result": payload},
-            isError=record.is_error,
+            # (The wire key stays camelCase via by_alias serialization; this
+            # is the mcp 2.x Python attribute name.)
+            structured_content={"result": payload},
+            is_error=record.is_error,
         ),
     )
 

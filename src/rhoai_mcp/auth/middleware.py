@@ -11,8 +11,11 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
+from mcp.server.auth.provider import AccessToken
 from pydantic import SecretStr
 
+from rhoai_mcp.auth.oidc import ValidatedIdentity
 from rhoai_mcp.auth.user_context import UserContext
 
 if TYPE_CHECKING:
@@ -90,10 +93,43 @@ class OIDCAuthMiddleware:
             token=SecretStr(token),
         )
         reset_token = UserContext.set_current(ctx)
+        # Propagate the validated principal into the ASGI scope's user slot
+        # so the SDK's session-owner pinning engages (see _build_authenticated_user)
+        scope["user"] = self._build_authenticated_user(token, identity)
         try:
             await self.app(scope, receive, send)
         finally:
             UserContext.reset_current(reset_token)
+
+    @staticmethod
+    def _build_authenticated_user(token: str, identity: ValidatedIdentity) -> AuthenticatedUser:
+        """The principal in the form the SDK's session-owner pinning compares.
+
+        Both SseServerTransport and the streamable-http manager record the
+        creating credential's principal (via authorization_context on the
+        ASGI scope's ``user`` slot) and reject messages posted to a session
+        with a different credential (404). Our pure-ASGI design carries the
+        identity in the UserContext contextvar for request code; this write
+        gives the SDK's native pinning the same principal in the shape it
+        reads — closing the mismatched-credential gap on session-based
+        transports without AuthenticationMiddleware (which is incompatible
+        with SSE streaming).
+
+        principal_components compares (client_id, claims["iss"], subject);
+        components the validator does not supply degrade to None, so the
+        comparison minimally distinguishes by username. A rotated token for
+        the same principal compares equal — rotation stays legitimate; a
+        different principal compares unequal — the POST is rejected.
+        """
+        return AuthenticatedUser(
+            AccessToken(
+                token=token,
+                client_id=identity.username,
+                scopes=[],
+                subject=identity.uid,
+                claims=identity.claims or {},
+            )
+        )
 
     async def _send_401(self, send: Send, detail: str) -> None:
         www_auth = "Bearer"

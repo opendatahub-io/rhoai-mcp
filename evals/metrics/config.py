@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from deepeval.metrics import MCPUseMetric, MultiTurnMCPUseMetric
 
@@ -23,21 +23,43 @@ def create_mcp_use_metric(config: EvalConfig) -> MCPUseMetric:
     )
 
 
-def create_multi_turn_mcp_use_metric(config: EvalConfig) -> MultiTurnMCPUseMetric:
+def create_multi_turn_mcp_use_metric(
+    config: EvalConfig, model: Any = None, *, context: str | None = None
+) -> MultiTurnMCPUseMetric:
     """Create a multi-turn MCP use metric with configured thresholds."""
+    if context is not None:
+        from evals.metrics.conversation import ConversationMCPUseMetric
+
+        return ConversationMCPUseMetric(
+            threshold=config.mcp_use_threshold,
+            model=model if model is not None else create_judge_llm(config),
+            context=context,
+            include_reason=True,
+        )
     return MultiTurnMCPUseMetric(
         threshold=config.mcp_use_threshold,
-        model=create_judge_llm(config),
+        model=model if model is not None else create_judge_llm(config),
         include_reason=True,
     )
 
 
-def create_task_completion_metric(config: EvalConfig) -> _MCPTaskCompletionMetric:
+def create_task_completion_metric(
+    config: EvalConfig, model: Any = None, *, context: str | None = None
+) -> _MCPTaskCompletionMetric:
     """Create an MCP task completion metric with configured thresholds."""
     from deepeval.metrics import MCPTaskCompletionMetric
 
+    if context is not None:
+        from evals.metrics.conversation import ConversationTaskCompletionMetric
+
+        return ConversationTaskCompletionMetric(
+            threshold=config.task_completion_threshold,
+            model=model if model is not None else create_judge_llm(config),
+            context=context,
+            include_reason=True,
+        )
     return MCPTaskCompletionMetric(
         threshold=config.task_completion_threshold,
-        model=create_judge_llm(config),
+        model=model if model is not None else create_judge_llm(config),
         include_reason=True,
     )

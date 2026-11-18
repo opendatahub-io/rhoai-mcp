@@ -6,6 +6,7 @@ Dataclasses matching the JSONL schema for eval result persistence.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -17,6 +18,9 @@ class MetricRecord:
     success: bool
     threshold: float
     reason: str
+    version: str = ""
+    scorecards: list[dict[str, Any]] = field(default_factory=list)
+    """Item ratings, evidence, weights, fractions and caps, when available."""
 
 
 @dataclass
@@ -39,11 +43,42 @@ class EnvironmentRecord:
     cluster_mode: str
     mcp_use_threshold: float
     task_completion_threshold: float
+    eval_model_base_url: str = ""
+    fidelity_threshold: float = 0.8
+
+
+@dataclass
+class CheckRecord:
+    """One named deterministic check result.
+
+    ``status`` is ``pass`` | ``fail`` | ``n/a`` | ``unexercised``. The last two
+    are deliberately distinct from ``pass``: a conditional branch that never ran
+    is not coverage, and a check whose precondition was absent is not a success.
+    """
+
+    name: str
+    status: str
+    detail: str = ""
+
+
+#: Attempt outcomes, kept distinct from pass/fail. Only an
+#: ``evaluated`` attempt is meaningfully a pass or a fail; the rest describe why
+#: the attempt did not reach a verdict. A model failure is an evaluation result,
+#: not automatically a harness bug.
+OUTCOME_EVALUATED = "evaluated"
+OUTCOME_HARNESS_ERROR = "harness_error"
+OUTCOME_MODEL_FAILURE = "model_failure"
+OUTCOME_ROUTING_FAILURE = "routing_failure"
 
 
 @dataclass
 class EvalRecord:
-    """A single scenario evaluation result, one JSONL line."""
+    """A single scenario evaluation result, one JSONL line.
+
+    The fields below ``duration_seconds`` were added for the skill-eval path and
+    are absent from historical LCS records; ``reader.load_records`` supplies
+    defaults so old lines still parse.
+    """
 
     run_id: str
     timestamp: str
@@ -54,4 +89,35 @@ class EvalRecord:
     turns: int = 0
     tool_names_used: list[str] = field(default_factory=list)
     passed: bool = False
-    duration_seconds: float = 0.0
+    duration_seconds: float | None = None
+
+    # -- skill-eval additions ----------------------------------------------- #
+
+    attempt_id: str = ""
+    """Identifies the agent run. A re-score reuses it."""
+    scoring_id: str = ""
+    """Identifies this scoring pass, so re-scores of one attempt stay distinct."""
+    skill: str = ""
+    golden_id: str = ""
+    skills_loaded: list[str] = field(default_factory=list)
+    outcome: str = OUTCOME_EVALUATED
+    error_stage: str = ""
+    error_detail: str = ""
+    checks: list[CheckRecord] = field(default_factory=list)
+    artifact_path: str = ""
+    trace_id: str = ""
+    """MLflow session grouping this attempt's per-turn traces. Equal to
+    ``attempt_id`` by construction, since tracing follows MLflow's model of one
+    trace per turn rather than one per conversation."""
+    dry_run: bool = False
+    """True when no judge ran. Such a record carries no metric scores and must
+    never be read as a judged pass."""
+    agent_seconds: float | None = None
+    """Agent execution time, separate from scoring time (``duration_seconds``)."""
+    is_rescore: bool | None = None
+    """Whether this scoring pass replayed an artifact; absent in older records."""
+    skill_sha: str = ""
+    scenario_sha: str = ""
+    rubric_version: str = ""
+    checks_version: str = ""
+    generation_git: dict[str, str] = field(default_factory=dict)

@@ -68,7 +68,7 @@ def score_trend_report(
             row.append(f"{m.score:.2f}" if m else "-")
         row.append(str(r.turns))
         row.append("Y" if r.passed else "N")
-        row.append(f"{r.duration_seconds:.1f}s")
+        row.append(f"{r.duration_seconds:.1f}s" if r.duration_seconds is not None else "n/a")
         rows.append(row)
 
     # Footer with summary stats

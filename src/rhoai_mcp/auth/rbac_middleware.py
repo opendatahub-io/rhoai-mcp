@@ -112,7 +112,7 @@ class RBACMiddleware:
 
         allowed, governed = check
         tools = result.get("tools", [])
-        # Tools with permission mappings must pass RBAC; unmapped tools are allowed
+        # Tools with permission mappings (`governed`) must pass RBAC (`allowed`); unmapped tools are allowed
         filtered = [
             tool
             for tool in tools

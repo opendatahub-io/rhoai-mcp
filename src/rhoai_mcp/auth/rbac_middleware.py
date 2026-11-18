@@ -92,7 +92,7 @@ class RBACMiddleware:
             return await call_next(ctx)
 
         allowed, governed = check
-        # Only enforce for tools with permission mappings
+        # Only enforce for tools with permission mappings (`governed`)
         if tool_name in governed and tool_name not in allowed:
             return self._denied_result(tool_name)
         return await call_next(ctx)

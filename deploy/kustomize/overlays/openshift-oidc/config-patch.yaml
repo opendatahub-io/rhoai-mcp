@@ -6,7 +6,7 @@
   value: "token-review"
 - op: add
   path: /data/RHOAI_MCP_TRANSPORT
-  value: "streamable-http"
+  value: "streamable-http"  # explicit for clarity; matches the base default since RHAI-14635
 - op: add
   path: /data/RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY
   value: "user-token"

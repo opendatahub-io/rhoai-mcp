@@ -111,7 +111,7 @@ For **JWT mode** with audience-bound tokens, user-token pass-through is a spec v
 
 ### Per-Message Token Extraction
 
-For HTTP transports (SSE, streamable-http), the server prefers the token from the per-message `request_ctx` (the MCP library's per-handler ContextVar carrying the POST's Starlette Request) over the session-level `UserContext.token`. This handles token refresh mid-session: if the client obtains a new token and sends it on subsequent POSTs, the new token is used automatically without tearing down the connection.
+For HTTP transports (streamable-http — the primary transport — and SSE, which is legacy), the server prefers the token from the per-message request headers (`ctx.request_context.request.headers` on the mcp 2.x `ServerRequestContext` — the runner maps the POST's Starlette Request onto it) over the session-level `UserContext.token`. This handles token refresh mid-session: if the client obtains a new token and sends it on subsequent POSTs, the new token is used automatically without tearing down the connection.
 
 ### RBAC Filtering
 

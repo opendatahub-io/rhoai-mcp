@@ -10,6 +10,7 @@ from rhoai_mcp.composites.planner.client import (
     PlannerAPIError,
     PlannerClient,
     PlannerConnectionError,
+    _filter_by_gpu,
 )
 from rhoai_mcp.composites.planner.models import DeploymentConfigResult
 
@@ -354,6 +355,13 @@ class TestPlannerClientGenerateRecommendations:
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
         assert "min_quality" not in payload
         assert "max_cost" not in payload
+
+
+def test_gpu_filter_does_not_guess_ambiguous_response() -> None:
+    """An unspecified A100 variant cannot satisfy an A100-80-only constraint."""
+    rec = {"gpu_config": {"gpu_type": "A100"}}
+    assert _filter_by_gpu([rec], ["A100-80"]) == []
+    assert _filter_by_gpu([rec], ["A100"]) == [rec]
 
 
 class TestPlannerClientRecommend:
@@ -773,6 +781,43 @@ class TestPlannerClientRecommend:
         # NVIDIA-L4 slots filtered to empty — L4 not in override → None
         assert result.top_cost is None
         assert result.top_quality is None
+        assert result.configs_after_filters == 1
+
+    @pytest.mark.parametrize("requested", ["A100", "a100", "nvidia-a100-80gb"])
+    @patch("rhoai_mcp.composites.planner.client.httpx")
+    async def test_gpu_alias_matches_planner_response(
+        self, mock_httpx: MagicMock, requested: str
+    ) -> None:
+        """HTTP response filtering uses the planner's GPU alias semantics."""
+        rec = {
+            **SAMPLE_RECOMMENDATION,
+            "gpu_config": {"gpu_type": "NVIDIA-A100-80GB", "gpu_count": 1},
+        }
+        spec_resp = MagicMock()
+        spec_resp.json.return_value = sample_specification()
+        spec_resp.raise_for_status = MagicMock()
+        ranked_resp = MagicMock()
+        ranked_resp.json.return_value = {
+            **SAMPLE_RANKED_RESPONSE,
+            "balanced": [rec],
+            "lowest_cost": [],
+            "lowest_latency": [],
+            "best_quality": [],
+        }
+        ranked_resp.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.post.side_effect = [spec_resp, ranked_resp]
+        mock_httpx.AsyncClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_httpx.AsyncClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        result = await PlannerClient("http://localhost:8000").recommend(
+            "chatbot",
+            use_case_override="chatbot_conversational",
+            user_count_override=100,
+            gpu_types_override=[requested],
+        )
+        assert result.top_balanced is not None
+        assert result.configs_after_filters == 1
 
     @patch("rhoai_mcp.composites.planner.client.httpx")
     async def test_empty_gpu_types_override_skips_filter(self, mock_httpx: MagicMock) -> None:

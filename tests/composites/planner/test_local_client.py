@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -139,51 +140,140 @@ class TestLocalPlannerClientInit:
             "models_added": 5,
             "errors": [],
         }
+        conn = mock_planner_cls.return_value._benchmark_repo._get_connection.return_value
+        conn.execute.return_value.fetchone.return_value = (10,)
+        with patch.object(LocalPlannerClient, "_normalize_synced_benchmarks") as normalize:
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
 
-        LocalPlannerClient(
-            model_catalog_url="https://catalog.example.com",
-        )
+        normalize.assert_called_once_with()
 
         mock_planner_cls.return_value.sync_model_catalog.assert_called_once_with(
             url="https://catalog.example.com",
         )
         mock_planner_cls.return_value.load_bundled_benchmarks.assert_not_called()
 
+    @pytest.mark.parametrize("errors", [["Failed to list models"], []])
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_aborted_catalog_sync_loads_bundled_benchmarks(
+        self, mock_planner_cls: MagicMock, errors: list[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mock_planner_cls.return_value.sync_model_catalog.return_value = {
+            "benchmarks_added": 0,
+            "models_added": 0,
+            "errors": errors,
+        }
+        conn = mock_planner_cls.return_value._benchmark_repo._get_connection.return_value
+        conn.execute.return_value.fetchone.return_value = (0,)
+
+        with patch.object(LocalPlannerClient, "_normalize_synced_benchmarks") as normalize:
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        normalize.assert_not_called()
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_called_once()
+        assert "loading bundled" in caplog.text.lower()
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_catalog_log_uses_stored_counts(
+        self, mock_planner_cls: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        planner = mock_planner_cls.return_value
+        planner._model_catalog._models = {"existing": object()}
+        conn = planner._benchmark_repo._get_connection.return_value
+        conn.execute.return_value.fetchone.return_value = (12,)
+
+        def sync_model_catalog(*, url: str) -> dict[str, object]:
+            assert url == "https://catalog.example.com"
+            planner._model_catalog._models["new"] = object()
+            return {"benchmarks_added": 0, "models_added": 0, "errors": []}
+
+        planner.sync_model_catalog.side_effect = sync_model_catalog
+
+        with (
+            patch.object(LocalPlannerClient, "_normalize_synced_benchmarks"),
+            caplog.at_level("INFO"),
+        ):
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        assert "12 catalog benchmarks available" in caplog.text
+        assert "1 model added" in caplog.text
+        planner.load_bundled_benchmarks.assert_not_called()
+
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_import_error(self, mock_planner_cls: MagicMock) -> None:
-        """ImportError from sync_model_catalog is mapped to PlannerAPIError."""
+        """Missing optional sync dependency falls back to bundled benchmarks."""
         mock_planner_cls.return_value.sync_model_catalog.side_effect = ImportError(
             "httpx required"
         )
 
-        with pytest.raises(PlannerAPIError, match="extra dependency"):
-            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+        LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_called_once()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_value_error(self, mock_planner_cls: MagicMock) -> None:
-        """ValueError from sync_model_catalog is mapped to PlannerAPIError(502)."""
+        """Invalid catalog URLs fall back to bundled benchmarks."""
         mock_planner_cls.return_value.sync_model_catalog.side_effect = ValueError("bad url")
 
-        with pytest.raises(PlannerAPIError) as exc_info:
-            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
-
-        assert exc_info.value.status_code == 502
-        assert "Model Catalog sync failed" in exc_info.value.detail
+        LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_called_once()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     def test_init_catalog_sync_planner_error(self, mock_planner_cls: MagicMock) -> None:
-        """PlannerError from sync_model_catalog is mapped to PlannerAPIError(502)."""
+        """Planner catalog errors fall back to bundled benchmarks."""
         from planner import PlannerError
 
         mock_planner_cls.return_value.sync_model_catalog.side_effect = PlannerError(
             "unreachable"
         )
 
-        with pytest.raises(PlannerAPIError) as exc_info:
+        LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_called_once()
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_catalog_service_account_token_read_error(
+        self, mock_planner_cls: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An unreadable mounted token falls back to bundled benchmarks."""
+        mock_planner_cls.return_value.sync_model_catalog.side_effect = PermissionError(
+            13, "Permission denied", "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        )
+
+        LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_called_once()
+        assert "Model Catalog sync failed (PermissionError)" in caplog.text
+        assert "Loading bundled synthetic benchmarks" in caplog.text
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_catalog_other_os_error_propagates(self, mock_planner_cls: MagicMock) -> None:
+        """Other sync I/O failures do not silently use bundled data."""
+        sync_error = OSError(5, "I/O error", "/var/lib/planner/benchmarks.db")
+        mock_planner_cls.return_value.sync_model_catalog.side_effect = sync_error
+
+        with pytest.raises(OSError) as exc_info:
             LocalPlannerClient(model_catalog_url="https://catalog.example.com")
 
+        assert exc_info.value is sync_error
+        mock_planner_cls.return_value.load_bundled_benchmarks.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    def test_init_catalog_normalization_sqlite_error(self, mock_planner_cls: MagicMock) -> None:
+        """SQLite failures after catalog sync preserve the planner error boundary."""
+        mock_planner_cls.return_value.sync_model_catalog.return_value = {
+            "benchmarks_added": 1,
+            "models_added": 1,
+        }
+        db_error = sqlite3.OperationalError("database is locked")
+
+        with (
+            patch.object(LocalPlannerClient, "_normalize_synced_benchmarks", side_effect=db_error),
+            pytest.raises(PlannerAPIError) as exc_info,
+        ):
+            LocalPlannerClient(model_catalog_url="https://catalog.example.com")
+
+        mock_planner_cls.return_value.sync_model_catalog.assert_called_once()
         assert exc_info.value.status_code == 502
-        assert "Model Catalog sync failed" in exc_info.value.detail
+        assert "Model Catalog benchmark normalization failed" in exc_info.value.detail
+        assert exc_info.value.__cause__ is db_error
 
 
 class TestLocalPlannerRecommend:
@@ -208,6 +298,82 @@ class TestLocalPlannerRecommend:
         assert result.top_balanced is not None
         assert result.top_balanced.model_name == "Llama 3.1 70B"
         assert result.total_configs_evaluated == 2847
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_gpu_override_filters_every_category(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """Only requested GPU types can appear in category selections."""
+        mock_planner = _make_mock_planner()
+        ranked_data = mock_planner.generate_recommendations.return_value.model_dump.return_value
+        h100_rec = ranked_data["balanced"][0]
+        a100_gpu_config = {"gpu_type": "NVIDIA-A100-80", "gpu_count": 1}
+        a100_rec = {
+            **h100_rec,
+            "gpu_config": a100_gpu_config,
+            "configuration": {**h100_rec["configuration"], "gpu_config": a100_gpu_config},
+        }
+        ranked_data["balanced"] = [h100_rec, a100_rec]
+        ranked_data["lowest_cost"] = [h100_rec]
+        ranked_data["lowest_latency"] = [a100_rec, h100_rec]
+        ranked_data["best_quality"] = [h100_rec]
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=50,
+            gpu_types_override=["A100-80"],
+        )
+
+        assert result.top_balanced is not None
+        assert result.top_balanced.gpu_config.gpu_type == "NVIDIA-A100-80"
+        assert result.top_cost is None
+        assert result.top_performance is not None
+        assert result.top_performance.gpu_config.gpu_type == "NVIDIA-A100-80"
+        assert result.top_quality is None
+        assert result.configs_after_filters == 1
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_gpu_alias_and_case_match(self, mock_planner_cls: MagicMock) -> None:
+        """A100 family and case aliases survive the planner's canonical response."""
+        mock_planner = _make_mock_planner()
+        rec = mock_planner.generate_recommendations.return_value.model_dump.return_value[
+            "balanced"
+        ][0]
+        rec["gpu_config"]["gpu_type"] = "NVIDIA-A100-80GB"
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=50,
+            gpu_types_override=["a100"],
+        )
+
+        assert result.top_balanced is not None
+        assert result.configs_after_filters == 1
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_empty_gpu_override_leaves_rankings_unfiltered(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """An empty GPU list allows the planner's unrestricted rankings."""
+        mock_planner = _make_mock_planner()
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        result = await client.recommend(
+            text="test",
+            use_case_override="chatbot_conversational",
+            user_count_override=50,
+            gpu_types_override=[],
+        )
+
+        assert result.top_balanced is not None
+        assert result.top_balanced.gpu_config.gpu_type == "NVIDIA-H100"
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_recommend_missing_overrides_raises(self, mock_planner_cls: MagicMock) -> None:
@@ -420,6 +586,32 @@ class TestLocalPlannerGenerateConfig:
             )
 
         assert exc_info.value.status_code == 404
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_generate_config_gpu_override_rejects_unsupported(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """No deployment is generated from an out-of-filter recommendation."""
+        mock_planner = _make_mock_planner()
+        mock_planner_cls.return_value = mock_planner
+
+        client = LocalPlannerClient()
+        with pytest.raises(PlannerAPIError, match="No recommendation found") as exc_info:
+            await client.generate_config(
+                category="balanced",
+                use_case="chatbot_conversational",
+                user_count=50,
+                prompt_tokens=512,
+                output_tokens=256,
+                expected_qps=10.0,
+                ttft_target_ms=150,
+                itl_target_ms=65,
+                e2e_target_ms=2000,
+                preferred_gpu_types=["A100-80"],
+            )
+
+        assert exc_info.value.status_code == 404
+        mock_planner.generate_deployment.assert_not_called()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_generate_config_no_files_raises(self, mock_planner_cls: MagicMock) -> None:

@@ -3,6 +3,8 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
     ModelRecommendation,
@@ -475,6 +477,31 @@ class TestRecommendModelTool:
         assert "preferred_gpu_types" in result["error"]
         mock_client_class.return_value.recommend.assert_not_called()
 
+    @pytest.mark.parametrize(
+        ("requested", "expected"),
+        [
+            (["h100"], ["H100"]),
+            (["nvidia-h100"], ["H100"]),
+            (["A100"], ["A100-40", "A100-80"]),
+        ],
+    )
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_gpu_alias_reaches_client(
+        self, mock_client_class: MagicMock, requested: list[str], expected: list[str]
+    ) -> None:
+        mock_client_class.return_value.recommend = AsyncMock(return_value=SAMPLE_RESULT)
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+
+        result = mock_mcp._registered_tools["recommend_model"](
+            text="chatbot", preferred_gpu_types=requested
+        )
+
+        assert "error" not in result
+        assert mock_client_class.return_value.recommend.call_args.kwargs[
+            "gpu_types_override"
+        ] == expected
+
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_empty_recommendations(self, mock_client_class: MagicMock) -> None:
         """Empty recommendations returns message."""
@@ -873,6 +900,30 @@ class TestDeploymentConfigTool:
         assert "error" in result
         assert "V100" in result["error"]
         mock_client_class.assert_not_called()
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    def test_gpu_alias_reaches_client(self, mock_client_class: MagicMock) -> None:
+        mock_client_class.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server())
+
+        result = mock_mcp._registered_tools["get_deployment_config"](
+            category="balanced",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            preferred_gpu_types=["nvidia-h100"],
+        )
+
+        assert "error" not in result
+        assert mock_client_class.return_value.generate_config.call_args.kwargs[
+            "preferred_gpu_types"
+        ] == ["H100"]
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     def test_invalid_min_quality(self, mock_client_class: MagicMock) -> None:
@@ -1355,6 +1406,35 @@ class TestPlanDeploymentTool:
         mock_mcp = _make_mock_mcp()
         register_tools(mock_mcp, _make_mock_server_with_k8s())
         assert "plan_deployment" in mock_mcp._registered_tools
+
+    @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
+    @patch("rhoai_mcp.domains.inference.client.InferenceClient")
+    def test_gpu_alias_reaches_client(
+        self, mock_inference_cls: MagicMock, mock_planner_cls: MagicMock
+    ) -> None:
+        mock_planner_cls.return_value.generate_config = AsyncMock(return_value=SAMPLE_CONFIG_RESULT)
+        mock_inference_cls.return_value.list_serving_runtimes.return_value = [SAMPLE_VLLM_RUNTIME]
+        mock_mcp = _make_mock_mcp()
+        register_tools(mock_mcp, _make_mock_server_with_k8s())
+
+        result = mock_mcp._registered_tools["plan_deployment"](
+            category="balanced",
+            namespace="my-project",
+            use_case="chatbot_conversational",
+            user_count=1000,
+            prompt_tokens=512,
+            output_tokens=256,
+            expected_qps=10.0,
+            ttft_target_ms=150,
+            itl_target_ms=65,
+            e2e_target_ms=2000,
+            preferred_gpu_types=["A100"],
+        )
+
+        assert "error" not in result
+        assert mock_planner_cls.return_value.generate_config.call_args.kwargs[
+            "preferred_gpu_types"
+        ] == ["A100-40", "A100-80"]
 
     @patch("rhoai_mcp.composites.planner.tools.PlannerClient")
     @patch("rhoai_mcp.domains.inference.client.InferenceClient")

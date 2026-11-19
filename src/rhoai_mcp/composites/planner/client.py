@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 from httpx import ConnectError, HTTPStatusError, RequestError, TimeoutException
+from planner.shared.utils import normalize_gpu_types
 
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
@@ -87,19 +88,43 @@ def _apply_priority_overrides(
 
 
 def _gpu_type_matches(rec_data: dict[str, Any], allowed: set[str]) -> bool:
-    """Return True if rec_data's gpu_type (after NVIDIA- normalisation) is in allowed."""
+    """Return True when the recommendation resolves to an allowed catalog GPU."""
     gpu_config = rec_data.get("gpu_config") or {}
     gpu_type = gpu_config.get("gpu_type") if isinstance(gpu_config, dict) else None
     if not isinstance(gpu_type, str):
         return False
-    # Planner responses use vendor-prefixed names (e.g. "NVIDIA-H100");
-    # the public API uses short names ("H100"). Normalise before comparing.
-    return gpu_type.removeprefix("NVIDIA-") in allowed
+    resolved = set(normalize_gpu_types([gpu_type]))
+    return bool(resolved) and resolved <= allowed
 
 
-def _filter_by_gpu(recs: list[dict[str, Any]], allowed: set[str]) -> list[dict[str, Any]]:
-    """Filter a recommendation list to only those with a GPU type in allowed."""
+def _filter_by_gpu(
+    recs: list[dict[str, Any]], preferred_gpu_types: list[str]
+) -> list[dict[str, Any]]:
+    """Filter a recommendation list using the planner's GPU alias rules."""
+    allowed = set(normalize_gpu_types(preferred_gpu_types))
     return [r for r in recs if _gpu_type_matches(r, allowed)]
+
+
+def _filter_ranked_lists(
+    ranked: dict[str, Any], preferred_gpu_types: list[str]
+) -> tuple[dict[str, list[dict[str, Any]]], int]:
+    """Filter all ranking categories and count distinct visible configurations."""
+    allowed = set(normalize_gpu_types(preferred_gpu_types))
+    lists = {
+        key: [rec for rec in ranked.get(key, []) if _gpu_type_matches(rec, allowed)]
+        for key in CATEGORY_MAP.values()
+    }
+    unique: list[dict[str, Any]] = []
+    for recs in lists.values():
+        for rec in recs:
+            config = rec.get("configuration") or {
+                "model_id": rec.get("model_id"),
+                "model_uri": rec.get("model_uri"),
+                "gpu_config": rec.get("gpu_config"),
+            }
+            if config not in unique:
+                unique.append(config)
+    return lists, len(unique)
 
 
 class PlannerConnectionError(Exception):
@@ -339,11 +364,11 @@ class PlannerClient:
         # Hard-filter by GPU type when the caller specified preferred_gpu_types.
         # The planner treats it as a scoring hint; enforce it as a constraint here.
         if gpu_types_override:
-            allowed = set(gpu_types_override)
-            balanced_list = _filter_by_gpu(balanced_list, allowed)
-            cost_list = _filter_by_gpu(cost_list, allowed)
-            latency_list = _filter_by_gpu(latency_list, allowed)
-            quality_list = _filter_by_gpu(quality_list, allowed)
+            filtered, after_filters = _filter_ranked_lists(ranked, gpu_types_override)
+            balanced_list = filtered["balanced"]
+            cost_list = filtered["lowest_cost"]
+            latency_list = filtered["lowest_latency"]
+            quality_list = filtered["best_quality"]
 
         try:
             top_balanced = _parse_recommendation(balanced_list[0]) if balanced_list else None
@@ -480,7 +505,7 @@ class PlannerClient:
         # Step 4: Pick top recommendation from category, filtered to cluster-supported GPUs.
         category_list = ranked.get(category_key, [])
         if preferred_gpu_types:
-            category_list = _filter_by_gpu(category_list, set(preferred_gpu_types))
+            category_list = _filter_by_gpu(category_list, preferred_gpu_types)
         if not category_list:
             raise PlannerAPIError(
                 status_code=404,

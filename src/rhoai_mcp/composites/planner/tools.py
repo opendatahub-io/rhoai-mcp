@@ -8,6 +8,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
+from planner.shared.utils import normalize_gpu_types
 
 from rhoai_mcp.composites.planner.client import (
     CATEGORY_MAP,
@@ -49,6 +50,19 @@ OPTIMIZATION_PROFILES: dict[str, dict[str, int]] = {
 
 VALID_CATEGORIES: set[str] = set(CATEGORY_MAP)
 _K8S_NAMESPACE_RE = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
+
+
+def _normalize_preferred_gpu_types(gpu_types: list[str]) -> tuple[list[str], list[str]]:
+    """Resolve known GPU aliases while retaining invalid inputs for tool errors."""
+    normalized: set[str] = set()
+    invalid: list[str] = []
+    for gpu_type in gpu_types:
+        resolved = set(normalize_gpu_types([gpu_type]))
+        if not resolved or not resolved <= VALID_GPU_TYPES:
+            invalid.append(gpu_type)
+        else:
+            normalized.update(resolved)
+    return sorted(normalized), sorted(set(invalid))
 
 
 def _format_recommendation(rec: ModelRecommendation, slot: str) -> dict[str, Any]:
@@ -134,7 +148,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
                 research_legal_analysis.
             user_count: Override the extracted user count.
             preferred_gpu_types: Override GPU preferences.
-                Valid: L4, A100-40, A100-80, H100, H200, B200.
+                Valid: L4, A100-40, A100-80, H100, H200, B200;
+                case and vendor aliases are accepted, and A100 includes both variants.
             ttft_max_ms: Maximum time-to-first-token in milliseconds.
                 Overrides the default SLO target for the use case.
             itl_max_ms: Maximum inter-token latency in milliseconds.
@@ -199,7 +214,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         # Validate preferred_gpu_types
         if preferred_gpu_types:
-            invalid = sorted(set(preferred_gpu_types) - VALID_GPU_TYPES)
+            preferred_gpu_types, invalid = _normalize_preferred_gpu_types(preferred_gpu_types)
             if invalid:
                 valid = ", ".join(sorted(VALID_GPU_TYPES))
                 return {
@@ -314,7 +329,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             optimization_profile: Scoring profile for ranking. Valid values:
                 balanced, optimize_latency, optimize_cost, optimize_quality.
             preferred_gpu_types: GPU type filter.
-                Valid: L4, A100-40, A100-80, H100, H200, B200.
+                Valid: L4, A100-40, A100-80, H100, H200, B200;
+                case and vendor aliases are accepted, and A100 includes both variants.
             min_quality: Minimum quality score (0-100).
             max_cost_per_month: Maximum monthly cost in USD.
             percentile: Percentile for SLO evaluation.
@@ -382,7 +398,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
 
         # Validate preferred_gpu_types
         if preferred_gpu_types:
-            invalid = sorted(set(preferred_gpu_types) - VALID_GPU_TYPES)
+            preferred_gpu_types, invalid = _normalize_preferred_gpu_types(preferred_gpu_types)
             if invalid:
                 valid = ", ".join(sorted(VALID_GPU_TYPES))
                 return {
@@ -630,7 +646,8 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             itl_target_ms: ITL SLO target in milliseconds.
             e2e_target_ms: E2E SLO target in milliseconds.
             preferred_gpu_types: GPU type filter (cluster GPU types from Phase 3).
-                Valid: L4, A100-40, A100-80, H100, H200, B200.
+                Valid: L4, A100-40, A100-80, H100, H200, B200;
+                case and vendor aliases are accepted, and A100 includes both variants.
             optimization_profile: Scoring profile. Valid values:
                 balanced, optimize_latency, optimize_cost, optimize_quality.
 
@@ -677,7 +694,7 @@ def register_tools(mcp: FastMCP, server: RHOAIServer) -> None:
             }
 
         if preferred_gpu_types:
-            invalid = sorted(set(preferred_gpu_types) - VALID_GPU_TYPES)
+            preferred_gpu_types, invalid = _normalize_preferred_gpu_types(preferred_gpu_types)
             if invalid:
                 valid = ", ".join(sorted(VALID_GPU_TYPES))
                 return {

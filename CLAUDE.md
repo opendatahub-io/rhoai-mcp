@@ -30,7 +30,8 @@ make check                       # lint + typecheck
 
 # Container operations
 make build                       # Build container image
-make run-http                    # Run with SSE transport
+make run-http                    # Run with SSE transport (legacy)
+make run-streamable              # Run with streamable-http transport (primary)
 make run-stdio                   # Run with stdio transport
 make run-dev                     # Debug logging + dangerous ops enabled
 
@@ -111,14 +112,14 @@ Plugins can implement these hooks (defined in `hooks.py`):
 
 Environment variables use `RHOAI_MCP_` prefix. Key settings:
 - `AUTH_MODE`: auto | kubeconfig
-- `TRANSPORT`: stdio | sse | streamable-http
+- `TRANSPORT`: stdio | streamable-http (primary) | sse (legacy)
 - `KUBECONFIG_PATH`, `KUBECONFIG_CONTEXT`: For kubeconfig auth
 - `ENABLE_DANGEROUS_OPERATIONS`: Enable delete operations
 - `READ_ONLY_MODE`: Disable all writes
 
 ### Key Dependencies
 
-- `mcp>=1.0.0`: Model Context Protocol (MCPServer)
+- `mcp>=2.0.0,<3`: Model Context Protocol (MCPServer) — v2 SDK
 - `kubernetes>=28.1.0`: K8s Python client
 - `pydantic>=2.0.0`: Data validation and settings
 

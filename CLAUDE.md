@@ -30,7 +30,8 @@ make check                       # lint + typecheck
 
 # Container operations
 make build                       # Build container image
-make run-http                    # Run with streamable-http transport (SSE is legacy)
+make run-http                    # Run with SSE transport (legacy)
+make run-streamable              # Run with streamable-http transport (primary)
 make run-stdio                   # Run with stdio transport
 make run-dev                     # Debug logging + dangerous ops enabled
 

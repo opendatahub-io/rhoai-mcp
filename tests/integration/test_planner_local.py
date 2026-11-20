@@ -89,7 +89,7 @@ async def deploy_config_result(local_client: LocalPlannerClient) -> DeploymentCo
 
 
 def _register_local_tools() -> dict[str, Any]:
-    """Register MCP tools with a mock FastMCP backed by a real local planner."""
+    """Register MCP tools with a mock MCPServer backed by a real local planner."""
     mock_mcp = MagicMock()
     registered: dict[str, Any] = {}
 

@@ -48,7 +48,7 @@
         <mxCell id="main" value="__main__.py&#xa;CLI Entry" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
           <mxGeometry x="480" y="260" width="110" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="server" value="server.py&#xa;RHOAIServer + FastMCP" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+        <mxCell id="server" value="server.py&#xa;RHOAIServer + MCPServer" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
           <mxGeometry x="610" y="260" width="160" height="50" as="geometry" />
         </mxCell>
         <mxCell id="config" value="config.py&#xa;RHOAIConfig&#xa;(pydantic-settings)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
@@ -286,7 +286,7 @@
         <mxCell id="legend_title" value="Key Dependencies" style="text;html=1;fontSize=13;fontStyle=1;align=center;" vertex="1" parent="1">
           <mxGeometry x="1300" y="775" width="160" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="dep1" value="mcp &gt;= 1.0  (FastMCP server)" style="text;html=1;fontSize=11;align=left;" vertex="1" parent="1">
+        <mxCell id="dep1" value="mcp &gt;= 2.0  (MCPServer)" style="text;html=1;fontSize=11;align=left;" vertex="1" parent="1">
           <mxGeometry x="1230" y="800" width="250" height="18" as="geometry" />
         </mxCell>
         <mxCell id="dep2" value="kubernetes &gt;= 28.1  (K8s Python client)" style="text;html=1;fontSize=11;align=left;" vertex="1" parent="1">
@@ -707,7 +707,7 @@
         <mxCell id="PZrfKFrHDZbYGmmKOG_u-10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="__main__.py&#xa;CLI Entry" vertex="1">
           <mxGeometry height="50" width="110" x="660" y="1270" as="geometry" />
         </mxCell>
-        <mxCell id="PZrfKFrHDZbYGmmKOG_u-11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="server.py&#xa;RHOAIServer + FastMCP" vertex="1">
+        <mxCell id="PZrfKFrHDZbYGmmKOG_u-11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="server.py&#xa;RHOAIServer + MCPServer" vertex="1">
           <mxGeometry height="50" width="160" x="790" y="1270" as="geometry" />
         </mxCell>
         <mxCell id="PZrfKFrHDZbYGmmKOG_u-12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="config.py&#xa;RHOAIConfig&#xa;(pydantic-settings)" vertex="1">
@@ -909,7 +909,7 @@
         <mxCell id="PZrfKFrHDZbYGmmKOG_u-69" parent="1" style="text;html=1;fontSize=13;fontStyle=1;align=center;" value="Key Dependencies" vertex="1">
           <mxGeometry height="20" width="160" x="1480" y="1785" as="geometry" />
         </mxCell>
-        <mxCell id="PZrfKFrHDZbYGmmKOG_u-70" parent="1" style="text;html=1;fontSize=11;align=left;" value="mcp &gt;= 1.0  (FastMCP server)" vertex="1">
+        <mxCell id="PZrfKFrHDZbYGmmKOG_u-70" parent="1" style="text;html=1;fontSize=11;align=left;" value="mcp &gt;= 2.0  (MCPServer)" vertex="1">
           <mxGeometry height="18" width="250" x="1410" y="1810" as="geometry" />
         </mxCell>
         <mxCell id="PZrfKFrHDZbYGmmKOG_u-71" parent="1" style="text;html=1;fontSize=11;align=left;" value="kubernetes &gt;= 28.1  (K8s Python client)" vertex="1">

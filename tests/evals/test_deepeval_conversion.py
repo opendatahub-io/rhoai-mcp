@@ -157,7 +157,7 @@ class TestConversationalTestCase:
         )
         assert warning not in "\n".join(t.content for t in default_case.turns)
         assert warning not in transcript.assistant_text
-        assert call_turn.mcp_tools_called[0].result.structuredContent["result"]["warnings"] == [
+        assert call_turn.mcp_tools_called[0].result.structured_content["result"]["warnings"] == [
             warning
         ]
 
@@ -198,7 +198,7 @@ class TestConversationalTestCase:
         (turn,) = [t for t in case.turns if t.mcp_tools_called]
         result = turn.mcp_tools_called[0].result
         assert isinstance(result, CallToolResult)
-        assert result.isError is False
+        assert result.is_error is False
 
     def test_structured_content_is_wrapped_under_a_result_key(
         self, history: list[Any], mcp_server: MCPServer
@@ -212,7 +212,7 @@ class TestConversationalTestCase:
         case = transcript_to_conversational_test_case(from_pydantic_ai(history), mcp_server)
 
         (turn,) = [t for t in case.turns if t.mcp_tools_called]
-        structured = turn.mcp_tools_called[0].result.structuredContent
+        structured = turn.mcp_tools_called[0].result.structured_content
 
         assert structured is not None
         assert structured["result"] == {"recommendations": [{"model": "llama-3.1-8b"}]}
@@ -425,7 +425,7 @@ class TestConversationalTestCase:
         case = transcript_to_conversational_test_case(from_pydantic_ai(history), mcp_server)
 
         (turn,) = [t for t in case.turns if t.mcp_tools_called]
-        assert turn.mcp_tools_called[0].result.isError is True
+        assert turn.mcp_tools_called[0].result.is_error is True
 
     def test_unreturned_call_is_flagged_as_an_error_result(self, mcp_server: MCPServer) -> None:
         history = [
@@ -438,4 +438,4 @@ class TestConversationalTestCase:
         case = transcript_to_conversational_test_case(from_pydantic_ai(history), mcp_server)
 
         (turn,) = [t for t in case.turns if t.mcp_tools_called]
-        assert turn.mcp_tools_called[0].result.isError is True
+        assert turn.mcp_tools_called[0].result.is_error is True

@@ -150,7 +150,7 @@ SAMPLE_DEPLOYMENT_BUNDLE = {
 class TestPlannerClientExtractIntent:
     """Tests for intent extraction."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_extract_intent_success(self, mock_httpx: MagicMock) -> None:
         """Successful intent extraction returns DeploymentIntent."""
         mock_response = MagicMock()
@@ -167,10 +167,10 @@ class TestPlannerClientExtractIntent:
         assert intent.use_case == "chatbot_conversational"
         assert intent.user_count == 1000
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_extract_intent_connection_error(self, mock_httpx: MagicMock) -> None:
         """Connection failure raises PlannerConnectionError."""
-        import httpx as real_httpx
+        import httpx2 as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
         mock_httpx.TimeoutException = real_httpx.TimeoutException
@@ -184,10 +184,10 @@ class TestPlannerClientExtractIntent:
         with pytest.raises(PlannerConnectionError):
             await client.extract_intent("test")
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_extract_intent_malformed_response(self, mock_httpx: MagicMock) -> None:
         """Malformed intent response raises PlannerAPIError."""
-        import httpx as real_httpx
+        import httpx2 as real_httpx
 
         mock_httpx.TimeoutException = real_httpx.TimeoutException
         mock_httpx.ConnectError = real_httpx.ConnectError
@@ -210,7 +210,7 @@ class TestPlannerClientExtractIntent:
 class TestPlannerClientGetDefaults:
     """Tests for fetching SLO/workload defaults."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_get_slo_defaults(self, mock_httpx: MagicMock) -> None:
         """SLO defaults are fetched and parsed."""
         mock_response = MagicMock()
@@ -227,7 +227,7 @@ class TestPlannerClientGetDefaults:
 
         assert defaults["slo_defaults"]["ttft_ms"]["default"] == 150
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_get_workload_profile(self, mock_httpx: MagicMock) -> None:
         """Workload profile is fetched and parsed."""
         mock_response = MagicMock()
@@ -244,7 +244,7 @@ class TestPlannerClientGetDefaults:
 
         assert profile["workload_profile"]["prompt_tokens"] == 512
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_get_expected_rps(self, mock_httpx: MagicMock) -> None:
         """Expected RPS is fetched and parsed."""
         mock_response = MagicMock()
@@ -265,7 +265,7 @@ class TestPlannerClientGetDefaults:
 class TestPlannerClientGenerateSpecification:
     """Tests for generate_specification method."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_specification(self, mock_httpx: MagicMock) -> None:
         """Specification is generated from intent."""
         mock_response = MagicMock()
@@ -291,7 +291,7 @@ class TestPlannerClientGenerateSpecification:
 class TestPlannerClientGenerateRecommendations:
     """Tests for generate_recommendations method."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_recommendations(self, mock_httpx: MagicMock) -> None:
         """Ranked recommendations are generated from specification."""
         mock_response = MagicMock()
@@ -311,7 +311,7 @@ class TestPlannerClientGenerateRecommendations:
         call_args = mock_client.post.call_args
         assert "/api/v1/generate-recommendations" in call_args.args[0]
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_recommendations_with_constraints(self, mock_httpx: MagicMock) -> None:
         """Constraint parameters are included in the POST payload."""
         mock_response = MagicMock()
@@ -335,7 +335,7 @@ class TestPlannerClientGenerateRecommendations:
         assert payload["min_quality"] == 70
         assert payload["max_cost"] == 5000.0
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_recommendations_without_constraints(self, mock_httpx: MagicMock) -> None:
         """When no constraints are provided, they are omitted from payload."""
         mock_response = MagicMock()
@@ -359,7 +359,7 @@ class TestPlannerClientGenerateRecommendations:
 class TestPlannerClientRecommend:
     """Tests for the full recommendation flow."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_full_flow(self, mock_httpx: MagicMock) -> None:
         """Full recommend() chains extract -> generate-specification -> generate-recommendations."""
         mock_client = AsyncMock()
@@ -399,7 +399,7 @@ class TestPlannerClientRecommend:
         assert mock_client.post.call_count == 3
         assert mock_client.get.call_count == 0
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_with_overrides(self, mock_httpx: MagicMock) -> None:
         """When all overrides are provided, extraction is skipped."""
         mock_client = AsyncMock()
@@ -432,10 +432,10 @@ class TestPlannerClientRecommend:
         assert mock_client.post.call_count == 2
         assert result.specification["use_case"] == "code_completion"
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_api_error(self, mock_httpx: MagicMock) -> None:
         """API error during recommendation raises PlannerAPIError."""
-        import httpx as real_httpx
+        import httpx2 as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
         mock_httpx.TimeoutException = real_httpx.TimeoutException
@@ -460,7 +460,7 @@ class TestPlannerClientRecommend:
         with pytest.raises(PlannerAPIError):
             await client.extract_intent("test")
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_with_slo_overrides(self, mock_httpx: MagicMock) -> None:
         """SLO overrides replace generated specification values."""
         mock_client = AsyncMock()
@@ -497,7 +497,7 @@ class TestPlannerClientRecommend:
         assert result.specification["slo_targets"]["itl_target_ms"] == 30
         assert result.specification["slo_targets"]["e2e_target_ms"] == 1500
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_with_partial_slo_overrides(self, mock_httpx: MagicMock) -> None:
         """Partial SLO overrides only replace the specified values."""
         mock_client = AsyncMock()
@@ -533,7 +533,7 @@ class TestPlannerClientRecommend:
         assert result.specification["slo_targets"]["itl_target_ms"] == 65
         assert result.specification["slo_targets"]["e2e_target_ms"] == 2000
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_forwards_constraints(self, mock_httpx: MagicMock) -> None:
         """min_quality and max_cost are forwarded to generate_recommendations."""
         mock_client = AsyncMock()
@@ -572,7 +572,7 @@ class TestPlannerClientRecommend:
         assert payload["max_cost"] == 5000.0
 
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_forwards_percentile_override(self, mock_httpx: MagicMock) -> None:
         """percentile_override is applied to the specification's slo_targets."""
         mock_client = AsyncMock()
@@ -603,7 +603,7 @@ class TestPlannerClientRecommend:
         payload = ranked_call.kwargs.get("json") or ranked_call[1].get("json")
         assert payload["specification"]["slo_targets"]["percentile"] == "p99"
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_forwards_priority_weights(self, mock_httpx: MagicMock) -> None:
         """priority_weights override the specification's priorities."""
         mock_client = AsyncMock()
@@ -640,7 +640,7 @@ class TestPlannerClientRecommend:
 
 
     @pytest.mark.parametrize("bad_priorities", [None, []])
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_invalid_priorities(
         self, mock_httpx: MagicMock, bad_priorities: Any
     ) -> None:
@@ -671,7 +671,7 @@ class TestPlannerClientRecommend:
             )
         assert exc_info.value.status_code == 502
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_invalid_priority_entry(self, mock_httpx: MagicMock) -> None:
         """Null priority entry raises PlannerAPIError(502)."""
         mock_client = AsyncMock()
@@ -700,7 +700,7 @@ class TestPlannerClientRecommend:
             )
         assert exc_info.value.status_code == 502
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_missing_priority_category(self, mock_httpx: MagicMock) -> None:
         """Missing priority category in spec raises PlannerAPIError(502)."""
         mock_client = AsyncMock()
@@ -730,7 +730,7 @@ class TestPlannerClientRecommend:
         assert exc_info.value.status_code == 502
         assert "priorities.quality" in exc_info.value.detail
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_gpu_types_override_acts_as_hard_filter(self, mock_httpx: MagicMock) -> None:
         """gpu_types_override filters out recommendations whose GPU type is not in the list."""
         mock_client = AsyncMock()
@@ -774,7 +774,7 @@ class TestPlannerClientRecommend:
         assert result.top_cost is None
         assert result.top_quality is None
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_empty_gpu_types_override_skips_filter(self, mock_httpx: MagicMock) -> None:
         """Empty gpu_types_override does not filter any recommendations."""
         mock_client = AsyncMock()
@@ -810,7 +810,7 @@ class TestPlannerClientRecommend:
 class TestPlannerClientRecommendExtractionBypass:
     """Tests for skipping extraction when overrides are sufficient."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_skips_extraction_when_all_overrides_provided(
         self, mock_httpx: MagicMock
     ) -> None:
@@ -845,7 +845,7 @@ class TestPlannerClientRecommendExtractionBypass:
         assert mock_client.post.call_count == 2
         assert result.specification["use_case"] == "chatbot_conversational"
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_recommend_still_extracts_when_only_use_case_override(
         self, mock_httpx: MagicMock
     ) -> None:
@@ -886,10 +886,10 @@ class TestPlannerClientRecommendExtractionBypass:
 class TestPlannerClientRequestErrors:
     """Tests for _request error handling edge cases."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_invalid_json_response(self, mock_httpx: MagicMock) -> None:
         """Non-JSON response raises PlannerAPIError."""
-        import httpx as real_httpx
+        import httpx2 as real_httpx
 
         mock_httpx.TimeoutException = real_httpx.TimeoutException
         mock_httpx.ConnectError = real_httpx.ConnectError
@@ -908,10 +908,10 @@ class TestPlannerClientRequestErrors:
         with pytest.raises(PlannerAPIError, match="invalid JSON"):
             await client.get_slo_defaults("chatbot_conversational")
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generic_request_error(self, mock_httpx: MagicMock) -> None:
-        """Other httpx.RequestError subtypes raise PlannerConnectionError."""
-        import httpx as real_httpx
+        """Other httpx2.RequestError subtypes raise PlannerConnectionError."""
+        import httpx2 as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
         mock_httpx.TimeoutException = real_httpx.TimeoutException
@@ -930,7 +930,7 @@ class TestPlannerClientRequestErrors:
 class TestPlannerClientHealthCheck:
     """Tests for health check."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     def test_health_check_healthy(self, mock_httpx: MagicMock) -> None:
         """Health check returns True when service is reachable."""
         mock_response = MagicMock()
@@ -948,10 +948,10 @@ class TestPlannerClientHealthCheck:
         assert "available" in msg.lower()
         mock_client.get.assert_called_once_with("http://localhost:8000/health", params=None)
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     def test_health_check_unhealthy(self, mock_httpx: MagicMock) -> None:
         """Health check returns False when service is unreachable."""
-        import httpx as real_httpx
+        import httpx2 as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
         mock_httpx.TimeoutException = real_httpx.TimeoutException
@@ -967,7 +967,7 @@ class TestPlannerClientHealthCheck:
         assert healthy is False
         assert "unavailable" in msg.lower()
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     def test_health_check_propagates_programming_errors(self, mock_httpx: MagicMock) -> None:
         """Health check must not hide internal programming errors as an outage."""
         mock_client = MagicMock()
@@ -984,7 +984,7 @@ class TestPlannerClientHealthCheck:
 class TestPlannerClientGenerateDeployment:
     """Tests for generate_deployment() method."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_deployment(self, mock_httpx: MagicMock) -> None:
         """generate_deployment() sends configuration + namespace and returns bundle."""
         mock_response = MagicMock()
@@ -1012,7 +1012,7 @@ class TestPlannerClientGenerateDeployment:
 class TestPlannerClientGenerateConfig:
     """Tests for generate_config() method."""
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_balanced(self, mock_httpx: MagicMock) -> None:
         """generate_config with category='balanced' picks from balanced list."""
         mock_client = AsyncMock()
@@ -1055,7 +1055,7 @@ class TestPlannerClientGenerateConfig:
         assert result.model_name == "Llama 3.1 70B"
         assert "inferenceservice" in result.configs
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_applies_workload_overrides(self, mock_httpx: MagicMock) -> None:
         """Caller's prompt_tokens/output_tokens/expected_qps override the specification."""
         mock_client = AsyncMock()
@@ -1103,7 +1103,7 @@ class TestPlannerClientGenerateConfig:
         assert workload["expected_qps"] == 25.0
 
     @pytest.mark.parametrize("bad_workload", [None, []])
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_invalid_workload_profile(
         self, mock_httpx: MagicMock, bad_workload: Any
     ) -> None:
@@ -1136,7 +1136,7 @@ class TestPlannerClientGenerateConfig:
             )
         assert exc_info.value.status_code == 502
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_cost(self, mock_httpx: MagicMock) -> None:
         """category='cost' maps to 'lowest_cost' ranking list."""
         mock_client = AsyncMock()
@@ -1176,7 +1176,7 @@ class TestPlannerClientGenerateConfig:
         assert isinstance(result, DeploymentConfigResult)
         assert result.deployment_id == "chatbot-llama-3-1-70b-20260322143022"
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_performance(self, mock_httpx: MagicMock) -> None:
         """category='performance' maps to 'lowest_latency' ranking list."""
         mock_client = AsyncMock()
@@ -1215,7 +1215,7 @@ class TestPlannerClientGenerateConfig:
 
         assert isinstance(result, DeploymentConfigResult)
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_quality(self, mock_httpx: MagicMock) -> None:
         """category='quality' maps to 'best_quality' ranking list."""
         mock_client = AsyncMock()
@@ -1254,7 +1254,7 @@ class TestPlannerClientGenerateConfig:
 
         assert isinstance(result, DeploymentConfigResult)
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_empty_category(self, mock_httpx: MagicMock) -> None:
         """Empty category list raises PlannerAPIError."""
         mock_client = AsyncMock()
@@ -1291,7 +1291,7 @@ class TestPlannerClientGenerateConfig:
                 e2e_target_ms=2000,
             )
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_gpu_filter_removes_unsupported(
         self, mock_httpx: MagicMock
     ) -> None:
@@ -1329,10 +1329,10 @@ class TestPlannerClientGenerateConfig:
                 preferred_gpu_types=["H100"],
             )
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_deploy_error(self, mock_httpx: MagicMock) -> None:
         """Deploy failure after ranking succeeds raises PlannerAPIError."""
-        import httpx as real_httpx
+        import httpx2 as real_httpx
 
         mock_httpx.ConnectError = real_httpx.ConnectError
         mock_httpx.TimeoutException = real_httpx.TimeoutException
@@ -1377,7 +1377,7 @@ class TestPlannerClientGenerateConfig:
                 e2e_target_ms=2000,
             )
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_empty_files(self, mock_httpx: MagicMock) -> None:
         """Deploy returns empty files dict raises PlannerAPIError."""
         mock_client = AsyncMock()
@@ -1416,7 +1416,7 @@ class TestPlannerClientGenerateConfig:
                 e2e_target_ms=2000,
             )
 
-    @patch("rhoai_mcp.composites.planner.client.httpx")
+    @patch("rhoai_mcp.composites.planner.client.httpx2")
     async def test_generate_config_model_id_fallback(self, mock_httpx: MagicMock) -> None:
         """When model_name is None, model_id is used instead."""
         mock_client = AsyncMock()

@@ -33,7 +33,7 @@ def mock_http_response() -> MagicMock:
         response.json.return_value = json_data or {}
         response.raise_for_status = MagicMock()
         if status_code >= 400:
-            from httpx import HTTPStatusError, Request, Response
+            from httpx2 import HTTPStatusError, Request, Response
 
             response.raise_for_status.side_effect = HTTPStatusError(
                 message=f"HTTP {status_code}",

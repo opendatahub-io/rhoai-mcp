@@ -14,7 +14,7 @@ import pluggy
 from rhoai_mcp.hooks import PROJECT_NAME, RHOAIMCPHookSpec
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from rhoai_mcp.plugin import PluginMetadata
     from rhoai_mcp.server import RHOAIServer
@@ -160,31 +160,31 @@ class PluginManager:
         results = self.hook.rhoai_get_plugin_metadata()
         return [meta for meta in results if meta is not None]
 
-    def register_all_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def register_all_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Call tool registration hooks on all plugins.
 
         Args:
-            mcp: The FastMCP server instance to register tools with.
+            mcp: The MCPServer instance to register tools with.
             server: The RHOAI server instance.
         """
         self.hook.rhoai_register_tools(mcp=mcp, server=server)
         logger.info(f"Registered tools from {len(self._registered_plugins)} plugins")
 
-    def register_all_resources(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def register_all_resources(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Call resource registration hooks on all plugins.
 
         Args:
-            mcp: The FastMCP server instance to register resources with.
+            mcp: The MCPServer instance to register resources with.
             server: The RHOAI server instance.
         """
         self.hook.rhoai_register_resources(mcp=mcp, server=server)
         logger.info(f"Registered resources from {len(self._registered_plugins)} plugins")
 
-    def register_all_prompts(self, mcp: FastMCP, server: RHOAIServer) -> None:
+    def register_all_prompts(self, mcp: MCPServer, server: RHOAIServer) -> None:
         """Call prompt registration hooks on all plugins.
 
         Args:
-            mcp: The FastMCP server instance to register prompts with.
+            mcp: The MCPServer instance to register prompts with.
             server: The RHOAI server instance.
         """
         self.hook.rhoai_register_prompts(mcp=mcp, server=server)

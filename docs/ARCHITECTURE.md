@@ -111,7 +111,7 @@ For **JWT mode** with audience-bound tokens, user-token pass-through is a spec v
 
 ### Per-Message Token Extraction
 
-For HTTP transports (SSE, streamable-http), the server prefers the token from the per-message `request_ctx` (the MCP library's per-handler ContextVar carrying the POST's Starlette Request) over the session-level `UserContext.token`. This handles token refresh mid-session: if the client obtains a new token and sends it on subsequent POSTs, the new token is used automatically without tearing down the connection.
+For HTTP transports (streamable-http — the primary transport — and SSE, which is legacy), the server prefers the token from the per-message request headers (`ctx.request_context.request.headers` on the mcp 2.x `ServerRequestContext` — the runner maps the POST's Starlette Request onto it) over the session-level `UserContext.token`. This handles token refresh mid-session: if the client obtains a new token and sends it on subsequent POSTs, the new token is used automatically without tearing down the connection.
 
 ### RBAC Filtering
 
@@ -414,7 +414,7 @@ Wraps MCP tool functions to handle token flow automatically:
 - **`requires`**: Verifies the incoming `workflow_token` kwarg matches the expected step. On success, replaces the raw token string with the verified data dict. On failure, returns an error dict without calling the tool function.
 - **`produces`**: Signs the tool's return dict (excluding any existing `workflow_token` key) and adds a `workflow_token` key. Skipped when the return dict contains an `"error"` key.
 
-The decorator preserves `__signature__` so FastMCP generates correct JSON schemas.
+The decorator preserves `__signature__` so MCPServer generates correct JSON schemas.
 
 ### Example Chain
 
@@ -519,17 +519,17 @@ To add a new domain:
            )
 
        @hookimpl
-       def rhoai_register_tools(self, mcp: FastMCP, server: RHOAIServer) -> None:
+       def rhoai_register_tools(self, mcp: MCPServer, server: RHOAIServer) -> None:
            from rhoai_mcp.domains.newdomain.tools import register_tools
            register_tools(mcp, server)
 
        @hookimpl
-       def rhoai_register_resources(self, mcp: FastMCP, server: RHOAIServer) -> None:
+       def rhoai_register_resources(self, mcp: MCPServer, server: RHOAIServer) -> None:
            from rhoai_mcp.domains.newdomain.resources import register_resources
            register_resources(mcp, server)
 
        @hookimpl
-       def rhoai_register_prompts(self, mcp: FastMCP, server: RHOAIServer) -> None:
+       def rhoai_register_prompts(self, mcp: MCPServer, server: RHOAIServer) -> None:
            from rhoai_mcp.domains.newdomain.prompts import register_prompts
            register_prompts(mcp, server)
    ```

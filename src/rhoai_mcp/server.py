@@ -1,69 +1,29 @@
-"""FastMCP server definition for RHOAI with pluggy-based plugin system."""
+"""MCP server definition for RHOAI with pluggy-based plugin system."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from pydantic import SecretStr
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from rhoai_mcp.auth.rbac_middleware import RBACMiddleware
 from rhoai_mcp.clients.base import K8sClient
 from rhoai_mcp.config import RHOAIConfig, TransportMode, get_config
 from rhoai_mcp.plugin_manager import PluginManager
+from rhoai_mcp.utils.errors import RHOAIError
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-
-def _get_per_message_token(session_token: SecretStr | None) -> SecretStr | None:
-    """Extract the Bearer token from the current MCP per-message request context."""
-    try:
-        from mcp.server.lowlevel.server import request_ctx
-
-        req_context = request_ctx.get()
-        if req_context is None:
-            return None
-        req = req_context.request
-        if req is None:
-            return None
-    except ImportError:
-        logger.warning(
-            "mcp.server.lowlevel.server.request_ctx not available "
-            "(MCP SDK 2.x?). Per-message token extraction disabled — "
-            "using session-level token. Mid-session token refresh inactive."
-        )
-        return None
-    except LookupError:
-        return None
-
-    auth_header = ""
-    if hasattr(req, "headers"):
-        auth_header = req.headers.get("authorization", "")
-    if not auth_header.lower().startswith("bearer "):
-        return None
-
-    per_message_token = SecretStr(auth_header[7:])
-
-    if (
-        session_token is not None
-        and per_message_token.get_secret_value() != session_token.get_secret_value()
-    ):
-        logger.warning(
-            "Bearer token changed mid-session — using per-message token. "
-            "This may indicate token refresh mid session."
-        )
-
-    return per_message_token
 
 
 class RHOAIServer:
@@ -72,7 +32,7 @@ class RHOAIServer:
     def __init__(self, config: RHOAIConfig | None = None) -> None:
         self._config = config or get_config()
         self._k8s_client: K8sClient | None = None
-        self._mcp: FastMCP | None = None
+        self._mcp: MCPServer | None = None
         self._plugin_manager: PluginManager | None = None
 
     @property
@@ -80,53 +40,107 @@ class RHOAIServer:
         """Get server configuration."""
         return self._config
 
-    @property
-    def k8s(self) -> K8sClient:
-        """Get the Kubernetes client.
+    def get_k8s(self, ctx: Context | None = None) -> K8sClient:
+        """Per-request Kubernetes client for the calling user (RHAI-14631).
 
-        When OIDC is enabled, returns a client authenticated as the current
-        user (via user-token or impersonation strategy). Otherwise returns
-        the shared SA client.
+        Token precedence per the 1.6 design: the per-message request
+        headers when the transport carries them (SSE attaches each POST's
+        Request to the message metadata — ``ctx.request_context.meta``),
+        else ``UserContext.token`` (per-POST fresh under Streamable HTTP;
+        connection-time under SSE, bounded by the SDK's session-owner
+        pinning).
+
+        Args:
+            ctx: the tool call's Context. None falls back to UserContext
+                only (used by the deprecated ``k8s`` property).
+
+        Returns:
+            The shared SA client when OIDC is disabled; otherwise a client
+            authenticated as the current user (user-token or impersonation
+            strategy).
 
         Raises:
-            RuntimeError: If server is not running.
+            RHOAIError: If server is not running, no UserContext is set
+                under OIDC, or no token is available for the user-token
+                strategy.
         """
         if self._k8s_client is None:
-            raise RuntimeError("Server not running. K8s client not available.")
+            raise RHOAIError("Server not running. K8s client not available.")
 
         if self._config.oidc_enabled:
             from rhoai_mcp.auth.user_context import UserContext
             from rhoai_mcp.config import OIDCKubeAuthStrategy
 
-            ctx = UserContext.current()
-            if ctx is None:
-                raise RuntimeError(
+            user_context = UserContext.current()
+            if user_context is None:
+                raise RHOAIError(
                     "OIDC is enabled but no UserContext is set. "
                     "Refusing to fall back to service-account client."
                 )
 
             if self._config.oidc_kube_auth_strategy == OIDCKubeAuthStrategy.USER_TOKEN:
-                token = _get_per_message_token(ctx.token) or ctx.token
+                token = self._per_message_token(ctx) or user_context.token
                 if not token:
-                    raise RuntimeError(
+                    raise RHOAIError(
                         "OIDC user-token strategy is active but no token is available "
-                        "(neither per-message request_ctx nor UserContext.token)."
+                        "(neither the per-message request nor UserContext.token)."
                     )
                 return self._k8s_client.create_user_token_client(token)
             else:
-                return self._k8s_client.create_impersonating_client(ctx.username, ctx.groups)
+                return self._k8s_client.create_impersonating_client(
+                    user_context.username, user_context.groups
+                )
 
         return self._k8s_client
 
+    @staticmethod
+    def _per_message_token(ctx: Context | None) -> SecretStr | None:
+        """Bearer token from the per-message request, when the transport carries it.
+
+        The transport's per-message data lives on ``ctx.request_context.request``
+        (``ServerRequestContext.request`` — the runner maps the session message
+        metadata's ``request_context`` there; ``meta`` is protocol ``_meta``,
+        a different thing). SSE attaches each POST's Starlette Request; the
+        stateful Streamable HTTP dispatch runs in the request's own task, where
+        the per-POST ``UserContext`` already carries the token; stdio has no
+        per-message requests. Uses only public attribute access; no SDK private
+        imports (replaces the v1 ``request_ctx`` ContextVar mechanism, which no
+        longer exists in v2).
+        """
+        if ctx is None or ctx.request_context is None:
+            return None
+        request = getattr(ctx.request_context, "request", None)
+        headers = getattr(request, "headers", None)
+        if not headers:
+            return None
+        auth_header = headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            return None
+        return SecretStr(auth_header[7:])
+
+    def get_shared_k8s(self) -> K8sClient:
+        """The shared service-account Kubernetes client.
+
+        For server-level operations that are not on behalf of a calling
+        user: startup health checks, CRD discovery. Per-request tool code
+        must use :meth:`get_k8s` instead.
+
+        Raises:
+            RHOAIError: If server is not running.
+        """
+        if self._k8s_client is None:
+            raise RHOAIError("Server not running. K8s client not available.")
+        return self._k8s_client
+
     @property
-    def mcp(self) -> FastMCP:
+    def mcp(self) -> MCPServer:
         """Get the MCP server instance.
 
         Raises:
-            RuntimeError: If server is not initialized.
+            RHOAIError: If server is not initialized.
         """
         if self._mcp is None:
-            raise RuntimeError("Server not initialized.")
+            raise RHOAIError("Server not initialized.")
         return self._mcp
 
     @property
@@ -134,10 +148,10 @@ class RHOAIServer:
         """Get the plugin manager.
 
         Raises:
-            RuntimeError: If server is not initialized.
+            RHOAIError: If server is not initialized.
         """
         if self._plugin_manager is None:
-            raise RuntimeError("Server not initialized.")
+            raise RHOAIError("Server not initialized.")
         return self._plugin_manager
 
     @property
@@ -228,7 +242,7 @@ class RHOAIServer:
         """Create the lifespan context manager for MCP sessions.
 
         Note: K8s connection is established eagerly in create_mcp(), not here.
-        FastMCP's lifespan runs per MCP client session (inside Server.run()),
+        MCPServer's lifespan runs per MCP client session (inside Server.run()),
         not at ASGI app startup. Putting K8s connect here would block the
         /health endpoint until the first MCP client connects.
         """
@@ -302,25 +316,25 @@ class RHOAIServer:
         app.router.lifespan_context = lifespan
         return app
 
-    def _install_http_shutdown(self, mcp: FastMCP) -> None:
+    def _install_http_shutdown(self, mcp: MCPServer) -> None:
         """Attach process cleanup to HTTP app shutdown, not client sessions."""
         if self._config.transport == TransportMode.SSE:
             original_sse_app = mcp.sse_app
 
-            def sse_app(mount_path: str | None = None) -> Starlette:
-                return self._with_port_forward_shutdown(original_sse_app(mount_path))
+            def sse_app(*args: Any, **kwargs: Any) -> Starlette:
+                return self._with_port_forward_shutdown(original_sse_app(*args, **kwargs))
 
             mcp.sse_app = sse_app  # type: ignore[method-assign]
         elif self._config.transport == TransportMode.STREAMABLE_HTTP:
             original_http_app = mcp.streamable_http_app
 
-            def streamable_http_app() -> Starlette:
-                return self._with_port_forward_shutdown(original_http_app())
+            def streamable_http_app(*args: Any, **kwargs: Any) -> Starlette:
+                return self._with_port_forward_shutdown(original_http_app(*args, **kwargs))
 
             mcp.streamable_http_app = streamable_http_app  # type: ignore[method-assign]
 
-    def create_mcp(self) -> FastMCP:
-        """Create and configure the FastMCP server."""
+    def create_mcp(self) -> MCPServer:
+        """Create and configure the MCPServer."""
         # Create plugin manager
         self._plugin_manager = PluginManager()
 
@@ -338,14 +352,18 @@ class RHOAIServer:
         self.startup()
 
         # Create MCP server with lifespan
-        mcp = FastMCP(
+        # v2: host/port are per-run arguments (passed to run()/app builders),
+        # not MCPServer constructor args
+        mcp = MCPServer(
             name="rhoai-mcp",
             instructions="MCP server for Red Hat OpenShift AI - enables AI agents to "
             "interact with RHOAI environments including workbenches, "
             "model serving, pipelines, and data connections.",
             lifespan=self._create_lifespan(),
-            host=self._config.host,
-            port=self._config.port,
+            # Dual-point RBAC enforcement via the public middleware parameter
+            # (RHAI-14627 / the ratified 1.6 design) — replaces the v1
+            # request_handlers monkey-patch. No-ops when OIDC is disabled.
+            middleware=[RBACMiddleware(self)],
         )
 
         # Store reference
@@ -370,7 +388,7 @@ class RHOAIServer:
 
         return mcp
 
-    def _setup_auth(self, mcp: FastMCP) -> None:
+    def _setup_auth(self, mcp: MCPServer) -> None:
         """Configure token validation middleware and metadata endpoint."""
         from rhoai_mcp.auth.metadata import build_protected_resource_metadata
         from rhoai_mcp.auth.oidc import OIDCValidator
@@ -432,8 +450,8 @@ class RHOAIServer:
 
         original_sse_app = mcp.sse_app
 
-        def patched_sse_app(mount_path: str | None = None) -> Any:
-            app = original_sse_app(mount_path)
+        def patched_sse_app(*args: Any, **kwargs: Any) -> Any:
+            app = original_sse_app(*args, **kwargs)
             return OIDCAuthMiddleware(
                 app,
                 validator=validator,
@@ -446,8 +464,8 @@ class RHOAIServer:
         if hasattr(mcp, "streamable_http_app"):
             original_http_app = mcp.streamable_http_app
 
-            def patched_http_app() -> Any:
-                app = original_http_app()
+            def patched_http_app(*args: Any, **kwargs: Any) -> Any:
+                app = original_http_app(*args, **kwargs)
                 return OIDCAuthMiddleware(
                     app,
                     validator=validator,
@@ -459,100 +477,18 @@ class RHOAIServer:
 
         logger.info("Auth middleware will be attached when transport app is created")
 
-        # Install tool-level RBAC filtering
-        self._install_tool_filtering(mcp)
+        # Tool-level RBAC enforcement is installed at construction time via
+        # the RBACMiddleware (see create_mcp) — nothing to patch here.
 
         logger.info("Authentication enabled")
 
-    def _install_tool_filtering(self, mcp: FastMCP) -> None:
-        """Patch lowlevel request handlers to enforce per-user RBAC filtering.
-
-        FastMCP registers protocol handlers via closures at setup time.
-        Monkey-patching methods on the FastMCP instance has no effect because
-        the lowlevel server's request_handlers dict still holds the original
-        closures. We must wrap the handlers in that dict directly.
-        """
-        from mcp import types as mcp_types
-
-        server = self
-        lowlevel = mcp._mcp_server  # noqa: SLF001
-
-        # Wrap list_tools handler
-        original_list_handler = lowlevel.request_handlers.get(mcp_types.ListToolsRequest)
-        if original_list_handler is None:
-            logger.warning("No ListToolsRequest handler registered, skipping tool filtering")
-            return
-
-        async def filtered_list_handler(req: mcp_types.ListToolsRequest) -> mcp_types.ServerResult:
-            result = await original_list_handler(req)
-            try:
-                check = await asyncio.to_thread(server.get_allowed_tools)
-            except Exception:
-                logger.error("RBAC check failed, denying all tools", exc_info=True)
-                return mcp_types.ServerResult(mcp_types.ListToolsResult(tools=[]))
-            if check is None:
-                return result
-            allowed, governed = check
-            list_result = result.root
-            assert isinstance(list_result, mcp_types.ListToolsResult)
-            all_tools = list_result.tools
-            # Tools with permission mappings must pass RBAC; unmapped tools are allowed
-            filtered = [t for t in all_tools if t.name in allowed or t.name not in governed]
-            logger.info("Tool filtering: %d/%d tools allowed", len(filtered), len(all_tools))
-            return mcp_types.ServerResult(mcp_types.ListToolsResult(tools=filtered))
-
-        lowlevel.request_handlers[mcp_types.ListToolsRequest] = filtered_list_handler
-
-        # Wrap call_tool handler
-        original_call_handler = lowlevel.request_handlers.get(mcp_types.CallToolRequest)
-        if original_call_handler is None:
-            logger.warning("No CallToolRequest handler registered, skipping call filtering")
-            return
-
-        async def filtered_call_handler(req: mcp_types.CallToolRequest) -> mcp_types.ServerResult:
-            tool_name = req.params.name
-            try:
-                check = await asyncio.to_thread(server.get_allowed_tools)
-            except Exception:
-                logger.error("RBAC check failed for tool '%s'", tool_name, exc_info=True)
-                return mcp_types.ServerResult(
-                    mcp_types.CallToolResult(
-                        content=[
-                            mcp_types.TextContent(
-                                type="text",
-                                text=f"Tool '{tool_name}' is not permitted: RBAC check failed",
-                            )
-                        ],
-                        isError=True,
-                    )
-                )
-            if check is not None:
-                allowed, governed = check
-                # Only enforce for tools with permission mappings
-                if tool_name in governed and tool_name not in allowed:
-                    return mcp_types.ServerResult(
-                        mcp_types.CallToolResult(
-                            content=[
-                                mcp_types.TextContent(
-                                    type="text",
-                                    text=f"Tool '{tool_name}' is not permitted for the current user",
-                                )
-                            ],
-                            isError=True,
-                        )
-                    )
-            return await original_call_handler(req)
-
-        lowlevel.request_handlers[mcp_types.CallToolRequest] = filtered_call_handler
-        logger.info("Tool-level RBAC filtering installed (request_handlers patched)")
-
-    def _register_core_resources(self, mcp: FastMCP) -> None:
+    def _register_core_resources(self, mcp: MCPServer) -> None:
         """Register core MCP resources for cluster information."""
         from rhoai_mcp.core_resources import register_core_resources
 
         register_core_resources(mcp, self)
 
-    def _register_health_endpoint(self, mcp: FastMCP) -> None:
+    def _register_health_endpoint(self, mcp: MCPServer) -> None:
         """Register /health endpoint for Kubernetes liveness/readiness probes."""
 
         @mcp.custom_route("/health", methods=["GET"])
@@ -599,7 +535,7 @@ def get_server() -> RHOAIServer:
     return _server
 
 
-def create_server(config: RHOAIConfig | None = None) -> FastMCP:
+def create_server(config: RHOAIConfig | None = None) -> MCPServer:
     """Create and return the MCP server instance.
 
     This is the main entry point for creating the server.

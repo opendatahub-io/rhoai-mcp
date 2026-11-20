@@ -7,6 +7,7 @@ from urllib3._collections import HTTPHeaderDict
 
 from rhoai_mcp.clients.base import K8sClient
 from rhoai_mcp.config import AuthMode, RHOAIConfig
+from rhoai_mcp.utils.errors import RHOAIError, ValidationError
 
 
 @pytest.fixture
@@ -65,26 +66,26 @@ class TestImpersonation:
 
     def test_header_injection_rejected(self, connected_client):
         """CWE-113: Reject control characters in header values."""
-        with pytest.raises(ValueError, match="control characters"):
+        with pytest.raises(ValidationError, match="control characters"):
             connected_client.create_impersonating_client("alice\r\nX-Evil: yes", [])
 
     def test_empty_username_rejected(self, connected_client):
-        with pytest.raises(ValueError, match="empty value"):
+        with pytest.raises(ValidationError, match="empty value"):
             connected_client.create_impersonating_client("  ", [])
 
     def test_username_with_whitespace_rejected(self, connected_client):
         """CWE-20: Reject leading/trailing whitespace instead of silently stripping."""
-        with pytest.raises(ValueError, match="whitespace"):
+        with pytest.raises(ValidationError, match="whitespace"):
             connected_client.create_impersonating_client(" alice ", [])
 
     def test_header_injection_in_group_rejected(self, connected_client):
         """CWE-113: Reject control characters in group header values."""
-        with pytest.raises(ValueError, match="control characters"):
+        with pytest.raises(ValidationError, match="control characters"):
             connected_client.create_impersonating_client("alice", ["team-a\r\nX-Evil: yes"])
 
     def test_empty_group_rejected(self, connected_client):
         """Reject empty group values."""
-        with pytest.raises(ValueError, match="empty value"):
+        with pytest.raises(ValidationError, match="empty value"):
             connected_client.create_impersonating_client("alice", ["team-a", "  "])
 
     def test_inherited_impersonation_headers_cleared(self, connected_client):
@@ -105,5 +106,5 @@ class TestImpersonation:
             api_token="x",
         )
         k8s_client = K8sClient(cfg)
-        with pytest.raises(RuntimeError, match="not connected"):
+        with pytest.raises(RHOAIError, match="not connected"):
             k8s_client.create_impersonating_client("alice", [])

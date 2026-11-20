@@ -11,6 +11,7 @@ anyio==4.14.2
     # via
     #   -c constraints-lock.tmp
     #   httpx
+    #   httpx2
     #   mcp
     #   sse-starlette
     #   starlette
@@ -58,6 +59,7 @@ h11==0.16.0
     # via
     #   -c constraints-lock.tmp
     #   httpcore
+    #   httpcore2
     #   uvicorn
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 hatchling==1.33.0
@@ -68,15 +70,20 @@ httpcore==1.0.9
     #   -c constraints-lock.tmp
     #   httpx
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
+httpcore2==2.12.0
+    # via
+    #   -c constraints-lock.tmp
+    #   httpx2
+    # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 httpx==0.28.1
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
-    #   mcp
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-httpx-sse==0.4.3
+httpx2==2.12.0
     # via
     #   -c constraints-lock.tmp
+    #   rhoai-mcp (pyproject.toml)
     #   mcp
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 idna==3.19
@@ -84,6 +91,7 @@ idna==3.19
     #   -c constraints-lock.tmp
     #   anyio
     #   httpx
+    #   httpx2
     #   requests
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 jinja2==3.1.6
@@ -116,15 +124,25 @@ markupsafe==3.0.4
     #   -c constraints-lock.tmp
     #   jinja2
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-mcp==1.30.0
+mcp==2.3.0
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
+    # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
+mcp-types==2.3.0
+    # via
+    #   -c constraints-lock.tmp
+    #   mcp
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 oauthlib==3.3.1
     # via
     #   -c constraints-lock.tmp
     #   requests-oauthlib
+    # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
+opentelemetry-api==1.45.2
+    # via
+    #   -c constraints-lock.tmp
+    #   mcp
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 packaging==26.3
     # via hatchling
@@ -143,25 +161,25 @@ pycparser==3.0
     #   -c constraints-lock.tmp
     #   cffi
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-pydantic==2.14.2
+pydantic==2.14.3
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
     #   llm-d-planner
     #   mcp
+    #   mcp-types
     #   pydantic-settings
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-pydantic-core==2.50.2
+pydantic-core==2.50.4
     # via
     #   -c constraints-lock.tmp
     #   pydantic
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-pydantic-settings==2.16.2
+pydantic-settings==2.16.3
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
     #   llm-d-planner
-    #   mcp
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 pyjwt==2.15.1
     # via
@@ -236,11 +254,20 @@ tomlkit==0.15.2
 trove-classifiers==2026.9.21.13
     # via hatchling
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
+truststore==0.10.5
+    # via
+    #   -c constraints-lock.tmp
+    #   httpcore2
+    #   httpx2
+    # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 typing-extensions==4.16.0
     # via
     #   -c constraints-lock.tmp
     #   anyio
+    #   httpx2
     #   mcp
+    #   mcp-types
+    #   opentelemetry-api
     #   pydantic
     #   pydantic-core
     #   pydantic-settings
@@ -248,7 +275,7 @@ typing-extensions==4.16.0
     #   starlette
     #   typing-inspection
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-typing-inspection==0.4.4
+typing-inspection==0.4.5
     # via
     #   -c constraints-lock.tmp
     #   mcp

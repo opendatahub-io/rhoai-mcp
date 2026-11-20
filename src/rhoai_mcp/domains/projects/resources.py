@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from rhoai_mcp.domains.projects.client import ProjectClient
 
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
 
 
-def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
+def register_resources(mcp: MCPServer, server: "RHOAIServer") -> None:
     """Register project-level MCP resources."""
 
     @mcp.resource("rhoai://projects/{name}/status")
@@ -20,7 +20,7 @@ def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
         Returns project metadata and resource summary including counts
         of workbenches, models, connections, and storage.
         """
-        project_client = ProjectClient(server.k8s)
+        project_client = ProjectClient(server.get_k8s(None))
         project = project_client.get_project(name, include_summary=True)
 
         result: dict[str, Any] = {
@@ -63,7 +63,7 @@ def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
         try:
             from rhoai_mcp.domains.notebooks.client import NotebookClient
 
-            notebook_client = NotebookClient(server.k8s)
+            notebook_client = NotebookClient(server.get_k8s(None))
             workbenches = notebook_client.list_workbenches(name)
 
             return [
@@ -95,7 +95,7 @@ def register_resources(mcp: FastMCP, server: "RHOAIServer") -> None:
         try:
             from rhoai_mcp.domains.inference.client import InferenceClient
 
-            inference_client = InferenceClient(server.k8s)
+            inference_client = InferenceClient(server.get_k8s(None))
             return inference_client.list_inference_services(name)
         except ImportError:
             return [{"error": "Inference domain not available"}]

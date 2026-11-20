@@ -346,8 +346,8 @@ class TestWorkflowStepChain:
         r3 = step_3(workflow_token=r1["workflow_token"])
         assert "error" in r3
 
-    def test_signature_preserved_for_fastmcp(self) -> None:
-        """Decorator preserves __signature__ for FastMCP schema inspection."""
+    def test_signature_preserved_for_mcp_server(self) -> None:
+        """Decorator preserves __signature__ for MCPServer schema inspection."""
         import inspect
 
         @workflow_step(requires="prev", produces="next")

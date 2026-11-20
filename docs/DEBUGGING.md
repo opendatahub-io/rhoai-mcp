@@ -8,7 +8,7 @@ Before diving in, collect these details from the user:
 
 - The exact error message or traceback
 - Which tool or operation they were calling (and the parameters used)
-- Their transport type (`stdio`, `sse`, or `streamable-http`)
+- Their transport type (`stdio`, `streamable-http`, or `sse` — legacy)
 - How they are running the server (container, local `uv run`, Claude Desktop, etc.)
 - Whether the error is reproducible or intermittent
 
@@ -113,11 +113,11 @@ When `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY=user-token` (the default for the `opensh
 **Check:**
 1. **Token expired** — The user's OpenShift token may have expired. Ask them to re-authenticate with `oc login`. The K8s API returns 401 directly in this case — the MCP server does not intercept it.
 2. **Misconfigured auth strategy** — The `user-token` strategy only works with opaque tokens (`token-review` mode). If you see this error at startup: `"oidc_kube_auth_strategy 'user-token' is not compatible with oidc_token_mode 'jwt'"`, fix the configuration by switching to `RHOAI_MCP_OIDC_KUBE_AUTH_STRATEGY=impersonation` and adding the impersonation ClusterRole binding for the ServiceAccount (see the `openshift-oidc` overlay README for details).
-3. **Token refresh mid-session (SSE transport)** — If the user refreshes their token during a long-lived SSE session, the server logs a warning: `"Bearer token changed mid-session"`. This is informational — the server uses the per-message token from each POST request, so the refreshed token is picked up automatically.
+3. **Token refresh mid-session (SSE transport, legacy)** — If the user refreshes their token during a long-lived SSE session, the server logs a warning: `"Bearer token changed mid-session"`. This is informational — the server uses the per-message token from each POST request, so the refreshed token is picked up automatically.
 
 ## Health Check Endpoint
 
-When running with HTTP transport (`sse` or `streamable-http`), the server exposes a health endpoint:
+When running with HTTP transport (`streamable-http` or `sse`), the server exposes a health endpoint:
 
 ```bash
 curl http://localhost:8000/health

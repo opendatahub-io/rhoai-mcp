@@ -13,7 +13,7 @@ from rhoai_mcp.composites.meta.tools import (
 
 @pytest.fixture
 def mock_mcp() -> MagicMock:
-    """Create a mock FastMCP server that captures tool registrations."""
+    """Create a mock MCPServer that captures tool registrations."""
     mock = MagicMock()
     registered_tools: dict = {}
 

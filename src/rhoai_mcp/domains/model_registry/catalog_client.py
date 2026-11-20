@@ -11,7 +11,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-import httpx
+import httpx2
 
 from rhoai_mcp.domains.model_registry.auth import build_auth_headers, get_tls_verify
 from rhoai_mcp.domains.model_registry.catalog_models import (
@@ -58,7 +58,7 @@ class ModelCatalogClient:
         """
         self._config = config
         self._discovery = discovery_result
-        self._http_client: httpx.AsyncClient | None = None
+        self._http_client: httpx2.AsyncClient | None = None
 
     def _get_base_url(self) -> str:
         """Get the base URL for API calls."""
@@ -75,14 +75,14 @@ class ModelCatalogClient:
         requires_auth_override = self._discovery.requires_auth if self._discovery else False
         return build_auth_headers(self._config, requires_auth_override=requires_auth_override)
 
-    async def _get_client(self) -> httpx.AsyncClient:
+    async def _get_client(self) -> httpx2.AsyncClient:
         """Get or create HTTP client with appropriate auth and SSL settings."""
         if self._http_client is None:
             headers = self._get_auth_headers()
             base_url = self._get_base_url()
             verify = get_tls_verify(self._config, base_url)
 
-            self._http_client = httpx.AsyncClient(
+            self._http_client = httpx2.AsyncClient(
                 base_url=base_url,
                 timeout=self._config.model_registry_timeout,
                 headers=headers,
@@ -196,15 +196,15 @@ class ModelCatalogClient:
             next_token = data.get("nextPageToken") or None
             return models, next_token
 
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             raise ModelRegistryConnectionError(
                 _format_connection_error(self._get_base_url(), e)
             ) from e
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             raise ModelRegistryConnectionError(
                 f"Timeout connecting to Model Catalog at {self._get_base_url()}: {e}"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to list catalog models: {e}") from e
 
     async def get_sources(self) -> list[CatalogSource]:
@@ -232,15 +232,15 @@ class ModelCatalogClient:
                 sources.append(self._parse_catalog_source(item))
             return sources
 
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             raise ModelRegistryConnectionError(
                 _format_connection_error(self._get_base_url(), e)
             ) from e
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             raise ModelRegistryConnectionError(
                 f"Timeout connecting to Model Catalog at {self._get_base_url()}: {e}"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to list catalog sources: {e}") from e
 
     async def get_model_artifacts(
@@ -281,15 +281,15 @@ class ModelCatalogClient:
                 artifacts.append(self._parse_catalog_artifact(item))
             return artifacts
 
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             raise ModelRegistryConnectionError(
                 _format_connection_error(self._get_base_url(), e)
             ) from e
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             raise ModelRegistryConnectionError(
                 f"Timeout connecting to Model Catalog at {self._get_base_url()}: {e}"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ModelRegistryError(f"Failed to get model artifacts: {e}") from e
 
     def _parse_catalog_model(self, data: dict[str, Any]) -> CatalogModel:

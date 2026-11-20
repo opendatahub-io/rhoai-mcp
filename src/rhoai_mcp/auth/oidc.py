@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
+import httpx2
 import jwt
 from jwt.exceptions import (
     ExpiredSignatureError,
@@ -70,7 +70,7 @@ class OIDCValidator:
         openid_config_url = f"{self.issuer_url}/.well-known/openid-configuration"
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx2.AsyncClient(timeout=10.0) as client:
                 # Fetch OpenID configuration
                 config_resp = await client.get(openid_config_url)
                 config_resp.raise_for_status()
@@ -87,7 +87,7 @@ class OIDCValidator:
                 self._jwks_fetched_at = time.time()
         except OIDCValidationError:
             raise
-        except (httpx.HTTPError, ValueError, KeyError) as e:
+        except (httpx2.HTTPError, ValueError, KeyError) as e:
             raise OIDCValidationError(f"OIDC discovery failed: {e}") from e
 
     async def _ensure_jwks(self) -> None:

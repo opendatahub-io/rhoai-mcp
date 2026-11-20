@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import httpx
-from httpx import ConnectError, HTTPStatusError, RequestError, TimeoutException
+import httpx2
+from httpx2 import ConnectError, HTTPStatusError, RequestError, TimeoutException
+from mcp.server.mcpserver.exceptions import ToolError
 
 from rhoai_mcp.composites.planner.models import (
     DeploymentConfigResult,
@@ -102,11 +103,11 @@ def _filter_by_gpu(recs: list[dict[str, Any]], allowed: set[str]) -> list[dict[s
     return [r for r in recs if _gpu_type_matches(r, allowed)]
 
 
-class PlannerConnectionError(Exception):
+class PlannerConnectionError(ToolError):
     """Raised when Planner service is unreachable."""
 
 
-class PlannerAPIError(Exception):
+class PlannerAPIError(ToolError):
     """Raised when Planner API returns an error response."""
 
     def __init__(self, status_code: int, detail: str) -> None:
@@ -136,7 +137,7 @@ class PlannerClient:
         """Make an HTTP request to Planner."""
         url = f"{self._base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx2.AsyncClient(timeout=self._timeout) as client:
                 kwargs: dict[str, Any] = {"params": params}
                 if method.upper() in ("POST", "PUT", "PATCH"):
                     kwargs["json"] = json
@@ -538,7 +539,7 @@ class PlannerClient:
     def health_check(self) -> tuple[bool, str]:
         """Check if Planner service is available."""
         try:
-            with httpx.Client(timeout=self._timeout) as client:
+            with httpx2.Client(timeout=self._timeout) as client:
                 response = client.get(f"{self._base_url}/health", params=None)
                 response.raise_for_status()
             return True, "Planner available"

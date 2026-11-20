@@ -123,7 +123,7 @@ class RHOAIConfig(BaseSettings):
     # Transport settings
     transport: TransportMode = Field(
         default=TransportMode.STDIO,
-        description="MCP transport mode: stdio, sse, or streamable-http",
+        description="MCP transport mode: stdio, streamable-http (primary), or sse (legacy)",
     )
     host: str = Field(
         default="127.0.0.1",

@@ -26,6 +26,21 @@ from rhoai_mcp.composites.planner.models import (
 
 logger = logging.getLogger(__name__)
 
+#: Projected service-account token location in Kubernetes pods (read fresh
+#: at sync time so token rotation is picked up; the token authorizes the
+#: server's SA against kube-rbac-proxy-fronted catalogs).
+_SA_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+
+def _in_cluster_service_account_token() -> str | None:
+    """The pod's service-account token, or None outside a cluster."""
+    try:
+        with open(_SA_TOKEN_PATH) as f:
+            token = f.read().strip()
+    except OSError:
+        return None
+    return token or None
+
 
 class LocalPlannerClient:
     """Embedded Planner client using in-process library calls.
@@ -51,7 +66,10 @@ class LocalPlannerClient:
 
         if model_catalog_url:
             try:
-                result = self._planner.sync_model_catalog(url=model_catalog_url)
+                result = self._planner.sync_model_catalog(
+                    url=model_catalog_url,
+                    token=_in_cluster_service_account_token(),
+                )
                 logger.info(
                     "Model Catalog sync: %d benchmarks added, %d models added",
                     result.get("benchmarks_added", 0),

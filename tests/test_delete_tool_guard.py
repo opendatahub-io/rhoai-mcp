@@ -37,6 +37,7 @@ class TestDeleteInferenceServiceTool:
     @pytest.fixture
     def mock_server(self) -> MagicMock:
         server = MagicMock()
+        server.get_k8s = MagicMock(return_value=server.k8s)
         server.config.read_only_mode = False
         server.config.is_operation_allowed.return_value = (True, None)
         server.config.max_list_limit = 100

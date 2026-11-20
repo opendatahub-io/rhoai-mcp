@@ -7,6 +7,7 @@ from pydantic import SecretStr
 
 from rhoai_mcp.clients.base import K8sClient
 from rhoai_mcp.config import RHOAIConfig
+from rhoai_mcp.utils.errors import RHOAIError
 
 
 @pytest.fixture(autouse=True)
@@ -82,7 +83,7 @@ class TestCreateUserTokenClient:
         # _api_client is None by default
 
         token = SecretStr("token")
-        with pytest.raises(RuntimeError, match="client not connected"):
+        with pytest.raises(RHOAIError, match="client not connected"):
             k8s.create_user_token_client(token)
 
     def test_returned_client_is_independent(self, connected_client):

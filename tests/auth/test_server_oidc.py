@@ -1,12 +1,14 @@
 """Tests for OIDC integration in server.py."""
 
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import SecretStr
 
 from rhoai_mcp.config import RHOAIConfig, TransportMode
 from rhoai_mcp.server import RHOAIServer
+from rhoai_mcp.utils.errors import RHOAIError
 
 
 class TestServerOIDCIntegration:
@@ -15,8 +17,8 @@ class TestServerOIDCIntegration:
         server = RHOAIServer(config)
         server.create_mcp()
         # Should return the shared mock client
-        assert server.k8s is not None
-        assert server.k8s.is_connected
+        assert server.get_k8s(None) is not None
+        assert server.get_k8s(None).is_connected
 
     def test_k8s_property_raises_when_no_user_context_under_oidc(self) -> None:
         config = RHOAIConfig(
@@ -29,8 +31,8 @@ class TestServerOIDCIntegration:
         server._k8s_client = MagicMock()
         server._k8s_client.is_connected = True
         # Without user context under OIDC, should fail closed
-        with pytest.raises(RuntimeError, match="no UserContext is set"):
-            _ = server.k8s
+        with pytest.raises(RHOAIError, match="no UserContext is set"):
+            server.get_k8s(None)
 
     def test_k8s_property_returns_impersonating_client_with_user_context(self) -> None:
         from rhoai_mcp.auth.user_context import UserContext
@@ -52,10 +54,8 @@ class TestServerOIDCIntegration:
         ctx = UserContext(username="alice", groups=["team-a"])
         token = UserContext.set_current(ctx)
         try:
-            result = server.k8s
-            mock_client.create_impersonating_client.assert_called_once_with(
-                "alice", ["team-a"]
-            )
+            result = server.get_k8s(None)
+            mock_client.create_impersonating_client.assert_called_once_with("alice", ["team-a"])
             assert result is mock_imp_client
         finally:
             UserContext.reset_current(token)
@@ -78,12 +78,10 @@ class TestServerOIDCIntegration:
         mock_client.create_user_token_client.return_value = mock_user_client
         server._k8s_client = mock_client
 
-        ctx = UserContext(
-            username="alice", groups=["team-a"], token=SecretStr("alice-token")
-        )
+        ctx = UserContext(username="alice", groups=["team-a"], token=SecretStr("alice-token"))
         token = UserContext.set_current(ctx)
         try:
-            result = server.k8s
+            result = server.get_k8s(None)
             mock_client.create_user_token_client.assert_called_once()
             call_token = mock_client.create_user_token_client.call_args[0][0]
             assert call_token.get_secret_value() == "alice-token"
@@ -111,8 +109,8 @@ class TestServerOIDCIntegration:
         # No token set
         token = UserContext.set_current(ctx)
         try:
-            with pytest.raises(RuntimeError, match="no token is available"):
-                _ = server.k8s
+            with pytest.raises(RHOAIError, match="no token is available"):
+                server.get_k8s(None)
         finally:
             UserContext.reset_current(token)
 
@@ -134,96 +132,184 @@ class TestServerOIDCIntegration:
         mock_client.create_impersonating_client.return_value = mock_imp_client
         server._k8s_client = mock_client
 
-        ctx = UserContext(
-            username="bob", groups=["team-b"], token=SecretStr("bob-token")
-        )
+        ctx = UserContext(username="bob", groups=["team-b"], token=SecretStr("bob-token"))
         token = UserContext.set_current(ctx)
         try:
-            result = server.k8s
-            mock_client.create_impersonating_client.assert_called_once_with(
-                "bob", ["team-b"]
-            )
+            result = server.get_k8s(None)
+            mock_client.create_impersonating_client.assert_called_once_with("bob", ["team-b"])
             mock_client.create_user_token_client.assert_not_called()
             assert result is mock_imp_client
         finally:
             UserContext.reset_current(token)
 
     def test_oidc_validation_called_at_startup(self) -> None:
-        config = RHOAIConfig(
-            oidc_enabled=True, mock_cluster=True, transport=TransportMode.SSE
-        )
+        config = RHOAIConfig(oidc_enabled=True, mock_cluster=True, transport=TransportMode.SSE)
         with pytest.raises(ValueError, match="oidc_issuer_url is required"):
             server = RHOAIServer(config)
             server.create_mcp()
 
 
-class TestGetPerMessageToken:
-    def test_returns_none_when_request_ctx_not_set(self) -> None:
-        from rhoai_mcp.server import _get_per_message_token
+class TestAuthAppWrapping:
+    """Transport app builders must be wrapped by OIDCAuthMiddleware (RHAI-14618).
 
-        result = _get_per_message_token(SecretStr("session-token"))
-        assert result is None
+    Under mcp 2.x the app builders take keyword-only arguments and no
+    ``mount_path``; the wrappers installed by ``_setup_auth()`` must forward
+    whatever the SDK passes and still apply the auth middleware. Tool-filtering
+    installation is stubbed out here — its v2 port is RHAI-14627 (story 3.1).
+    """
 
-    def test_returns_none_on_import_error(self) -> None:
-        from rhoai_mcp.server import _get_per_message_token
+    def _make_server(self) -> RHOAIServer:
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_token_mode="token-review",
+            oidc_kube_auth_strategy="impersonation",
+            mock_cluster=True,
+            transport=TransportMode.SSE,
+        )
+        server = RHOAIServer(config)
+        mock_k8s = MagicMock()
+        mock_k8s.is_connected = True
+        mock_k8s._api_client = MagicMock()
+        server._k8s_client = mock_k8s
+        return server
 
-        with patch.dict("sys.modules", {"mcp.server.lowlevel.server": None}):
-            result = _get_per_message_token(SecretStr("token"))
-            assert result is None
+    @staticmethod
+    def _setup_auth(mcp: Any, server: RHOAIServer) -> None:
+        """Run _setup_auth (RBAC enforcement is constructor-installed now)."""
+        server._setup_auth(mcp)
 
-    def test_returns_token_from_request_ctx(self) -> None:
-        from mcp.server.lowlevel.server import request_ctx
+    def test_sse_app_wrapped_in_oidc_middleware(self) -> None:
+        from mcp.server.mcpserver import MCPServer
 
-        from rhoai_mcp.server import _get_per_message_token
+        from rhoai_mcp.auth.middleware import OIDCAuthMiddleware
 
-        mock_request = MagicMock()
-        mock_request.headers = {"authorization": "Bearer per-msg-token"}
-        mock_ctx = MagicMock()
-        mock_ctx.request = mock_request
+        server = self._make_server()
+        mcp = MCPServer(name="wrap-test")
+        self._setup_auth(mcp, server)
 
-        ctx_token = request_ctx.set(mock_ctx)
+        app = mcp.sse_app()
+        assert isinstance(app, OIDCAuthMiddleware)
+
+    def test_sse_app_forwards_v2_kwargs(self) -> None:
+        """The wrapper forwards v2's keyword-only sse_app arguments (no mount_path)."""
+        from mcp.server.mcpserver import MCPServer
+
+        from rhoai_mcp.auth.middleware import OIDCAuthMiddleware
+
+        server = self._make_server()
+        mcp = MCPServer(name="wrap-test")
+        self._setup_auth(mcp, server)
+
+        app = mcp.sse_app(sse_path="/sse", message_path="/messages/")
+        assert isinstance(app, OIDCAuthMiddleware)
+
+    def test_streamable_http_app_wrapped_in_oidc_middleware(self) -> None:
+        from mcp.server.mcpserver import MCPServer
+
+        from rhoai_mcp.auth.middleware import OIDCAuthMiddleware
+
+        server = self._make_server()
+        mcp = MCPServer(name="wrap-test")
+        self._setup_auth(mcp, server)
+
+        app = mcp.streamable_http_app()
+        assert isinstance(app, OIDCAuthMiddleware)
+
+
+class TestGetK8sTokenPrecedence:
+    """Token sourcing for get_k8s(ctx) (RHAI-14631, the 1.6 design's precedence).
+
+    Per-message request headers (SSE carries the POST's Request on the
+    message metadata) win over UserContext.token; UserContext covers
+    Streamable HTTP, where the ASGI middleware sets it per POST.
+    """
+
+    def _make_server(self, strategy: str = "user-token") -> RHOAIServer:
+        config = RHOAIConfig(
+            oidc_enabled=True,
+            oidc_token_mode="token-review",
+            oidc_kube_auth_strategy=strategy,
+            mock_cluster=True,
+            transport=TransportMode.SSE,
+        )
+        server = RHOAIServer(config)
+        mock_k8s = MagicMock()
+        mock_k8s.is_connected = True
+        server._k8s_client = mock_k8s
+        return server
+
+    @staticmethod
+    def _ctx_with_headers(headers: dict[str, str]) -> Any:
+        """A tool-side Context matching the SDK's real shape.
+
+        The transport's per-message data lives on
+        ``ctx.request_context.request`` (ServerRequestContext.request) —
+        the runner maps the session message metadata's request_context
+        there. ``meta`` is protocol _meta, a different field.
+        """
+        from types import SimpleNamespace
+
+        request = SimpleNamespace(headers=headers)
+        return SimpleNamespace(request_context=SimpleNamespace(request=request))
+
+    def test_per_message_token_wins_over_user_context(self) -> None:
+        from rhoai_mcp.auth.user_context import UserContext
+
+        server = self._make_server()
+        ctx = UserContext(username="alice", groups=[], token=SecretStr("session-token"))
+        token = UserContext.set_current(ctx)
         try:
-            result = _get_per_message_token(SecretStr("session-token"))
-            assert result is not None
-            assert result.get_secret_value() == "per-msg-token"
+            server.get_k8s(self._ctx_with_headers({"authorization": "Bearer fresh-token"}))
+            call_token = server._k8s_client.create_user_token_client.call_args[0][0]
+            assert call_token.get_secret_value() == "fresh-token"
         finally:
-            request_ctx.reset(ctx_token)
+            UserContext.reset_current(token)
 
-    def test_warns_when_tokens_differ(self) -> None:
-        from mcp.server.lowlevel.server import request_ctx
+    def test_falls_back_to_user_context_token(self) -> None:
+        from rhoai_mcp.auth.user_context import UserContext
 
-        from rhoai_mcp.server import _get_per_message_token
-
-        mock_request = MagicMock()
-        mock_request.headers = {"authorization": "Bearer new-token"}
-        mock_ctx = MagicMock()
-        mock_ctx.request = mock_request
-
-        ctx_token = request_ctx.set(mock_ctx)
+        server = self._make_server()
+        ctx = UserContext(username="alice", groups=[], token=SecretStr("session-token"))
+        token = UserContext.set_current(ctx)
         try:
-            with patch("rhoai_mcp.server.logger") as mock_logger:
-                result = _get_per_message_token(SecretStr("old-token"))
-                mock_logger.warning.assert_called_once()
-                assert "changed mid-session" in mock_logger.warning.call_args[0][0]
-                assert result.get_secret_value() == "new-token"
+            # No ctx at all (the deprecated k8s property path)
+            server.get_k8s(None)
+            call_token = server._k8s_client.create_user_token_client.call_args[0][0]
+            assert call_token.get_secret_value() == "session-token"
+
+            # ctx present but meta None (Streamable HTTP)
+            from types import SimpleNamespace
+
+            server.get_k8s(SimpleNamespace(request_context=SimpleNamespace(meta=None)))
+            call_token = server._k8s_client.create_user_token_client.call_args[0][0]
+            assert call_token.get_secret_value() == "session-token"
         finally:
-            request_ctx.reset(ctx_token)
+            UserContext.reset_current(token)
 
-    def test_no_warning_when_tokens_match(self) -> None:
-        from mcp.server.lowlevel.server import request_ctx
+    def test_non_bearer_header_is_ignored(self) -> None:
+        from rhoai_mcp.auth.user_context import UserContext
 
-        from rhoai_mcp.server import _get_per_message_token
-
-        mock_request = MagicMock()
-        mock_request.headers = {"authorization": "Bearer same-token"}
-        mock_ctx = MagicMock()
-        mock_ctx.request = mock_request
-
-        ctx_token = request_ctx.set(mock_ctx)
+        server = self._make_server()
+        ctx = UserContext(username="alice", groups=[], token=SecretStr("session-token"))
+        token = UserContext.set_current(ctx)
         try:
-            with patch("rhoai_mcp.server.logger") as mock_logger:
-                result = _get_per_message_token(SecretStr("same-token"))
-                mock_logger.warning.assert_not_called()
-                assert result.get_secret_value() == "same-token"
+            server.get_k8s(self._ctx_with_headers({"authorization": "Basic something"}))
+            call_token = server._k8s_client.create_user_token_client.call_args[0][0]
+            assert call_token.get_secret_value() == "session-token"
         finally:
-            request_ctx.reset(ctx_token)
+            UserContext.reset_current(token)
+
+    def test_impersonation_strategy_uses_identity_not_token(self) -> None:
+        from rhoai_mcp.auth.user_context import UserContext
+
+        server = self._make_server(strategy="impersonation")
+        ctx = UserContext(username="alice", groups=["team-a"], token=SecretStr("ignored"))
+        token = UserContext.set_current(ctx)
+        try:
+            server.get_k8s(self._ctx_with_headers({"authorization": "Bearer fresh-token"}))
+            server._k8s_client.create_impersonating_client.assert_called_once_with(
+                "alice", ["team-a"]
+            )
+            server._k8s_client.create_user_token_client.assert_not_called()
+        finally:
+            UserContext.reset_current(token)

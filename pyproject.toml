@@ -23,11 +23,16 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.26.0,<2",
+    "mcp>=2.0.0,<3",
     "kubernetes>=35.0.0,<36",
     "pydantic>=2.12.5,<3",
     "pydantic-settings>=2.12.0,<3",
-    "httpx>=0.28.1,<1",
+    "httpx2>=2.10.0",
+    # Our own HTTP calls use httpx2, but llm-d-planner's model-catalog
+    # client imports httpx by name at sync time (its quality-sync extra
+    # also pulls datasets/pandas, which the sync path does not need) —
+    # keep httpx as an explicit runtime dep for that path.
+    "httpx>=0.28.1",
     "pluggy>=1.6.0,<2",
     "PyJWT[crypto]>=2.15.1,<3",
     "llm-d-planner>=0.3.0,<1",

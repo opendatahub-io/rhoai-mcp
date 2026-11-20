@@ -7,6 +7,7 @@ External plugins can be discovered via entry points.
 """
 
 from rhoai_mcp.domains.registry import (
+    AutoMLPlugin,
     ConnectionsPlugin,
     InferencePlugin,
     NotebooksPlugin,
@@ -18,6 +19,7 @@ from rhoai_mcp.domains.registry import (
 )
 
 __all__ = [
+    "AutoMLPlugin",
     "ConnectionsPlugin",
     "InferencePlugin",
     "NotebooksPlugin",

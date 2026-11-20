@@ -685,6 +685,18 @@ model_id: meta-llama/Llama-3.1-8B-Instruct
 | `list_serving_runtimes` | List available runtimes |
 | `get_model_endpoint` | Get inference endpoint URL |
 
+### AutoML (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `list_automl_deployments` | List explicitly exposed AutoGluon deployments in a project |
+| `get_automl_deployment` | Get AutoML deployment status, input schema, and example record |
+| `predict_automl_deployment` | Validate JSON records, call KServe v2, and return predictions |
+
+Classification deployments return a class and probabilities when their AutoGluon
+ServingRuntime enables `PREDICT_PROBA=true`; regression deployments return numeric values.
+See [AutoML MCP deployments](docs/automl-mcp.md) for the exposure contract and client examples.
+
 ### Data Connections (4 tools)
 
 | Tool | Description |

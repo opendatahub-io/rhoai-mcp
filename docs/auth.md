@@ -98,10 +98,23 @@ RFC 7662 URL when the authorization server is the Kubernetes API itself.
 **Why no major implementer documents this pattern:** MCP servers that
 authenticate users generally target standard OAuth 2.1 identity providers with
 JWT access tokens (Cloudflare, GitHub, and Google implementations all do).
-A production MCP server consuming platform-native opaque tokens via
-TokenReview is, to our knowledge, unique to rhoai-mcp — correct and necessary
-for the OpenShift deployment model, but with no reference implementation to
-cite. This note is that citation.
+
+The nearest comparable is Red Hat's own
+[`openshift-mcp-server`](https://github.com/openshift/openshift-mcp-server).
+It takes a different shape at every layer:
+
+- **Default:** local kubeconfig credentials for stdio use, and token
+  forwarding when deployed on-cluster.
+- **Optional richer mode:** MCP-spec token exchange against an external OIDC
+  provider such as Keycloak. The provider issues an `aud=mcp` token; the
+  server exchanges it for an `aud=openshift` token before calling the Kube
+  API. This model requires the external provider to drive the cluster's
+  users and RBAC (BYO-OIDC).
+
+Neither mode validates the platform's own opaque tokens in place. To our
+knowledge, a production MCP server consuming platform-native opaque tokens
+via TokenReview remains unique to rhoai-mcp — a pattern that is correct and
+necessary for the OpenShift deployment model.
 
 ### Security properties of TokenReview mode
 

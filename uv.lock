@@ -2868,7 +2868,7 @@ requires-dist = [
     { name = "httpx2", specifier = ">=2.10.0" },
     { name = "kubernetes", specifier = ">=35.0.0,<36" },
     { name = "llm-d-planner", specifier = ">=0.3.0,<1" },
-    { name = "mcp", specifier = ">=2.0.0,<3" },
+    { name = "mcp", specifier = ">=2.3.0,<3" },
     { name = "pluggy", specifier = ">=1.6.0,<2" },
     { name = "pydantic", specifier = ">=2.12.5,<3" },
     { name = "pydantic-settings", specifier = ">=2.12.0,<3" },

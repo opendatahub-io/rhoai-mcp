@@ -15,7 +15,7 @@ This document applies the [RHAI Release Stages and API Tiers](https://github.com
 | **API tier** | Tier 2: Goal-Oriented Stability |
 | **Stability unit** | Capability set (documented goals an AI agent can achieve), not individual tool names or signatures |
 | **Deprecation window** | 9 months or 3 minor releases, whichever is longer |
-| **MCP surface** | 97 tools · 8 resources · 18 prompts |
+| **MCP surface** | 93 tools · 8 resources (5 static + 3 templates) · 18 prompts *(re-verified 2026-11-23 post-v2-migration; method below)* |
 | **Tier 2 capabilities** | RHAIRFE-1705 (model recommendation) · RHAIRFE-1706 (deployment optimization and execution) |
 
 ## Context: How `rhoai-mcp` Differs from Operator-Managed Components
@@ -77,7 +77,7 @@ rhoai-mcp's MCP API surface is designed for a **Tier 2** classification, with a 
 **Why Tier 2:**
 
 - **Not Tier 1**: Tier 1 is for APIs customers hardcode in automation (CRDs, REST endpoints).
-MCP tools are dynamically discovered by AI agents, and the surface (currently 97 tools, 8 resources, 18 prompts) is still being refined based on real-world agent usage.
+MCP tools are dynamically discovered by AI agents, and the surface (currently 93 tools, 8 resources, 18 prompts) is still being refined based on real-world agent usage.
 Locking individual tool signatures for 18 months would prevent improving this `rhoai-mcp` for better agent ergonomics without providing meaningful additional value to the AI Agent consumers.
 
 - **Not Tier 4**: Tier 4 is for internal-only APIs.
@@ -240,3 +240,15 @@ The stability of those upstream APIs is governed by their respective component o
 
 The MCP server's HTTP transport endpoints (`/sse`, `/mcp`) are MCP protocol transport: they are not a REST API surface.
 Their stability is governed by the [MCP specification](https://spec.modelcontextprotocol.io), not by RHAI API tiers.
+Streamable HTTP (`/mcp`) is the primary transport; SSE (`/sse`) is legacy — supported, but new deployments should select streamable-http (RHAI-14635).
+Because transports sit outside the RHAI API tiers, the SSE demotion requires no deprecation notice under this policy's window; it is communicated via release notes.
+
+### Surface Verification Method
+
+The surface counts above were re-verified 2026-11-23 after the MCP SDK v2 migration (PR #203):
+all 13 plugins enabled, mock cluster, counting `list_tools()` + `list_resources()` +
+`list_resource_templates()` + `list_prompts()` on the running server (93 / 5 + 3 / 18).
+Source-level cross-check: 95 tool functions declared via `@mcp.tool()` across `src/` at both
+the original document commit and post-migration HEAD, with identical names — **the migration
+changed the surface by zero**. The earlier snapshot's "97 tools" could not be reconciled with
+either count and its method was not recorded; the verified figure supersedes it.

@@ -68,8 +68,8 @@ rhoai-mcp
 # Build the image
 make build
 
-# Run with HTTP transport
-make run-http
+# Run with HTTP transport (streamable-http, primary)
+make run-streamable
 
 # Run with STDIO transport (interactive)
 make run-stdio
@@ -84,12 +84,12 @@ Or run directly without Make:
 # Build
 podman build -f Containerfile -t rhoai-mcp:latest .
 
-# Run with HTTP transport
+# Run with HTTP transport (streamable-http, primary)
 podman run -p 8000:8000 \
   -v ~/.kube/config:/opt/app-root/src/kubeconfig/config:ro \
   -e RHOAI_MCP_AUTH_MODE=kubeconfig \
   -e RHOAI_MCP_KUBECONFIG_PATH=/opt/app-root/src/kubeconfig/config \
-  rhoai-mcp:latest --transport sse
+  rhoai-mcp:latest --transport streamable-http
 
 # Run with STDIO transport
 podman run -it \
@@ -104,7 +104,7 @@ Available Make targets:
 | Target | Description |
 |--------|-------------|
 | `make build` | Build the container image |
-| `make run-http` | Run with SSE transport on port 8000 |
+| `make run-http` | Run with SSE transport (legacy) on port 8000 |
 | `make run-streamable` | Run with streamable-http transport |
 | `make run-stdio` | Run with STDIO transport (interactive) |
 | `make run-dev` | Run with debug logging |
@@ -131,7 +131,7 @@ deploy/kustomize/
 ├── base/                    # Shared resources (all environments)
 │   ├── clusterrole.yaml     # RBAC for RHOAI resources
 │   ├── deployment.yaml      # Hardened pod spec (non-root, read-only rootfs, probes)
-│   ├── configmap.yaml       # Default config (SSE transport, INFO logging)
+│   ├── configmap.yaml       # Default config (streamable-http transport, INFO logging)
 │   └── ...
 └── overlays/
     ├── kind/                # NodePort, DEBUG logging, imagePullPolicy: Never
@@ -845,7 +845,7 @@ uv run mypy src/rhoai_mcp
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                MCP Transport Layer (stdio/SSE/HTTP)             │
+│           MCP Transport Layer (stdio / streamable-http / SSE·legacy)      │
 ├─────────────────────────────────────────────────────────────────┤
 │  MCPServer (server.py)                                            │
 │  - Tool registration     - Resource registration                │

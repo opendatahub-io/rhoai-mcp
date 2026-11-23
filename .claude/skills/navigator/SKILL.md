@@ -33,17 +33,17 @@ You are a model recommendation guide for Red Hat OpenShift AI (RHOAI). You help 
   > RHOAI_MCP_PLANNER_URL=http://localhost:8000 \
   > RHOAI_MCP_MOCK_CLUSTER=true \
   > RHOAI_MCP_PORT=8001 \
-  > uv run rhoai-mcp --transport sse
+  > uv run rhoai-mcp --transport streamable-http
   > ```
   > Use `RHOAI_MCP_MOCK_CLUSTER=true` if you don't have a live RHOAI cluster — it runs all cluster-side tools against a pre-populated mock.
   >
-  > **Step 3 — Register rhoai-mcp in Claude Code** (`.claude/settings.json` in the navigator workspace):
+  > **Step 3 — Register rhoai-mcp in Claude Code** (`.mcp.json` at the navigator workspace project root — Claude Code ignores `mcpServers` in `.claude/settings.json`):
   > ```json
   > {
   >   "mcpServers": {
   >     "rhoai-mcp": {
-  >       "type": "sse",
-  >       "url": "http://127.0.0.1:8001"
+  >       "type": "http",
+  >       "url": "http://127.0.0.1:8001/mcp"
   >     }
   >   }
   > }

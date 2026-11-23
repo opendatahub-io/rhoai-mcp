@@ -23,6 +23,7 @@ import hmac
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -270,13 +271,31 @@ def check_token_rotation_mid_session() -> None:
         _kubectl(
             "wait", "--for=delete", "pod/smoke-token-rotator", "-n", "rhoai-mcp", "--timeout=60s"
         )
-        try:
-            tool_names(bound_token, session)
-            raise AssertionError(
-                "invalidated token still accepted — authentication is cached at session level"
+        # Bounded poll for the rejection: pod-object deletion is confirmed
+        # above, but the apiserver's bound-token validation can lag it by a
+        # moment (eventual consistency) — a single-shot assertion races that
+        # propagation and misattributes the lag to session-level caching.
+        # Mirrors T08's freshness polling.
+        deadline = time.monotonic() + 30
+        last_code: int | None = None
+        while time.monotonic() < deadline:
+            try:
+                tool_names(bound_token, session)
+            except urllib.error.HTTPError as exc:
+                if exc.code == 401:
+                    break
+                last_code = exc.code
+            else:
+                last_code = None
+            time.sleep(2)
+        else:
+            detail = (
+                f"invalidated token got HTTP {last_code}, expected 401"
+                if last_code is not None
+                else "invalidated token still accepted after 30s — "
+                "authentication is cached at session level"
             )
-        except urllib.error.HTTPError as exc:
-            assert exc.code == 401, f"invalidated token got HTTP {exc.code}, expected 401"
+            raise AssertionError(detail)
 
         # The fresh token continues the SAME session: filtered view unchanged
         after = tool_names(READER_TOKEN, session)

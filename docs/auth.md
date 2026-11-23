@@ -123,10 +123,13 @@ necessary for the OpenShift deployment model.
   against a different cluster. Note the granularity: TokenReview mode binds
   tokens to the *cluster*, not to this specific deployment — no
   `spec.audiences` is sent, so any cluster-valid token is accepted by any
-  rhoai-mcp deployment in that cluster. This is the same property that makes
-  the `user-token` pass-through spec-compliant (see [ARCHITECTURE.md](ARCHITECTURE.md),
-  "MCP Spec Compliance"): the K8s API server is the token's native audience and
-  this server is part of the cluster's infrastructure. The bound on
+  rhoai-mcp deployment in that cluster. This is the same property the
+  `user-token` pass-through relies on (see [ARCHITECTURE.md](ARCHITECTURE.md),
+  "MCP Spec Compliance"): the K8s API server is the token's native audience,
+  and this server is part of the cluster's infrastructure forwarding a
+  cluster credential to its own issuer — within the spec's intent, though
+  the spec's pass-through prohibition names no cluster-infrastructure
+  exemption. The bound on
   cross-deployment use within a cluster is per-caller RBAC plus the caller's
   own token permissions — identity preservation, not escalation.
 - **Per-caller RBAC** is enforced for every *governed* tool — a tool with a

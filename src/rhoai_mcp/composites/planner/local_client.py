@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from typing import Any
 
 from planner import (
@@ -56,6 +57,8 @@ class LocalPlannerClient:
         model_catalog_url: str | None = None,
     ) -> None:
         self._planner = Planner()
+        # The planner's benchmark connection is shared and unsafe for concurrent queries.
+        self._recommendation_lock = threading.Lock()
 
         # Pre-seed the gpu_normalizer singleton with the Planner's catalog
         # to avoid a redundant ModelCatalog() construction on first
@@ -237,11 +240,12 @@ class LocalPlannerClient:
 
             spec_with_overrides = DeploymentSpecification(**spec_data)
 
-            ranked = self._planner.generate_recommendations(
-                spec_with_overrides,
-                min_quality=min_quality,
-                max_cost=max_cost,
-            )
+            with self._recommendation_lock:
+                ranked = self._planner.generate_recommendations(
+                    spec_with_overrides,
+                    min_quality=min_quality,
+                    max_cost=max_cost,
+                )
             ranked_data = ranked.model_dump()
 
             balanced_list = ranked_data.get("balanced", [])
@@ -345,11 +349,12 @@ class LocalPlannerClient:
 
             spec_with_overrides = DeploymentSpecification(**spec_data)
 
-            ranked = self._planner.generate_recommendations(
-                spec_with_overrides,
-                min_quality=min_quality,
-                max_cost=max_cost,
-            )
+            with self._recommendation_lock:
+                ranked = self._planner.generate_recommendations(
+                    spec_with_overrides,
+                    min_quality=min_quality,
+                    max_cost=max_cost,
+                )
             ranked_data = ranked.model_dump()
 
             category_list = ranked_data.get(category_key, [])

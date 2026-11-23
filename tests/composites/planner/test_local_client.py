@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -218,6 +220,63 @@ class TestLocalPlannerClientInit:
 
 class TestLocalPlannerRecommend:
     """Tests for LocalPlannerClient.recommend()."""
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_recommend_and_config_serialize_planner_queries(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """Both paths protect the shared benchmark connection, even after cancellation."""
+        mock_planner = _make_mock_planner()
+        mock_planner_cls.return_value = mock_planner
+        first_entered = threading.Event()
+        release_first = threading.Event()
+        second_spec = threading.Event()
+        second_entered = threading.Event()
+        spec = mock_planner.generate_specification.return_value
+        ranked = mock_planner.generate_recommendations.return_value
+        spec_calls = 0
+
+        def generate_specification(_intent: object) -> MagicMock:
+            nonlocal spec_calls
+            spec_calls += 1
+            if spec_calls == 2:
+                second_spec.set()
+            return spec
+
+        def generate_recommendations(*_args: object, **_kwargs: object) -> MagicMock:
+            if not first_entered.is_set():
+                first_entered.set()
+                if not release_first.wait(5):
+                    raise TimeoutError("First planner call was not released")
+            else:
+                second_entered.set()
+            return ranked
+
+        mock_planner.generate_specification.side_effect = generate_specification
+        mock_planner.generate_recommendations.side_effect = generate_recommendations
+        client = LocalPlannerClient()
+        first = asyncio.create_task(client.recommend(
+            text="ignored", use_case_override="chatbot_conversational",
+            user_count_override=1000, gpu_types_override=["H100"],
+        ))
+        second = None
+        try:
+            assert await asyncio.to_thread(first_entered.wait, 5)
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            second = asyncio.create_task(client.generate_config(
+                category="balanced", use_case="chatbot_conversational", user_count=1000,
+                prompt_tokens=512, output_tokens=256, expected_qps=10.0,
+                ttft_target_ms=200, itl_target_ms=65, e2e_target_ms=5000,
+            ))
+            assert await asyncio.to_thread(second_spec.wait, 5)
+            assert not await asyncio.to_thread(second_entered.wait, 0.2)
+        finally:
+            release_first.set()
+            if second is not None:
+                await second
+        assert second_entered.is_set()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_recommend_full_flow(self, mock_planner_cls: MagicMock) -> None:

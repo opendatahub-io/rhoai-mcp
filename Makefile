@@ -17,6 +17,8 @@ CONTAINER_RUNTIME := $(shell command -v podman 2>/dev/null || command -v docker 
 PORT ?= 8000
 KUBECONFIG ?= $(HOME)/.kube/config
 LOG_LEVEL ?= INFO
+MLFLOW_DB ?= .mlflow/mlflow.db
+MLFLOW_PORT ?= 5000
 
 # Disable DeepEval telemetry for all Makefile recipes unless explicitly overridden.
 export DEEPEVAL_TELEMETRY_OPT_OUT ?= YES
@@ -30,9 +32,11 @@ PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13
 # Keep these paths aligned with the eval harness checks in CI.
 LINT_PATHS := src/ evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
 
-# Guard: ensure a container runtime was found
+# Guard container-dependent targets; local MLflow and help do not need a runtime.
 ifeq ($(CONTAINER_RUNTIME),)
-    $(error No container runtime found. Install podman or docker.)
+    ifneq ($(strip $(filter-out help eval-mlflow,$(MAKECMDGOALS))),)
+        $(error No container runtime found. Install podman or docker.)
+    endif
 endif
 
 # Compose command detection (podman compose or docker compose)
@@ -50,7 +54,7 @@ endif
 
 .PHONY: help build build-no-cache run run-http run-stdio run-dev run-token stop logs shell clean info
 .PHONY: dev install sync test test-evals lint format check typecheck eval eval-live eval-scenario eval-report eval-compare eval-trend eval-up eval-down
-.PHONY: evals-clean eval-skills eval-skills-judge eval-rescore
+.PHONY: evals-clean eval-skills eval-skills-judge eval-rescore eval-mlflow
 .PHONY: generate-requirements-cpu
 
 # =============================================================================
@@ -68,7 +72,7 @@ help: ## Show this help message
 	@grep -E '^(dev|install|sync|test|test-evals|lint|format|check|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Evaluation:"
-	@grep -E '^(eval|eval-live|eval-scenario|eval-report|eval-compare|eval-trend|eval-skills|eval-skills-judge|eval-rescore|evals-clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(eval|eval-live|eval-scenario|eval-report|eval-compare|eval-trend|eval-skills|eval-skills-judge|eval-rescore|eval-mlflow|evals-clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Container:"
 	@grep -E '^(build|run|stop|logs|shell|clean|info|test-):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -192,6 +196,11 @@ eval-trend: ## Show eval score trends over time
 # =============================================================================
 # Skill evaluations (Pydantic AI agent over stdio; no LCORE/compose needed)
 # =============================================================================
+
+eval-mlflow: ## Start local MLflow with a persistent SQLite database
+	@mkdir -p "$$(dirname "$(MLFLOW_DB)")" .mlflow/artifacts
+	uvx --from 'mlflow==3.17.*' mlflow server --host 127.0.0.1 --port $(MLFLOW_PORT) \
+		--backend-store-uri "sqlite:///$(MLFLOW_DB)" --artifacts-destination "$(CURDIR)/.mlflow/artifacts"
 
 eval-skills: ## Run both skill suites with deterministic checks
 	uv run --group skill-eval pytest evals/skills -v -s --reruns 0

@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from evals.agent.tracing import TracingSession, content, mark_error
 from evals.agent.transcript import AgentTranscript, AttemptArtifact, from_pydantic_ai
 
 if TYPE_CHECKING:
@@ -74,6 +75,7 @@ class ConversationResult:
     error_stage: str | None = None
     turns_completed: int = 0
     elapsed_s: float = 0.0
+    trace_session_id: str = ""
     final_output: str = ""
     task: str = ""
 
@@ -90,6 +92,7 @@ class ConversationResult:
             "error_stage": self.error_stage,
             "turns_completed": self.turns_completed,
             "elapsed_s": round(self.elapsed_s, 2),
+            "trace_session_id": self.trace_session_id,
         }
         meta.update(metadata or {})
         return AttemptArtifact.from_messages(
@@ -193,6 +196,9 @@ async def run_conversation(
     tool_calls_limit: int = DEFAULT_TOOL_CALLS_LIMIT,
     turn_timeout_s: float = DEFAULT_TURN_TIMEOUT_S,
     on_turn: Callable[[int, AgentTranscript], Awaitable[None]] | None = None,
+    tracing: TracingSession | None = None,
+    golden_id: str = "",
+    skill: str = "",
 ) -> ConversationResult:
     """Run a scripted conversation and capture everything needed to score it.
 
@@ -226,6 +232,17 @@ async def run_conversation(
         spec_id=spec.id,
         task=turns[0].prompt if turns else "",
     )
+    tracing = tracing or TracingSession()
+    trace_attrs = {
+        "rhoai.run_id": run_id,
+        "rhoai.attempt_id": result.attempt_id,
+        "rhoai.golden_id": golden_id,
+        "rhoai.skill": skill,
+        "rhoai.agent_model": spec.id,
+        "rhoai.model_name": spec.model_name,
+    }
+    # MLflow promotes these root-span attributes to searchable trace tags.
+    trace_attrs.update({f"mlflow.traceTag.{key}": value for key, value in trace_attrs.items()})
     limits = UsageLimits(request_limit=request_limit, tool_calls_limit=tool_calls_limit)
     started = time.monotonic()
 
@@ -240,6 +257,11 @@ async def run_conversation(
         result.error_stage = "agent_build"
         result.error = f"{type(exc).__name__}: {exc}"
         result.elapsed_s = time.monotonic() - started
+        with tracing.span(
+            attempt_id=result.attempt_id, name="eval.setup", attributes=trace_attrs
+        ) as span:
+            mark_error(span, result.error)
+        result.trace_session_id = result.attempt_id if tracing.provider is not None else ""
         return result
 
     history: list[ModelMessage] = []
@@ -271,37 +293,56 @@ async def run_conversation(
 
                 # capture_run_messages keeps the partial history of a run that
                 # raises, so a timeout still yields a saveable transcript.
-                with capture_run_messages() as captured:
+                with (
+                    tracing.span(
+                        attempt_id=result.attempt_id,
+                        name=f"eval.turn[{index}] {turn.name or golden_id}",
+                        attributes={
+                            **trace_attrs,
+                            "rhoai.turn_index": index,
+                            "mlflow.spanInputs": content(turn.prompt, "user"),
+                        },
+                    ) as span,
+                    capture_run_messages() as captured,
+                ):
                     try:
                         async with asyncio.timeout(turn_timeout_s):
                             run = await agent.run(
                                 turn.prompt,
                                 message_history=history or None,
                                 usage_limits=limits,
+                                capabilities=tracing.instrumentation() or None,
                             )
                     except TimeoutError:
                         history = _extend(history, captured)
                         result.outcome = OUTCOME_MODEL_FAILURE
                         result.error_stage = f"turn_timeout:{index}"
                         result.error = f"turn {index} exceeded {turn_timeout_s}s"
+                        mark_error(span, result.error)
                         break
                     except UsageLimitExceeded as exc:
                         history = _extend(history, captured)
                         result.outcome = OUTCOME_MODEL_FAILURE
                         result.error_stage = f"usage_limit:{index}"
                         result.error = str(exc)
+                        mark_error(span, result.error)
                         break
                     except Exception as exc:  # noqa: BLE001
                         history = _extend(history, captured)
                         result.outcome = OUTCOME_MODEL_FAILURE
                         result.error_stage = f"model_error:{index}"
                         result.error = f"{type(exc).__name__}: {exc}"
+                        mark_error(span, result.error)
                         break
 
                     # Cumulative history; never concatenate successive snapshots.
                     history = list(run.all_messages())
                     result.final_output = str(run.output or "")
                     result.turns_completed = index + 1
+                    if span is not None:
+                        span.set_attribute(
+                            "mlflow.spanOutputs", content(result.final_output, "assistant")
+                        )
 
                 if on_turn is not None:
                     await on_turn(index, from_pydantic_ai(history, task=result.task))
@@ -313,6 +354,13 @@ async def run_conversation(
     finally:
         result.messages = history
         result.elapsed_s = time.monotonic() - started
+        if result.turns_completed == 0 and result.outcome == OUTCOME_HARNESS_ERROR:
+            with tracing.span(
+                attempt_id=result.attempt_id, name="eval.setup", attributes=trace_attrs
+            ) as span:
+                mark_error(span, result.error or "setup failed")
+        if tracing.provider is not None and (result.turns_completed or result.error_stage):
+            result.trace_session_id = result.attempt_id
 
     return result
 

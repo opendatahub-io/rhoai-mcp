@@ -629,6 +629,38 @@ Live checks-only runs still call the agent. Replay reads saved evidence and neve
 
 Each attempt writes `evals/results/<run-id>/<attempt-id>/artifact.json` and `messages.json`, including partial histories, tool schemas, errors, delivered instructions, generation settings and scenario intent. Each scoring appends to `evals/results/skill_history.jsonl` with the original run and attempt IDs and a new scoring ID. Older artifacts without an intent snapshot are accepted only when their scenario hash matches the current definition. Scores contain the evaluator revision, checks and rubric versions, judge configuration and original generation hashes. Read the JSONL directly to inspect prior results.
 
+### Optional MLflow traces
+
+Set `RHOAI_EVAL_OTLP_ENDPOINT` to the full OTLP/HTTP traces URL and install the `trace` group to export one trace per executed turn. Each attempt's traces share its attempt ID as the MLflow session ID; the artifact metadata and JSONL `trace_id` link back to it. Each turn also carries trace tags for the golden, skill, model profile, model name, run ID and attempt ID. They can be displayed or filtered in the grouped Traces table; existing traces retain their original span attributes. Replay preserves the link and does not export traces. Artifacts remain the scoring source. Tracing exports prompts, replies and tool payloads to the configured server; use a destination appropriate for that data. Export failures are logged and do not change scoring; a recorded session ID does not guarantee delivery.
+
+For a local [MLflow 3.17.x server](https://mlflow.org/docs/latest/genai/tracing/opentelemetry/ingest/) with SQLite (run the server in a separate terminal):
+
+```bash
+make eval-mlflow
+```
+
+The database (`.mlflow/mlflow.db`) and artifacts persist across restarts and `make evals-clean`. Open http://127.0.0.1:5000, select the Default experiment, then select **Group by session** in the Traces tab to browse each multi-turn conversation. Override the database or port with `make eval-mlflow MLFLOW_DB=/path/to/mlflow.db MLFLOW_PORT=5001`.
+
+In the eval terminal, use an existing experiment ID (`0` is the default experiment):
+
+```bash
+export RHOAI_EVAL_OTLP_ENDPOINT=http://127.0.0.1:5000/v1/traces
+export OTEL_EXPORTER_OTLP_TRACES_HEADERS='x-mlflow-experiment-id=0'
+RHOAI_EVAL_AGENT_MODELS=all uv run --group skill-eval --group trace pytest evals/skills/test_navigator.py -v -s --reruns 0
+```
+
+For an authenticated OpenShift route that exposes OTLP, use its full URL, including any gateway prefix (for example `/mlflow/v1/traces` on the [operator gateway](https://github.com/opendatahub-io/mlflow-operator#testing)). Set the experiment ID and, if enabled, workspace name to existing values. The bearer token must have permission to write traces:
+
+```bash
+export RHOAI_EVAL_OTLP_ENDPOINT='https://<mlflow-route>/mlflow/v1/traces'
+export OTEL_EXPORTER_OTLP_TRACES_HEADERS="x-mlflow-experiment-id=<id>,Authorization=Bearer%20$(oc whoami -t),X-MLFLOW-WORKSPACE=<workspace>"
+# Only when the route uses a CA not already trusted by the exporter:
+export OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE=/path/to/ca-bundle.pem
+RHOAI_EVAL_AGENT_MODELS=enmaas-glm uv run --group skill-eval --group trace pytest evals/skills/test_navigator.py -k happy -v -s --reruns 0
+```
+
+Omit the workspace header when the server does not use workspaces. Headers use OTLP's comma-separated, URL-encoded format. Remove the endpoint variable to disable tracing.
+
 ### Navigator comparison reports
 
 The offline comparison command produces Markdown and JSON reports with quality, deterministic checks, token usage, tool calls, timing and per-attempt results. Select the original run IDs explicitly; repeat `--run-id` when a sweep spans multiple pytest sessions. It rejects incompatible configurations and unbalanced scenario mixes. Checks-only attempts are excluded, and the comparison fails if no judged Navigator attempts remain. Judge saved attempts and use `--scoring latest`, or generate a Navigator-only judged run:

@@ -1,0 +1,13 @@
+# MLflow tracing for skill evals
+
+With tracing enabled, each live golden/model attempt gets one MLflow session keyed by `attempt_id`, with one trace per executed turn. The existing artifacts and JSONL history remain the source for scoring and replay.
+
+1. **Restore the exporter.** Use `cc95501` and `09a5ede` from `tarilabs-20261031-deepevalpydanticai` as references. `025bb11` on `tarilabs-20261112-deepevalpydanticai-MINIMIZE` removed the integration. Add the optional `trace` dependency group for the OTel SDK and OTLP/HTTP exporter, and update `uv.lock`. Use a dedicated provider with batch export, a short export timeout, and flush at pytest session teardown. Missing dependencies or export errors should warn and let the eval finish.
+
+2. **Instrument the shared live path.** Wire `evals/skills/attempt.py` into `evals/agent/runner.py` with native Pydantic AI instrumentation. Put `session.id=attempt_id` on every span using attempt-local context so child spans arriving first still group correctly. Include sweep ID, skill, golden ID, model profile and turn index on the turn root. Set `mlflow.spanInputs` and `mlflow.spanOutputs` to the prompt and reply before closing the span. Mark failed turns and emit an error trace if agent or MCP setup fails before the first turn. [MLflow attribute mapping](https://mlflow.org/docs/latest/genai/tracing/opentelemetry/attribute-mapping/)
+
+3. **Link local evidence.** Store `trace_session_id` in artifact metadata and populate the existing `EvalRecord.trace_id` from it. Replay carries that ID forward without exporting. Older and untraced attempts default to an empty ID.
+
+4. **Document local and OpenShift setup in `docs/EVALS.md`.** Opt in with `RHOAI_EVAL_OTLP_ENDPOINT` set to the full `/v1/traces` URL. Pass `x-mlflow-experiment-id` through `OTEL_EXPORTER_OTLP_TRACES_HEADERS`. Show a local SQLite-backed MLflow 3.17.x example and an HTTPS OpenShift route that exposes OTLP, with bearer auth, workspace header and CA bundle when required. State that tracing exports prompts, replies and tool payloads. [MLflow OTLP setup](https://mlflow.org/docs/latest/genai/tracing/opentelemetry/ingest/) · [OpenShift route example](https://github.com/opendatahub-io/mlflow-operator#testing)
+
+5. **Verify.** Use the offline runner fixture and an in-memory exporter to test grouping, prompt/reply previews, tool spans, failures and replay. Run `RHOAI_EVAL_AGENT_MODELS=all uv run --group skill-eval --group trace pytest evals/skills -v -s --reruns 0` against local MLflow and confirm 16 distinct sessions match local attempt IDs. Repeat one golden/model on the authenticated OpenShift endpoint.

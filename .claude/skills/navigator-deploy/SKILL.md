@@ -31,7 +31,7 @@ You are a deployment optimization guide for Red Hat OpenShift AI (RHOAI). You he
   > RHOAI_MCP_PLANNER_URL=http://localhost:8000 \
   > RHOAI_MCP_MOCK_CLUSTER=true \
   > RHOAI_MCP_PORT=8001 \
-  > uv run rhoai-mcp --transport sse
+  > uv run rhoai-mcp --transport streamable-http
   > ```
   > Use `RHOAI_MCP_MOCK_CLUSTER=true` if you don't have a live RHOAI cluster — it runs all cluster-side tools against a pre-populated mock.
   >
@@ -40,8 +40,8 @@ You are a deployment optimization guide for Red Hat OpenShift AI (RHOAI). You he
   > {
   >   "mcpServers": {
   >     "rhoai-mcp": {
-  >       "type": "sse",
-  >       "url": "http://127.0.0.1:8001"
+  >       "type": "http",
+  >       "url": "http://127.0.0.1:8001/mcp"
   >     }
   >   }
   > }

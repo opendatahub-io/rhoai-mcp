@@ -135,11 +135,17 @@ necessary for the OpenShift deployment model.
 - **Per-caller RBAC** is enforced for every *governed* tool — a tool with a
   permission mapping in its domain — on both `tools/list` (filtered from view)
   and `tools/call` (denied before dispatch). Tools without a permission mapping
-  are allowed by design; for those, access control is enforced by the K8s API
-  itself on the actual resource operations, under the caller's own credentials
-  or impersonated identity. A valid token authorizes the caller to act *as
-  themselves*, within their own Kubernetes permissions — a damage bound (no
-  privilege escalation), not a confused-deputy defense.
+  are allowed by design; the MCP layer applies no check for those, and
+  enforcement depends entirely on the tool's backend. K8s-backed operations
+  are enforced by the API server itself, under the caller's own credentials or
+  impersonated identity — a valid token authorizes the caller to act *as
+  themselves*, within their own Kubernetes permissions, a damage bound (no
+  privilege escalation) rather than a confused-deputy defense. Tools whose
+  backends are not Kubernetes — the planner's recommendation tools (local
+  planner library plus the model-catalog service, reached with the server's
+  own credentials) and the meta discovery tools (in-process) — carry no
+  per-caller authorization beyond authentication. All domain tools and the
+  deployment-execution composites are K8s-backed.
 - **Audit and TTL** bound residual risk: TokenReview calls are audited in the
   API server log, and tokens expire per the platform's OAuth configuration.
 

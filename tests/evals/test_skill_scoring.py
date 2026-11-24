@@ -10,8 +10,6 @@ import pytest
 
 
 def test_normal_scoring_keeps_item_evidence_without_extra_judge_calls() -> None:
-    from pathlib import Path
-
     from evals.agent.transcript import from_pydantic_ai
     from evals.config import EvalConfig
     from evals.metrics.scorecards import Scorecard
@@ -37,18 +35,14 @@ def test_normal_scoring_keeps_item_evidence_without_extra_judge_calls() -> None:
             return self.generate(prompt, schema, **kwargs)
 
     judge = ItemJudge()
-    with patch(
-        "evals.agent.transcript.AttemptArtifact.load",
-        return_value=SimpleNamespace(mcp_tools=lambda: []),
-    ):
-        records, _ = _score(
-            from_pydantic_ai(workflow(deploy=True)),
-            Path("unused"),
-            "navigator-deploy",
-            EvalConfig(_env_file=None),
-            judge,
-            CheckReport(),
-        )
+    records, _ = _score(
+        from_pydantic_ai(workflow(deploy=True)),
+        [],
+        "navigator-deploy",
+        EvalConfig(_env_file=None),
+        judge,
+        CheckReport(),
+    )
     assert len(records) == 3
     assert [len(r.scorecards) for r in records] == [2, 1, 0]
     assert all(r.success for r in records)
@@ -87,8 +81,6 @@ def test_fidelity_judge_error_is_a_failed_metric() -> None:
 
 @pytest.mark.parametrize("mcp_failure", [False, True])
 def test_fidelity_runs_without_mcp_or_when_mcp_judge_fails(mcp_failure: bool) -> None:
-    from pathlib import Path
-
     from evals.agent.transcript import from_pydantic_ai
     from evals.config import EvalConfig
     from evals.reporting.models import MetricRecord
@@ -111,16 +103,12 @@ def test_fidelity_runs_without_mcp_or_when_mcp_judge_fails(mcp_failure: bool) ->
     )
     fidelity = MetricRecord(name="fidelity", score=1, success=True, threshold=0.8, reason="")
     with (
-        patch(
-            "evals.agent.transcript.AttemptArtifact.load",
-            return_value=SimpleNamespace(mcp_tools=lambda: []),
-        ),
         patch("deepeval.evaluate.evaluate", side_effect=RuntimeError("judge unavailable")),
         patch("evals.skills.attempt._score_fidelity", return_value=[fidelity]) as score_fidelity,
     ):
         records, _ = _score(
             from_pydantic_ai(messages),
-            Path("unused"),
+            [],
             "navigator",
             EvalConfig(_env_file=None),
             UnusedJudge(),

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 DEFAULT_JUDGE_MODEL = "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017"
 
 
-class LLMProvider(str, Enum):
+class LLMProvider(StrEnum):
     """LLM provider for the judge LLM."""
 
     OPENAI = "openai"
@@ -23,7 +23,7 @@ class LLMProvider(str, Enum):
     GOOGLE_VERTEX = "google-vertex"
 
 
-class ClusterMode(str, Enum):
+class ClusterMode(StrEnum):
     """Whether to use mock or live K8s cluster."""
 
     MOCK = "mock"

@@ -42,6 +42,8 @@ from evals.skills.checks import CheckReport
 from evals.skills.goldens import RUBRIC_VERSION, Golden
 
 if TYPE_CHECKING:
+    from mcp.types import Tool
+
     from evals.agent.models import AgentModelSpec
     from evals.agent.tracing import TracingSession
     from evals.agent.transcript import AgentTranscript
@@ -229,7 +231,7 @@ def score_artifact(
     if judge is not None:
         metrics, scoring_seconds = _score(
             transcript,
-            artifact_path,
+            artifact.mcp_tools(),
             golden.skill,
             config,
             judge,
@@ -359,7 +361,7 @@ def render_outcome(outcome: AttemptOutcome) -> str:
 
 def _score(
     transcript: AgentTranscript,
-    artifact_path: Path,
+    schemas: list[Tool],
     skill: str,
     config: EvalConfig,
     judge: Any,
@@ -375,7 +377,6 @@ def _score(
     """
     from deepeval.evaluate import AsyncConfig, CacheConfig, DisplayConfig, evaluate
 
-    from evals.agent.transcript import AttemptArtifact
     from evals.deepeval_helpers import (
         NothingToScoreError,
         build_mcp_server_from_schemas,
@@ -387,7 +388,6 @@ def _score(
     )
     from evals.metrics.conversation import CONVERSATION_METRIC_VERSION
 
-    schemas = AttemptArtifact.load(artifact_path).mcp_tools()
     started = time.monotonic()
     try:
         case = transcript_to_conversational_test_case(

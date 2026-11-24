@@ -124,6 +124,14 @@ testpaths = ["tests"]
 pythonpath = ["."]
 # Load the eval-specific defaults early, before third-party plugins are imported.
 addopts = "-p evals.pytest_defaults -ra -q"
+filterwarnings = [
+    # deepeval 4.3.2 calls asyncio.iscoroutinefunction, deprecated in Python 3.14
+    # and removed in 3.16 — the warning echoes ~600x per run at import time on
+    # 3.14+ (CI's 3.11/3.12 lanes never see it). Silence the echo, not the fact:
+    # bump deepeval before the toolchain moves to Python 3.16 or this becomes a
+    # hard ImportError in the eval test lane.
+    "ignore:.*'asyncio.iscoroutinefunction' is deprecated.*:DeprecationWarning:deepeval.*",
+]
 markers = [
     "eval: MCP evaluation tests (require LLM provider)",
     "live: tests requiring a live OpenShift cluster",

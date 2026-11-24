@@ -122,7 +122,11 @@ def metric_records_from(eval_result: Any) -> tuple[list[MetricRecord], bool]:
 
 
 def overall_passed(
-    *, checks_passed: bool, routing_ok: bool, metrics: list[MetricRecord], dry_run: bool,
+    *,
+    checks_passed: bool,
+    routing_ok: bool,
+    metrics: list[MetricRecord],
+    dry_run: bool,
     required_metrics: set[str] | None = None,
 ) -> bool:
     """Decide the attempt's verdict.

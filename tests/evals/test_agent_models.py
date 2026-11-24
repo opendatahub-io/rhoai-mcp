@@ -86,3 +86,23 @@ async def test_opus_uses_native_messages_and_replays_tool_result(
 
     assert result.output == "Use the A100-80."
     assert len(requests) == 2
+
+
+def test_spec_without_temperature_requests_none() -> None:
+    """A spec that omits temperature must not request one (RHAI-45972 follow-up).
+
+    The matrix invariant is "every spec leaves temperature to the provider" —
+    the gpt-5.6 family rejects the parameter, and a cross-model difference in
+    sampling configuration would bias comparisons. The dataclass default must
+    enforce that, not rely on every future spec remembering to set None.
+    """
+    from evals.agent.models import AgentModelSpec
+
+    spec = AgentModelSpec(
+        id="probe",
+        model_name="some-model",
+        base_url=None,
+        api_key_env="PROBE_KEY",
+    )
+    assert "temperature" not in spec.settings()
+    assert spec.describe()["sampling"].startswith("provider-default")

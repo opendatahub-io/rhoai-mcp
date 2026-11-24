@@ -69,7 +69,7 @@ class AgentModelSpec:
     base_url: str | None
     api_key_env: str
     api: AgentApi = "responses"
-    temperature: float | None = 0.0
+    temperature: float | None = None
     extra_settings: dict[str, Any] = field(default_factory=dict)
 
     @property

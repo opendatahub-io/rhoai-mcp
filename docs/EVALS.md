@@ -639,7 +639,7 @@ For a local [MLflow 3.17.x server](https://mlflow.org/docs/latest/genai/tracing/
 make eval-mlflow
 ```
 
-The database (`.mlflow/mlflow.db`) and artifacts persist across restarts and `make evals-clean`. Open http://127.0.0.1:5000, select the Default experiment, then select **Group by session** in the Traces tab to browse each multi-turn conversation. Override the database or port with `make eval-mlflow MLFLOW_DB=/path/to/mlflow.db MLFLOW_PORT=5001`.
+The database (`.mlflow/mlflow.db`) and artifacts persist across restarts and `make evals-clean`. Open http://127.0.0.1:5000, select the Default experiment, then select **Group by session** in the Traces tab to browse each multi-turn conversation. Override the database or port with `make eval-mlflow MLFLOW_DB=/path/to/mlflow.db MLFLOW_PORT=5001`. If you override the port, use the same port in both the browser URL and the endpoint below (for example, `http://127.0.0.1:5001/v1/traces`).
 
 In the eval terminal, use an existing experiment ID (`0` is the default experiment):
 

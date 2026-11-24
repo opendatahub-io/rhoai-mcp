@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from rhoai_mcp.auth.token_review import TokenReviewValidator
 from rhoai_mcp.composites.planner.client import PlannerAPIError
 from rhoai_mcp.composites.planner.local_client import LocalPlannerClient
 
@@ -218,6 +223,73 @@ class TestLocalPlannerClientInit:
 
 class TestLocalPlannerRecommend:
     """Tests for LocalPlannerClient.recommend()."""
+
+    @patch("rhoai_mcp.composites.planner.local_client.Planner")
+    async def test_planner_queries_serialize_and_token_review_completes(
+        self, mock_planner_cls: MagicMock
+    ) -> None:
+        """A cancelled planner call keeps its worker while TokenReview completes."""
+        loop = asyncio.get_running_loop()
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+        mock_planner = _make_mock_planner()
+        mock_planner_cls.return_value = mock_planner
+        first_entered = asyncio.Event()
+        release_first = threading.Event()
+        second_entered = threading.Event()
+        ranked = mock_planner.generate_recommendations.return_value
+
+        def generate_recommendations(*_args: object, **_kwargs: object) -> MagicMock:
+            if mock_planner.generate_recommendations.call_count == 1:
+                loop.call_soon_threadsafe(first_entered.set)
+                if not release_first.wait(10):
+                    raise TimeoutError("First planner call was not released")
+            else:
+                second_entered.set()
+            return ranked
+
+        mock_planner.generate_recommendations.side_effect = generate_recommendations
+        user = SimpleNamespace(username="alice", uid=None, groups=[])
+        review = SimpleNamespace(status=SimpleNamespace(authenticated=True, user=user))
+        api_client = MagicMock()
+        api_client.call_api.side_effect = [review, {"groups": []}]
+        validator = TokenReviewValidator(api_client)
+        client = LocalPlannerClient()
+        first = asyncio.create_task(
+            client.recommend(
+                text="ignored",
+                use_case_override="chatbot_conversational",
+                user_count_override=1000,
+                gpu_types_override=["H100"],
+            )
+        )
+        second = None
+        try:
+            await asyncio.wait_for(first_entered.wait(), timeout=5)
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            second = asyncio.create_task(
+                client.generate_config(
+                    category="balanced",
+                    use_case="chatbot_conversational",
+                    user_count=1000,
+                    prompt_tokens=512,
+                    output_tokens=256,
+                    expected_qps=10.0,
+                    ttft_target_ms=200,
+                    itl_target_ms=65,
+                    e2e_target_ms=5000,
+                )
+            )
+            identity = await asyncio.wait_for(validator.validate_token("opaque-token"), timeout=5)
+            assert identity.username == "alice"
+            assert not second_entered.is_set()
+        finally:
+            release_first.set()
+            await asyncio.gather(first, return_exceptions=True)
+            if second is not None:
+                await second
+        assert second_entered.is_set()
 
     @patch("rhoai_mcp.composites.planner.local_client.Planner")
     async def test_recommend_full_flow(self, mock_planner_cls: MagicMock) -> None:

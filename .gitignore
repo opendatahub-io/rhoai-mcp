@@ -209,6 +209,7 @@ __marimo__/
 .mcp.json
 
 # Eval reports, results, and env
+.mlflow
 evals/reports/
 evals/results/*
 !evals/results/README.md

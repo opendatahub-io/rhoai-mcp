@@ -1,13 +1,6 @@
 """Utility functions and helpers for RHOAI MCP server."""
 
 from rhoai_mcp.utils.annotations import RHOAIAnnotations
-from rhoai_mcp.utils.cache import (
-    cache_stats,
-    cached,
-    clear_cache,
-    clear_expired,
-    invalidate,
-)
 from rhoai_mcp.utils.errors import (
     AuthenticationError,
     ConfigurationError,
@@ -47,12 +40,6 @@ __all__ = [
     "ResponseBuilder",
     "PaginatedResponse",
     "paginate",
-    # Caching
-    "cached",
-    "clear_cache",
-    "clear_expired",
-    "cache_stats",
-    "invalidate",
     # Port forwarding
     "PortForwardConnection",
     "PortForwardError",

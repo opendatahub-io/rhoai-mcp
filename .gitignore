@@ -219,3 +219,5 @@ evals/results/*
 .deepeval-cache.json
 .deepeval_telemetry.txt
 temp_test_run_data.json
+.DS_Store
+._.DS_Store

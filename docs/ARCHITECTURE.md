@@ -140,9 +140,11 @@ sessions — a client disconnecting never tears down shared process state.
 credentials and no server-side affinity is required — any replica behind plain round-robin
 can answer any request (no state is keyed by MCP session, per the story 4.1 audit; end-to-end
 round-robin validation through the gateway is tracked in
-[RHAI-14636](https://redhat.atlassian.net/browse/RHAI-14636), story 4.3). The stateful
-Streamable HTTP mode holds sessions in memory and therefore requires sticky routing;
-deployments behind round-robin balancers should run stateless.
+[RHAI-14636](https://redhat.atlassian.net/browse/RHAI-14636), story 4.3). The default
+Streamable HTTP mode is stateful: sessions live in memory, so a client whose requests reach
+a different replica fails. Round-robin balancing therefore requires sticky routing today;
+the SDK's `stateless_http=True` would remove that requirement, but the server does not yet
+expose it as a configuration (a prerequisite for the RHAI-14636 validation).
 
 ## Composite Workflow Tools
 

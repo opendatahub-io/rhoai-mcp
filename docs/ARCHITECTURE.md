@@ -125,22 +125,23 @@ The server keeps no state keyed by MCP session. The full inventory (RHAI-14634 a
 |---|---|---|---|
 | `UserContext` (contextvar) | per request | request | Set by `OIDCAuthMiddleware`, reset after each request |
 | Per-message request data | per message | message | `ctx.request_context.request` — the POST's headers, including `Authorization` |
-| K8s clients | per request / per process | — | `get_k8s(ctx)` builds user-scoped clients per call (user-token strategy) or impersonated clients; `get_shared_k8s()` is the SA-backed shared client |
+| K8s clients | per call (user-scoped) or per process (SA-backed), by kind | call (user-scoped) / process (SA-backed) | `get_k8s(ctx)` builds user-scoped clients per call (user-token strategy) or impersonated clients; `get_shared_k8s()` is the SA-backed shared client |
 | `PortForwardManager` | per process | app shutdown (HTTP) / process end (stdio) | Ref-counted singleton; port-forwards to in-cluster services when running outside the cluster. A session ending never closes a forward another session shares (`tests/test_server_lifespan.py`) |
-| Planner local client | per process | process | Built once at the first planner tool call (including the model-catalog sync); read-only afterward |
+| Planner local client | per process | process | Built once at the first planner tool call (including the model-catalog sync); not mutated after initialization |
 | Registry/inference discovery cache | per process | process | Caches cluster-level discovery (API type, URL) — never user data |
-| MCP session manager | per process (SDK-owned) | — | In-memory sessions in stateful Streamable HTTP; `stateless_http=True` requires no session state |
+| MCP session manager | per process (SDK-owned) | process (in-memory) | Holds sessions in stateful Streamable HTTP; `stateless_http=True` (the MCP SDK's flag) runs without server-side sessions |
 
-**Session lifespan is empty by design.** The per-session lifespan body only logs (plus
+**Session lifespans carry no teardown responsibility.** The per-session lifespan body only logs (plus
 port-forward cleanup in stdio mode, where one session spans the whole process). For HTTP
 transports, cleanup is attached to the ASGI app lifespan (uvicorn shutdown), not to client
 sessions — a client disconnecting never tears down shared process state.
 
 **Stateless-protocol implications:** in stateless operation every request carries its own
 credentials and no server-side affinity is required — any replica behind plain round-robin
-can answer any request (validated end-to-end through the gateway in story 4.3 / RHAI-14636).
-The stateful Streamable HTTP mode holds sessions in memory and therefore requires sticky
-routing; deployments behind round-robin balancers should run stateless.
+can answer any request (validated end-to-end through the gateway in
+[RHAI-14636](https://redhat.atlassian.net/browse/RHAI-14636)). The stateful Streamable
+HTTP mode holds sessions in memory and therefore requires sticky routing; deployments
+behind round-robin balancers should run stateless.
 
 ## Composite Workflow Tools
 

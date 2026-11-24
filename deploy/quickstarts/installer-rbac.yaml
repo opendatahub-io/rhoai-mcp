@@ -1,0 +1,33 @@
+# Pre-provisioned shared installer identity for the rhoai-mcp quickstarts domain.
+# DEV-ONLY: binds the installer SA to cluster-admin so the installer image can do
+# whatever a quickstart action requires. A production deploy should replace the
+# ClusterRoleBinding below with a dedicated, least-privilege ClusterRole.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-quickstarts
+  labels:
+    app.kubernetes.io/managed-by: rhoai-mcp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: quickstart-installer
+  namespace: openshift-quickstarts
+  labels:
+    app.kubernetes.io/managed-by: rhoai-mcp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: quickstart-installer-admin
+  labels:
+    app.kubernetes.io/managed-by: rhoai-mcp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: quickstart-installer
+    namespace: openshift-quickstarts

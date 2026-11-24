@@ -212,7 +212,7 @@ def check_token_rotation_mid_session() -> None:
     continues the same session, including a governed, Kubernetes-backed
     tool call whose result data is asserted against a seeded resource,
     so an empty result cannot pass. Token invalidation is awaited at the
-    apiserver (kubectl auth whoami, Kubernetes-side truth) before the
+    apiserver (a TokenReview poll, Kubernetes-side truth) before the
     MCP assertion, so the check tests the server's per-message
     authentication rather than racing the authorizer.
     """
@@ -283,17 +283,29 @@ def check_token_rotation_mid_session() -> None:
         # T08's await_rbac: poll the authorizer, then assert once on the
         # server under test.
         def bound_token_still_valid() -> bool:
-            # The exit code, not the output, is the signal: an invalid token
-            # fails authentication (nonzero) regardless of RBAC answers.
-            import subprocess
-
-            proc = subprocess.run(
-                ["kubectl", "auth", "whoami", f"--token={bound_token}"],
-                capture_output=True,
-                text=True,
-                check=False,
+            # Probe via TokenReview, the same check the server runs per
+            # request, so the poll awaits exactly the truth the MCP
+            # assertion depends on. The local kubectl's own credentials
+            # (admin client cert in the kind kubeconfig) are irrelevant to
+            # the verdict — only the reviewed token is evaluated.
+            # (kubectl auth whoami --token=<token> would NOT work here:
+            # when the bearer token fails, the apiserver falls through to
+            # the client cert and the probe authenticates as admin.)
+            review = _kubectl(
+                "create",
+                "-f",
+                "-",
+                "-o",
+                "json",
+                stdin=json.dumps(
+                    {
+                        "apiVersion": "authentication.k8s.io/v1",
+                        "kind": "TokenReview",
+                        "spec": {"token": bound_token},
+                    }
+                ),
             )
-            return proc.returncode == 0
+            return json.loads(review).get("status", {}).get("authenticated") is True
 
         def await_token_invalidation(timeout_s: int = 30) -> None:
             deadline = time.monotonic() + timeout_s

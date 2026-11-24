@@ -424,9 +424,7 @@ class RHOAIConfig(BaseSettings):
             return
 
         if self.transport != TransportMode.STREAMABLE_HTTP:
-            raise ValueError(
-                "stateless_http is only supported with the streamable-http transport"
-            )
+            raise ValueError("stateless_http is only supported with the streamable-http transport")
 
     def is_operation_allowed(self, operation: str) -> tuple[bool, str | None]:
         """Check if an operation is allowed based on safety settings.

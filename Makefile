@@ -32,11 +32,9 @@ PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13
 # Keep these paths aligned with the eval harness checks in CI.
 LINT_PATHS := src/ evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
 
-# Guard container-dependent targets; local MLflow and help do not need a runtime.
+# Guard: ensure a container runtime was found
 ifeq ($(CONTAINER_RUNTIME),)
-    ifneq ($(strip $(filter-out help eval-mlflow,$(MAKECMDGOALS))),)
-        $(error No container runtime found. Install podman or docker.)
-    endif
+    $(error No container runtime found. Install podman or docker.)
 endif
 
 # Compose command detection (podman compose or docker compose)

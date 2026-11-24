@@ -328,10 +328,14 @@ def check_token_rotation_mid_session() -> None:
         try:
             tool_names(bound_token, session)
         except urllib.error.HTTPError as exc:
-            raise AssertionError(f"invalidated token got HTTP {exc.code}, expected 401") from exc
-        raise AssertionError(
-            "invalidated token still accepted — authentication is cached at session level"
-        )
+            if exc.code != 401:
+                raise AssertionError(
+                    f"invalidated token got HTTP {exc.code}, expected 401"
+                ) from exc
+        else:
+            raise AssertionError(
+                "invalidated token still accepted — authentication is cached at session level"
+            )
 
         # The fresh token continues the SAME session: filtered view unchanged
         after = tool_names(READER_TOKEN, session)

@@ -1038,6 +1038,9 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
 
 def _estimate_model_info(model_id: str) -> dict[str, Any]:
     """Estimate model information from model ID."""
+    if len(model_id) > 255:
+        raise ValueError("model_id must be at most 255 characters")
+
     model_lower = model_id.lower()
 
     # Extract parameter count

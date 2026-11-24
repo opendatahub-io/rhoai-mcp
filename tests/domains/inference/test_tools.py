@@ -32,6 +32,27 @@ def _register_tools(mock_server: MagicMock) -> dict[str, Any]:
     return registered_tools
 
 
+class TestModelIdLength:
+    def test_maximum_length_is_accepted(self) -> None:
+        tools = _register_tools(MagicMock())
+
+        result = tools["estimate_serving_resources"](model_id="x" * 252 + "-8b")
+
+        assert result["estimated_params_billion"] == 8.0
+
+    @pytest.mark.parametrize("length", [256, 257, 8192])
+    async def test_oversized_model_id_rejected_by_both_tools(self, length: int) -> None:
+        server = MagicMock()
+        tools = _register_tools(server)
+        model_id = "1" * length
+
+        with pytest.raises(ValueError, match="model_id must be at most 255 characters"):
+            tools["estimate_serving_resources"](model_id=model_id)
+        with pytest.raises(ValueError, match="model_id must be at most 255 characters"):
+            await tools["prepare_model_deployment"](namespace="test", model_id=model_id)
+        server.get_k8s.assert_not_called()
+
+
 class TestPrepareModelDeploymentCatalogLookup:
     """Test that prepare_model_deployment resolves storage_uri from catalog."""
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from typing import Any
 
 from planner import (
@@ -57,8 +58,8 @@ class LocalPlannerClient:
         model_catalog_url: str | None = None,
     ) -> None:
         self._planner = Planner()
-        # The planner's benchmark connection is shared and unsafe for concurrent queries.
-        self._recommendation_lock = threading.Lock()
+        # Serialize SQLite queries and keep the default executor available for auth.
+        self._recommendation_executor = ThreadPoolExecutor(max_workers=1)
 
         # Pre-seed the gpu_normalizer singleton with the Planner's catalog
         # to avoid a redundant ModelCatalog() construction on first
@@ -240,12 +241,11 @@ class LocalPlannerClient:
 
             spec_with_overrides = DeploymentSpecification(**spec_data)
 
-            with self._recommendation_lock:
-                ranked = self._planner.generate_recommendations(
-                    spec_with_overrides,
-                    min_quality=min_quality,
-                    max_cost=max_cost,
-                )
+            ranked = self._planner.generate_recommendations(
+                spec_with_overrides,
+                min_quality=min_quality,
+                max_cost=max_cost,
+            )
             ranked_data = ranked.model_dump()
 
             balanced_list = ranked_data.get("balanced", [])
@@ -285,7 +285,9 @@ class LocalPlannerClient:
             )
 
         try:
-            return await asyncio.to_thread(_run)
+            return await asyncio.get_running_loop().run_in_executor(
+                self._recommendation_executor, copy_context().run, _run
+            )
         except PlannerAPIError:
             raise
         except ValueError as e:
@@ -349,12 +351,11 @@ class LocalPlannerClient:
 
             spec_with_overrides = DeploymentSpecification(**spec_data)
 
-            with self._recommendation_lock:
-                ranked = self._planner.generate_recommendations(
-                    spec_with_overrides,
-                    min_quality=min_quality,
-                    max_cost=max_cost,
-                )
+            ranked = self._planner.generate_recommendations(
+                spec_with_overrides,
+                min_quality=min_quality,
+                max_cost=max_cost,
+            )
             ranked_data = ranked.model_dump()
 
             category_list = ranked_data.get(category_key, [])
@@ -410,7 +411,9 @@ class LocalPlannerClient:
             )
 
         try:
-            return await asyncio.to_thread(_run)
+            return await asyncio.get_running_loop().run_in_executor(
+                self._recommendation_executor, copy_context().run, _run
+            )
         except PlannerAPIError:
             raise
         except ValueError as e:

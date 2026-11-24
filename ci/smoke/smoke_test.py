@@ -211,7 +211,10 @@ def check_token_rotation_mid_session() -> None:
     authentication at the session level) while a freshly minted token
     continues the same session, including a governed, Kubernetes-backed
     tool call whose result data is asserted against a seeded resource,
-    so an empty result cannot pass.
+    so an empty result cannot pass. Token invalidation is awaited at the
+    apiserver (kubectl auth whoami, Kubernetes-side truth) before the
+    MCP assertion, so the check tests the server's per-message
+    authentication rather than racing the authorizer.
     """
     # A dummy pod to bind the throwaway token to: deleting the pod
     # invalidates the token deterministically.
@@ -271,31 +274,52 @@ def check_token_rotation_mid_session() -> None:
         _kubectl(
             "wait", "--for=delete", "pod/smoke-token-rotator", "-n", "rhoai-mcp", "--timeout=60s"
         )
-        # Bounded poll for the rejection: pod-object deletion is confirmed
-        # above, but the apiserver's bound-token validation can lag it by a
-        # moment (eventual consistency) — a single-shot assertion races that
-        # propagation and misattributes the lag to session-level caching.
-        # Mirrors T08's freshness polling.
-        deadline = time.monotonic() + 30
-        last_code: int | None = None
-        while time.monotonic() < deadline:
-            try:
-                tool_names(bound_token, session)
-            except urllib.error.HTTPError as exc:
-                if exc.code == 401:
-                    break
-                last_code = exc.code
-            else:
-                last_code = None
-            time.sleep(2)
-        else:
-            detail = (
-                f"invalidated token got HTTP {last_code}, expected 401"
-                if last_code is not None
-                else "invalidated token still accepted after 30s — "
-                "authentication is cached at session level"
+
+        # Await Kubernetes-side truth before asserting on the MCP endpoint:
+        # pod-object deletion is confirmed above, but the apiserver's
+        # bound-token validation can lag it by a moment (eventual
+        # consistency) — asserting on the MCP endpoint while that propagates
+        # would misattribute the lag to session-level auth caching. Mirrors
+        # T08's await_rbac: poll the authorizer, then assert once on the
+        # server under test.
+        def bound_token_still_valid() -> bool:
+            # The exit code, not the output, is the signal: an invalid token
+            # fails authentication (nonzero) regardless of RBAC answers.
+            import subprocess
+
+            proc = subprocess.run(
+                ["kubectl", "auth", "whoami", f"--token={bound_token}"],
+                capture_output=True,
+                text=True,
+                check=False,
             )
-            raise AssertionError(detail)
+            return proc.returncode == 0
+
+        def await_token_invalidation(timeout_s: int = 30) -> None:
+            deadline = time.monotonic() + timeout_s
+            while time.monotonic() < deadline:
+                if not bound_token_still_valid():
+                    return
+                time.sleep(1)
+            raise AssertionError(
+                f"bound token still valid at the apiserver after {timeout_s}s — "
+                "pod deletion did not invalidate it"
+            )
+
+        await_token_invalidation()
+
+        # Single-shot MCP assertion: the token is now Kubernetes-side
+        # invalid, so a 200 here is genuinely the server caching
+        # authentication, and any other status is a deterministic
+        # rejection — no retry loop that could mask or misattribute
+        # either.
+        try:
+            tool_names(bound_token, session)
+        except urllib.error.HTTPError as exc:
+            raise AssertionError(f"invalidated token got HTTP {exc.code}, expected 401") from exc
+        raise AssertionError(
+            "invalidated token still accepted — authentication is cached at session level"
+        )
 
         # The fresh token continues the SAME session: filtered view unchanged
         after = tool_names(READER_TOKEN, session)

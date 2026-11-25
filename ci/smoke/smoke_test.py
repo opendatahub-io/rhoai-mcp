@@ -23,6 +23,7 @@ import hmac
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -210,7 +211,10 @@ def check_token_rotation_mid_session() -> None:
     authentication at the session level) while a freshly minted token
     continues the same session, including a governed, Kubernetes-backed
     tool call whose result data is asserted against a seeded resource,
-    so an empty result cannot pass.
+    so an empty result cannot pass. Token invalidation is awaited at the
+    apiserver (a TokenReview poll, Kubernetes-side truth) before the
+    MCP assertion, so the check tests the server's per-message
+    authentication rather than racing the authorizer.
     """
     # A dummy pod to bind the throwaway token to: deleting the pod
     # invalidates the token deterministically.
@@ -270,13 +274,68 @@ def check_token_rotation_mid_session() -> None:
         _kubectl(
             "wait", "--for=delete", "pod/smoke-token-rotator", "-n", "rhoai-mcp", "--timeout=60s"
         )
+
+        # Await Kubernetes-side truth before asserting on the MCP endpoint:
+        # pod-object deletion is confirmed above, but the apiserver's
+        # bound-token validation can lag it by a moment (eventual
+        # consistency) — asserting on the MCP endpoint while that propagates
+        # would misattribute the lag to session-level auth caching. Mirrors
+        # T08's await_rbac: poll the authorizer, then assert once on the
+        # server under test.
+        def bound_token_still_valid() -> bool:
+            # Probe via TokenReview, the same check the server runs per
+            # request, so the poll awaits exactly the truth the MCP
+            # assertion depends on. The local kubectl's own credentials
+            # (admin client cert in the kind kubeconfig) are irrelevant to
+            # the verdict — only the reviewed token is evaluated.
+            # (kubectl auth whoami --token=<token> would NOT work here:
+            # when the bearer token fails, the apiserver falls through to
+            # the client cert and the probe authenticates as admin.)
+            review = _kubectl(
+                "create",
+                "-f",
+                "-",
+                "-o",
+                "json",
+                stdin=json.dumps(
+                    {
+                        "apiVersion": "authentication.k8s.io/v1",
+                        "kind": "TokenReview",
+                        "spec": {"token": bound_token},
+                    }
+                ),
+            )
+            return json.loads(review).get("status", {}).get("authenticated") is True
+
+        def await_token_invalidation(timeout_s: int = 30) -> None:
+            deadline = time.monotonic() + timeout_s
+            while time.monotonic() < deadline:
+                if not bound_token_still_valid():
+                    return
+                time.sleep(1)
+            raise AssertionError(
+                f"bound token still valid at the apiserver after {timeout_s}s — "
+                "pod deletion did not invalidate it"
+            )
+
+        await_token_invalidation()
+
+        # Single-shot MCP assertion: the token is now Kubernetes-side
+        # invalid, so a 200 here is genuinely the server caching
+        # authentication, and any other status is a deterministic
+        # rejection — no retry loop that could mask or misattribute
+        # either.
         try:
             tool_names(bound_token, session)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 401:
+                raise AssertionError(
+                    f"invalidated token got HTTP {exc.code}, expected 401"
+                ) from exc
+        else:
             raise AssertionError(
                 "invalidated token still accepted — authentication is cached at session level"
             )
-        except urllib.error.HTTPError as exc:
-            assert exc.code == 401, f"invalidated token got HTTP {exc.code}, expected 401"
 
         # The fresh token continues the SAME session: filtered view unchanged
         after = tool_names(READER_TOKEN, session)

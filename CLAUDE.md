@@ -119,7 +119,7 @@ Environment variables use `RHOAI_MCP_` prefix. Key settings:
 
 ### Key Dependencies
 
-- `mcp>=2.0.0,<3`: Model Context Protocol (MCPServer) — v2 SDK
+- `mcp>=2.3.0,<3`: Model Context Protocol (MCPServer) — v2 SDK (floor = validated version, PR #203)
 - `kubernetes>=28.1.0`: K8s Python client
 - `pydantic>=2.0.0`: Data validation and settings
 

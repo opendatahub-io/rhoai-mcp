@@ -106,3 +106,37 @@ def test_spec_without_temperature_requests_none() -> None:
     )
     assert "temperature" not in spec.settings()
     assert spec.describe()["sampling"].startswith("provider-default")
+
+
+def test_describe_reports_effective_temperature() -> None:
+    """``describe()`` must report the temperature ``settings()`` sends (RHAI-45972).
+
+    ``extra_settings`` forms the base of the effective settings, so a
+    ``temperature`` there is live whenever the dedicated field is ``None``.
+    The result record must not claim provider-default sampling in that case,
+    and an explicit ``temperature`` must still win over ``extra_settings``.
+    """
+    from evals.agent.models import AgentModelSpec
+
+    via_extra = AgentModelSpec(
+        id="probe",
+        model_name="some-model",
+        base_url=None,
+        api_key_env="PROBE_KEY",
+        extra_settings={"temperature": 0.5},
+    )
+    assert via_extra.settings()["temperature"] == 0.5
+    assert via_extra.describe()["temperature"] == 0.5
+    assert via_extra.describe()["sampling"] == "temperature=0.5"
+
+    explicit = AgentModelSpec(
+        id="probe",
+        model_name="some-model",
+        base_url=None,
+        api_key_env="PROBE_KEY",
+        temperature=0.2,
+        extra_settings={"temperature": 0.5},
+    )
+    assert explicit.settings()["temperature"] == 0.2
+    assert explicit.describe()["temperature"] == 0.2
+    assert explicit.describe()["sampling"] == "temperature=0.2"

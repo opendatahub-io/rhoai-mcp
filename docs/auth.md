@@ -4,8 +4,7 @@ This note explains how rhoai-mcp validates bearer tokens relative to the
 [MCP authorization model](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization):
 why **TokenReview mode** is the OpenShift-native equivalent of the spec's RFC 7662
 opaque-token pathway, and why there is no standard introspection endpoint to point
-at instead. Written down once so nobody has to re-derive it in every
-interoperability review.
+at instead.
 
 ## Overview: one middleware, two validation modes
 

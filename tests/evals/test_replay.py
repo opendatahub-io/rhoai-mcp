@@ -77,6 +77,7 @@ def test_replay_preserves_evidence_identity_and_saved_intent(
     assert first.report.to_list() == second.report.to_list()
     assert records[0].run_id == records[1].run_id == "original-run"
     assert records[0].attempt_id == records[1].attempt_id == "original-attempt"
+    assert records[0].trace_id == records[1].trace_id == ""
     assert records[0].scoring_id != records[1].scoring_id
     assert records[1].skill_sha == "original-skill"
     assert records[1].scenario_sha == NAVIGATOR_HAPPY_PATH.scenario_sha()
@@ -195,13 +196,20 @@ async def test_live_scoring_and_replay_share_the_saved_record_path(
     recorder = EvalRecorder(config, path=tmp_path / "history.jsonl")
 
     async def fake_run(
-        _spec: object, _script: object, *, run_id: str, attempt_id: str, mock_cluster: bool
+        _spec: object,
+        _script: object,
+        *,
+        run_id: str,
+        attempt_id: str,
+        mock_cluster: bool,
+        **_kwargs: object,
     ) -> ConversationResult:
         assert mock_cluster is (cluster_mode == "mock")
         return ConversationResult(
             run_id=run_id,
             attempt_id=attempt_id,
             spec_id="offline-agent",
+            trace_session_id=attempt_id,
             messages=workflow(),
             turns_completed=len(golden.script),
             task="support chatbot",
@@ -226,6 +234,7 @@ async def test_live_scoring_and_replay_share_the_saved_record_path(
     assert first.report.to_list() == replay.report.to_list()
     assert records[0].run_id == records[1].run_id == recorder.run_id
     assert records[0].attempt_id == records[1].attempt_id
+    assert records[0].trace_id == records[1].trace_id == records[0].attempt_id
     assert records[0].scoring_id != records[1].scoring_id
     assert records[0].is_rescore is False
     assert records[1].is_rescore is True

@@ -3050,6 +3050,10 @@ skill-eval = [
     { name = "pydantic-ai-harness", extra = ["skills"] },
     { name = "pydantic-ai-slim", extra = ["anthropic", "mcp", "openai"] },
 ]
+trace = [
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -3082,6 +3086,10 @@ skill-eval = [
     { name = "deepeval", specifier = ">=4.3,<5" },
     { name = "pydantic-ai-harness", extras = ["skills"], specifier = ">=0.64,<1" },
     { name = "pydantic-ai-slim", extras = ["anthropic", "mcp", "openai"], specifier = ">=2.64,<3" },
+]
+trace = [
+    { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.30,<2" },
+    { name = "opentelemetry-sdk", specifier = ">=1.30,<2" },
 ]
 
 [[package]]

@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
 if TYPE_CHECKING:
+    from evals.agent.tracing import TracingSession
     from evals.config import EvalConfig
     from evals.reporting.recorder import EvalRecorder
 
@@ -95,3 +97,13 @@ def judge_llm(skill_eval_config: EvalConfig) -> Any:
     from evals.providers import create_judge_llm
 
     return create_judge_llm(skill_eval_config)
+
+
+@pytest.fixture(scope="session")
+def skill_tracing() -> Iterator[TracingSession]:
+    """Share and flush the optional exporter once per pytest session."""
+    from evals.agent.tracing import setup_tracing
+
+    session = setup_tracing()
+    yield session
+    session.shutdown()

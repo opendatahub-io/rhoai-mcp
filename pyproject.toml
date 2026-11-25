@@ -73,6 +73,11 @@ skill-eval = [
     "pydantic-ai-slim[anthropic,mcp,openai]>=2.64,<3",
 ]
 
+trace = [
+    "opentelemetry-sdk>=1.30,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.30,<2",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

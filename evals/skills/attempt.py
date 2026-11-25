@@ -43,6 +43,7 @@ from evals.skills.goldens import RUBRIC_VERSION, Golden
 
 if TYPE_CHECKING:
     from evals.agent.models import AgentModelSpec
+    from evals.agent.tracing import TracingSession
     from evals.agent.transcript import AgentTranscript
     from evals.config import EvalConfig
     from evals.reporting.recorder import EvalRecorder
@@ -99,6 +100,7 @@ async def run_attempt(
     config: EvalConfig,
     judge: Any = None,
     results_root: Path | None = None,
+    tracing: TracingSession | None = None,
 ) -> AttemptOutcome:
     """Execute, persist, score and record one golden/model attempt."""
 
@@ -113,6 +115,9 @@ async def run_attempt(
         run_id=recorder.run_id,
         attempt_id=attempt_id,
         mock_cluster=config.cluster_mode == ClusterMode.MOCK,
+        tracing=tracing,
+        golden_id=golden.id,
+        skill=golden.skill,
     )
     agent_seconds = time.monotonic() - agent_started
 
@@ -292,6 +297,7 @@ def score_artifact(
         error_detail=error or "",
         checks=[CheckRecord(**c) for c in report.to_list()],
         artifact_path=str(artifact_path),
+        trace_id=str(meta.get("trace_session_id") or ""),
         dry_run=dry_run,
         agent_seconds=round(agent_seconds, 2) if agent_seconds is not None else 0.0,
         is_rescore=agent_seconds is None,

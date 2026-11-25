@@ -193,6 +193,14 @@ def main() -> int:
             logger.error(f"OIDC configuration error: {e}")
             return 1
 
+    # Validate stateless HTTP config
+    if config.stateless_http:
+        try:
+            config.validate_stateless_config()
+        except ValueError as e:
+            logger.error(f"Stateless HTTP configuration error: {e}")
+            return 1
+
     # Create and run server
     # Run with appropriate transport
     from rhoai_mcp.server import create_server, get_server
@@ -214,7 +222,12 @@ def main() -> int:
         elif config.transport == TransportMode.SSE:
             mcp.run(transport="sse", host=config.host, port=config.port)
         else:
-            mcp.run(transport="streamable-http", host=config.host, port=config.port)
+            mcp.run(
+                transport="streamable-http",
+                host=config.host,
+                port=config.port,
+                stateless_http=config.stateless_http,
+            )
     except BaseException as exc:  # BaseException to catch anyio's BaseExceptionGroup
         if _has_auth_error(exc):
             logger.error(

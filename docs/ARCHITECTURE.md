@@ -129,7 +129,7 @@ The server keeps no state keyed by MCP session. The full inventory (RHAI-14634 a
 | `PortForwardManager` | per process | app shutdown (HTTP) / process end (stdio) | Ref-counted singleton; port-forwards to in-cluster services when running outside the cluster. A session ending never closes a forward another session shares (`tests/test_server_lifespan.py`) |
 | Planner local client | per process | process | Built once at the first planner tool call (including the model-catalog sync); not mutated after initialization |
 | Registry/inference discovery cache | per process | process | Caches cluster-level discovery (API type, URL) — never user data |
-| MCP session manager | per process (SDK-owned) | process (in-memory) | Holds sessions in stateful Streamable HTTP; `stateless_http=True` (the MCP SDK's flag) runs without server-side sessions |
+| MCP session manager | per process (SDK-owned) | process (in-memory) | Holds sessions in stateful Streamable HTTP; `stateless_http=True` (the MCP SDK's flag, exposed as `RHOAI_MCP_STATELESS_HTTP`) runs without server-side sessions |
 
 **Session lifespans carry no teardown responsibility.** The per-session lifespan body only logs (plus
 port-forward cleanup in stdio mode, where one session spans the whole process). For HTTP
@@ -142,9 +142,14 @@ can answer any request (no state is keyed by MCP session, per the story 4.1 audi
 round-robin validation through the gateway is tracked in
 [RHAI-14636](https://redhat.atlassian.net/browse/RHAI-14636), story 4.3). The default
 Streamable HTTP mode is stateful: sessions live in memory, so a client whose requests reach
-a different replica fails. Round-robin balancing therefore requires sticky routing today;
-the SDK's `stateless_http=True` would remove that requirement, but the server does not yet
-expose it as a configuration (a prerequisite for the RHAI-14636 validation).
+a different replica fails. Round-robin balancing therefore requires sticky routing in the
+default mode; setting `RHOAI_MCP_STATELESS_HTTP=true`
+([RHAI-59232](https://redhat.atlassian.net/browse/RHAI-59232)) enables the SDK's stateless
+mode, which needs no server-side sessions. One requirement applies to multi-replica
+deployments either way: workflow tokens are signed with `RHOAI_MCP_WORKFLOW_HMAC_SECRET`,
+which defaults to a per-process random value — every replica must share the same secret, or
+a token issued by one replica fails verification on another regardless of session mode (see
+the README's Workflow Tokens section).
 
 ## Composite Workflow Tools
 

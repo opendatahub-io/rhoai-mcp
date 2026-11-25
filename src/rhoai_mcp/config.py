@@ -135,6 +135,14 @@ class RHOAIConfig(BaseSettings):
         le=65535,
         description="Port to bind HTTP server to",
     )
+    stateless_http: bool = Field(
+        default=False,
+        description=(
+            "Run Streamable HTTP without server-side sessions (the SDK's "
+            "stateless_http flag). Default is stateful: sessions live in memory, "
+            "so round-robin balancing requires sticky routing"
+        ),
+    )
 
     # Safety settings
     enable_dangerous_operations: bool = Field(
@@ -405,6 +413,18 @@ class RHOAIConfig(BaseSettings):
                 "oidc_token_mode 'jwt'. JWT tokens are audience-bound and cannot "
                 "be forwarded to the Kubernetes API. Use 'impersonation' strategy instead."
             )
+
+    def validate_stateless_config(self) -> None:
+        """Validate stateless HTTP configuration.
+
+        Raises:
+            ValueError: If stateless_http is set with a non-streamable-http transport.
+        """
+        if not self.stateless_http:
+            return
+
+        if self.transport != TransportMode.STREAMABLE_HTTP:
+            raise ValueError("stateless_http is only supported with the streamable-http transport")
 
     def is_operation_allowed(self, operation: str) -> tuple[bool, str | None]:
         """Check if an operation is allowed based on safety settings.

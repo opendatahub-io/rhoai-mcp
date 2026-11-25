@@ -222,6 +222,15 @@ export RHOAI_MCP_TRANSPORT=stdio
 export RHOAI_MCP_TRANSPORT=streamable-http
 export RHOAI_MCP_HOST=127.0.0.1
 export RHOAI_MCP_PORT=8000
+
+# Stateless HTTP (streamable-http only): run without server-side sessions,
+# so any replica behind a round-robin load balancer can answer any request.
+# The default (stateful) keeps sessions in memory and requires sticky routing.
+# Multi-replica note: workflow tokens are signed with RHOAI_MCP_WORKFLOW_HMAC_SECRET,
+# which defaults to a per-process random value — set the same secret on every
+# replica, or a token issued by one replica fails verification on another.
+# See "Workflow Tokens" below.
+export RHOAI_MCP_STATELESS_HTTP=true
 ```
 
 ### Safety Settings

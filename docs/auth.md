@@ -1,22 +1,20 @@
 # Authentication Architecture
 
 This note explains how rhoai-mcp validates bearer tokens relative to the
-[MCP authorization model](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
-— in particular why **TokenReview mode** is the OpenShift-native equivalent of the
-spec's RFC 7662 opaque-token pathway, and why no standard introspection endpoint
-exists to point at instead. It exists so that "we use TokenReview instead of
-RFC 7662 Token Introspection" does not have to be re-derived from first principles
-in every interoperability review, gateway certification, or contribution discussion.
+[MCP authorization model](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization):
+why **TokenReview mode** is the OpenShift-native equivalent of the spec's RFC 7662
+opaque-token pathway, and why there is no standard introspection endpoint to point
+at instead. Written down once so nobody has to re-derive it in every
+interoperability review.
 
 ## Overview: one middleware, two validation modes
 
-A deployment picks exactly one of two mutually exclusive modes via
-`RHOAI_MCP_OIDC_TOKEN_MODE` (`jwt` | `token-review`). Both feed the same
-pure-ASGI `OIDCAuthMiddleware`, which extracts the Bearer token, validates it
-through the configured validator, populates the request's `UserContext`, and
-answers `401 + WWW-Authenticate: Bearer resource_metadata="<url>"` on failure
-(the RFC 9728 reference to the metadata document served at
-`/.well-known/oauth-protected-resource`).
+A deployment picks one of two modes via `RHOAI_MCP_OIDC_TOKEN_MODE`
+(`jwt` | `token-review`). Both feed the same pure-ASGI `OIDCAuthMiddleware`:
+extract the Bearer token, validate it through the configured validator, populate
+the request's `UserContext`, and answer
+`401 + WWW-Authenticate: Bearer resource_metadata="<url>"` on failure (the
+RFC 9728 reference to `/.well-known/oauth-protected-resource`).
 
 | | JWT mode (`jwt`, default) | TokenReview mode (`token-review`) |
 |---|---|---|
@@ -35,16 +33,15 @@ issuer, `audience` against the configured audience, with `exp`/`iss`/`aud`
 required. This is the straightforward mapping to the MCP spec's JWT pathway —
 nothing platform-specific to explain.
 
-**Audience guidance (RFC 8707 relationship):** set `RHOAI_MCP_OIDC_AUDIENCE` to
-this deployment's own resource URL — the same value advertised as `resource` in
-the RFC 9728 metadata (`RHOAI_MCP_OIDC_RESOURCE_URL`, e.g. the OpenShift Route
-URL). The `aud` check is the resource-server side of RFC 8707 Resource
-Indicators: the authorization server mints `aud` = the `resource` the client
-requested, and the server rejects tokens minted for a different resource. With a
-per-deployment audience this closes the cross-deployment confused-deputy window;
-with the generic default (`"rhoai-mcp"`) any two deployments sharing an issuer
-family accept each other's tokens, so treat the default as a development
-convenience only.
+**Audience guidance (RFC 8707):** set `RHOAI_MCP_OIDC_AUDIENCE` to this
+deployment's own resource URL — the same value advertised as `resource` in the
+RFC 9728 metadata (`RHOAI_MCP_OIDC_RESOURCE_URL`, e.g. the OpenShift Route URL).
+The `aud` check is the resource-server side of RFC 8707: the authorization server
+mints `aud` for the `resource` the client requested, and the server rejects
+tokens minted for a different one. A per-deployment audience closes the
+cross-deployment confused-deputy window. With the generic default
+(`"rhoai-mcp"`), any two deployments sharing an issuer family accept each
+other's tokens — treat the default as a development convenience.
 
 ## TokenReview mode: the RFC 7662 equivalent
 
@@ -85,15 +82,14 @@ kube-auth strategy choice:
   tokens are issued; impersonation remains the requirement for JWT mode (see
   the configuration reference) and appropriate where tokens are not scoped.
 
-Why no standard endpoint exists, and why that is correct: an RFC 7662 facade in
-front of TokenReview would add a URL shape without changing a single semantic —
-the same actor (the cluster) makes the same decision (is this token live, and
-whose is it) through the same authority (the API server's token validation).
-TokenReview *is* the introspection mechanism for the platform that issued the
-token; wrapping it would be interop theater. The MCP spec requires the resource
-server to validate tokens by an appropriate mechanism for its authorization
-server — it does not require that mechanism to be an HTTP POST to an
-RFC 7662 URL when the authorization server is the Kubernetes API itself.
+Why no standard endpoint exists: an RFC 7662 facade in front of TokenReview
+would add a URL shape without changing a single semantic. The same actor — the
+cluster — would make the same decision through the same authority. TokenReview
+*is* the introspection mechanism for the platform that issued the token;
+wrapping it would be interop theater. The spec requires the resource server to
+validate tokens by an appropriate mechanism for its authorization server. It
+does not require that mechanism to be an HTTP POST to an RFC 7662 URL when the
+authorization server is the Kubernetes API.
 
 **Why no major implementer documents this pattern:** MCP servers that
 authenticate users generally target standard OAuth 2.1 identity providers with
@@ -112,42 +108,36 @@ It takes a different shape at every layer:
   users and RBAC (BYO-OIDC).
 
 Neither mode validates the platform's own opaque tokens in place. To our
-knowledge, a production MCP server consuming platform-native opaque tokens
-via TokenReview remains unique to rhoai-mcp — a pattern that is correct and
-necessary for the OpenShift deployment model.
+knowledge, rhoai-mcp is the only production MCP server that does — and for
+the OpenShift deployment model, it is the right call.
 
 ### Security properties of TokenReview mode
 
-- **Cluster scoping** is the token's boundary: the API server that issued the
-  token is the only one that will validate it. A token cannot be replayed
-  against a different cluster. Note the granularity: TokenReview mode binds
-  tokens to the *cluster*, not to this specific deployment — no
-  `spec.audiences` is sent, so any cluster-valid token is accepted by any
-  rhoai-mcp deployment in that cluster. This is the same property the
-  `user-token` pass-through relies on (see [ARCHITECTURE.md](ARCHITECTURE.md),
-  "MCP Spec Compliance"): the K8s API server is the token's native audience,
-  and this server is part of the cluster's infrastructure forwarding a
-  cluster credential to its own issuer — within the spec's intent, though
-  the spec's pass-through prohibition names no cluster-infrastructure
-  exemption. The bound on
-  cross-deployment use within a cluster is per-caller RBAC plus the caller's
+- **Cluster scoping.** Only the API server that issued a token will validate
+  it; a token cannot be replayed against a different cluster. The granularity
+  is coarser than per-deployment: no `spec.audiences` is sent, so any
+  cluster-valid token is accepted by any rhoai-mcp deployment in that
+  cluster. Within a cluster, the bound is per-caller RBAC plus the caller's
   own token permissions — identity preservation, not escalation.
-- **Per-caller RBAC** is enforced for every *governed* tool — a tool with a
-  permission mapping in its domain — on both `tools/list` (filtered from view)
-  and `tools/call` (denied before dispatch). Tools without a permission mapping
-  are allowed by design; the MCP layer applies no check for those, and
-  enforcement depends entirely on the tool's backend. K8s-backed operations
-  are enforced by the API server itself, under the caller's own credentials or
-  impersonated identity — a valid token authorizes the caller to act *as
-  themselves*, within their own Kubernetes permissions, a damage bound (no
-  privilege escalation) rather than a confused-deputy defense. Tools whose
-  backends are not Kubernetes — the planner's recommendation tools (local
-  planner library plus the model-catalog service, reached with the server's
-  own credentials) and the meta discovery tools (in-process) — carry no
-  per-caller authorization beyond authentication. All domain tools and the
-  deployment-execution composites are K8s-backed.
-- **Audit and TTL** bound residual risk: TokenReview calls are audited in the
-  API server log, and tokens expire per the platform's OAuth configuration.
+- **Pass-through.** Forwarding the caller's token to the K8s API (the
+  `user-token` strategy) relies on the same property: the K8s API is the
+  token's native audience, and this server is cluster infrastructure
+  forwarding a cluster credential to its own issuer. That is within the
+  spec's intent, though the pass-through prohibition names no
+  cluster-infrastructure exemption (see [ARCHITECTURE.md](ARCHITECTURE.md),
+  "MCP Spec Compliance").
+- **Per-caller RBAC.** Every *governed* tool — one with a permission mapping —
+  is checked on both `tools/list` (filtered from view) and `tools/call`
+  (denied before dispatch). Ungoverned tools get no MCP-layer check;
+  enforcement depends on the backend. K8s-backed tools (all domain tools,
+  the deployment composites) are enforced by the API server under the
+  caller's own credentials or impersonated identity: the caller acts *as
+  themselves*, within their own permissions — a damage bound, not a
+  confused-deputy defense. Non-K8s tools — planner recommendations (local
+  library plus the model catalog, reached with the server's own credentials)
+  and meta discovery (in-process) — are authentication-gated only.
+- **Audit and TTL.** TokenReview calls are audited in the API server log;
+  tokens expire per the platform's OAuth configuration.
 
 ## Configuration reference
 

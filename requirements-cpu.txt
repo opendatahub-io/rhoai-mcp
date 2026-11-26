@@ -70,7 +70,7 @@ httpcore==1.0.9
     #   -c constraints-lock.tmp
     #   httpx
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-httpcore2==2.12.0
+httpcore2==2.16.2
     # via
     #   -c constraints-lock.tmp
     #   httpx2
@@ -80,7 +80,7 @@ httpx==0.28.1
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-httpx2==2.12.0
+httpx2==2.16.2
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
@@ -161,7 +161,7 @@ pycparser==3.0
     #   -c constraints-lock.tmp
     #   cffi
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-pydantic==2.14.3
+pydantic==2.14.4
     # via
     #   -c constraints-lock.tmp
     #   rhoai-mcp (pyproject.toml)
@@ -170,7 +170,7 @@ pydantic==2.14.3
     #   mcp-types
     #   pydantic-settings
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-pydantic-core==2.50.4
+pydantic-core==2.50.5
     # via
     #   -c constraints-lock.tmp
     #   pydantic
@@ -197,12 +197,12 @@ python-dotenv==1.2.4
     #   -c constraints-lock.tmp
     #   pydantic-settings
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-python-multipart==0.0.33
+python-multipart==0.0.34
     # via
     #   -c constraints-lock.tmp
     #   mcp
     # from https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
-pyyaml==6.0.3
+pyyaml==6.0.4
     # via
     #   -c constraints-lock.tmp
     #   kubernetes

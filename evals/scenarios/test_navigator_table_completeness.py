@@ -68,9 +68,7 @@ def _assert_table_completeness(output: str) -> None:
     for line in table_lines[2:]:  # skip header and separator
         cells = [c.strip() for c in line.split("|")[1:-1]]
         for cell in cells[1:]:  # skip the row-label cell
-            assert cell, (
-                f"Empty cell found in table row: {line!r} — must be filled or '—'"
-            )
+            assert cell, f"Empty cell found in table row: {line!r} — must be filled or '—'"
 
 
 @pytest.mark.eval
@@ -106,8 +104,7 @@ class TestNavigatorTableCompleteness:
         all_tool_calls = turn1.tool_calls + result.tool_calls
         recommend_model_calls = [t for t in all_tool_calls if t.name == "recommend_model"]
         assert len(recommend_model_calls) >= 1, (
-            f"Navigator must call recommend_model at least once, "
-            f"got {len(recommend_model_calls)}"
+            f"Navigator must call recommend_model at least once, got {len(recommend_model_calls)}"
         )
 
         _assert_table_completeness(result.final_output)

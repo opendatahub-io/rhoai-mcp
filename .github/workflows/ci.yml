@@ -86,8 +86,8 @@ jobs:
 
       - name: Check retained eval code
         run: |
-          uv run --locked --group skill-eval ruff check evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
-          uv run --locked --group skill-eval ruff format --check evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
+          uv run --locked --group skill-eval ruff check evals/ tests/evals/
+          uv run --locked --group skill-eval ruff format --check evals/ tests/evals/
 
       - name: Run offline eval harness tests
         run: uv run --locked --group skill-eval pytest tests/evals -v --tb=short

@@ -30,7 +30,9 @@ PLATFORM ?= linux/amd64
 PYPI_INDEX_URL ?= https://packages.redhat.com/api/pypi/public-rhai/cpu-torch2.13-el9.8-test/simple/
 
 # Keep these paths aligned with the eval harness checks in CI.
-LINT_PATHS := src/ evals/agent/ evals/skills/ evals/metrics/conversation.py evals/metrics/scorecards.py tests/evals/
+# The boundary is the directory, not a file allowlist — new eval code is
+# linted by default.
+LINT_PATHS := src/ evals/ tests/evals/
 
 # Guard: ensure a container runtime was found
 ifeq ($(CONTAINER_RUNTIME),)

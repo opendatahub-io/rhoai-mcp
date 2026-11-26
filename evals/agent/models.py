@@ -69,7 +69,7 @@ class AgentModelSpec:
     base_url: str | None
     api_key_env: str
     api: AgentApi = "responses"
-    temperature: float | None = 0.0
+    temperature: float | None = None
     extra_settings: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -96,21 +96,25 @@ class AgentModelSpec:
     def describe(self) -> dict[str, Any]:
         """Credential-free description of this spec for the result record.
 
+        ``temperature`` and ``sampling`` are derived from ``settings()`` so the
+        record matches what is actually sent — including a ``temperature`` that
+        arrives via ``extra_settings`` while the dedicated field is ``None``.
         ``sampling`` spells out what a bare ``temperature: null`` means, so a
         reader of the results does not have to guess whether determinism was
         attempted and failed or was never requested.
         """
+        effective_temperature = self.settings().get("temperature")
         return {
             "id": self.id,
             "model_name": self.model_name,
             "base_url": self.base_url or OPENAI_BASE_URL,
             "api": self.api,
-            "temperature": self.temperature,
+            "temperature": effective_temperature,
             "sampling": (
                 "provider-default (temperature not requested; cannot be set "
                 "uniformly across the matrix)"
-                if self.temperature is None
-                else f"temperature={self.temperature}"
+                if effective_temperature is None
+                else f"temperature={effective_temperature}"
             ),
             "extra_settings": dict(self.extra_settings),
             "agent_backend": "pydantic-ai",

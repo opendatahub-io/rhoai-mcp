@@ -192,7 +192,7 @@ class GoogleJudgeLLM(DeepEvalBaseLLM):
     def load_model(self) -> Any:
         return self._client
 
-    async def a_generate(self, prompt: str, **kwargs: Any) -> str:
+    async def a_generate(self, prompt: str, **_kwargs: Any) -> str:
         response = await self._client.aio.models.generate_content(
             model=self._model_name,
             contents=prompt,

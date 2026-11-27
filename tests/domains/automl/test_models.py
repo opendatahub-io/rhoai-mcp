@@ -10,6 +10,7 @@ from rhoai_mcp.domains.automl.models import (
     AutoMLDeployment,
     AutoMLSchema,
 )
+from rhoai_mcp.utils.errors import ValidationError
 
 
 def _resource(*, exposed: bool = True, model_format: str = "autogluon") -> SimpleNamespace:
@@ -71,9 +72,9 @@ def test_records_return_agent_usable_validation_errors() -> None:
     schema = AutoMLDeployment.from_inference_service(_resource()).input_schema
     assert schema is not None
 
-    with pytest.raises(ValueError, match="missing required feature 'country'"):
+    with pytest.raises(ValidationError, match="missing required feature 'country'"):
         schema.records_to_v2_request([{"age": 42}])
-    with pytest.raises(ValueError, match="age must be integer"):
+    with pytest.raises(ValidationError, match="age must be integer"):
         schema.records_to_v2_request([{"age": "forty-two", "country": "PL"}])
 
 
@@ -86,7 +87,7 @@ def test_records_reject_null_even_for_nullable_feature() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="KServe v2 tensor data does not support null values"):
+    with pytest.raises(ValidationError, match="KServe v2 tensor data does not support null values"):
         schema.records_to_v2_request([{"x": None}])
 
 
@@ -97,5 +98,17 @@ def test_classifier_schema_requires_class_labels() -> None:
                 "task_type": "classification",
                 "features": [{"name": "x", "json_type": "number"}],
                 "example_record": {"x": 1},
+            }
+        )
+
+
+def test_classifier_schema_rejects_duplicate_class_labels() -> None:
+    with pytest.raises(ValueError, match="duplicate class_labels"):
+        AutoMLSchema.model_validate(
+            {
+                "task_type": "classification",
+                "features": [{"name": "x", "json_type": "number"}],
+                "example_record": {"x": 1},
+                "class_labels": ["yes", "yes"],
             }
         )

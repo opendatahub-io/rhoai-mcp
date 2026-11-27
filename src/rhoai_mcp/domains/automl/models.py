@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from rhoai_mcp.utils.errors import ValidationError
+
 AUTO_ML_EXPOSED_LABEL = "automl.opendatahub.io/mcp-exposed"
 AUTO_ML_SCHEMA_ANNOTATION = "automl.opendatahub.io/input-schema"
 
@@ -39,29 +41,31 @@ class AutoMLSchema(BaseModel):
     def classification_has_labels(self) -> AutoMLSchema:
         if self.task_type == AutoMLTaskType.CLASSIFICATION and not self.class_labels:
             raise ValueError("classification schemas must include class_labels")
+        if self.class_labels and len(set(self.class_labels)) != len(self.class_labels):
+            raise ValueError("classification schemas must not include duplicate class_labels")
         return self
 
     def records_to_v2_request(self, records: list[dict[str, Any]]) -> dict[str, Any]:
         """Validate JSON records and encode them as a KServe v2 request."""
         if not records:
-            raise ValueError("records must contain at least one row")
+            raise ValidationError("records must contain at least one row")
 
         inputs = []
         for feature in self.features:
             values = []
             for row_index, record in enumerate(records):
                 if feature.name not in record:
-                    raise ValueError(
+                    raise ValidationError(
                         f"records[{row_index}] is missing required feature '{feature.name}'"
                     )
                 value = record[feature.name]
                 if value is None:
-                    raise ValueError(
+                    raise ValidationError(
                         f"records[{row_index}].{feature.name} cannot be null: "
                         "KServe v2 tensor data does not support null values"
                     )
                 elif not _matches_json_type(value, feature.json_type):
-                    raise ValueError(
+                    raise ValidationError(
                         f"records[{row_index}].{feature.name} must be {feature.json_type}"
                     )
                 values.append(value)
@@ -110,8 +114,8 @@ class AutoMLDeployment(BaseModel):
             name=_field(metadata, "name"),
             namespace=_field(metadata, "namespace"),
             status="Ready" if _field(ready, "status") == "True" else "NotReady",
-            # KServe's address URL includes the predictor's direct serving port.
-            # The generic status URL can resolve to a headless Service on port 80.
+            # Intentional: MCP runs in-cluster and calls KServe's direct predictor
+            # endpoint. ``status.url`` is the ingress/route-facing endpoint.
             url=_field(address, "url") or _field(status, "url"),
             input_schema=schema,
         )

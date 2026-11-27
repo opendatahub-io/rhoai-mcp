@@ -13,6 +13,7 @@ from rhoai_mcp.domains.automl.client import (
     _prediction_error_message,
 )
 from rhoai_mcp.domains.automl.models import AutoMLDeployment
+from rhoai_mcp.utils.errors import ValidationError
 from tests.domains.automl.test_models import _resource
 
 
@@ -132,7 +133,7 @@ def test_rejects_duplicate_probability_output_names() -> None:
     deployment = AutoMLDeployment.from_inference_service(_resource())
     assert deployment is not None
 
-    with pytest.raises(ValueError, match="duplicate probability output 'proba_no'"):
+    with pytest.raises(ValidationError, match="duplicate probability output 'proba_no'"):
         _normalize_prediction_response(
             deployment,
             {
@@ -144,23 +145,44 @@ def test_rejects_duplicate_probability_output_names() -> None:
         )
 
 
-def test_rejects_schema_labels_that_map_to_the_same_probability_output() -> None:
+def test_matches_kserve_probability_output_name_collisions() -> None:
     deployment = AutoMLDeployment.from_inference_service(_resource())
     assert deployment is not None
     assert deployment.input_schema is not None
-    deployment.input_schema.class_labels = ["a-b", "a_b"]
+    deployment.input_schema.class_labels = ["a b", "a_b"]
 
-    with pytest.raises(
-        ValueError, match="Schema class labels map to duplicate probability output names"
-    ):
-        _normalize_prediction_response(
-            deployment,
-            {
-                "outputs": [
-                    {"name": "proba_a_b", "data": [0.1]},
-                ]
-            },
-        )
+    result = _normalize_prediction_response(
+        deployment,
+        {
+            "outputs": [
+                {"name": "proba_a_b_2", "data": [0.9]},
+                {"name": "proba_a_b", "data": [0.1]},
+            ]
+        },
+    )
+
+    assert result["predictions"] == [{"class": "a_b", "probabilities": {"a b": 0.1, "a_b": 0.9}}]
+
+
+def test_matches_kserve_label_sanitization() -> None:
+    deployment = AutoMLDeployment.from_inference_service(_resource())
+    assert deployment is not None
+    assert deployment.input_schema is not None
+    deployment.input_schema.class_labels = ["high-risk", "low risk"]
+
+    result = _normalize_prediction_response(
+        deployment,
+        {
+            "outputs": [
+                {"name": "proba_low_risk", "data": [0.2]},
+                {"name": "proba_highrisk", "data": [0.8]},
+            ]
+        },
+    )
+
+    assert result["predictions"] == [
+        {"class": "high-risk", "probabilities": {"high-risk": 0.8, "low risk": 0.2}}
+    ]
 
 
 def test_normalizes_label_only_classification_response() -> None:

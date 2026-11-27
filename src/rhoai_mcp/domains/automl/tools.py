@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 from mcp.server.mcpserver import Context, MCPServer
 
 from rhoai_mcp.domains.automl.client import AutoMLClient
+from rhoai_mcp.utils.errors import OperationNotAllowedError
 
 if TYPE_CHECKING:
     from rhoai_mcp.server import RHOAIServer
@@ -46,4 +47,6 @@ def register_tools(mcp: MCPServer, server: "RHOAIServer") -> None:
         Returns numeric values for regression. For classification, returns a class and,
         when the ServingRuntime enables ``PREDICT_PROBA=true``, class probabilities.
         """
+        if server.config.read_only_mode:
+            raise OperationNotAllowedError("prediction", reason="read-only mode is enabled")
         return await AutoMLClient(server.get_k8s(ctx)).predict_deployment(name, namespace, records)

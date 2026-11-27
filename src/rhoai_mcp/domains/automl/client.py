@@ -10,6 +10,7 @@ import httpx
 
 from rhoai_mcp.domains.automl.models import AUTO_ML_EXPOSED_LABEL, AutoMLDeployment
 from rhoai_mcp.domains.inference.crds import InferenceCRDs
+from rhoai_mcp.utils.errors import RHOAIError, ValidationError
 
 if TYPE_CHECKING:
     from rhoai_mcp.clients.base import K8sClient
@@ -42,9 +43,14 @@ class AutoMLClient:
 
     def get_deployment(self, name: str, namespace: str) -> AutoMLDeployment:
         resource = self._k8s.get(InferenceCRDs.INFERENCE_SERVICE, name=name, namespace=namespace)
-        deployment = AutoMLDeployment.from_inference_service(resource)
+        try:
+            deployment = AutoMLDeployment.from_inference_service(resource)
+        except ValueError as error:
+            raise ValidationError(
+                f"InferenceService '{name}' has an invalid AutoML MCP input schema"
+            ) from error
         if deployment is None:
-            raise ValueError(f"InferenceService '{name}' is not an exposed AutoML deployment")
+            raise ValidationError(f"InferenceService '{name}' is not an exposed AutoML deployment")
         return deployment
 
     async def predict_deployment(
@@ -53,11 +59,11 @@ class AutoMLClient:
         """Validate records, invoke KServe v2, and normalize the prediction response."""
         deployment = self.get_deployment(name, namespace)
         if deployment.input_schema is None:
-            raise ValueError("Deployment has no AutoML MCP input schema annotation")
+            raise ValidationError("Deployment has no AutoML MCP input schema annotation")
         if not deployment.is_ready:
-            raise ValueError(f"Deployment '{name}' is not ready for predictions")
+            raise RHOAIError(f"Deployment '{name}' is not ready for predictions")
         if not deployment.url:
-            raise ValueError(f"Deployment '{name}' has no prediction endpoint URL")
+            raise RHOAIError(f"Deployment '{name}' has no prediction endpoint URL")
 
         request_body = deployment.input_schema.records_to_v2_request(records)
         endpoint = f"{deployment.url.rstrip('/')}/v2/models/{name}/infer"
@@ -66,19 +72,19 @@ class AutoMLClient:
             async with httpx.AsyncClient(timeout=30.0) as http_client:
                 response = await http_client.post(endpoint, json=request_body)
         except httpx.TimeoutException as error:
-            raise ValueError(f"Prediction request to '{name}' timed out") from error
+            raise RHOAIError(f"Prediction request to '{name}' timed out") from error
         except httpx.RequestError as error:
-            raise ValueError(
+            raise RHOAIError(
                 f"Could not reach prediction endpoint for '{name}': {error}"
             ) from error
 
         if response.is_error:
-            raise ValueError(_prediction_error_message(response, name))
+            raise RHOAIError(_prediction_error_message(response, name))
 
         try:
             response_body = response.json()
         except ValueError as error:
-            raise ValueError(f"Prediction endpoint for '{name}' returned invalid JSON") from error
+            raise RHOAIError(f"Prediction endpoint for '{name}' returned invalid JSON") from error
 
         return _normalize_prediction_response(deployment, response_body)
 
@@ -100,11 +106,11 @@ def _prediction_error_message(response: httpx.Response, name: str) -> str:
 def _normalize_prediction_response(deployment: AutoMLDeployment, response: Any) -> dict[str, Any]:
     """Convert a KServe v2 response into task-aware, agent-friendly predictions."""
     if not isinstance(response, dict) or not isinstance(response.get("outputs"), list):
-        raise ValueError("Prediction endpoint returned no KServe v2 outputs")
+        raise ValidationError("Prediction endpoint returned no KServe v2 outputs")
 
     outputs = response["outputs"]
     if deployment.input_schema is None:  # Defensive: checked before the HTTP request.
-        raise ValueError("Deployment has no AutoML MCP input schema annotation")
+        raise ValidationError("Deployment has no AutoML MCP input schema annotation")
 
     if deployment.input_schema.task_type == "regression":
         prediction_output = _output_named(outputs, "predictions")
@@ -137,7 +143,7 @@ def _classification_probabilities(
     """Convert AutoGluon ``proba_<class>`` outputs to per-record probabilities."""
     labels = deployment.input_schema.class_labels if deployment.input_schema else None
     if not labels:
-        raise ValueError(
+        raise ValidationError(
             "Prediction endpoint probability outputs do not match the schema class labels"
         )
 
@@ -145,15 +151,15 @@ def _classification_probabilities(
     for output in outputs:
         name = _output_name(output)
         if name in outputs_by_name:
-            raise ValueError(f"Prediction endpoint returned duplicate probability output '{name}'")
+            raise ValidationError(
+                f"Prediction endpoint returned duplicate probability output '{name}'"
+            )
         outputs_by_name[name] = output
 
-    expected_names_by_label = {label: _probability_output_name(label) for label in labels}
-    expected_names = set(expected_names_by_label.values())
-    if len(expected_names) != len(labels):
-        raise ValueError("Schema class labels map to duplicate probability output names")
-    if set(outputs_by_name) != expected_names:
-        raise ValueError(
+    expected_names = _probability_output_names(labels)
+    expected_names_by_label = dict(zip(labels, expected_names, strict=True))
+    if set(outputs_by_name) != set(expected_names):
+        raise ValidationError(
             "Prediction endpoint probability outputs do not match the schema class labels"
         )
 
@@ -163,7 +169,7 @@ def _classification_probabilities(
     }
     row_count = len(next(iter(probabilities_by_class.values())))
     if any(len(values) != row_count for values in probabilities_by_class.values()):
-        raise ValueError(
+        raise ValidationError(
             "Prediction endpoint returned probability outputs with inconsistent lengths"
         )
 
@@ -189,19 +195,21 @@ def _classification_probabilities(
 def _output_named(outputs: list[Any], name: str) -> Any:
     output = next((item for item in outputs if _output_name(item) == name), None)
     if output is None:
-        raise ValueError(f"Prediction endpoint returned no '{name}' output")
+        raise ValidationError(f"Prediction endpoint returned no '{name}' output")
     return output
 
 
 def _output_name(output: Any) -> str:
     if not isinstance(output, dict) or not isinstance(output.get("name"), str):
-        raise ValueError("Prediction endpoint returned an invalid KServe output")
+        raise ValidationError("Prediction endpoint returned an invalid KServe output")
     return cast(str, output["name"])
 
 
 def _output_values(output: Any) -> list[Any]:
     if not isinstance(output, dict) or not isinstance(output.get("data"), list):
-        raise ValueError(f"Prediction endpoint output '{_output_name(output)}' has no data array")
+        raise ValidationError(
+            f"Prediction endpoint output '{_output_name(output)}' has no data array"
+        )
     return cast(list[Any], output["data"])
 
 
@@ -209,15 +217,30 @@ def _probability_values(output: Any) -> list[float]:
     """Return numeric probability data and reject malformed runtime responses."""
     values = _output_values(output)
     if any(not isinstance(value, (int, float)) or isinstance(value, bool) for value in values):
-        raise ValueError(
+        raise ValidationError(
             f"Prediction endpoint output '{_output_name(output)}' has non-numeric probabilities"
         )
     return [float(value) for value in values]
 
 
-def _probability_output_name(label: str) -> str:
-    """Return AutoGluon's KServe v2 tensor name for a class label."""
-    sanitized_label = re.sub(r"[^0-9A-Za-z_]", "_", label)
-    if sanitized_label and sanitized_label[0].isdigit():
-        sanitized_label = f"_{sanitized_label}"
-    return f"proba_{sanitized_label}"
+def _probability_output_names(labels: list[str]) -> list[str]:
+    """Return KServe AutoGluon's unique v2 probability output names.
+
+    This mirrors ``autogluonserver.tabular_model._get_proba_output_names``.
+    """
+    names: list[str] = []
+    used: set[str] = set()
+    for label in labels:
+        normalized = label.strip().replace(" ", "_")
+        normalized = re.sub(r"[^0-9A-Za-z_]", "", normalized) or "class"
+        if normalized[0].isdigit():
+            normalized = f"_{normalized}"
+        base_name = f"proba_{normalized}"
+        name = base_name
+        index = 2
+        while name in used:
+            name = f"{base_name}_{index}"
+            index += 1
+        used.add(name)
+        names.append(name)
+    return names

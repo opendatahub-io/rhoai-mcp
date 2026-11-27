@@ -96,7 +96,7 @@ JWT access tokens (Cloudflare, GitHub, and Google implementations all do).
 
 The nearest comparable is Red Hat's own
 [`openshift-mcp-server`](https://github.com/openshift/openshift-mcp-server).
-It takes a different shape at every layer:
+which provides the following configuration options:
 
 - **Default:** local kubeconfig credentials for stdio use, and token
   forwarding when deployed on-cluster.

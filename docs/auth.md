@@ -107,8 +107,8 @@ It takes a different shape at every layer:
   users and RBAC (BYO-OIDC).
 
 Neither mode validates the platform's own opaque tokens in place. To our
-knowledge, rhoai-mcp is the only production MCP server that does — and for
-the OpenShift deployment model, it is the right call.
+knowledge, rhoai-mcp is the only production MCP server that does TokenReview
+as a pre-flight check for Kubernetes authorisations.
 
 ### Security properties of TokenReview mode
 

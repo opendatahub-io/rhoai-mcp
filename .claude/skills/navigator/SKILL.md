@@ -226,6 +226,8 @@ Suggest a default based on the customer's stated priority, favouring cluster-ava
 
 Once the customer confirms which model they want, output the following handoff block verbatim (filling in the values from this session), then close with the prompt below. The handoff block lets `/navigator-deploy` skip Phases 1–3 entirely.
 
+Preserve the chosen recommendation's planning capacity target: copy `specification.traffic_profile.expected_qps` unchanged from the successful `recommend_model` response that supplied the chosen slot, including a fallback or re-run response if one supplied it. This value includes the planner's capacity buffer and minimum. Keep the average and peak rates shown in Phase 2 as workload context.
+
 ```
 <!-- navigator-handoff
 model_id: <chosen model_id>
@@ -234,7 +236,7 @@ user_count: <user_count>
 chosen_category: <balanced|cost|performance|quality>
 prompt_tokens: <from get_use_case_defaults workload.prompt_tokens>
 output_tokens: <from get_use_case_defaults workload.output_tokens>
-expected_qps: <from get_expected_rps expected_rps>
+expected_qps: <from the chosen slot's recommend_model response specification.traffic_profile.expected_qps>
 ttft_target_ms: <confirmed SLO TTFT default or override>
 itl_target_ms: <confirmed SLO ITL default or override>
 e2e_target_ms: <confirmed SLO E2E default or override>
